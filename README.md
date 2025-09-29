@@ -1,15 +1,19 @@
-# 🚀 SafaryLoc - Sistema de Gestión Logística
+# 🎨 SafaryLoc - Sistema de Gestión Logística
 
-[![Deploy on Railway](https://railway.app/button.svg)](https://railway.app/new/template/T8wP3Q)
+[![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/Safary16/soptraloc)
 
-## 📱 **Acceso Directo a la Aplicación**
-- **🌐 URL de Producción:** https://safary-soptraloc.up.railway.app
-- **📊 Dashboard:** https://safary-soptraloc.up.railway.app/dashboard/
-- **⚙️ Admin Panel:** https://safary-soptraloc.up.railway.app/admin/
+## � **Deploy Instantáneo en Render**
 
----
+Tu sistema logístico completo listo para la nube en **5 minutos**.
 
-Sistema integral de gestión logística para el transporte de contenedores que permite mantener el stock en almacenes, registrar movimientos, programar transportes, generar alertas automáticas y optimizar asignaciones.
+### **✅ Lo que incluye:**
+- **692 contenedores** de Walmart ya cargados
+- **Dashboard responsive** para móviles y tablets  
+- **Sistema de conductores** con asignación inteligente
+- **Control de asistencia** diario
+- **Seguimiento temporal** de rutas completo
+- **API REST** documentada
+- **Panel de administración** profesional
 
 ## 🚀 Características Principales
 
