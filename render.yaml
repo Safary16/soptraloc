@@ -10,24 +10,15 @@ services:
     rootDir: soptraloc_system
     plan: free
     
-    # 🔨 Comandos de construcción
+    # 🔨 Comandos de construcción - Se ejecutan solo una vez
     buildCommand: |
       pip install -r ../requirements.txt
       python manage.py collectstatic --noinput --settings=config.settings_production
       python manage.py migrate --settings=config.settings_production
-      python manage.py shell --settings=config.settings_production -c "
-      from django.contrib.auth.models import User
-      if not User.objects.filter(username='admin').exists():
-          User.objects.create_superuser('admin', 'admin@safary.com', 'admin123')
-          print('✅ Superusuario creado: admin/admin123')
-      else:
-          print('✅ Superusuario ya existe')
-      "
-      python manage.py load_walmart_containers --settings=config.settings_production
-      python manage.py load_drivers --count=25 --settings=config.settings_production
-      echo "🎉 Base de datos inicializada con 692 contenedores y 25 conductores"
+      python initialize_system.py
+      echo "🎉 Sistema completamente inicializado y listo para producción"
       
-    # 🚀 Comandos de inicio
+    # 🚀 Comandos de inicio - Se ejecutan en cada restart
     startCommand: |
       gunicorn --bind=0.0.0.0:$PORT --timeout 600 --workers 2 config.wsgi:application
       
@@ -47,6 +38,8 @@ services:
           property: connectionString
       - key: ALLOWED_HOSTS
         value: "*.onrender.com,localhost,127.0.0.1"
+      - key: RENDER_EXTERNAL_HOSTNAME
+        value: "soptraloc-web.onrender.com"
 
 # 🗄️ Base de Datos PostgreSQL
 databases:

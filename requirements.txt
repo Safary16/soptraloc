@@ -18,6 +18,7 @@ Pillow==10.3.0
 reportlab==4.2.0
 openpyxl==3.1.2
 pandas==2.2.2
+numpy==2.1.1
 
 # Database and production
 gunicorn==23.0.0
@@ -26,3 +27,6 @@ dj-database-url==2.2.0
 
 # HTTP and integrations
 requests==2.32.3
+
+# Additional utilities for optimization and analysis
+unicodedata2==15.1.0
