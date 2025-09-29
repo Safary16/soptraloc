@@ -111,6 +111,9 @@
                     <a href="/drivers/" class="btn btn-outline-success">
                         <i class="bi bi-people"></i> Conductores
                     </a>
+                    <button class="btn btn-outline-warning" onclick="autoAssignAll()">
+                        <i class="bi bi-lightning-charge-fill"></i> Auto-asignar todos
+                    </button>
                     <button class="btn btn-outline-info" onclick="exportTable()">
                         <i class="bi bi-download"></i> Exportar
                     </button>
@@ -343,7 +346,8 @@ function markArrived(containerId) {
                         <div class="mb-3">
                             <label class="form-label">Seleccionar destino de arribo:</label>
                             <select id="arrivalLocation" class="form-select">
-                                <option value="CCTI">CCTI</option>
+                                <option value="CCTI">CCTI (Retorna vacío a base)</option>
+                                <option value="DEPOSITO_DEVOLUCION">Depósito de Devolución (Devuelto vacío)</option>
                                 <option value="CD_QUILICURA">CD Quilicura</option>
                                 <option value="CD_PENON">CD El Peñón</option>
                                 <option value="CD_MADERO">CD Puerto Madero</option>
@@ -554,6 +558,33 @@ function quickAssign(containerId) {
             setTimeout(() => location.reload(), 1500);
         } else {
             showAlert('danger', data.message || 'Error en asignación automática');
+        }
+    })
+    .catch(error => {
+        showAlert('danger', 'Error de conexión: ' + error.message);
+    });
+}
+
+function autoAssignAll() {
+    if (!confirm('¿Asignar en automático todos los contenedores programados disponibles?')) {
+        return;
+    }
+
+    fetch('/drivers/auto-assign/', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': getCookie('csrftoken')
+        },
+        body: JSON.stringify({})
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            showAlert('success', data.message);
+            setTimeout(() => location.reload(), 1800);
+        } else {
+            showAlert('danger', data.message || 'No fue posible auto-asignar a todos los contenedores');
         }
     })
     .catch(error => {

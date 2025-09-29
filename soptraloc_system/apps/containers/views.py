@@ -302,7 +302,8 @@ def _apply_container_position_update(container: Container, new_position: str, us
         'CD_QUILICURA': 'warehouse',
         'CD_CAMPOS': 'warehouse',
         'CD_MADERO': 'warehouse',
-        'CD_PENON': 'warehouse',
+    'CD_PENON': 'warehouse',
+    'DEPOSITO_DEVOLUCION': 'floor',
     }
 
     old_position_code = container.current_position or 'NO_DEFINIDA'
