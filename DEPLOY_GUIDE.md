@@ -40,6 +40,7 @@ git push origin main
    - **Root Directory**: `soptraloc_system`
    - **Build Command**: Automatizado desde `render.yaml`
    - **Start Command**: Automatizado desde `render.yaml`
+  - **Python Version**: detectada desde `runtime.txt` (`python-3.12.3`)
 
 ## 🗄️ Configuración de Base de Datos
 

@@ -32,6 +32,7 @@ Root Directory: soptraloc_system
 Build Command: Automático desde render.yaml
 Start Command: gunicorn config.wsgi:application
 Database: soptraloc-production-db (PostgreSQL)
+Python Version: 3.12.3 (definida en runtime.txt)
 ```
 
 ### 🎯 **URLS FINALES**
