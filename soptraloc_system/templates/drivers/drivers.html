@@ -1,0 +1,248 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h1><i class="bi bi-people"></i> {{ title }}</h1>
+    <div class="btn-group">
+        <a href="/dashboard/" class="btn btn-outline-primary">
+            <i class="bi bi-speedometer2"></i> Dashboard
+        </a>
+        <a href="/drivers/alerts/" class="btn btn-outline-danger">
+            <i class="bi bi-exclamation-triangle"></i> Alertas
+        </a>
+        <a href="/admin/drivers/driver/add/" class="btn btn-success">
+            <i class="bi bi-person-plus"></i> Agregar Conductor
+        </a>
+    </div>
+</div>
+
+<!-- Estadísticas -->
+<div class="row mb-4">
+    <div class="col-md-2">
+        <div class="card text-white bg-primary">
+            <div class="card-body text-center">
+                <h3>{{ stats.total }}</h3>
+                <p class="mb-0">Total</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-2">
+        <div class="card text-white bg-success">
+            <div class="card-body text-center">
+                <h3>{{ stats.operativos }}</h3>
+                <p class="mb-0">Operativos</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-2">
+        <div class="card text-white bg-info">
+            <div class="card-body text-center">
+                <h3>{{ stats.disponibles }}</h3>
+                <p class="mb-0">Disponibles</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-2">
+        <div class="card text-white bg-warning">
+            <div class="card-body text-center">
+                <h3>{{ stats.asignados }}</h3>
+                <p class="mb-0">Asignados</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-2">
+        <div class="card text-white bg-secondary">
+            <div class="card-body text-center">
+                <h3>{{ stats.localeros }}</h3>
+                <p class="mb-0">Localeros</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-2">
+        <div class="card text-white bg-dark">
+            <div class="card-body text-center">
+                <h3>{{ stats.troncales }}</h3>
+                <p class="mb-0">Troncales</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Filtros -->
+<div class="card mb-4">
+    <div class="card-body">
+        <form method="GET" class="row g-3">
+            <div class="col-md-3">
+                <label class="form-label">Tipo de Conductor:</label>
+                <select name="tipo" class="form-select">
+                    <option value="">Todos</option>
+                    {% for value, label in tipo_choices %}
+                    <option value="{{ value }}" {% if tipo_filter == value %}selected{% endif %}>{{ label }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-3">
+                <label class="form-label">Estado:</label>
+                <select name="estado" class="form-select">
+                    <option value="">Todos</option>
+                    {% for value, label in estado_choices %}
+                    <option value="{{ value }}" {% if estado_filter == value %}selected{% endif %}>{{ label }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-3">
+                <label class="form-label">Ubicación:</label>
+                <select name="ubicacion" class="form-select">
+                    <option value="">Todas</option>
+                    {% for value, label in ubicacion_choices %}
+                    <option value="{{ value }}" {% if ubicacion_filter == value %}selected{% endif %}>{{ label }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-3">
+                <label class="form-label">&nbsp;</label>
+                <div class="d-flex gap-2">
+                    <button type="submit" class="btn btn-primary">
+                        <i class="bi bi-search"></i> Filtrar
+                    </button>
+                    <a href="/drivers/" class="btn btn-outline-secondary">
+                        <i class="bi bi-x"></i> Limpiar
+                    </a>
+                </div>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Lista de Conductores -->
+<div class="card">
+    <div class="card-header">
+        <h5><i class="bi bi-list"></i> Conductores ({{ drivers.count }})</h5>
+    </div>
+    <div class="card-body p-0">
+        {% if drivers %}
+        <div class="table-responsive">
+            <table class="table table-striped table-hover mb-0">
+                <thead class="table-dark">
+                    <tr>
+                        <th>Conductor</th>
+                        <th>Vehículo</th>
+                        <th>Tipo</th>
+                        <th>Estado</th>
+                        <th>Ubicación Actual</th>
+                        <th>Tiempo en Ubicación</th>
+                        <th>Asignación</th>
+                        <th>Acciones</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for driver in drivers %}
+                    <tr>
+                        <td>
+                            <strong>{{ driver.nombre }}</strong>
+                            <br><small class="text-muted">{{ driver.rut }}</small>
+                            {% if driver.telefono %}
+                            <br><small class="text-muted"><i class="bi bi-telephone"></i> {{ driver.telefono }}</small>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <strong>{{ driver.ppu }}</strong>
+                            {% if driver.tracto %}
+                            <br><small class="text-muted">Tracto {{ driver.tracto }}</small>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <span class="badge 
+                                {% if driver.tipo_conductor == 'LOCALERO' %}bg-primary
+                                {% elif driver.tipo_conductor == 'TRONCO' %}bg-dark
+                                {% elif driver.tipo_conductor == 'TRONCO_PM' %}bg-info
+                                {% else %}bg-secondary{% endif %}">
+                                {{ driver.get_tipo_conductor_display }}
+                            </span>
+                        </td>
+                        <td>
+                            <span class="badge 
+                                {% if driver.estado == 'OPERATIVO' %}bg-success
+                                {% elif driver.estado == 'PANNE' %}bg-danger
+                                {% elif driver.estado == 'PERMISO' %}bg-warning text-dark
+                                {% else %}bg-secondary{% endif %}">
+                                {{ driver.get_estado_display }}
+                            </span>
+                        </td>
+                        <td>
+                            <div class="btn-group btn-group-sm">
+                                <button class="btn btn-outline-info dropdown-toggle" data-bs-toggle="dropdown">
+                                    {{ driver.get_ubicacion_actual_display }}
+                                </button>
+                                <ul class="dropdown-menu">
+                                    {% for value, label in ubicacion_choices %}
+                                    <li>
+                                        <form method="POST" action="{% url 'drivers:update_location' driver.id %}">
+                                            {% csrf_token %}
+                                            <input type="hidden" name="ubicacion" value="{{ value }}">
+                                            <button type="submit" class="dropdown-item 
+                                                {% if driver.ubicacion_actual == value %}active{% endif %}">
+                                                {{ label }}
+                                            </button>
+                                        </form>
+                                    </li>
+                                    {% endfor %}
+                                </ul>
+                            </div>
+                        </td>
+                        <td>
+                            <small class="text-muted">{{ driver.tiempo_en_ubicacion_texto }}</small>
+                        </td>
+                        <td>
+                            {% if driver.contenedor_asignado %}
+                            <div>
+                                <strong>{{ driver.contenedor_asignado.container_number }}</strong>
+                                <br><small class="text-muted">{{ driver.contenedor_asignado.cd_location }}</small>
+                            </div>
+                            {% else %}
+                            {% if driver.esta_disponible %}
+                                <span class="badge bg-success">DISPONIBLE</span>
+                            {% else %}
+                                <span class="badge bg-secondary">NO DISPONIBLE</span>
+                            {% endif %}
+                            {% endif %}
+                        </td>
+                        <td>
+                            <div class="btn-group btn-group-sm">
+                                <a href="/admin/drivers/driver/{{ driver.id }}/change/" class="btn btn-outline-primary">
+                                    <i class="bi bi-pencil"></i>
+                                </a>
+                                {% if driver.contenedor_asignado %}
+                                                                <button class="btn btn-outline-danger" onclick="unassignDriver('{{ driver.id }}')">
+                                    <i class="bi bi-x-circle"></i> Liberar
+                                </button>
+                                {% endif %}
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <div class="text-center py-5">
+            <i class="bi bi-people display-1 text-muted"></i>
+            <h4 class="text-muted mt-3">No hay conductores</h4>
+            <p class="text-muted">Los conductores aparecerán aquí una vez que sean agregados al sistema.</p>
+            <a href="/admin/drivers/driver/add/" class="btn btn-primary">
+                <i class="bi bi-person-plus"></i> Agregar Conductor
+            </a>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<script>
+function unassignDriver(driverId) {
+    if (confirm('¿Está seguro de desasignar este conductor?')) {
+        // Implementar desasignación via AJAX
+        alert('Función de desasignación pendiente de implementar');
+    }
+}
+</script>
+{% endblock %}

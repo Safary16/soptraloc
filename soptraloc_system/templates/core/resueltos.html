@@ -1,0 +1,530 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}{{ title }}{% endblock %}
+
+{% block extra_css %}
+<style>
+.container-status {
+    font-size: 0.8em;
+    padding: 0.3em 0.6em;
+    border-radius: 4px;
+}
+.status-ASIGNADO { background-color: #ffc107; color: black; }
+.status-EN_RUTA { background-color: #0dcaf0; color: black; }
+.status-ARRIBADO { background-color: #198754; color: white; }
+.status-FINALIZADO { background-color: #6c757d; color: white; }
+
+.btn-action {
+    margin: 2px;
+    padding: 4px 8px;
+    font-size: 0.8em;
+}
+
+.stats-card {
+    border-left: 4px solid;
+}
+.stats-card.asignados { border-left-color: #ffc107; }
+.stats-card.en-ruta { border-left-color: #0dcaf0; }
+.stats-card.arribados { border-left-color: #198754; }
+.stats-card.finalizados { border-left-color: #6c757d; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center">
+                <h1 class="h3 mb-0">
+                    <i class="bi bi-check-circle-fill text-success"></i> 
+                    Contenedores Resueltos
+                </h1>
+                <div>
+                    <a href="{% url 'dashboard' %}" class="btn btn-outline-primary">
+                        <i class="bi bi-arrow-left"></i> Volver al Dashboard
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Estadísticas -->
+    <div class="row mb-4">
+        <div class="col-md-3 mb-3">
+            <div class="card stats-card asignados h-100">
+                <div class="card-body text-center">
+                    <h5 class="card-title text-warning">{{ stats.asignados }}</h5>
+                    <p class="card-text small">Asignados</p>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3 mb-3">
+            <div class="card stats-card en-ruta h-100">
+                <div class="card-body text-center">
+                    <h5 class="card-title text-info">{{ stats.en_ruta }}</h5>
+                    <p class="card-text small">En Ruta</p>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3 mb-3">
+            <div class="card stats-card arribados h-100">
+                <div class="card-body text-center">
+                    <h5 class="card-title text-success">{{ stats.arribados }}</h5>
+                    <p class="card-text small">Arribados</p>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3 mb-3">
+            <div class="card stats-card finalizados h-100">
+                <div class="card-body text-center">
+                    <h5 class="card-title text-muted">{{ stats.finalizados }}</h5>
+                    <p class="card-text small">Finalizados</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Filtros -->
+    <div class="card mb-4">
+        <div class="card-body">
+            <form method="GET" class="row g-3">
+                <div class="col-md-4">
+                    <label for="estado" class="form-label">Estado</label>
+                    <select name="estado" id="estado" class="form-select">
+                        <option value="">Todos los estados</option>
+                        <option value="ASIGNADO" {% if estado_filter == 'ASIGNADO' %}selected{% endif %}>Asignado</option>
+                        <option value="EN_RUTA" {% if estado_filter == 'EN_RUTA' %}selected{% endif %}>En Ruta</option>
+                        <option value="ARRIBADO" {% if estado_filter == 'ARRIBADO' %}selected{% endif %}>Arribado</option>
+                        <option value="FINALIZADO" {% if estado_filter == 'FINALIZADO' %}selected{% endif %}>Finalizado</option>
+                    </select>
+                </div>
+                <div class="col-md-4">
+                    <label for="conductor" class="form-label">Conductor</label>
+                    <select name="conductor" id="conductor" class="form-select">
+                        <option value="">Todos los conductores</option>
+                        {% for conductor in conductores %}
+                        <option value="{{ conductor.id }}" {% if conductor_filter == conductor.id|stringformat:"s" %}selected{% endif %}>
+                            {{ conductor.nombre }} ({{ conductor.ppu }})
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label">&nbsp;</label>
+                    <div class="d-flex gap-2">
+                        <button type="submit" class="btn btn-primary">
+                            <i class="bi bi-funnel"></i> Filtrar
+                        </button>
+                        <a href="{% url 'resueltos' %}" class="btn btn-outline-secondary">
+                            <i class="bi bi-x-circle"></i> Limpiar
+                        </a>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Tabla de Contenedores Resueltos -->
+    <div class="card">
+        <div class="card-header">
+            <h5 class="mb-0">
+                <i class="bi bi-list-task"></i> 
+                Lista de Contenedores ({{ contenedores.count }})
+            </h5>
+        </div>
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-hover mb-0">
+                    <thead class="table-dark">
+                        <tr>
+                            <th>Contenedor</th>
+                            <th>Cliente</th>
+                            <th>Conductor</th>
+                            <th>Estado</th>
+                            <th>Posición Actual</th>
+                            <th>Fecha Programada</th>
+                            <th>CD Destino</th>
+                            <th>Acciones</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for container in contenedores %}
+                        <tr>
+                            <td>
+                                <strong>{{ container.container_number }}</strong>
+                                {% if container.seal_number %}
+                                <br><small class="text-muted">{{ container.seal_number }}</small>
+                                {% endif %}
+                            </td>
+                            <td>{{ container.client.name|default:"-" }}</td>
+                            <td>
+                                <strong>{{ container.conductor_asignado.nombre }}</strong>
+                                <br><small class="text-muted">{{ container.conductor_asignado.ppu }}</small>
+                            </td>
+                            <td>
+                                <span class="badge container-status status-{{ container.status }}">
+                                    {{ container.get_status_display }}
+                                </span>
+                            </td>
+                            <td>
+                                {% if container.current_position %}
+                                    {{ container.get_current_position_display }}
+                                {% else %}
+                                    <span class="text-muted">No definida</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if container.scheduled_date %}
+                                    {{ container.scheduled_date|date:"d/m/Y" }}
+                                    {% if container.scheduled_time %}
+                                        <br><small class="text-muted">{{ container.scheduled_time|time:"H:i" }}</small>
+                                    {% endif %}
+                                    {% if container.scheduled_date == today %}
+                                        <br><span class="badge bg-warning text-dark">HOY</span>
+                                    {% endif %}
+                                {% else %}
+                                    <span class="text-muted">Sin programar</span>
+                                {% endif %}
+                            </td>
+                            <td>{{ container.cd_location|default:"-" }}</td>
+                            <td>
+                                <div class="btn-group-vertical btn-group-sm">
+                                    <!-- Ver Detalles -->
+                                    <button class="btn btn-outline-info btn-action" onclick="viewContainerDetails('{{ container.id }}')" title="Ver Detalles Completos">
+                                        <i class="bi bi-eye"></i> Detalles
+                                    </button>
+                                    
+                                    <!-- Acciones según estado -->
+                                    {% if container.status == 'ASIGNADO' %}
+                                    <button class="btn btn-success btn-action" onclick="startRoute('{{ container.id }}')" title="Iniciar Ruta">
+                                        <i class="bi bi-play-fill"></i> Iniciar Ruta
+                                    </button>
+                                    {% endif %}
+                                    
+                                    {% if container.status == 'EN_RUTA' %}
+                                    <button class="btn btn-warning btn-action" onclick="markArrived('{{ container.id }}')" title="Marcar Llegada">
+                                        <i class="bi bi-geo-alt-fill"></i> Llegada
+                                    </button>
+                                    {% endif %}
+                                    
+                                    {% if container.status == 'ARRIBADO' %}
+                                    <button class="btn btn-info btn-action" onclick="markContainerEmpty('{{ container.id }}')" title="Marcar Vacío">
+                                        <i class="bi bi-box"></i> Vacío
+                                    </button>
+                                    <button class="btn btn-secondary btn-action" onclick="markContainerFull('{{ container.id }}')" title="Marcar Lleno">
+                                        <i class="bi bi-box-fill"></i> Lleno
+                                    </button>
+                                    {% endif %}
+                                    
+                                    <!-- Actualizar Posición -->
+                                    <div class="dropdown">
+                                        <button class="btn btn-outline-primary btn-action dropdown-toggle" type="button" data-bs-toggle="dropdown" title="Actualizar Posición">
+                                            <i class="bi bi-geo"></i> Posición
+                                        </button>
+                                        <ul class="dropdown-menu">
+                                            <li><h6 class="dropdown-header">Terminal</h6></li>
+                                            <li><a class="dropdown-item" href="#" onclick="updatePosition('{{ container.id }}', 'CCTI')">CCTI</a></li>
+                                            <li><a class="dropdown-item" href="#" onclick="updatePosition('{{ container.id }}', 'ZEAL')">ZEAL</a></li>
+                                            <li><a class="dropdown-item" href="#" onclick="updatePosition('{{ container.id }}', 'CLEP')">CLEP</a></li>
+                                            <li><hr class="dropdown-divider"></li>
+                                            <li><h6 class="dropdown-header">CD Destino</h6></li>
+                                            <li><a class="dropdown-item" href="#" onclick="updatePosition('{{ container.id }}', 'CD_QUILICURA')">CD Quilicura</a></li>
+                                            <li><a class="dropdown-item" href="#" onclick="updatePosition('{{ container.id }}', 'CD_CAMPOS')">CD Campos</a></li>
+                                            <li><a class="dropdown-item" href="#" onclick="updatePosition('{{ container.id }}', 'CD_MADERO')">CD Puerto Madero</a></li>
+                                            <li><a class="dropdown-item" href="#" onclick="updatePosition('{{ container.id }}', 'CD_PENON')">CD El Peñón</a></li>
+                                            <li><hr class="dropdown-divider"></li>
+                                            <li><a class="dropdown-item" href="#" onclick="updatePosition('{{ container.id }}', 'EN_RUTA')">En Ruta</a></li>
+                                            <li><a class="dropdown-item" href="#" onclick="updatePosition('{{ container.id }}', 'DEPOSITO_DEVOLUCION')">Depósito Devolución</a></li>
+                                        </ul>
+                                    </div>
+                                </div>
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="8" class="text-center py-4">
+                                <i class="bi bi-inbox display-4 text-muted"></i>
+                                <p class="text-muted mt-2">No hay contenedores resueltos</p>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal de Detalles del Contenedor -->
+<div class="modal fade" id="containerDetailsModal" tabindex="-1" aria-labelledby="containerDetailsModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-xl">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="containerDetailsModalLabel">
+                    <i class="bi bi-box-seam"></i> Detalles del Contenedor
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body" id="containerDetailsContent">
+                <div class="text-center">
+                    <div class="spinner-border" role="status">
+                        <span class="visually-hidden">Cargando...</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// Ver detalles completos del contenedor
+function viewContainerDetails(containerId) {
+    const modal = new bootstrap.Modal(document.getElementById('containerDetailsModal'));
+    const content = document.getElementById('containerDetailsContent');
+    
+    // Mostrar spinner
+    content.innerHTML = `
+        <div class="text-center">
+            <div class="spinner-border" role="status">
+                <span class="visually-hidden">Cargando...</span>
+            </div>
+        </div>
+    `;
+    
+    modal.show();
+    
+    // Cargar detalles via AJAX
+    fetch(`/containers/${containerId}/`, {
+        headers: {
+            'Accept': 'application/json'
+        }
+    })
+        .then(response => response.json())
+        .then(data => {
+            content.innerHTML = `
+                <div class="row">
+                    <div class="col-md-6">
+                        <h6><i class="bi bi-info-circle"></i> Información Básica</h6>
+                        <table class="table table-sm">
+                            <tr><td><strong>Contenedor:</strong></td><td>${data.container_number}</td></tr>
+                            <tr><td><strong>Tipo:</strong></td><td>${data.container_type || '-'}</td></tr>
+                            <tr><td><strong>Cliente:</strong></td><td>${data.client?.name || '-'}</td></tr>
+                            <tr><td><strong>Estado:</strong></td><td><span class="badge status-${data.status}">${data.status_display}</span></td></tr>
+                            <tr><td><strong>Sello:</strong></td><td>${data.seal_number || '-'}</td></tr>
+                            <tr><td><strong>Conductor:</strong></td><td>${data.conductor_asignado?.nombre || '-'}</td></tr>
+                        </table>
+                        
+                        <h6><i class="bi bi-calendar"></i> Fechas</h6>
+                        <table class="table table-sm">
+                            <tr><td><strong>Programado:</strong></td><td>${data.scheduled_date || '-'} ${data.scheduled_time || ''}</td></tr>
+                            <tr><td><strong>ETA:</strong></td><td>${data.eta || '-'}</td></tr>
+                            <tr><td><strong>Liberación:</strong></td><td>${data.release_date || '-'} ${data.release_time || ''}</td></tr>
+                            <tr><td><strong>Arribo CD:</strong></td><td>${data.cd_arrival_date || '-'} ${data.cd_arrival_time || ''}</td></tr>
+                        </table>
+                        
+                        <h6><i class="bi bi-clock"></i> Tiempos Operativos</h6>
+                        <table class="table table-sm">
+                            <tr><td><strong>Asignado:</strong></td><td>${data.tiempo_asignacion || '-'}</td></tr>
+                            <tr><td><strong>Inicio Ruta:</strong></td><td>${data.tiempo_inicio_ruta || '-'}</td></tr>
+                            <tr><td><strong>Llegada:</strong></td><td>${data.tiempo_llegada || '-'}</td></tr>
+                            <tr><td><strong>Descarga:</strong></td><td>${data.tiempo_descarga || '-'}</td></tr>
+                            <tr><td><strong>Finalización:</strong></td><td>${data.tiempo_finalizacion || '-'}</td></tr>
+                        </table>
+                    </div>
+                    
+                    <div class="col-md-6">
+                        <h6><i class="bi bi-speedometer2"></i> Pesos y Medidas</h6>
+                        <table class="table table-sm">
+                            <tr><td><strong>Peso Vacío:</strong></td><td>${data.weight_empty ? data.weight_empty + ' kg' : '-'}</td></tr>
+                            <tr><td><strong>Peso Carga:</strong></td><td>${data.cargo_weight ? data.cargo_weight + ' kg' : '-'}</td></tr>
+                            <tr><td><strong>Peso Total:</strong></td><td>${data.total_weight ? data.total_weight + ' kg' : '-'}</td></tr>
+                            <tr><td><strong>Peso Máximo:</strong></td><td>${data.max_weight ? data.max_weight + ' kg' : '-'}</td></tr>
+                        </table>
+                        
+                        <h6><i class="bi bi-ship"></i> Información Marítima</h6>
+                        <table class="table table-sm">
+                            <tr><td><strong>Nave:</strong></td><td>${data.vessel?.name || '-'}</td></tr>
+                            <tr><td><strong>Línea Naviera:</strong></td><td>${data.shipping_line?.name || '-'}</td></tr>
+                            <tr><td><strong>Agencia:</strong></td><td>${data.agency?.name || '-'}</td></tr>
+                            <tr><td><strong>Terminal:</strong></td><td>${data.terminal?.name || '-'}</td></tr>
+                        </table>
+                        
+                        <h6><i class="bi bi-geo-alt"></i> Ubicación</h6>
+                        <table class="table table-sm">
+                            <tr><td><strong>Posición Actual:</strong></td><td>${data.current_position || 'No definida'}</td></tr>
+                            <tr><td><strong>CD Destino:</strong></td><td>${data.cd_location || '-'}</td></tr>
+                        </table>
+                        
+                        <h6><i class="bi bi-stopwatch"></i> Duraciones</h6>
+                        <table class="table table-sm">
+                            <tr><td><strong>Duración Ruta:</strong></td><td>${data.duracion_ruta ? data.duracion_ruta + ' min' : '-'}</td></tr>
+                            <tr><td><strong>Duración Descarga:</strong></td><td>${data.duracion_descarga ? data.duracion_descarga + ' min' : '-'}</td></tr>
+                            <tr><td><strong>Duración Total:</strong></td><td>${data.duracion_total ? data.duracion_total + ' min' : '-'}</td></tr>
+                        </table>
+                    </div>
+                </div>
+                
+                ${data.cargo_description ? `
+                <div class="row mt-3">
+                    <div class="col-12">
+                        <h6><i class="bi bi-box"></i> Descripción de Carga</h6>
+                        <p class="bg-light p-2 rounded">${data.cargo_description}</p>
+                    </div>
+                </div>
+                ` : ''}
+                
+                ${data.observation_1 || data.observation_2 ? `
+                <div class="row mt-3">
+                    <div class="col-12">
+                        <h6><i class="bi bi-chat-text"></i> Observaciones</h6>
+                        ${data.observation_1 ? `<p><strong>OBS 1:</strong> ${data.observation_1}</p>` : ''}
+                        ${data.observation_2 ? `<p><strong>OBS 2:</strong> ${data.observation_2}</p>` : ''}
+                    </div>
+                </div>
+                ` : ''}
+            `;
+        })
+        .catch(error => {
+            content.innerHTML = `
+                <div class="alert alert-danger">
+                    <i class="bi bi-exclamation-triangle"></i>
+                    Error al cargar los detalles del contenedor: ${error.message}
+                </div>
+            `;
+        });
+}
+
+// Iniciar ruta
+function startRoute(containerId) {
+    if (!confirm('¿Confirmar que el conductor ha iniciado la ruta?')) return;
+    
+    updateContainerStatus(containerId, 'EN_RUTA', 'Ruta iniciada exitosamente');
+}
+
+// Marcar llegada
+function markArrived(containerId) {
+    if (!confirm('¿Confirmar que el conductor ha llegado al destino?')) return;
+    
+    updateContainerStatus(containerId, 'ARRIBADO', 'Llegada confirmada exitosamente');
+}
+
+// Marcar contenedor vacío
+function markContainerEmpty(containerId) {
+    if (!confirm('¿Confirmar que el contenedor está vacío?')) return;
+    
+    updateContainerStatus(containerId, 'FINALIZADO', 'Contenedor marcado como vacío');
+}
+
+// Marcar contenedor lleno
+function markContainerFull(containerId) {
+    if (!confirm('¿Confirmar que el contenedor está lleno?')) return;
+    
+    updateContainerStatus(containerId, 'FINALIZADO', 'Contenedor marcado como lleno');
+}
+
+// Actualizar posición
+function updatePosition(containerId, position) {
+    const positionNames = {
+        'CCTI': 'CCTI',
+        'ZEAL': 'ZEAL',
+        'CLEP': 'CLEP',
+        'CD_QUILICURA': 'CD Quilicura',
+        'CD_CAMPOS': 'CD Campos',
+        'CD_MADERO': 'CD Puerto Madero',
+        'CD_PENON': 'CD El Peñón',
+        'EN_RUTA': 'En Ruta',
+        'DEPOSITO_DEVOLUCION': 'Depósito Devolución'
+    };
+    
+    if (!confirm(`¿Confirmar actualización de posición a ${positionNames[position]}?`)) return;
+    
+    fetch(`/containers/${containerId}/update-position/`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': getCookie('csrftoken')
+        },
+        body: JSON.stringify({
+            position: position
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            showAlert('success', `Posición actualizada a ${positionNames[position]}`);
+            setTimeout(() => location.reload(), 1500);
+        } else {
+            showAlert('danger', data.message || 'Error al actualizar posición');
+        }
+    })
+    .catch(error => {
+        showAlert('danger', 'Error de conexión: ' + error.message);
+    });
+}
+
+// Función auxiliar para actualizar estado
+function updateContainerStatus(containerId, status, successMessage) {
+    fetch(`/containers/${containerId}/update-status/`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': getCookie('csrftoken')
+        },
+        body: JSON.stringify({
+            status: status
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            showAlert('success', successMessage);
+            setTimeout(() => location.reload(), 1500);
+        } else {
+            showAlert('danger', data.message || 'Error al actualizar estado');
+        }
+    })
+    .catch(error => {
+        showAlert('danger', 'Error de conexión: ' + error.message);
+    });
+}
+
+// Función para obtener cookie CSRF
+function getCookie(name) {
+    let cookieValue = null;
+    if (document.cookie && document.cookie !== '') {
+        const cookies = document.cookie.split(';');
+        for (let i = 0; i < cookies.length; i++) {
+            const cookie = cookies[i].trim();
+            if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                break;
+            }
+        }
+    }
+    return cookieValue;
+}
+
+// Función para mostrar alertas
+function showAlert(type, message) {
+    const alertDiv = document.createElement('div');
+    alertDiv.className = `alert alert-${type} alert-dismissible fade show position-fixed`;
+    alertDiv.style.cssText = 'top: 20px; right: 20px; z-index: 1050; min-width: 300px;';
+    alertDiv.innerHTML = `
+        ${message}
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    `;
+    
+    document.body.appendChild(alertDiv);
+    
+    // Auto-remover después de 5 segundos
+    setTimeout(() => {
+        if (alertDiv && alertDiv.parentNode) {
+            alertDiv.remove();
+        }
+    }, 5000);
+}
+</script>
+{% endblock %}

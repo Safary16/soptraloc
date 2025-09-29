@@ -1,0 +1,64 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <div class="jumbotron bg-white p-5 rounded shadow-sm">
+            <h1 class="display-4"><i class="bi bi-truck"></i> Bienvenido a SoptraLoc</h1>
+            <p class="lead">Sistema de Gestión Logística para Contenedores de Walmart</p>
+            <hr class="my-4">
+            <div class="row">
+                <div class="col-md-6">
+                    <div class="card border-primary">
+                        <div class="card-body">
+                            <h5 class="card-title"><i class="bi bi-clipboard-check text-primary"></i> Contenedores Programados</h5>
+                            <h2 class="text-primary">{{ programados|default:0 }}</h2>
+                            <p class="card-text">Contenedores con estado PROGRAMADO listos para gestionar</p>
+                            <a href="/dashboard/" class="btn btn-primary">Ver Dashboard</a>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="card border-info">
+                        <div class="card-body">
+                            <h5 class="card-title"><i class="bi bi-boxes text-info"></i> Total de Contenedores</h5>
+                            <h2 class="text-info">{{ total|default:0 }}</h2>
+                            <p class="card-text">Total de contenedores en el sistema</p>
+                            <a href="/admin/containers/container/" class="btn btn-outline-info">Administrar</a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row mt-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5><i class="bi bi-info-circle"></i> Información del Sistema</h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-6">
+                        <h6>Enlaces Rápidos:</h6>
+                        <ul class="list-unstyled">
+                            <li><a href="/admin/" class="text-decoration-none"><i class="bi bi-gear"></i> Panel de Administración</a></li>
+                            <li><a href="/api/v1/auth/info/" class="text-decoration-none"><i class="bi bi-key"></i> Información de API</a></li>
+                            <li><a href="/dashboard/" class="text-decoration-none"><i class="bi bi-graph-up"></i> Dashboard de Contenedores</a></li>
+                        </ul>
+                    </div>
+                    <div class="col-md-6">
+                        <h6>Credenciales por defecto:</h6>
+                        <ul class="list-unstyled">
+                            <li><strong>Usuario:</strong> admin</li>
+                            <li><strong>Contraseña:</strong> admin123</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

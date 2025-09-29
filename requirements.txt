@@ -1,0 +1,31 @@
+# Core Django
+Django==5.2.6
+python-decouple==3.8
+whitenoise==6.11.0
+
+# Django REST Framework and API
+djangorestframework==3.16.1
+django-cors-headers==4.9.0
+django-filter==25.1
+djangorestframework-simplejwt==5.5.1
+drf-yasg==1.21.11
+
+# Development and utilities
+django-extensions==4.1
+
+# File processing and reports
+Pillow==10.3.0
+reportlab==4.2.0
+openpyxl==3.1.2
+pandas==2.2.2
+
+# Production server
+gunicorn==23.0.0
+psycopg2-binary==2.9.9
+dj-database-url==2.2.0
+
+# HTTP and integrations
+requests==2.32.3
+
+# Production server
+gunicorn==22.0.0
