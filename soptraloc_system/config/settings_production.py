@@ -18,6 +18,10 @@ RAILWAY_ENVIRONMENT = config('RAILWAY_ENVIRONMENT', default='')
 # Allowed hosts configuration
 if RAILWAY_ENVIRONMENT:
     ALLOWED_HOSTS = ['*']  # Railway handles SSL termination
+    # Add specific Railway domains
+    railway_domain = config('RAILWAY_STATIC_URL', default='').replace('https://', '').replace('http://', '')
+    if railway_domain:
+        ALLOWED_HOSTS.append(railway_domain)
 else:
     ALLOWED_HOSTS = config('ALLOWED_HOSTS', default='localhost,127.0.0.1,0.0.0.0', cast=lambda v: [s.strip() for s in v.split(',')])
 
@@ -32,12 +36,15 @@ CSRF_TRUSTED_ORIGINS = [
 
 # Add Railway domain to CSRF trusted origins if in production
 if RAILWAY_ENVIRONMENT:
-    railway_domain = config('RAILWAY_PUBLIC_DOMAIN', default='')
+    # Railway URLs
+    CSRF_TRUSTED_ORIGINS.extend([
+        'https://*.up.railway.app',
+        'https://*.railway.app',
+        'https://safary-soptraloc.up.railway.app',
+    ])
+    railway_domain = config('RAILWAY_STATIC_URL', default='')
     if railway_domain:
-        CSRF_TRUSTED_ORIGINS.extend([
-            f'https://{railway_domain}',
-            f'http://{railway_domain}',
-        ])
+        CSRF_TRUSTED_ORIGINS.append(railway_domain)
 
 # Para desarrollo - permitir CSRF desde cualquier origen
 if DEBUG:

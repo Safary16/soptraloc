@@ -1,4 +1,13 @@
-# SOPTRALOC - Sistema de Optimización para Transporte de Contenedores
+# 🚀 SafaryLoc - Sistema de Gestión Logística
+
+[![Deploy on Railway](https://railway.app/button.svg)](https://railway.app/new/template/T8wP3Q)
+
+## 📱 **Acceso Directo a la Aplicación**
+- **🌐 URL de Producción:** https://safary-soptraloc.up.railway.app
+- **📊 Dashboard:** https://safary-soptraloc.up.railway.app/dashboard/
+- **⚙️ Admin Panel:** https://safary-soptraloc.up.railway.app/admin/
+
+---
 
 Sistema integral de gestión logística para el transporte de contenedores que permite mantener el stock en almacenes, registrar movimientos, programar transportes, generar alertas automáticas y optimizar asignaciones.
 
