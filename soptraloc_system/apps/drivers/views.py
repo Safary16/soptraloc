@@ -5,10 +5,117 @@ from django.contrib import messages
 from django.utils import timezone
 from django.views.decorators.csrf import csrf_exempt
 from django.db.models import Q
-from datetime import datetime, timedelta
-from .models import Driver, Assignment, Alert, TimeMatrix, Location
+from datetime import datetime, timedelta, time
+
 from apps.containers.models import Container
+from apps.containers.services.status_utils import normalize_status
+
+from .models import Driver, Assignment, Alert, Location
 import json
+
+# Configuración auxiliar para asignaciones automáticas
+DEFAULT_ASSIGNMENT_TIME = time(hour=8, minute=0)
+CD_NAME_TO_CODE = {
+    'CD QUILICURA': 'CD_QUILICURA',
+    'CD CAMPOS': 'CD_CAMPOS',
+    'CD CAMPOS DE CHILE - PUDAHUEL': 'CD_CAMPOS',
+    'CD PUERTO MADERO': 'CD_MADERO',
+    'CD PUERTO MADERO - PUDAHUEL': 'CD_MADERO',
+    'CD EL PEÑÓN': 'CD_PENON',
+    'CD EL PEÑON': 'CD_PENON',
+}
+
+
+def _compute_scheduled_datetime(container):
+    """Obtiene la fecha/hora efectiva para programar una asignación."""
+    if container.scheduled_date:
+        scheduled_time = container.scheduled_time or DEFAULT_ASSIGNMENT_TIME
+        naive_datetime = datetime.combine(container.scheduled_date, scheduled_time)
+        if timezone.is_naive(naive_datetime):
+            return timezone.make_aware(naive_datetime)
+        return naive_datetime
+    return timezone.now()
+
+
+def _resolve_assignment_locations(driver, container):
+    """Busca ubicaciones origen/destino compatibles con la asignación."""
+    origin = Location.objects.filter(code=driver.ubicacion_actual).first()
+
+    destination = None
+    if container.cd_location:
+        normalized_cd = container.cd_location.strip()
+        destination_code = CD_NAME_TO_CODE.get(normalized_cd.upper())
+        if destination_code:
+            destination = Location.objects.filter(code=destination_code).first()
+        if not destination:
+            destination = Location.objects.filter(name__iexact=normalized_cd).first()
+        if not destination:
+            destination = Location.objects.filter(name__icontains=normalized_cd).first()
+
+    return origin, destination
+
+
+def _preferred_driver_types(container):
+    """Determina los tipos de conductor preferidos según destino."""
+    cd_location = (container.cd_location or '').upper()
+    if cd_location.startswith('CD'):
+        return ['LOCALERO', 'LEASING']
+    return ['TRONCO', 'TRONCO_PM', 'LEASING']
+
+
+def _assign_driver_to_container(container, driver, user, scheduled_datetime=None):
+    """Centraliza la creación de asignaciones y la actualización de estados."""
+    scheduled_datetime = scheduled_datetime or _compute_scheduled_datetime(container)
+    origin_location, destination_location = _resolve_assignment_locations(driver, container)
+
+    assignment = Assignment.objects.create(
+        container=container,
+        driver=driver,
+        fecha_programada=scheduled_datetime,
+        estado='PENDIENTE',
+        origen=origin_location,
+        destino=destination_location,
+        origen_legacy=driver.get_ubicacion_actual_display() if hasattr(driver, 'get_ubicacion_actual_display') else driver.ubicacion_actual,
+        destino_legacy=container.cd_location or 'CD No definido',
+        created_by=user
+    )
+
+    assignment.calculate_estimated_time()
+    assignment.save(update_fields=['tiempo_estimado'])
+
+    driver.contenedor_asignado = container
+    driver.save(update_fields=['contenedor_asignado', 'updated_at'])
+
+    now = timezone.now()
+    container.status = 'ASIGNADO'
+    container.conductor_asignado = driver
+    container.tiempo_asignacion = now
+    container.save(update_fields=['status', 'conductor_asignado', 'tiempo_asignacion', 'updated_at'])
+
+    Alert.objects.filter(
+        tipo='CONTENEDOR_SIN_ASIGNAR',
+        container=container,
+        is_active=True
+    ).update(
+        is_active=False,
+        fecha_resolucion=now,
+        resuelto_por=user
+    )
+
+    return assignment
+
+
+def _pick_driver_for_container(container, drivers):
+    """Selecciona y extrae el conductor más adecuado desde una lista mutable."""
+    if not drivers:
+        return None
+
+    preferred_types = _preferred_driver_types(container)
+    for index, driver in enumerate(drivers):
+        if driver.tipo_conductor in preferred_types:
+            return drivers.pop(index)
+
+    return drivers.pop(0)
 
 
 @login_required
@@ -86,6 +193,12 @@ def assign_container(request):
             container = get_object_or_404(Container, id=container_id)
             driver = get_object_or_404(Driver, id=driver_id)
             
+            if container.conductor_asignado_id:
+                return JsonResponse({
+                    'success': False,
+                    'message': 'El contenedor ya cuenta con un conductor asignado'
+                })
+
             # Verificar que el conductor esté disponible
             if not driver.esta_disponible:
                 return JsonResponse({
@@ -93,47 +206,12 @@ def assign_container(request):
                     'message': f'El conductor {driver.nombre} no está disponible'
                 })
             
-            # Crear asignación
-            if container.scheduled_date and container.scheduled_time:
-                fecha_programada = timezone.make_aware(
-                    timezone.datetime.combine(container.scheduled_date, container.scheduled_time)
-                )
-            else:
-                fecha_programada = timezone.now()
-                
-            assignment = Assignment.objects.create(
-                container=container,
-                driver=driver,
-                fecha_programada=fecha_programada,
-                estado='PENDIENTE',
-                origen_legacy=driver.get_ubicacion_actual_display() if hasattr(driver, 'get_ubicacion_actual_display') else str(driver.ubicacion_actual),
-                destino_legacy=container.cd_location or 'CD No definido',
-                created_by=request.user
-            )
-            
-            # Actualizar relaciones
-            driver.contenedor_asignado = container
-            driver.save()
-            
-            # Actualizar container status y asignar conductor
-            container.status = 'ASIGNADO'
-            container.conductor_asignado = driver
-            container.save()
-            
-            # Resolver alerta si existe
-            Alert.objects.filter(
-                tipo='CONTENEDOR_SIN_ASIGNAR',
-                container=container,
-                is_active=True
-            ).update(
-                is_active=False,
-                fecha_resolucion=timezone.now(),
-                resuelto_por=request.user
-            )
-            
+            assignment = _assign_driver_to_container(container, driver, request.user)
+
             return JsonResponse({
                 'success': True, 
-                'message': f'Contenedor {container.container_number} asignado a {driver.nombre}'
+                'message': f'Contenedor {container.container_number} asignado a {driver.nombre}',
+                'assignment_id': assignment.id
             })
             
         except Exception as e:
@@ -513,77 +591,53 @@ def auto_assign_drivers(request):
     """Asignación automática de conductores"""
     if request.method == 'POST':
         try:
-            today = timezone.now().date()
+            today = timezone.localdate()
             tomorrow = today + timedelta(days=1)
-            
-            # Obtener contenedores sin asignar
+
             unassigned_containers = Container.objects.filter(
-                status='PROGRAMADO',
                 conductor_asignado__isnull=True,
+                status__in=['PROGRAMADO', 'EN_PROCESO', 'EN_SECUENCIA', 'SECUENCIADO'],
                 scheduled_date__in=[today, tomorrow]
-            ).order_by('scheduled_date', 'scheduled_time')
-            
-            # Obtener conductores disponibles
-            available_drivers = Driver.objects.filter(
+            ).order_by('scheduled_date', 'scheduled_time', 'container_number')
+
+            primary_drivers_qs = Driver.objects.filter(
                 is_active=True,
                 estado='OPERATIVO',
                 contenedor_asignado__isnull=True,
-                ultimo_registro_asistencia=today  # Solo conductores presentes
-            )
-            
+                ultimo_registro_asistencia=today
+            ).order_by('tiempo_en_ubicacion')
+
+            primary_driver_ids = list(primary_drivers_qs.values_list('id', flat=True))
+
+            fallback_drivers_qs = Driver.objects.filter(
+                is_active=True,
+                estado='OPERATIVO',
+                contenedor_asignado__isnull=True
+            ).exclude(id__in=primary_driver_ids).order_by('tiempo_en_ubicacion')
+
+            available_drivers = list(primary_drivers_qs) + list(fallback_drivers_qs)
+
             assigned_count = 0
-            
-            for container in unassigned_containers[:available_drivers.count()]:
-                # Determinar tipo de conductor necesario
-                if container.cd_location and 'CD' in container.cd_location:
-                    tipo_requerido = 'LOCALERO'
-                else:
-                    tipo_requerido = 'TRONCO'
-                
-                # Buscar conductor del tipo adecuado
-                suitable_driver = available_drivers.filter(
-                    tipo_conductor=tipo_requerido
-                ).first()
-                
-                if not suitable_driver:
-                    # Si no hay del tipo específico, usar cualquier disponible
-                    suitable_driver = available_drivers.first()
-                
-                if suitable_driver:
-                    # Crear asignación
-                    if container.scheduled_date and container.scheduled_time:
-                        fecha_programada = timezone.make_aware(
-                            timezone.datetime.combine(container.scheduled_date, container.scheduled_time)
-                        )
-                    else:
-                        fecha_programada = timezone.now()
-                    
-                    Assignment.objects.create(
-                        container=container,
-                        driver=suitable_driver,
-                        fecha_programada=fecha_programada,
-                        estado='PENDIENTE',
-                        origen_legacy=suitable_driver.get_ubicacion_actual_display(),
-                        destino_legacy=container.cd_location or 'CD No definido',
-                        created_by=request.user
-                    )
-                    
-                    # Actualizar relaciones
-                    suitable_driver.contenedor_asignado = container
-                    suitable_driver.save()
-                    
-                    container.status = 'ASIGNADO'
-                    container.conductor_asignado = suitable_driver
-                    container.save()
-                    
-                    # Remover de disponibles
-                    available_drivers = available_drivers.exclude(id=suitable_driver.id)
-                    assigned_count += 1
-            
+            pending_containers = []
+
+            for container in unassigned_containers:
+                driver = _pick_driver_for_container(container, available_drivers)
+                if not driver:
+                    pending_containers.append(container.container_number)
+                    continue
+
+                _assign_driver_to_container(container, driver, request.user)
+                assigned_count += 1
+
+            message = f'{assigned_count} contenedores asignados automáticamente'
+            if pending_containers:
+                message += f". Sin conductor disponible para: {', '.join(pending_containers[:5])}" + ('...' if len(pending_containers) > 5 else '')
+
             return JsonResponse({
                 'success': True,
-                'message': f'Asignación automática completada',
-                'assigned_count': assigned_count
+                'message': message,
+                'assigned_count': assigned_count,
+                'pending_containers': pending_containers
             })
             
         except Exception as e:
@@ -599,103 +653,63 @@ def auto_assign_drivers(request):
 @login_required  
 def auto_assign_single(request):
     """Asignación automática para un contenedor específico"""
-    if request.method == 'POST':
-        try:
-            data = json.loads(request.body)
-            container_id = data.get('container_id')
-            
-            if not container_id:
-                return JsonResponse({'success': False, 'message': 'ID de contenedor requerido'})
-            
-            # Obtener el contenedor
-            from apps.containers.models import Container
-            try:
-                container = Container.objects.get(id=container_id, status='PROGRAMADO')
-            except Container.DoesNotExist:
-                return JsonResponse({'success': False, 'message': 'Contenedor no encontrado o no disponible'})
-            
-            # Obtener conductores disponibles hoy
-            available_drivers = Driver.objects.filter(
-                is_active=True,
-                contenedor_asignado__isnull=True,
-                hora_ingreso_hoy__isnull=False  # Solo conductores que han marcado asistencia
-            ).select_related('ubicacion_actual')
-            
-            if not available_drivers.exists():
-                return JsonResponse({
-                    'success': False,
-                    'message': 'No hay conductores disponibles. Asegúrate de que hayan marcado asistencia.'
-                })
-            
-            # Buscar el mejor conductor considerando tipo de vehículo y ubicación
-            best_driver = None
-            min_time = float('inf')
-            
-            for driver in available_drivers:
-                # Verificar tipo de vehículo compatible
-                if container.container_type in ['20ft', '20st']:
-                    if driver.tipo_vehiculo not in ['SIMPLE', 'DOBLE']:
-                        continue
-                elif container.container_type in ['40ft', '40hc', '40hr', '40hn']:
-                    if driver.tipo_vehiculo != 'DOBLE':
-                        continue
-                
-                # Calcular tiempo estimado basado en ubicación
-                if driver.ubicacion_actual and container.terminal:
-                    try:
-                        time_matrix = TimeMatrix.objects.get(
-                            origin=driver.ubicacion_actual,
-                            destination=container.terminal
-                        )
-                        estimated_time = time_matrix.travel_time
-                    except TimeMatrix.DoesNotExist:
-                        estimated_time = 60  # Tiempo por defecto si no hay matriz
-                else:
-                    estimated_time = 45  # Tiempo por defecto
-                
-                if estimated_time < min_time:
-                    min_time = estimated_time
-                    best_driver = driver
-            
-            if not best_driver:
-                return JsonResponse({
-                    'success': False,
-                    'message': 'No se encontró un conductor compatible para este tipo de contenedor'
-                })
-            
-            # Crear la asignación
-            assignment = Assignment.objects.create(
-                driver=best_driver,
-                container=container,
-                origen_programado=container.terminal.name if container.terminal else 'Terminal',
-                destino_programado=container.cd_location or 'CD',
-                destino_legacy=container.cd_location or 'CD',
-                created_by=request.user
-            )
-            
-            # Calcular tiempo estimado
-            assignment.calculate_estimated_time()
-            assignment.save()
-            
-            # Actualizar contenedor
-            container.status = 'ASIGNADO'
-            container.conductor_asignado = best_driver
-            container.tiempo_asignacion = timezone.now()
-            container.save()
-            
-            # Actualizar conductor
-            best_driver.contenedor_asignado = container
-            best_driver.save()
-            
-            return JsonResponse({
-                'success': True,
-                'message': f'Contenedor asignado automáticamente a {best_driver.nombre} ({best_driver.ppu})'
-            })
-            
-        except Exception as e:
-            return JsonResponse({
-                'success': False,
-                'message': f'Error en asignación automática: {str(e)}'
-            })
-    
-    return JsonResponse({'success': False, 'message': 'Método no permitido'})
+    if request.method != 'POST':
+        return JsonResponse({'success': False, 'message': 'Método no permitido'})
+
+    try:
+        data = json.loads(request.body or '{}')
+    except json.JSONDecodeError:
+        return JsonResponse({'success': False, 'message': 'Formato JSON inválido'})
+
+    container_id = data.get('container_id')
+    if not container_id:
+        return JsonResponse({'success': False, 'message': 'ID de contenedor requerido'})
+
+    container = get_object_or_404(Container, id=container_id)
+
+    if container.conductor_asignado_id:
+        return JsonResponse({'success': False, 'message': 'El contenedor ya posee un conductor asignado'})
+
+    status_code = normalize_status(container.status)
+    if status_code not in {'PROGRAMADO', 'EN_PROCESO', 'EN_SECUENCIA', 'SECUENCIADO', 'LIBERADO'}:
+        return JsonResponse({'success': False, 'message': f'Estado {status_code} no admite asignación automática'})
+
+    today = timezone.localdate()
+
+    primary_drivers = Driver.objects.filter(
+        is_active=True,
+        estado='OPERATIVO',
+        contenedor_asignado__isnull=True,
+        ultimo_registro_asistencia=today
+    ).order_by('tiempo_en_ubicacion')
+
+    available_drivers = list(primary_drivers)
+    if not available_drivers:
+        fallback_qs = Driver.objects.filter(
+            is_active=True,
+            estado='OPERATIVO',
+            contenedor_asignado__isnull=True
+        ).order_by('tiempo_en_ubicacion')
+        available_drivers = list(fallback_qs)
+
+    driver = _pick_driver_for_container(container, available_drivers)
+
+    if not driver:
+        return JsonResponse({
+            'success': False,
+            'message': 'No hay conductores disponibles para asignar automáticamente'
+        })
+
+    assignment = _assign_driver_to_container(container, driver, request.user)
+
+    return JsonResponse({
+        'success': True,
+        'message': f'Contenedor {container.container_number} asignado a {driver.nombre} ({driver.ppu})',
+        'assignment_id': assignment.id,
+        'driver': {
+            'id': driver.id,
+            'nombre': driver.nombre,
+            'tipo': driver.get_tipo_conductor_display(),
+            'ubicacion': driver.get_ubicacion_actual_display(),
+        }
+    })

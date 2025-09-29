@@ -199,7 +199,7 @@
                                             <i class="bi bi-lightning-fill"></i>
                                         </button>
                                         {% endif %}
-                                        {% if container.status == 'EN_PROCESO' or container.status == 'EN_TRANSITO' %}
+                                        {% if container.status == 'EN_PROCESO' or container.status == 'EN_TRANSITO' or container.status == 'ASIGNADO' or container.status == 'EN_RUTA' %}
                                         <button class="btn btn-outline-warning btn-sm dropdown-toggle" data-bs-toggle="dropdown" title="Actualizar Posición">
                                             <i class="bi bi-geo-alt"></i>
                                         </button>

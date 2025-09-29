@@ -18,7 +18,6 @@ services:
       cd soptraloc_system
       python manage.py collectstatic --noinput --settings=config.settings_production
       python manage.py migrate --settings=config.settings_production
-      cd soptraloc_system
       python initialize_system.py
       python manage.py normalize_container_statuses
       echo "✅ SafaryLoc desplegado correctamente - Sistema optimizado y funcional"

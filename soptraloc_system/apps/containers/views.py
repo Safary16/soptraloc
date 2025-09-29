@@ -1,10 +1,12 @@
+from datetime import timedelta
+
 from django.db.models import Count, Q
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework import status, viewsets
 from rest_framework.decorators import action
 from rest_framework.filters import OrderingFilter, SearchFilter
 from rest_framework.response import Response
-from django.shortcuts import render, get_object_or_404, redirect
+from django.shortcuts import render, get_object_or_404
 from django.http import JsonResponse
 from django.contrib.auth.decorators import login_required
 from django.utils import timezone
@@ -260,48 +262,112 @@ def container_detail(request, container_id):
     return render(request, 'containers/container_detail.html', context)
 
 
+def _format_position_display(code: str) -> str:
+    """Traduce el código interno de posición a un texto legible."""
+    display_map = {
+        'EN_PISO': 'En Piso',
+        'EN_CHASIS': 'En Chasis',
+        'EN_RUTA': 'En Ruta',
+        'CCTI': 'CCTI - Base Maipú',
+        'ZEAL': 'ZEAL',
+        'CLEP': 'CLEP',
+        'CD_QUILICURA': 'CD Quilicura',
+        'CD_CAMPOS': 'CD Campos',
+        'CD_MADERO': 'CD Puerto Madero',
+        'CD_PENON': 'CD El Peñón',
+        'DEPOSITO_DEVOLUCION': 'Depósito Devolución',
+    }
+    return display_map.get(code, code)
+
+
+def _apply_container_position_update(container: Container, new_position: str, user) -> dict:
+    """Aplica un cambio de posición asegurando validaciones y registros."""
+    valid_positions = {
+        'EN_PISO', 'EN_CHASIS', 'CCTI', 'ZEAL', 'CLEP', 'EN_RUTA',
+        'CD_QUILICURA', 'CD_CAMPOS', 'CD_MADERO', 'CD_PENON', 'DEPOSITO_DEVOLUCION'
+    }
+    if new_position not in valid_positions:
+        raise ValueError('Posición no válida')
+
+    cd_mapping = {
+        'CD_QUILICURA': 'CD Quilicura',
+        'CD_CAMPOS': 'CD Campos',
+        'CD_MADERO': 'CD Puerto Madero',
+        'CD_PENON': 'CD El Peñón',
+    }
+    position_status_map = {
+        'EN_PISO': 'floor',
+        'EN_CHASIS': 'chassis',
+        'CD_QUILICURA': 'warehouse',
+        'CD_CAMPOS': 'warehouse',
+        'CD_MADERO': 'warehouse',
+        'CD_PENON': 'warehouse',
+    }
+
+    old_position_code = container.current_position or 'NO_DEFINIDA'
+    now = timezone.now()
+
+    container.current_position = new_position
+    container.position_updated_at = now
+    container.position_updated_by = user
+
+    if new_position in position_status_map:
+        container.position_status = position_status_map[new_position]
+
+    if new_position in cd_mapping:
+        container.cd_location = cd_mapping[new_position]
+        container.cd_arrival_date = container.cd_arrival_date or now.date()
+        container.cd_arrival_time = container.cd_arrival_time or now.time()
+
+    if new_position == 'DEPOSITO_DEVOLUCION' and not container.return_date:
+        container.return_date = now.date()
+
+    container.save()
+
+    movement_code = MovementCode.generate_code('transfer')
+    movement_code.created_by = user
+    movement_code.save(update_fields=['created_by'])
+
+    ContainerMovement.objects.create(
+        container=container,
+        movement_type='TRANSFER',
+        movement_code=movement_code,
+        movement_date=now,
+        notes=f'Posición actualizada de {_format_position_display(old_position_code)} a {_format_position_display(new_position)}',
+        created_by=user
+    )
+
+    return {
+        'old_position': _format_position_display(old_position_code),
+        'new_position': _format_position_display(new_position)
+    }
+
+
 @login_required
 def update_position(request):
-    """Actualizar la posición de un contenedor"""
+    """Actualizar la posición de un contenedor desde formularios clásicos."""
     if request.method == 'POST':
         try:
             container_id = request.POST.get('container_id')
             new_position = request.POST.get('position')
-            
+
             container = get_object_or_404(Container, id=container_id)
-            
-            # Actualizar posición
-            container.current_position = new_position
-            container.position_updated_at = timezone.now()
-            container.position_updated_by = request.user
-            
-            # Si se mueve a CD, actualizar también el estado
-            if new_position.startswith('CD_'):
-                container.status = 'EN_TRANSITO'
-                if not container.cd_arrival_date:
-                    container.cd_arrival_date = timezone.now().date()
-                    container.cd_arrival_time = timezone.now().time()
-            elif new_position == 'DEPOSITO_DEVOLUCION':
-                container.status = 'COMPLETADO'
-                if not container.return_date:
-                    container.return_date = timezone.now().date()
-            elif new_position == 'EN_RUTA':
-                container.status = 'EN_TRANSITO'
-            
-            container.save()
-            
+            result = _apply_container_position_update(container, new_position, request.user)
+
             return JsonResponse({
                 'success': True,
-                'message': f'Posición actualizada a {new_position}',
-                'new_position': container.get_current_position_display() if hasattr(container, 'get_current_position_display') else new_position
+                'message': f"Posición actualizada a {result['new_position']}",
+                'new_position': result['new_position']
             })
-            
-        except Exception as e:
+
+        except ValueError as exc:
+            return JsonResponse({'success': False, 'message': str(exc)})
+        except Exception as exc:
             return JsonResponse({
                 'success': False,
-                'message': f'Error al actualizar posición: {str(e)}'
+                'message': f'Error al actualizar posición: {exc}'
             })
-    
+
     return JsonResponse({'success': False, 'message': 'Método no permitido'})
 
 
@@ -532,12 +598,16 @@ def update_container_status_view(request, container_id):
             
             container.save()
             
-            # Registrar el movimiento
+            movement_code = MovementCode.generate_code('transfer')
+            movement_code.created_by = request.user
+            movement_code.save(update_fields=['created_by'])
+
             ContainerMovement.objects.create(
                 container=container,
-                movement_type='status_change',
-                origin_location=container.current_location,
-                destination_location=container.current_location,
+                movement_type='TRANSFER',
+                movement_code=movement_code,
+                from_location=container.current_location,
+                to_location=container.current_location,
                 movement_date=timezone.now(),
                 notes=f'Estado cambiado de {old_status} a {new_status}',
                 created_by=request.user
@@ -578,26 +648,11 @@ def update_container_position_view(request, container_id):
             if new_position not in valid_positions:
                 return JsonResponse({'success': False, 'message': 'Posición no válida'})
             
-            # Actualizar posición
-            old_position = container.current_position
-            container.current_position = new_position
-            container.position_updated_at = timezone.now()
-            container.position_updated_by = request.user
-            container.save()
-            
-            # Registrar el movimiento
-            ContainerMovement.objects.create(
-                container=container,
-                movement_type='position_update',
-                origin_location=container.current_location,
-                movement_date=timezone.now(),
-                notes=f'Posición actualizada de {old_position or "No definida"} a {new_position}',
-                created_by=request.user
-            )
-            
+            stats = _apply_container_position_update(container, new_position, request.user)
+
             return JsonResponse({
                 'success': True,
-                'message': f'Posición actualizada exitosamente'
+                'message': f"Posición actualizada de {stats['old_position']} a {stats['new_position']}"
             })
             
         except Exception as e:
@@ -613,9 +668,8 @@ def update_container_position_view(request, container_id):
 def container_detail_uuid(request, container_id):
     """Vista de detalles del contenedor usando UUID"""
     container = get_object_or_404(Container, id=container_id)
-    
-    if request.headers.get('Accept') == 'application/json':
-        # Respuesta JSON para AJAX
+
+    if request.GET.get('format') == 'json' or request.headers.get('Accept') == 'application/json':
         data = {
             'id': str(container.id),
             'container_number': container.container_number,
@@ -685,7 +739,12 @@ def container_detail_uuid(request, container_id):
             'duracion_descarga': container.duracion_descarga,
         }
         return JsonResponse(data)
-    
-    # Si no es JSON, redirigir a la vista de resueltos
-    from django.shortcuts import redirect
-    return redirect('resueltos')
+
+    today = timezone.localdate()
+    context = {
+        'container': container,
+        'today': today,
+        'tomorrow': today + timedelta(days=1),
+    }
+
+    return render(request, 'containers/container_detail.html', context)

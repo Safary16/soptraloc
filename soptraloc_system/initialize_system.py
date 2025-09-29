@@ -12,8 +12,11 @@ import django
 from datetime import datetime, timedelta, time
 import random
 
-# Configurar Django
-sys.path.append('/workspaces/soptraloc/soptraloc_system')
+# Configurar Django de forma dinámica según la ubicación del script
+BASE_DIR = Path(__file__).resolve().parent
+if str(BASE_DIR) not in sys.path:
+    sys.path.append(str(BASE_DIR))
+
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'config.settings')
 django.setup()
 

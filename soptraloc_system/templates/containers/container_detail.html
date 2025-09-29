@@ -145,7 +145,7 @@
                         <tr>
                             <td><strong>Ubicación Actual:</strong></td>
                             <td>
-                                {% if container.status == 'EN_PROCESO' or container.status == 'EN_TRANSITO' %}
+                                {% if container.status == 'EN_PROCESO' or container.status == 'EN_TRANSITO' or container.status == 'ASIGNADO' or container.status == 'EN_RUTA' %}
                                 <div class="btn-group btn-group-sm">
                                     <button class="btn btn-outline-info dropdown-toggle" data-bs-toggle="dropdown">
                                         {{ container.current_position|default:"No definido" }}
