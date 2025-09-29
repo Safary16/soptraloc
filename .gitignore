@@ -1,22 +1,39 @@
-# Python# Python
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
 
-__pycache__/__pycache__/
+# Virtual Environment
+venv/
+env/
+ENV/
 
-*.py[cod]*.py[cod]
+# Development
+build/
+develop-eggs/
+dist/
+downloads/
+.coverage
 
-*$py.class*$py.class
+# Django
+*.log
+db.sqlite3
+staticfiles/
 
-*.so*.so
+# IDE
+.vscode/
+.idea/
 
-.Python.Python
+# OS
+.DS_Store
+Thumbs.db
 
-venv/build/
-
-env/develop-eggs/
-
-ENV/dist/
-
-.coveragedownloads/
+# Environment variables
+.env
+.env.local
+.env.production
 
 .pytest_cache/eggs/
 

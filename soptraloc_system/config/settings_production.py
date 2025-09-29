@@ -12,18 +12,14 @@ SECRET_KEY = config('SECRET_KEY', default='django-insecure-change-me-in-producti
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = config('DEBUG', default=False, cast=bool)
 
-# Railway specific configuration
-RAILWAY_ENVIRONMENT = config('RAILWAY_ENVIRONMENT', default='')
+# Render.com specific configuration
+RENDER_EXTERNAL_HOSTNAME = config('RENDER_EXTERNAL_HOSTNAME', default='')
 
 # Allowed hosts configuration
-if RAILWAY_ENVIRONMENT:
-    ALLOWED_HOSTS = ['*']  # Railway handles SSL termination
-    # Add specific Railway domains
-    railway_domain = config('RAILWAY_STATIC_URL', default='').replace('https://', '').replace('http://', '')
-    if railway_domain:
-        ALLOWED_HOSTS.append(railway_domain)
+if RENDER_EXTERNAL_HOSTNAME:
+    ALLOWED_HOSTS = [RENDER_EXTERNAL_HOSTNAME, '*.onrender.com']
 else:
-    ALLOWED_HOSTS = config('ALLOWED_HOSTS', default='localhost,127.0.0.1,0.0.0.0', cast=lambda v: [s.strip() for s in v.split(',')])
+    ALLOWED_HOSTS = config('ALLOWED_HOSTS', default='localhost,127.0.0.1,0.0.0.0,*.onrender.com', cast=lambda v: [s.strip() for s in v.split(',')])
 
 # CSRF Configuration
 CSRF_TRUSTED_ORIGINS = [
@@ -34,13 +30,12 @@ CSRF_TRUSTED_ORIGINS = [
     'http://0.0.0.0:8000',
 ]
 
-# Add Railway domain to CSRF trusted origins if in production
-if RAILWAY_ENVIRONMENT:
-    # Railway URLs
+# Add Render domain to CSRF trusted origins if in production
+if RENDER_EXTERNAL_HOSTNAME:
+    # Render URLs
     CSRF_TRUSTED_ORIGINS.extend([
-        'https://*.up.railway.app',
-        'https://*.railway.app',
-        'https://safary-soptraloc.up.railway.app',
+        f'https://{RENDER_EXTERNAL_HOSTNAME}',
+        'https://*.onrender.com',
     ])
     railway_domain = config('RAILWAY_STATIC_URL', default='')
     if railway_domain:
@@ -200,7 +195,7 @@ CORS_ALLOWED_ORIGINS = [
     "http://127.0.0.1:8000",
 ]
 
-if RAILWAY_ENVIRONMENT:
+if RENDER_EXTERNAL_HOSTNAME:
     CORS_ALLOW_ALL_ORIGINS = True
 elif DEBUG:
     CORS_ALLOW_ALL_ORIGINS = True
@@ -225,8 +220,8 @@ if not DEBUG:
     SECURE_HSTS_INCLUDE_SUBDOMAINS = True
     SECURE_HSTS_PRELOAD = True
     
-    # Only enforce HTTPS if not on Railway (Railway handles SSL termination)
-    if not RAILWAY_ENVIRONMENT:
+    # Only enforce HTTPS if not on Render (Render handles SSL termination)
+    if not RENDER_EXTERNAL_HOSTNAME:
         SECURE_SSL_REDIRECT = True
         SESSION_COOKIE_SECURE = True
         CSRF_COOKIE_SECURE = True

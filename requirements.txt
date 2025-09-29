@@ -19,13 +19,10 @@ reportlab==4.2.0
 openpyxl==3.1.2
 pandas==2.2.2
 
-# Production server
+# Database and production
 gunicorn==23.0.0
 psycopg2-binary==2.9.9
 dj-database-url==2.2.0
 
 # HTTP and integrations
 requests==2.32.3
-
-# Production server
-gunicorn==22.0.0
