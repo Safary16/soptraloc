@@ -6,6 +6,8 @@ Configura el sistema desde cero con todos los datos necesarios
 
 import os
 import sys
+from pathlib import Path
+
 import django
 from datetime import datetime, timedelta, time
 import random
@@ -52,18 +54,21 @@ def run_existing_commands():
     print("\n📦 Ejecutando comandos de carga de datos...")
     
     try:
-        # Contenedores
-        from apps.containers.management.commands.load_walmart_containers import Command as ContainerCommand
-        container_cmd = ContainerCommand()
-        
-        current_containers = Container.objects.count()
-        if current_containers == 0:
-            container_cmd.handle()
-            print(f"✅ Contenedores cargados: {Container.objects.count()}")
-        else:
-            print(f"✅ Ya existen {current_containers} contenedores")
+        csv_path = Path(__file__).resolve().parent / "PLANILLA MATRIZ IMPORTACIONES 3(WALMART).csv"
 
-        # Normalizar estados tras la importación (evita valores heredados o en inglés)
+        if csv_path.exists():
+            print(f"📦 Importando contenedores desde {csv_path.name}...")
+            call_command(
+                'import_containers',
+                str(csv_path),
+                '--truncate',
+                '--user',
+                '1',
+            )
+            print(f"✅ Contenedores disponibles: {Container.objects.count()}")
+        else:
+            print(f"⚠️ El archivo de contenedores no existe: {csv_path}")
+
         try:
             call_command('normalize_container_statuses')
         except Exception as normalize_error:
