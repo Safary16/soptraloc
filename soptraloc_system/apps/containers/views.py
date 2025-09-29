@@ -298,6 +298,7 @@ def _apply_container_position_update(container: Container, new_position: str, us
     position_status_map = {
         'EN_PISO': 'floor',
         'EN_CHASIS': 'chassis',
+        'EN_RUTA': 'chassis',
         'CD_QUILICURA': 'warehouse',
         'CD_CAMPOS': 'warehouse',
         'CD_MADERO': 'warehouse',
@@ -384,27 +385,38 @@ def update_status(request):
             if action == 'start_route':
                 # Iniciar ruta
                 if container.status == 'ASIGNADO' and container.conductor_asignado:
+                    try:
+                        position_stats = _apply_container_position_update(container, 'EN_RUTA', request.user)
+                    except ValueError as exc:
+                        return JsonResponse({'success': False, 'message': str(exc)})
+
+                    now = timezone.now()
                     container.status = 'EN_RUTA'
-                    container.position_updated_at = timezone.now()
-                    container.position_updated_by = request.user
-                    
-                    # Actualizar asignación
+                    if not container.tiempo_inicio_ruta:
+                        container.tiempo_inicio_ruta = now
+                    if container.tiempo_asignacion:
+                        container.duracion_ruta = int((now - container.tiempo_asignacion).total_seconds() / 60)
+                    else:
+                        container.duracion_ruta = None
+                    container.save(update_fields=['status', 'tiempo_inicio_ruta', 'duracion_ruta'])
+
                     assignment = Assignment.objects.filter(
                         container=container,
                         driver=container.conductor_asignado,
                         estado='PENDIENTE'
                     ).first()
-                    
+
                     if assignment:
                         assignment.estado = 'EN_CURSO'
-                        assignment.fecha_inicio = timezone.now()
-                        assignment.save()
-                    
-                    container.save()
-                    
+                        assignment.fecha_inicio = now
+                        assignment.save(update_fields=['estado', 'fecha_inicio'])
+
                     return JsonResponse({
                         'success': True,
-                        'message': f'Ruta iniciada para contenedor {container.container_number}'
+                        'message': (
+                            f"Ruta iniciada para contenedor {container.container_number}. "
+                            f"Posición {position_stats['old_position']} → {position_stats['new_position']}"
+                        )
                     })
                 else:
                     return JsonResponse({
@@ -417,26 +429,20 @@ def update_status(request):
                 arrival_location = request.POST.get('arrival_location')
                 
                 if container.status == 'EN_RUTA':
+                    try:
+                        position_stats = _apply_container_position_update(container, arrival_location, request.user)
+                    except ValueError as exc:
+                        return JsonResponse({'success': False, 'message': str(exc)})
+
+                    now = timezone.now()
                     container.status = 'ARRIBADO'
-                    container.current_position = arrival_location
-                    container.position_updated_at = timezone.now()
-                    container.position_updated_by = request.user
-                    
-                    # Registrar arribo en CD si aplica
-                    if arrival_location.startswith('CD_'):
-                        container.cd_arrival_date = timezone.now().date()
-                        container.cd_arrival_time = timezone.now().time()
-                        
-                        # Determinar CD location basado en la selección
-                        cd_mapping = {
-                            'CD_QUILICURA': 'CD Quilicura',
-                            'CD_PENON': 'CD El Peñón', 
-                            'CD_MADERO': 'CD Puerto Madero',
-                            'CD_CAMPOS': 'CD Campos'
-                        }
-                        container.cd_location = cd_mapping.get(arrival_location, container.cd_location)
-                    
-                    # Actualizar asignación
+                    if not container.tiempo_llegada:
+                        container.tiempo_llegada = now
+                    if container.tiempo_inicio_ruta:
+                        delta = now - container.tiempo_inicio_ruta
+                        container.duracion_ruta = int(delta.total_seconds() / 60)
+                    container.save(update_fields=['status', 'tiempo_llegada', 'duracion_ruta'])
+
                     assignment = Assignment.objects.filter(
                         container=container,
                         driver=container.conductor_asignado,
@@ -445,14 +451,17 @@ def update_status(request):
                     
                     if assignment:
                         assignment.estado = 'COMPLETADA'
-                        assignment.fecha_completada = timezone.now()
-                        assignment.save()
-                    
-                    container.save()
+                        assignment.fecha_completada = now
+                        if assignment.fecha_inicio:
+                            elapsed = now - assignment.fecha_inicio
+                            assignment.tiempo_real = int(elapsed.total_seconds() / 60)
+                        assignment.save(update_fields=['estado', 'fecha_completada', 'tiempo_real'])
                     
                     return JsonResponse({
                         'success': True,
-                        'message': f'Arribo registrado en {arrival_location.replace("_", " ")}'
+                        'message': (
+                            f"Arribo registrado. Posición {position_stats['old_position']} → {position_stats['new_position']}"
+                        )
                     })
                 else:
                     return JsonResponse({

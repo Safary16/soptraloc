@@ -2,6 +2,7 @@ from django.contrib.auth import authenticate
 from django.contrib.auth.models import User
 from django.shortcuts import render
 from django.contrib.auth.decorators import login_required
+from django.db.models import Count
 from django.utils import timezone
 from rest_framework import status
 from rest_framework.decorators import api_view, permission_classes
@@ -14,6 +15,7 @@ from apps.containers.services.status_utils import (
     active_status_filter_values,
     normalize_status,
     related_status_values,
+    summarize_statuses,
 )
 
 
@@ -104,75 +106,90 @@ def home_view(request):
 @login_required
 def dashboard_view(request):
     """Dashboard principal con contenedores programados"""
-    from django.utils import timezone
-    from datetime import datetime, timedelta
-    
-    # Obtener filtro de estado - Mostrar contenedores relevantes por defecto
-    status_filter = request.GET.get('status', 'all')  # Cambiar de 'PROGRAMADO' a 'all'
-    
-    # Obtener fechas para comparación
-    today = timezone.now().date()
+    from datetime import timedelta
+    from apps.drivers.models import Alert
+
+    status_filter = request.GET.get('status', 'all')
+    today = timezone.localdate()
     tomorrow = today + timedelta(days=1)
-    
-    # Filtrar contenedores según el estado
+
+    base_queryset = Container.objects.select_related(
+        'conductor_asignado',
+        'client',
+        'terminal',
+        'owner_company',
+        'vessel',
+        'agency',
+        'shipping_line'
+    )
+
     if status_filter == 'all':
-        containers = Container.objects.filter(
-            status__in=active_status_filter_values()
-        ).order_by('scheduled_date', 'container_number')
+        containers = base_queryset.filter(status__in=active_status_filter_values())
     else:
         normalized_status = normalize_status(status_filter)
-        containers = Container.objects.filter(
-            status__in=related_status_values(normalized_status)
-        ).order_by('scheduled_date', 'container_number')
-    
-    # Estadísticas generales
-    total_containers = Container.objects.count()
-    programados = Container.objects.filter(status__in=related_status_values('PROGRAMADO')).count()
-    en_proceso = Container.objects.filter(status__in=related_status_values('EN_PROCESO')).count()
-    en_transito = Container.objects.filter(status__in=related_status_values('EN_TRANSITO')).count()
-    liberados = Container.objects.filter(status__in=related_status_values('LIBERADO')).count()
-    descargados = Container.objects.filter(status__in=related_status_values('DESCARGADO')).count()
-    en_secuencia = Container.objects.filter(status__in=related_status_values('EN_SECUENCIA')).count()
-    
-    # Generar alertas para contenedores programados sin conductor
-    from apps.drivers.models import Alert
-    programados_hoy = Container.objects.filter(
-        status__in=related_status_values('PROGRAMADO'),
-        scheduled_date=today,
-        conductor_asignado__isnull=True
+        containers = base_queryset.filter(status__in=related_status_values(normalized_status))
+
+    containers = containers.order_by('scheduled_date', 'container_number')
+
+    raw_status_counts = Container.objects.values_list('status').annotate(count=Count('id'))
+    normalized_counts = {
+        summary.code: summary.count for summary in summarize_statuses(raw_status_counts)
+    }
+
+    stats = {
+        'total': sum(normalized_counts.values()),
+        'programados': normalized_counts.get('PROGRAMADO', 0),
+        'en_proceso': normalized_counts.get('EN_PROCESO', 0),
+        'en_transito': normalized_counts.get('EN_TRANSITO', 0),
+        'liberados': normalized_counts.get('LIBERADO', 0),
+        'descargados': normalized_counts.get('DESCARGADO', 0),
+        'en_secuencia': normalized_counts.get('EN_SECUENCIA', 0),
+    }
+
+    programados_hoy_data = list(
+        Container.objects.filter(
+            status__in=related_status_values('PROGRAMADO'),
+            scheduled_date=today,
+            conductor_asignado__isnull=True
+        ).values('id', 'container_number')
     )
-    
-    # Crear alertas para contenedores sin asignar
-    for container in programados_hoy:
-        Alert.objects.get_or_create(
-            tipo='CONTENEDOR_SIN_ASIGNAR',
-            container=container,
-            defaults={
-                'prioridad': 'ALTA',
-                'titulo': f'Contenedor {container.container_number} sin conductor',
-                'mensaje': f'El contenedor {container.container_number} está programado para hoy y no tiene conductor asignado.'
-            }
+    programados_hoy_ids = [item['id'] for item in programados_hoy_data]
+
+    if programados_hoy_ids:
+        existing_alert_ids = set(
+            Alert.objects.filter(
+                tipo='CONTENEDOR_SIN_ASIGNAR',
+                container_id__in=programados_hoy_ids,
+                is_active=True
+            ).values_list('container_id', flat=True)
         )
-    
+        new_alerts = [
+            Alert(
+                tipo='CONTENEDOR_SIN_ASIGNAR',
+                prioridad='ALTA',
+                titulo=f"Contenedor {item['container_number']} sin conductor",
+                mensaje=(
+                    f"El contenedor {item['container_number']} está programado para hoy y no tiene conductor asignado."
+                ),
+                container_id=item['id']
+            )
+            for item in programados_hoy_data
+            if item['id'] not in existing_alert_ids
+        ]
+        if new_alerts:
+            Alert.objects.bulk_create(new_alerts)
+
     context = {
         'title': 'Dashboard - SoptraLoc',
         'containers': containers,
         'status_filter': status_filter,
         'today': today,
         'tomorrow': tomorrow,
-        'stats': {
-            'total': total_containers,
-            'programados': programados,
-            'en_proceso': en_proceso,
-            'en_transito': en_transito,
-            'liberados': liberados,
-            'descargados': descargados,
-            'en_secuencia': en_secuencia,
-        },
+        'stats': stats,
         'alertas_activas': Alert.objects.filter(is_active=True).count(),
-        'contenedores_sin_asignar': programados_hoy.count(),
+        'contenedores_sin_asignar': len(programados_hoy_data),
     }
-    
+
     return render(request, 'core/dashboard.html', context)
 
 
