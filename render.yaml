@@ -1,22 +1,25 @@
-# 🚀 Render.com - Deploy Optimizado para SafaryLoc
-# Configuración completa para sistema de gestión logística
+# 🚀 Render.com - Deploy Definitivo SafaryLoc
+# Sistema de optimización de transporte de contenedores
+# Deploy final con todas las funcionalidades restauradas
 
 services:
   # 🌐 Aplicación Web Principal
   - type: web
-    name: soptraloc-web
+    name: soptraloc-production
     env: python
     repo: https://github.com/Safary16/soptraloc.git
     rootDir: soptraloc_system
     plan: free
     
-    # 🔨 Comandos de construcción - Se ejecutan solo una vez
+    # 🔨 Comandos de construcción - Deploy definitivo
     buildCommand: |
+      echo "🚀 Iniciando deploy definitivo de SafaryLoc..."
       pip install -r ../requirements.txt
       python manage.py collectstatic --noinput --settings=config.settings_production
       python manage.py migrate --settings=config.settings_production
       python initialize_system.py
-      echo "🎉 Sistema completamente inicializado y listo para producción"
+      python manage.py normalize_container_statuses
+      echo "✅ SafaryLoc desplegado correctamente - Sistema optimizado y funcional"
       
     # 🚀 Comandos de inicio - Se ejecutan en cada restart
     startCommand: |
@@ -34,16 +37,20 @@ services:
         generateValue: true
       - key: DATABASE_URL
         fromDatabase:
-          name: soptraloc-db
+          name: soptraloc-production-db
           property: connectionString
       - key: ALLOWED_HOSTS
         value: "*.onrender.com,localhost,127.0.0.1"
       - key: RENDER_EXTERNAL_HOSTNAME
-        value: "soptraloc-web.onrender.com"
+        value: "soptraloc-production.onrender.com"
+      - key: DEPLOYMENT_ENV
+        value: "production"
+      - key: SYSTEM_VERSION
+        value: "v2.0-optimized"
 
-# 🗄️ Base de Datos PostgreSQL
+# 🗄️ Base de Datos PostgreSQL - Producción
 databases:
-  - name: soptraloc-db
-    databaseName: soptraloc
-    user: soptraloc_user
+  - name: soptraloc-production-db
+    databaseName: soptraloc_prod
+    user: soptraloc_prod_user
     plan: free
