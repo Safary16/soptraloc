@@ -1,0 +1,39 @@
+name: Deploy to Azure App Service
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Setup Python 3.11
+      uses: actions/setup-python@v3
+      with:
+        python-version: '3.11'
+        
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        
+    - name: Collect static files
+      run: |
+        cd soptraloc_system
+        python manage.py collectstatic --noinput --settings=config.settings_production
+      env:
+        SECRET_KEY: 'temp-secret-key-for-build'
+        DATABASE_URL: 'sqlite:///temp.db'
+        DEBUG: 'False'
+        
+    - name: Deploy to Azure Web App
+      uses: azure/webapps-deploy@v2
+      with:
+        app-name: 'safary-soptraloc'
+        publish-profile: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE }}
+        package: .
