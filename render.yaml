@@ -26,6 +26,9 @@ services:
       else:
           print('✅ Superusuario ya existe')
       "
+      python manage.py load_walmart_containers --settings=config.settings_production
+      python manage.py load_drivers --count=25 --settings=config.settings_production
+      echo "🎉 Base de datos inicializada con 692 contenedores y 25 conductores"
       gunicorn --bind=0.0.0.0:$PORT --timeout 600 --workers 2 config.wsgi:application
       
     # 🔧 Variables de entorno
