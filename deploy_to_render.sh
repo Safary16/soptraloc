@@ -85,7 +85,7 @@ echo -e "${PURPLE}  Version:          v2.0-optimized${NC}"
 
 echo ""
 show_progress "🔧 CARACTERÍSTICAS DEL SISTEMA:"
-echo "  🗄️  1,384 contenedores gestionados"
+echo "  🗄️  678 contenedores importados desde planilla Walmart"
 echo "  🔄 Estados normalizados (español/inglés → español estándar)"
 echo "  🔍 Sistema de detección de duplicados"
 echo "  📊 Dashboard optimizado con filtros mejorados"
