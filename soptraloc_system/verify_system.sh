@@ -1,8 +1,6 @@
 #!/bin/bash
-"""
-Script de verificación del sistema SafaryLoc
-Verifica que todos los componentes estén funcionando correctamente
-"""
+# Script de verificación del sistema SafaryLoc
+# Verifica que todos los componentes estén funcionando correctamente
 
 echo "🔍 VERIFICACIÓN COMPLETA DEL SISTEMA SAFARYLOC"
 echo "=============================================="

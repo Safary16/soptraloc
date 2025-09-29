@@ -16,6 +16,7 @@ os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'config.settings')
 django.setup()
 
 from django.contrib.auth.models import User
+from django.core.management import call_command
 from apps.containers.models import Container
 from apps.drivers.models import Driver, Location, TimeMatrix
 from apps.core.models import Company
@@ -61,6 +62,12 @@ def run_existing_commands():
             print(f"✅ Contenedores cargados: {Container.objects.count()}")
         else:
             print(f"✅ Ya existen {current_containers} contenedores")
+
+        # Normalizar estados tras la importación (evita valores heredados o en inglés)
+        try:
+            call_command('normalize_container_statuses')
+        except Exception as normalize_error:
+            print(f"⚠️ No fue posible normalizar estados automáticamente: {normalize_error}")
         
         # Conductores
         from apps.drivers.management.commands.load_drivers import Command as DriverCommand

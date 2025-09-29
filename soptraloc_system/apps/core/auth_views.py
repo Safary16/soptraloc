@@ -9,6 +9,12 @@ from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from rest_framework_simplejwt.tokens import RefreshToken
 from apps.containers.models import Container
+from apps.containers.services.status_utils import (
+    ACTIVE_STATUS_CODES,
+    active_status_filter_values,
+    normalize_status,
+    related_status_values,
+)
 
 
 @api_view(['POST'])
@@ -75,7 +81,7 @@ def auth_info(request):
         },
         'stats': {
             'total_containers': Container.objects.count(),
-            'containers_programados': Container.objects.filter(status='PROGRAMADO').count(),
+            'containers_programados': Container.objects.filter(status__in=related_status_values('PROGRAMADO')).count(),
         },
         'headers_required': {
             'Authorization': 'Bearer <your_jwt_token>',
@@ -85,7 +91,7 @@ def auth_info(request):
 
 def home_view(request):
     """Vista principal con dashboard básico"""
-    programados = Container.objects.filter(status='PROGRAMADO').count()
+    programados = Container.objects.filter(status__in=related_status_values('PROGRAMADO')).count()
     total = Container.objects.count()
     
     return render(request, 'core/home.html', {
@@ -101,8 +107,8 @@ def dashboard_view(request):
     from django.utils import timezone
     from datetime import datetime, timedelta
     
-    # Obtener filtro de estado
-    status_filter = request.GET.get('status', 'PROGRAMADO')
+    # Obtener filtro de estado - Mostrar contenedores relevantes por defecto
+    status_filter = request.GET.get('status', 'all')  # Cambiar de 'PROGRAMADO' a 'all'
     
     # Obtener fechas para comparación
     today = timezone.now().date()
@@ -110,23 +116,28 @@ def dashboard_view(request):
     
     # Filtrar contenedores según el estado
     if status_filter == 'all':
-        containers = Container.objects.all().order_by('scheduled_date', 'container_number')
+        containers = Container.objects.filter(
+            status__in=active_status_filter_values()
+        ).order_by('scheduled_date', 'container_number')
     else:
-        containers = Container.objects.filter(status=status_filter).order_by('scheduled_date', 'container_number')
+        normalized_status = normalize_status(status_filter)
+        containers = Container.objects.filter(
+            status__in=related_status_values(normalized_status)
+        ).order_by('scheduled_date', 'container_number')
     
     # Estadísticas generales
     total_containers = Container.objects.count()
-    programados = Container.objects.filter(status='PROGRAMADO').count()
-    en_proceso = Container.objects.filter(status='EN_PROCESO').count()
-    en_transito = Container.objects.filter(status='EN_TRANSITO').count()
-    liberados = Container.objects.filter(status='LIBERADO').count()
-    descargados = Container.objects.filter(status='DESCARGADO').count()
-    en_secuencia = Container.objects.filter(status='EN_SECUENCIA').count()
+    programados = Container.objects.filter(status__in=related_status_values('PROGRAMADO')).count()
+    en_proceso = Container.objects.filter(status__in=related_status_values('EN_PROCESO')).count()
+    en_transito = Container.objects.filter(status__in=related_status_values('EN_TRANSITO')).count()
+    liberados = Container.objects.filter(status__in=related_status_values('LIBERADO')).count()
+    descargados = Container.objects.filter(status__in=related_status_values('DESCARGADO')).count()
+    en_secuencia = Container.objects.filter(status__in=related_status_values('EN_SECUENCIA')).count()
     
     # Generar alertas para contenedores programados sin conductor
     from apps.drivers.models import Alert
     programados_hoy = Container.objects.filter(
-        status='PROGRAMADO',
+        status__in=related_status_values('PROGRAMADO'),
         scheduled_date=today,
         conductor_asignado__isnull=True
     )

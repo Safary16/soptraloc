@@ -16,6 +16,7 @@ os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'config.settings')
 django.setup()
 
 from apps.containers.models import Container, Agency, ShippingLine, Vessel
+from apps.containers.services.status_utils import normalize_status
 from apps.core.models import Company, Location
 from decimal import Decimal
 
@@ -90,7 +91,7 @@ def import_walmart_containers():
                     print(f"🔄 Actualizado: {container_number} - {new_status}")
             
             # Contar programados
-            if container.status == 'available':
+            if normalize_status(container.status) == 'PROGRAMADO':
                 programmed_count += 1
                 
         except Exception as e:
@@ -120,11 +121,11 @@ def generate_sample_walmart_data():
     
     # Datos de ejemplo
     sample_containers = [
-        {'number': 'WALU1234567', 'type': 'DRY', 'status': 'available'},
-        {'number': 'WALU2345678', 'type': 'REEFER', 'status': 'in_transit'},
-        {'number': 'WALU3456789', 'type': 'DRY', 'status': 'available'},
-        {'number': 'WALU4567890', 'type': 'TANK', 'status': 'loading'},
-        {'number': 'WALU5678901', 'type': 'DRY', 'status': 'available'},
+    {'number': 'WALU1234567', 'type': 'DRY', 'status': 'PROGRAMADO'},
+    {'number': 'WALU2345678', 'type': 'REEFER', 'status': 'EN_TRANSITO'},
+    {'number': 'WALU3456789', 'type': 'DRY', 'status': 'PROGRAMADO'},
+    {'number': 'WALU4567890', 'type': 'TANK', 'status': 'EN_PROCESO'},
+    {'number': 'WALU5678901', 'type': 'DRY', 'status': 'PROGRAMADO'},
     ]
     
     imported = 0
@@ -134,7 +135,7 @@ def generate_sample_walmart_data():
             defaults={
                 'owner_company': walmart,
                 'container_type': container_data['type'],
-                'status': container_data['status'],
+                'status': map_status(container_data['status']),
                 'position_status': 'floor',
                 'cargo_description': f"Walmart merchandise - {container_data['type']} container",
             }
@@ -163,23 +164,11 @@ def get_container_type(med_value):
     return 'DRY'
 
 def map_status(status_value):
-    """Mapea el status del contenedor"""
+    """Normaliza el status del contenedor usando las reglas del sistema."""
     if not status_value or str(status_value).strip() == 'nan':
-        return 'available'
-        
-    status = str(status_value).upper().strip()
-    
-    status_mapping = {
-        'PROGRAMADO': 'available',
-        'FINALIZADO': 'dispatched',
-        'LIBERADO': 'dispatched', 
-        'DESCARGADO': 'loading',
-        'POR ARRIBAR': 'in_transit',
-        'EN SECUENCIA': 'loading',
-        'TRG': 'available',
-    }
-    
-    return status_mapping.get(status, 'available')
+        return normalize_status(None)
+
+    return normalize_status(status_value)
 
 def get_weight(weight_value):
     """Convierte peso a decimal"""

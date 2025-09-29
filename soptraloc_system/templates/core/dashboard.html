@@ -91,16 +91,19 @@
                 <h5 class="mb-0">
                     <i class="bi bi-list-check"></i> 
                     {% if status_filter == 'all' %}
-                        Todos los Contenedores ({{ containers.count }})
+                        Todos los Contenedores Activos ({{ containers.count }})
                     {% elif status_filter %}
                         Contenedores {{ status_filter|title }} ({{ containers.count }})
                     {% else %}
-                        Contenedores Programados ({{ containers.count }})
+                        Contenedores Activos ({{ containers.count }})
                     {% endif %}
                 </h5>
                 <div class="btn-group btn-group-sm">
-                    <a href="/dashboard/" class="btn btn-outline-primary">
+                    <a href="/dashboard/?status=PROGRAMADO" class="btn btn-outline-primary">
                         <i class="bi bi-clipboard-check"></i> Solo Programados
+                    </a>
+                    <a href="/dashboard/?status=all" class="btn btn-outline-info">
+                        <i class="bi bi-grid"></i> Todos
                     </a>
                     <a href="{% url 'resueltos' %}" class="btn btn-success">
                         <i class="bi bi-check-circle-fill"></i> Ver Resueltos
@@ -245,8 +248,8 @@
                 {% else %}
                 <div class="text-center py-5">
                     <i class="bi bi-inbox display-1 text-muted"></i>
-                    <h4 class="text-muted mt-3">No hay contenedores programados</h4>
-                    <p class="text-muted">Los contenedores con estado PROGRAMADO aparecerán aquí.</p>
+                    <h4 class="text-muted mt-3">No hay contenedores disponibles</h4>
+                    <p class="text-muted">Los contenedores con estados activos aparecerán aquí.</p>
                     <a href="/admin/containers/container/" class="btn btn-primary">
                         <i class="bi bi-plus"></i> Agregar Contenedor
                     </a>
