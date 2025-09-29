@@ -9,27 +9,28 @@ services:
     env: python
     pythonVersion: 3.12.6
     repo: https://github.com/Safary16/soptraloc.git
-    rootDir: soptraloc_system
     plan: free
     
     # 🔨 Comandos de construcción - Deploy definitivo
     buildCommand: |
       echo "🚀 Iniciando deploy definitivo de SafaryLoc..."
-      pip install -r ../requirements.txt
+      pip install -r requirements.txt
+      cd soptraloc_system
       python manage.py collectstatic --noinput --settings=config.settings_production
       python manage.py migrate --settings=config.settings_production
+      cd soptraloc_system
       python initialize_system.py
       python manage.py normalize_container_statuses
       echo "✅ SafaryLoc desplegado correctamente - Sistema optimizado y funcional"
       
     # 🚀 Comandos de inicio - Se ejecutan en cada restart
     startCommand: |
-      gunicorn --bind=0.0.0.0:$PORT --timeout 600 --workers 2 config.wsgi:application
+      cd soptraloc_system && gunicorn --bind=0.0.0.0:$PORT --timeout 600 --workers 2 config.wsgi:application
       
     # 🔧 Variables de entorno
     envVars:
       - key: PYTHON_VERSION
-        value: "3.12.3"
+        value: "3.12.6"
       - key: DEBUG
         value: "False"
       - key: DJANGO_SETTINGS_MODULE
