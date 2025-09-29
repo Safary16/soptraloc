@@ -7,7 +7,7 @@ services:
   - type: web
     name: soptraloc-production
     env: python
-    pythonVersion: 3.12.3
+    pythonVersion: 3.12.6
     repo: https://github.com/Safary16/soptraloc.git
     rootDir: soptraloc_system
     plan: free
