@@ -493,58 +493,20 @@ def assign_driver_quick(request):
             
             container = get_object_or_404(Container, id=container_id)
             driver = get_object_or_404(Driver, id=driver_id)
+            from apps.drivers.views import _assign_driver_to_container, _compute_scheduled_datetime
             
-            # Verificar disponibilidad del conductor
-            if container.scheduled_date and container.scheduled_time:
-                scheduled_datetime = timezone.datetime.combine(
-                    container.scheduled_date, 
-                    container.scheduled_time
-                ).replace(tzinfo=timezone.get_current_timezone())
-                
-                # Verificar conflictos de horario
-                existing_assignments = Assignment.objects.filter(
-                    driver=driver,
-                    fecha_programada__date=scheduled_datetime.date(),
-                    estado__in=['PENDIENTE', 'EN_CURSO']
-                )
-                
-                if existing_assignments.exists():
-                    return JsonResponse({
-                        'success': False,
-                        'message': f'El conductor {driver.nombre} ya tiene asignaciones en esa fecha/hora'
-                    })
-            else:
-                scheduled_datetime = timezone.now()
-            
-            # Crear asignación
-            assignment = Assignment.objects.create(
-                container=container,
-                driver=driver,
-                fecha_programada=scheduled_datetime,
-                origen_legacy=container.terminal.name if container.terminal else 'Terminal',
-                destino_legacy=container.cd_location or 'CD',
-                created_by=request.user
-            )
-            
-            # Calcular tiempo estimado
-            assignment.calculate_estimated_time()
-            assignment.save()
-            
-            # Actualizar estado del contenedor con tiempo de asignación
-            container.status = 'ASIGNADO'  # Cambiar a ASIGNADO en lugar de EN_PROCESO
-            container.conductor_asignado = driver
-            container.tiempo_asignacion = timezone.now()  # Registrar tiempo de asignación
-            container.save()
-            
-            # Actualizar conductor
-            driver.contenedor_asignado = container
-            driver.save()
-            
+            scheduled_datetime = _compute_scheduled_datetime(container)
+            assignment = _assign_driver_to_container(container, driver, request.user, scheduled_datetime)
+
             return JsonResponse({
                 'success': True,
                 'message': f'Conductor {driver.nombre} asignado exitosamente'
             })
-            
+        except ValueError as exc:
+            return JsonResponse({
+                'success': False,
+                'message': str(exc)
+            })
         except Exception as e:
             return JsonResponse({
                 'success': False,

@@ -1,16 +1,16 @@
-from django.shortcuts import render, get_object_or_404, redirect
+from datetime import datetime, timedelta, time
+
+from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.http import JsonResponse
-from django.contrib import messages
+from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 from django.views.decorators.csrf import csrf_exempt
-from django.db.models import Q
-from datetime import datetime, timedelta, time
 
 from apps.containers.models import Container
 from apps.containers.services.status_utils import normalize_status
 
-from .models import Driver, Assignment, Alert, Location
+from .models import Alert, Assignment, Driver, Location, TimeMatrix
 import json
 
 # Configuración auxiliar para asignaciones automáticas
@@ -24,6 +24,9 @@ CD_NAME_TO_CODE = {
     'CD EL PEÑÓN': 'CD_PENON',
     'CD EL PEÑON': 'CD_PENON',
 }
+
+SCHEDULE_BUFFER_MINUTES = 30
+DEFAULT_ASSIGNMENT_DURATION = 120
 
 
 def _compute_scheduled_datetime(container):
@@ -63,10 +66,59 @@ def _preferred_driver_types(container):
     return ['TRONCO', 'TRONCO_PM', 'LEASING']
 
 
+def _estimate_assignment_duration_minutes(origin, destination):
+    if origin and destination:
+        try:
+            time_matrix = TimeMatrix.objects.get(from_location=origin, to_location=destination)
+            return time_matrix.get_total_time()
+        except TimeMatrix.DoesNotExist:
+            return DEFAULT_ASSIGNMENT_DURATION
+    return DEFAULT_ASSIGNMENT_DURATION
+
+
+def _has_schedule_conflict(driver, start_datetime, duration_minutes):
+    if start_datetime is None:
+        start_datetime = timezone.now()
+    if duration_minutes is None or duration_minutes <= 0:
+        duration_minutes = DEFAULT_ASSIGNMENT_DURATION
+
+    buffer = timedelta(minutes=SCHEDULE_BUFFER_MINUTES)
+    window_start = start_datetime - buffer
+    window_end = start_datetime + timedelta(minutes=duration_minutes) + buffer
+
+    active_assignments = Assignment.objects.filter(
+        driver=driver,
+        estado__in=['PENDIENTE', 'EN_CURSO']
+    )
+
+    for assignment in active_assignments:
+        assign_start = assignment.fecha_programada or assignment.fecha_inicio or timezone.now()
+        if assignment.estado == 'EN_CURSO' and assignment.fecha_inicio:
+            assign_start = assignment.fecha_inicio
+
+        assign_duration = assignment.tiempo_estimado or DEFAULT_ASSIGNMENT_DURATION
+        assign_end = assign_start + timedelta(minutes=assign_duration)
+
+        if (assign_start - buffer) < window_end and window_start < (assign_end + buffer):
+            return True
+
+    return False
+
+
 def _assign_driver_to_container(container, driver, user, scheduled_datetime=None):
     """Centraliza la creación de asignaciones y la actualización de estados."""
     scheduled_datetime = scheduled_datetime or _compute_scheduled_datetime(container)
     origin_location, destination_location = _resolve_assignment_locations(driver, container)
+
+    today = timezone.localdate()
+    if driver.ultimo_registro_asistencia != today or not driver.hora_ingreso_hoy:
+        raise ValueError(f'El conductor {driver.nombre} no ha registrado asistencia hoy')
+
+    duration_minutes = _estimate_assignment_duration_minutes(origin_location, destination_location)
+    if _has_schedule_conflict(driver, scheduled_datetime, duration_minutes):
+        raise ValueError(
+            f'El conductor {driver.nombre} tiene otra asignación en horario conflictivo'
+        )
 
     assignment = Assignment.objects.create(
         container=container,
@@ -77,7 +129,8 @@ def _assign_driver_to_container(container, driver, user, scheduled_datetime=None
         destino=destination_location,
         origen_legacy=driver.get_ubicacion_actual_display() if hasattr(driver, 'get_ubicacion_actual_display') else driver.ubicacion_actual,
         destino_legacy=container.cd_location or 'CD No definido',
-        created_by=user
+        created_by=user,
+        tiempo_estimado=duration_minutes
     )
 
     assignment.calculate_estimated_time()
@@ -105,17 +158,27 @@ def _assign_driver_to_container(container, driver, user, scheduled_datetime=None
     return assignment
 
 
-def _pick_driver_for_container(container, drivers):
+def _pick_driver_for_container(container, drivers, excluded_driver_ids=None):
     """Selecciona y extrae el conductor más adecuado desde una lista mutable."""
     if not drivers:
         return None
 
+    if excluded_driver_ids is None:
+        excluded_driver_ids = set()
+
     preferred_types = _preferred_driver_types(container)
     for index, driver in enumerate(drivers):
+        if driver.id in excluded_driver_ids:
+            continue
         if driver.tipo_conductor in preferred_types:
             return drivers.pop(index)
 
-    return drivers.pop(0)
+    for index, driver in enumerate(drivers):
+        if driver.id in excluded_driver_ids:
+            continue
+        return drivers.pop(index)
+
+    return None
 
 
 @login_required
@@ -213,7 +276,11 @@ def assign_container(request):
                 'message': f'Contenedor {container.container_number} asignado a {driver.nombre}',
                 'assignment_id': assignment.id
             })
-            
+        except ValueError as exc:
+            return JsonResponse({
+                'success': False,
+                'message': str(exc)
+            })
         except Exception as e:
             return JsonResponse({
                 'success': False, 
@@ -373,6 +440,7 @@ def get_available_drivers(request):
     
     try:
         container = get_object_or_404(Container, id=container_id)
+        today = timezone.localdate()
         
         # Determinar tipo de conductor necesario basado en destino
         if container.cd_location and 'CD' in container.cd_location:
@@ -382,36 +450,27 @@ def get_available_drivers(request):
             # Para puertos se pueden usar troncales
             tipo_requerido = 'TRONCO'
         
-        # Obtener la fecha/hora programada
-        scheduled_datetime = None
-        if container.scheduled_date and container.scheduled_time:
-            scheduled_datetime = timezone.datetime.combine(
-                container.scheduled_date, 
-                container.scheduled_time
-            ).replace(tzinfo=timezone.get_current_timezone())
+        scheduled_datetime = _compute_scheduled_datetime(container)
         
-        # Obtener conductores disponibles del tipo adecuado
+        # Obtener conductores disponibles del tipo adecuado y con asistencia registrada
         available_drivers = Driver.objects.filter(
             estado='OPERATIVO',
             contenedor_asignado__isnull=True,
             tipo_conductor=tipo_requerido,
-            is_active=True
+            is_active=True,
+            ultimo_registro_asistencia=today,
+            hora_ingreso_hoy__isnull=False
         )
-        
-        # Si hay fecha programada, verificar conflictos de horario
-        if scheduled_datetime:
-            # Buscar conductores que NO tienen asignaciones conflictivas
-            conflicted_drivers = Assignment.objects.filter(
-                fecha_programada__date=scheduled_datetime.date(),
-                estado__in=['PENDIENTE', 'EN_CURSO']
-            ).values_list('driver_id', flat=True)
-            
-            available_drivers = available_drivers.exclude(id__in=conflicted_drivers)
-        
-        available_drivers = available_drivers.order_by('nombre')
-        
+        candidates = available_drivers.order_by('nombre')
+
         drivers_data = []
-        for driver in available_drivers:
+        for driver in candidates:
+            origin, destination = _resolve_assignment_locations(driver, container)
+            duration = _estimate_assignment_duration_minutes(origin, destination)
+
+            if _has_schedule_conflict(driver, scheduled_datetime, duration):
+                continue
+
             drivers_data.append({
                 'id': driver.id,
                 'nombre': driver.nombre,
@@ -600,44 +659,62 @@ def auto_assign_drivers(request):
                 scheduled_date__in=[today, tomorrow]
             ).order_by('scheduled_date', 'scheduled_time', 'container_number')
 
-            primary_drivers_qs = Driver.objects.filter(
-                is_active=True,
-                estado='OPERATIVO',
-                contenedor_asignado__isnull=True,
-                ultimo_registro_asistencia=today
-            ).order_by('tiempo_en_ubicacion')
-
-            primary_driver_ids = list(primary_drivers_qs.values_list('id', flat=True))
-
-            fallback_drivers_qs = Driver.objects.filter(
-                is_active=True,
-                estado='OPERATIVO',
-                contenedor_asignado__isnull=True
-            ).exclude(id__in=primary_driver_ids).order_by('tiempo_en_ubicacion')
-
-            available_drivers = list(primary_drivers_qs) + list(fallback_drivers_qs)
+            available_drivers = list(
+                Driver.objects.filter(
+                    is_active=True,
+                    estado='OPERATIVO',
+                    contenedor_asignado__isnull=True,
+                    ultimo_registro_asistencia=today,
+                    hora_ingreso_hoy__isnull=False
+                ).order_by('tiempo_en_ubicacion')
+            )
 
             assigned_count = 0
             pending_containers = []
 
             for container in unassigned_containers:
-                driver = _pick_driver_for_container(container, available_drivers)
-                if not driver:
-                    pending_containers.append(container.container_number)
-                    continue
+                attempted_ids = set()
+                assignment_error = None
 
-                _assign_driver_to_container(container, driver, request.user)
-                assigned_count += 1
+                while available_drivers:
+                    driver = _pick_driver_for_container(container, available_drivers, attempted_ids)
+                    if not driver:
+                        break
+
+                    attempted_ids.add(driver.id)
+
+                    try:
+                        _assign_driver_to_container(container, driver, request.user)
+                        assigned_count += 1
+                        break
+                    except ValueError as exc:
+                        assignment_error = str(exc)
+                        available_drivers.append(driver)
+                        continue
+
+                else:
+                    driver = None
+
+                if not driver or driver.id not in attempted_ids:
+                    pending_containers.append({
+                        'number': container.container_number,
+                        'reason': assignment_error or 'Sin conductores con horario disponible'
+                    })
 
             message = f'{assigned_count} contenedores asignados automáticamente'
             if pending_containers:
-                message += f". Sin conductor disponible para: {', '.join(pending_containers[:5])}" + ('...' if len(pending_containers) > 5 else '')
+                detalles = ', '.join(
+                    f"{item['number']} ({item['reason']})" for item in pending_containers[:5]
+                )
+                message += f". Sin conductor disponible para: {detalles}" + (
+                    '...' if len(pending_containers) > 5 else ''
+                )
 
             return JsonResponse({
                 'success': True,
                 'message': message,
                 'assigned_count': assigned_count,
-                'pending_containers': pending_containers
+                'pending_containers': [item['number'] for item in pending_containers]
             })
             
         except Exception as e:
@@ -676,40 +753,47 @@ def auto_assign_single(request):
 
     today = timezone.localdate()
 
-    primary_drivers = Driver.objects.filter(
-        is_active=True,
-        estado='OPERATIVO',
-        contenedor_asignado__isnull=True,
-        ultimo_registro_asistencia=today
-    ).order_by('tiempo_en_ubicacion')
-
-    available_drivers = list(primary_drivers)
-    if not available_drivers:
-        fallback_qs = Driver.objects.filter(
+    available_drivers = list(
+        Driver.objects.filter(
             is_active=True,
             estado='OPERATIVO',
-            contenedor_asignado__isnull=True
+            contenedor_asignado__isnull=True,
+            ultimo_registro_asistencia=today,
+            hora_ingreso_hoy__isnull=False
         ).order_by('tiempo_en_ubicacion')
-        available_drivers = list(fallback_qs)
+    )
 
-    driver = _pick_driver_for_container(container, available_drivers)
+    attempted_ids = set()
+    last_error = None
 
-    if not driver:
-        return JsonResponse({
-            'success': False,
-            'message': 'No hay conductores disponibles para asignar automáticamente'
-        })
+    while available_drivers:
+        driver = _pick_driver_for_container(container, available_drivers, attempted_ids)
+        if not driver:
+            break
 
-    assignment = _assign_driver_to_container(container, driver, request.user)
+        attempted_ids.add(driver.id)
+
+        try:
+            assignment = _assign_driver_to_container(container, driver, request.user)
+
+            return JsonResponse({
+                'success': True,
+                'message': f'Contenedor {container.container_number} asignado a {driver.nombre} ({driver.ppu})',
+                'assignment_id': assignment.id,
+                'driver': {
+                    'id': driver.id,
+                    'nombre': driver.nombre,
+                    'tipo': driver.get_tipo_conductor_display(),
+                    'ubicacion': driver.get_ubicacion_actual_display(),
+                }
+            })
+
+        except ValueError as exc:
+            last_error = str(exc)
+            available_drivers.append(driver)
+            continue
 
     return JsonResponse({
-        'success': True,
-        'message': f'Contenedor {container.container_number} asignado a {driver.nombre} ({driver.ppu})',
-        'assignment_id': assignment.id,
-        'driver': {
-            'id': driver.id,
-            'nombre': driver.nombre,
-            'tipo': driver.get_tipo_conductor_display(),
-            'ubicacion': driver.get_ubicacion_actual_display(),
-        }
+        'success': False,
+        'message': last_error or 'No hay conductores disponibles para asignar automáticamente'
     })
