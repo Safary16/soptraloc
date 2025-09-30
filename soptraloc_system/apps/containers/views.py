@@ -3,11 +3,12 @@ from datetime import timedelta
 from django.db.models import Count, Q
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework import status, viewsets
+from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
 from rest_framework.decorators import action
 from rest_framework.filters import OrderingFilter, SearchFilter
 from rest_framework.response import Response
 from django.shortcuts import render, get_object_or_404
-from django.http import JsonResponse
+from django.http import HttpResponse, JsonResponse
 from django.contrib.auth.decorators import login_required
 from django.utils import timezone
 from django.contrib import messages
@@ -26,6 +27,12 @@ from .serializers import (
     ContainerSummarySerializer,
 )
 from apps.drivers.models import Driver, Assignment
+from apps.containers.services.excel_importers import (
+    apply_programming,
+    apply_release_schedule,
+    export_liberated_containers,
+    import_vessel_manifest,
+)
 import json
 
 
@@ -33,6 +40,7 @@ class ContainerViewSet(viewsets.ModelViewSet):
     queryset = Container.objects.filter(is_active=True).select_related(
         'owner_company', 'current_location', 'current_vehicle'
     )
+    parser_classes = [JSONParser, MultiPartParser, FormParser]
     filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]
     filterset_fields = [
         'container_type', 'status', 'position_status', 'owner_company', 
@@ -54,6 +62,90 @@ class ContainerViewSet(viewsets.ModelViewSet):
 
     def perform_update(self, serializer):
         serializer.save(updated_by=self.request.user)
+
+    @staticmethod
+    def _extract_uploaded_files(request):
+        files = list(request.FILES.getlist('files'))
+        if not files:
+            single = request.FILES.get('file')
+            if single:
+                files = [single]
+        return [uploaded for uploaded in files if uploaded]
+
+    @action(
+        detail=False,
+        methods=['post'],
+        url_path='import-manifest',
+        parser_classes=[MultiPartParser, FormParser],
+    )
+    def import_manifest(self, request):
+        """Importa uno o varios manifiestos de nave desde archivos Excel."""
+        uploaded_files = self._extract_uploaded_files(request)
+        if not uploaded_files:
+            return Response(
+                {'detail': 'No se adjuntaron archivos para importar'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        summaries = import_vessel_manifest(uploaded_files, request.user)
+        return Response(
+            {'summaries': [summary.as_dict() for summary in summaries]},
+            status=status.HTTP_200_OK,
+        )
+
+    @action(
+        detail=False,
+        methods=['post'],
+        url_path='import-release',
+        parser_classes=[MultiPartParser, FormParser],
+    )
+    def import_release(self, request):
+        """Aplica archivos de liberaciones para actualizar contenedores."""
+        uploaded_files = self._extract_uploaded_files(request)
+        if not uploaded_files:
+            return Response(
+                {'detail': 'No se adjuntaron archivos para importar'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        summaries = [apply_release_schedule(uploaded, request.user) for uploaded in uploaded_files]
+        return Response(
+            {'summaries': [summary.as_dict() for summary in summaries]},
+            status=status.HTTP_200_OK,
+        )
+
+    @action(
+        detail=False,
+        methods=['post'],
+        url_path='import-programming',
+        parser_classes=[MultiPartParser, FormParser],
+    )
+    def import_programming(self, request):
+        """Carga archivos de programación y aplica asignaciones operativas."""
+        uploaded_files = self._extract_uploaded_files(request)
+        if not uploaded_files:
+            return Response(
+                {'detail': 'No se adjuntaron archivos para importar'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        summaries = [apply_programming(uploaded, request.user) for uploaded in uploaded_files]
+        return Response(
+            {'summaries': [summary.as_dict() for summary in summaries]},
+            status=status.HTTP_200_OK,
+        )
+
+    @action(detail=False, methods=['get'], url_path='export-liberated')
+    def export_liberated(self, request):
+        """Genera un Excel con los contenedores liberados o programados."""
+        output = export_liberated_containers()
+        filename = f"contenedores_liberados_{timezone.now().strftime('%Y%m%d')}.xlsx"
+        response = HttpResponse(
+            output.getvalue(),
+            content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        )
+        response['Content-Disposition'] = f'attachment; filename="{filename}"'
+        return response
 
     @action(detail=False, methods=['get'])
     def summary(self, request):
