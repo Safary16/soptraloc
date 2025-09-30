@@ -7,7 +7,7 @@ services:
   - type: web
     name: soptraloc-production
     env: python
-    pythonVersion: 3.12.6
+    pythonVersion: "3.12.6"
     repo: https://github.com/Safary16/soptraloc.git
     plan: free
     
@@ -17,10 +17,14 @@ services:
       pip install -r requirements.txt
       cd soptraloc_system
       python manage.py collectstatic --noinput --settings=config.settings_production
+      echo "✅ Dependencias listas y archivos estáticos recopilados"
+
+    preDeployCommand: |
+      cd soptraloc_system
       python manage.py migrate --settings=config.settings_production
-      python initialize_system.py
-      python manage.py normalize_container_statuses
-      echo "✅ SafaryLoc desplegado correctamente - Sistema optimizado y funcional"
+      DJANGO_SETTINGS_MODULE=config.settings_production python initialize_system.py
+      python manage.py normalize_container_statuses --settings=config.settings_production
+      echo "✅ Base de datos migrada y datos iniciales preparados"
       
     # 🚀 Comandos de inicio - Se ejecutan en cada restart
     startCommand: |
