@@ -142,52 +142,23 @@ def _parse_decimal(value: Optional[str]) -> Optional[Decimal]:
 
 
 def _parse_date(value: Optional[str]) -> Optional[date]:
-    if value is None or str(value).strip() == "":
-        return None
-    if isinstance(value, date) and not isinstance(value, datetime):
-        return value
-    if isinstance(value, datetime):
-        return value.date()
-    for fmt in ("%Y-%m-%d", "%d/%m/%Y", "%d-%m-%Y", "%m/%d/%Y", "%d/%m/%y"):
-        try:
-            return datetime.strptime(str(value), fmt).date()
-        except ValueError:
-            continue
-    try:
-        return pd.to_datetime(value, dayfirst=True).date()
-    except Exception:
-        return None
+    """Wrapper para DateTimeParser.parse_date compartido"""
+    from apps.containers.services.utils import DateTimeParser
+    return DateTimeParser.parse_date(value)
 
 
 def _parse_time(value: Optional[str]) -> Optional[time]:
-    if value is None or str(value).strip() == "":
-        return None
-    if isinstance(value, time):
-        return value
-    if isinstance(value, datetime):
-        return value.time()
-    for fmt in ("%H:%M", "%H:%M:%S", "%I:%M %p"):
-        try:
-            return datetime.strptime(str(value), fmt).time()
-        except ValueError:
-            continue
-    try:
-        return pd.to_datetime(value).time()
-    except Exception:
-        return None
+    """Wrapper para DateTimeParser.parse_time compartido"""
+    from apps.containers.services.utils import DateTimeParser
+    return DateTimeParser.parse_time(value)
 
 
 def normalize_container_number(raw: Optional[str]) -> str:
+    """Normaliza número de contenedor usando ContainerNumberFormatter compartido"""
+    from apps.containers.services.utils import ContainerNumberFormatter
     if not raw:
         return ""
-    cleaned = re.sub(r"[^A-Za-z0-9]", "", str(raw).upper())
-    if len(cleaned) < 11:
-        return cleaned
-    prefix = cleaned[:4]
-    digits = cleaned[4:11]
-    if len(digits) < 7:
-        return f"{prefix} {digits}".strip()
-    return f"{prefix} {digits[:6]}-{digits[6]}"
+    return ContainerNumberFormatter.format(str(raw))
 
 
 def _container_variants(number: str) -> Sequence[str]:
@@ -207,64 +178,35 @@ def match_existing_container(container_number: str) -> Optional[Container]:
 
 
 def _get_or_create_company(name: Optional[str], user: User) -> Company:
+    """Wrapper para EntityFactory.get_or_create_company con user"""
+    from apps.containers.services.utils import EntityFactory
     cleaned = _clean_str(name) or "WALMART"
-    company = Company.objects.filter(name__iexact=cleaned).first()
-    if company:
-        return company
-    code = re.sub(r"[^A-Z0-9]", "", cleaned.upper())[:10] or "COMPANY"
-    return Company.objects.create(
-        name=cleaned,
-        code=code,
-        rut=f"{code[:8] or '00000000'}-{code[-1] if len(code) > 8 else '0'}",
-        email=f"{code.lower()}@placeholder.local",
-        phone="+56 2 0000 0000",
-        address="Dirección no especificada",
-        created_by=user,
-        updated_by=user,
-    )
+    return EntityFactory.get_or_create_company(cleaned, user)
 
 
 def _get_or_create_shipping_line(name: Optional[str], user: User) -> ShippingLine:
+    """Wrapper para EntityFactory.get_or_create_shipping_line con user"""
+    from apps.containers.services.utils import EntityFactory
     cleaned = _clean_str(name) or "Sin Especificar"
-    shipping_line, _ = ShippingLine.objects.get_or_create(
-        name=cleaned,
-        defaults={
-            "code": re.sub(r"[^A-Z0-9]", "", cleaned.upper())[:10] or "SHIP",
-            "created_by": user,
-            "updated_by": user,
-        },
-    )
-    return shipping_line
+    return EntityFactory.get_or_create_shipping_line(cleaned, user)
 
 
 def _get_or_create_vessel(name: Optional[str], shipping_line: ShippingLine, user: User) -> Optional[Vessel]:
+    """Wrapper para EntityFactory.get_or_create_vessel con user"""
+    from apps.containers.services.utils import EntityFactory
     cleaned = _clean_str(name)
     if not cleaned:
         return None
-    vessel, _ = Vessel.objects.get_or_create(
-        name=cleaned,
-        defaults={
-            "shipping_line": shipping_line,
-            "created_by": user,
-            "updated_by": user,
-        },
-    )
-    return vessel
+    return EntityFactory.get_or_create_vessel(cleaned, shipping_line, user)
 
 
 def _get_or_create_agency(name: Optional[str], user: User) -> Optional[Agency]:
+    """Wrapper para EntityFactory.get_or_create_agency con user"""
+    from apps.containers.services.utils import EntityFactory
     cleaned = _clean_str(name)
     if not cleaned:
         return None
-    agency, _ = Agency.objects.get_or_create(
-        name=cleaned,
-        defaults={
-            "code": re.sub(r"[^A-Z0-9]", "", cleaned.upper())[:10] or "AG",
-            "created_by": user,
-            "updated_by": user,
-        },
-    )
-    return agency
+    return EntityFactory.get_or_create_agency(cleaned, user)
 
 
 def _get_or_create_core_location(name: str, city: str, user: User) -> CoreLocation:
