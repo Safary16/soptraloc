@@ -1,4 +1,5 @@
 {% extends 'base.html' %}
+{% load static %}
 
 {% block content %}
 <div class="d-flex justify-content-between align-items-center mb-4">
@@ -10,6 +11,87 @@
         <a href="/api/v1/containers/" class="btn btn-outline-info">
             <i class="bi bi-code"></i> API
         </a>
+        <button type="button" class="btn btn-outline-success dropdown-toggle" data-bs-toggle="dropdown" aria-expanded="false">
+            <i class="bi bi-cloud-upload"></i> Importar
+        </button>
+        <ul class="dropdown-menu dropdown-menu-end">
+            <li>
+                <button class="dropdown-item" type="button" onclick="SoptralocActions.openUploadDialog('#upload-manifest-form')">
+                    <i class="bi bi-ship"></i> Manifiestos de Nave
+                </button>
+            </li>
+            <li>
+                <button class="dropdown-item" type="button" onclick="SoptralocActions.openUploadDialog('#upload-release-form')">
+                    <i class="bi bi-clipboard-check"></i> Liberaciones
+                </button>
+            </li>
+            <li>
+                <button class="dropdown-item" type="button" onclick="SoptralocActions.openUploadDialog('#upload-programming-form')">
+                    <i class="bi bi-calendar-week"></i> Programación Operativa
+                </button>
+            </li>
+        </ul>
+    </div>
+</div>
+
+<!-- Carga rápida de archivos -->
+<div class="card mb-4">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <h5 class="mb-0"><i class="bi bi-upload"></i> Gestión de archivos Excel</h5>
+        <a href="/api/v1/containers/export-liberated/" class="btn btn-sm btn-success">
+            <i class="bi bi-download"></i> Exportar Liberados
+        </a>
+    </div>
+    <div class="card-body">
+        <div class="alert alert-info mb-3">
+            <i class="bi bi-info-circle"></i> 
+            <strong>Flujo de trabajo:</strong>
+            1) Subir manifiesto de nave → contenedores en estado <span class="badge bg-primary">POR_ARRIBAR</span> 
+            2) Aplicar liberaciones → estado <span class="badge bg-success">LIBERADO</span> 
+            3) Exportar liberados para enviar al cliente 
+            4) Subir programación del cliente → estado <span class="badge bg-info">PROGRAMADO</span>
+        </div>
+        <div class="row g-4">
+            <div class="col-md-4">
+                <div class="border rounded p-3 h-100">
+                    <h6 class="fw-semibold mb-3"><i class="bi bi-ship"></i> 1. Manifiestos de nave</h6>
+                    <form id="upload-manifest-form" class="d-flex flex-column gap-2" data-upload-endpoint="/api/v1/containers/import-manifest/" data-auto-submit="true" enctype="multipart/form-data">
+                        <input type="file" name="files" class="form-control" accept=".xls,.xlsx,.csv" multiple>
+                        <button type="submit" class="btn btn-primary">
+                            <i class="bi bi-upload"></i> Subir manifiesto
+                        </button>
+                    </form>
+                    <div class="upload-result small text-muted mt-2"></div>
+                    <small class="text-muted d-block mt-2">Formato de contenedor reconocido: AAAU1234561 → AAAU 123456-1</small>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="border rounded p-3 h-100">
+                    <h6 class="fw-semibold mb-3"><i class="bi bi-clipboard-check"></i> 2. Liberaciones</h6>
+                    <form id="upload-release-form" class="d-flex flex-column gap-2" data-upload-endpoint="/api/v1/containers/import-release/" data-auto-submit="true" enctype="multipart/form-data">
+                        <input type="file" name="files" class="form-control" accept=".xls,.xlsx,.csv" multiple>
+                        <button type="submit" class="btn btn-success">
+                            <i class="bi bi-upload"></i> Aplicar liberaciones
+                        </button>
+                    </form>
+                    <div class="upload-result small text-muted mt-2"></div>
+                    <small class="text-muted d-block mt-2">Actualiza horarios de liberación de la nave</small>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="border rounded p-3 h-100">
+                    <h6 class="fw-semibold mb-3"><i class="bi bi-calendar-week"></i> 3. Programación</h6>
+                    <form id="upload-programming-form" class="d-flex flex-column gap-2" data-upload-endpoint="/api/v1/containers/import-programming/" data-auto-submit="true" enctype="multipart/form-data">
+                        <input type="file" name="files" class="form-control" accept=".xls,.xlsx,.csv" multiple>
+                        <button type="submit" class="btn btn-warning text-dark">
+                            <i class="bi bi-upload"></i> Actualizar programación
+                        </button>
+                    </form>
+                    <div class="upload-result small text-muted mt-2"></div>
+                    <small class="text-muted d-block mt-2">Programa contenedores con CD destino y demurrage</small>
+                </div>
+            </div>
+        </div>
     </div>
 </div>
 
@@ -111,13 +193,13 @@
                     <a href="/drivers/" class="btn btn-outline-success">
                         <i class="bi bi-people"></i> Conductores
                     </a>
-                    <button class="btn btn-outline-warning" onclick="autoAssignAll()">
+                    <button class="btn btn-outline-warning" onclick="SoptralocActions.autoAssignAll()">
                         <i class="bi bi-lightning-charge-fill"></i> Auto-asignar todos
                     </button>
-                    <button class="btn btn-outline-info" onclick="exportTable()">
+                    <button class="btn btn-outline-info" onclick="SoptralocActions.showAlert('info', 'Exportación disponible próximamente')">
                         <i class="bi bi-download"></i> Exportar
                     </button>
-                    <button class="btn btn-outline-success" onclick="refreshData()">
+                    <button class="btn btn-outline-success" onclick="SoptralocActions.refreshPage()">
                         <i class="bi bi-arrow-clockwise"></i> Actualizar
                     </button>
                 </div>
@@ -191,14 +273,14 @@
                                 <td>
                                     {% if user.is_authenticated %}
                                     <div class="btn-group btn-group-sm">
-                                        <button class="btn btn-outline-secondary btn-sm" onclick="viewContainer('{{ container.id }}')" title="Ver Detalles">
+                                        <button class="btn btn-outline-secondary btn-sm" onclick="SoptralocActions.viewContainer('{{ container.id }}')" title="Ver Detalles">
                                             <i class="bi bi-eye"></i>
                                         </button>
                                         {% if container.status == 'PROGRAMADO' %}
-                                        <button class="btn btn-outline-primary btn-sm" onclick="assignDriver('{{ container.id }}')" title="Asignar Conductor">
+                                        <button class="btn btn-outline-primary btn-sm" onclick="SoptralocActions.assignDriver('{{ container.id }}')" title="Asignar Conductor">
                                             <i class="bi bi-person-plus"></i>
                                         </button>
-                                        <button class="btn btn-success btn-sm" onclick="quickAssign('{{ container.id }}')" title="Asignación Rápida">
+                                        <button class="btn btn-success btn-sm" onclick="SoptralocActions.quickAssign('{{ container.id }}')" title="Asignación Rápida">
                                             <i class="bi bi-lightning-fill"></i>
                                         </button>
                                         {% endif %}
@@ -207,31 +289,31 @@
                                             <i class="bi bi-geo-alt"></i>
                                         </button>
                                         <ul class="dropdown-menu">
-                                            <li><a class="dropdown-item" href="#" onclick="updatePosition('{{ container.id }}', 'EN_PISO')">En Piso</a></li>
-                                            <li><a class="dropdown-item" href="#" onclick="updatePosition('{{ container.id }}', 'EN_CHASIS')">En Chasis</a></li>
-                                            <li><a class="dropdown-item" href="#" onclick="updatePosition('{{ container.id }}', 'EN_RUTA')">En Ruta</a></li>
-                                            <li><a class="dropdown-item" href="#" onclick="updatePosition('{{ container.id }}', 'CD_QUILICURA')">CD Quilicura</a></li>
-                                            <li><a class="dropdown-item" href="#" onclick="updatePosition('{{ container.id }}', 'CD_PENON')">CD El Peñón</a></li>
-                                            <li><a class="dropdown-item" href="#" onclick="updatePosition('{{ container.id }}', 'CD_MADERO')">CD Puerto Madero</a></li>
-                                            <li><a class="dropdown-item" href="#" onclick="updatePosition('{{ container.id }}', 'CD_CAMPOS')">CD Campos</a></li>
+                                            <li><a class="dropdown-item" href="#" onclick="SoptralocActions.updatePosition('{{ container.id }}', 'EN_PISO')">En Piso</a></li>
+                                            <li><a class="dropdown-item" href="#" onclick="SoptralocActions.updatePosition('{{ container.id }}', 'EN_CHASIS')">En Chasis</a></li>
+                                            <li><a class="dropdown-item" href="#" onclick="SoptralocActions.updatePosition('{{ container.id }}', 'EN_RUTA')">En Ruta</a></li>
+                                            <li><a class="dropdown-item" href="#" onclick="SoptralocActions.updatePosition('{{ container.id }}', 'CD_QUILICURA')">CD Quilicura</a></li>
+                                            <li><a class="dropdown-item" href="#" onclick="SoptralocActions.updatePosition('{{ container.id }}', 'CD_PENON')">CD El Peñón</a></li>
+                                            <li><a class="dropdown-item" href="#" onclick="SoptralocActions.updatePosition('{{ container.id }}', 'CD_MADERO')">CD Puerto Madero</a></li>
+                                            <li><a class="dropdown-item" href="#" onclick="SoptralocActions.updatePosition('{{ container.id }}', 'CD_CAMPOS')">CD Campos</a></li>
                                         </ul>
                                         {% endif %}
                                         {% if container.conductor_asignado and container.status == 'ASIGNADO' %}
-                                        <button class="btn btn-success btn-sm" onclick="startRoute('{{ container.id }}')" title="Iniciar Ruta">
+                                        <button class="btn btn-success btn-sm" onclick="SoptralocActions.startRoute('{{ container.id }}')" title="Iniciar Ruta">
                                             <i class="bi bi-play-fill"></i>
                                         </button>
                                         {% endif %}
                                         {% if container.status == 'EN_RUTA' %}
-                                        <button class="btn btn-warning btn-sm" onclick="markArrived('{{ container.id }}')" title="Marcar Arribado">
+                                        <button class="btn btn-warning btn-sm" onclick="SoptralocActions.markArrived('{{ container.id }}')" title="Marcar Arribado">
                                             <i class="bi bi-geo-alt-fill"></i>
                                         </button>
                                         {% endif %}
-                                        <button class="btn btn-outline-info btn-sm" onclick="editContainer('{{ container.id }}')" title="Editar">
+                                        <button class="btn btn-outline-info btn-sm" onclick="SoptralocActions.editContainer('{{ container.id }}')" title="Editar">
                                             <i class="bi bi-pencil"></i>
                                         </button>
                                     </div>
                                     {% else %}
-                                    <button class="btn btn-outline-secondary btn-sm" onclick="viewDetails('{{ container.id }}')">
+                                    <button class="btn btn-outline-secondary btn-sm" onclick="SoptralocActions.viewContainer('{{ container.id }}')">
                                         <i class="bi bi-eye"></i>
                                     </button>
                                     {% endif %}
@@ -263,372 +345,10 @@
     </div>
 </div>
 
+{% block extra_scripts %}
+<script src="{% static 'js/container-actions.js' %}"></script>
 <script>
-function viewContainer(containerId) {
-    window.location.href = `/containers/${containerId}/`;
-}
-
-function editContainer(containerId) {
-    window.open(`/admin/containers/container/${containerId}/change/`, '_blank');
-}
-
-function updatePosition(containerId, newPosition) {
-    if (confirm(`¿Actualizar posición a ${newPosition}?`)) {
-        const formData = new FormData();
-        formData.append('container_id', containerId);
-        formData.append('position', newPosition);
-        formData.append('csrfmiddlewaretoken', getCookie('csrftoken'));
-
-        fetch('/containers/update-position/', {
-            method: 'POST',
-            credentials: 'same-origin',
-            headers: {
-                'X-CSRFToken': getCookie('csrftoken')
-            },
-            body: formData
-        })
-        .then(response => response.json())
-        .then(data => {
-            if (data.success) {
-                location.reload();
-            } else {
-                alert('Error: ' + data.message);
-            }
-        })
-        .catch(error => {
-            console.error('Error:', error);
-            alert('Error al actualizar posición');
-        });
-    }
-}
-
-function startRoute(containerId) {
-    if (confirm('¿Iniciar ruta para este contenedor?')) {
-        const formData = new FormData();
-        formData.append('container_id', containerId);
-        formData.append('action', 'start_route');
-        formData.append('csrfmiddlewaretoken', getCookie('csrftoken'));
-
-        fetch('/containers/update-status/', {
-            method: 'POST',
-            credentials: 'same-origin',
-            headers: {
-                'X-CSRFToken': getCookie('csrftoken')
-            },
-            body: formData
-        })
-        .then(response => response.json())
-        .then(data => {
-            if (data.success) {
-                location.reload();
-            } else {
-                alert('Error: ' + data.message);
-            }
-        })
-        .catch(error => {
-            console.error('Error:', error);
-            alert('Error al iniciar ruta');
-        });
-    }
-}
-
-function markArrived(containerId) {
-    // Modal para seleccionar destino
-    const modalHtml = `
-        <div class="modal fade" id="arrivalModal" tabindex="-1">
-            <div class="modal-dialog">
-                <div class="modal-content">
-                    <div class="modal-header">
-                        <h5 class="modal-title">Marcar Arribado</h5>
-                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                    </div>
-                    <div class="modal-body">
-                        <div class="mb-3">
-                            <label class="form-label">Seleccionar destino de arribo:</label>
-                            <select id="arrivalLocation" class="form-select">
-                                <option value="CCTI">CCTI (Retorna vacío a base)</option>
-                                <option value="DEPOSITO_DEVOLUCION">Depósito de Devolución (Devuelto vacío)</option>
-                                <option value="CD_QUILICURA">CD Quilicura</option>
-                                <option value="CD_PENON">CD El Peñón</option>
-                                <option value="CD_MADERO">CD Puerto Madero</option>
-                                <option value="CD_CAMPOS">CD Campos</option>
-                            </select>
-                        </div>
-                    </div>
-                    <div class="modal-footer">
-                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
-                        <button type="button" class="btn btn-success" onclick="confirmArrival(${containerId})">Confirmar Arribo</button>
-                    </div>
-                </div>
-            </div>
-        </div>
-    `;
-
-    // Remover modal existente si existe
-    const existingModal = document.getElementById('arrivalModal');
-    if (existingModal) {
-        existingModal.remove();
-    }
-
-    document.body.insertAdjacentHTML('beforeend', modalHtml);
-    const modal = new bootstrap.Modal(document.getElementById('arrivalModal'));
-    modal.show();
-}
-
-function confirmArrival(containerId) {
-    const location = document.getElementById('arrivalLocation').value;
-    
-    const formData = new FormData();
-    formData.append('container_id', containerId);
-    formData.append('action', 'mark_arrived');
-    formData.append('arrival_location', location);
-    formData.append('csrfmiddlewaretoken', getCookie('csrftoken'));
-
-    fetch('/containers/update-status/', {
-        method: 'POST',
-        credentials: 'same-origin',
-        headers: {
-            'X-CSRFToken': getCookie('csrftoken')
-        },
-        body: formData
-    })
-    .then(response => response.json())
-    .then(data => {
-        if (data.success) {
-            bootstrap.Modal.getInstance(document.getElementById('arrivalModal')).hide();
-            location.reload();
-        } else {
-            alert('Error: ' + data.message);
-        }
-    })
-    .catch(error => {
-        console.error('Error:', error);
-        alert('Error al marcar arribo');
-    });
-}
-
-function exportTable() {
-    // Implementar exportación CSV/Excel si es necesario
-    alert('Función de exportación pendiente de implementar');
-}
-
-function refreshData() {
-    location.reload();
-}
-
-function assignDriver(containerId) {
-    // Obtener conductores disponibles
-    fetch(`/drivers/available/?container_id=${containerId}`)
-        .then(response => response.json())
-        .then(data => {
-            if (data.success) {
-                showDriverSelectionModal(data.container, data.drivers);
-            } else {
-                alert('Error: ' + data.message);
-            }
-        })
-        .catch(error => {
-            console.error('Error:', error);
-            alert('Error al obtener conductores disponibles');
-        });
-}
-
-function showDriverSelectionModal(container, drivers) {
-    let driversHtml = '';
-    if (drivers.length === 0) {
-        driversHtml = '<p class="text-muted">No hay conductores disponibles</p>';
-    } else {
-        driversHtml = '<div class="list-group">';
-        drivers.forEach(driver => {
-            driversHtml += `
-                <button type="button" class="list-group-item list-group-item-action" 
-                        onclick="confirmAssignment(${container.id}, ${driver.id}, '${driver.nombre}', '${driver.ppu}')">
-                    <div class="d-flex justify-content-between">
-                        <div>
-                            <h6 class="mb-1">${driver.nombre}</h6>
-                            <p class="mb-1">PPU: ${driver.ppu} - ${driver.tipo}</p>
-                            <small>Ubicación: ${driver.ubicacion} (${driver.tiempo_ubicacion})</small>
-                        </div>
-                        <small>Seleccionar</small>
-                    </div>
-                </button>
-            `;
-        });
-        driversHtml += '</div>';
-    }
-
-    const modalHtml = `
-        <div class="modal fade" id="driverModal" tabindex="-1">
-            <div class="modal-dialog modal-lg">
-                <div class="modal-content">
-                    <div class="modal-header">
-                        <h5 class="modal-title">Asignar Conductor - ${container.number}</h5>
-                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                    </div>
-                    <div class="modal-body">
-                        <div class="mb-3">
-                            <strong>Contenedor:</strong> ${container.number}<br>
-                            <strong>Destino:</strong> ${container.destination}<br>
-                            <strong>Programado:</strong> ${container.scheduled_date} ${container.scheduled_time}
-                        </div>
-                        <h6>Conductores Disponibles:</h6>
-                        ${driversHtml}
-                    </div>
-                </div>
-            </div>
-        </div>
-    `;
-
-    // Remover modal existente si existe
-    const existingModal = document.getElementById('driverModal');
-    if (existingModal) {
-        existingModal.remove();
-    }
-
-    // Agregar nuevo modal
-    document.body.insertAdjacentHTML('beforeend', modalHtml);
-    
-    // Mostrar modal
-    const modal = new bootstrap.Modal(document.getElementById('driverModal'));
-    modal.show();
-}
-
-function confirmAssignment(containerId, driverId, driverName, driverPpu) {
-    if (confirm(`¿Asignar el conductor ${driverName} (${driverPpu}) a este contenedor?`)) {
-        // Realizar asignación
-        const formData = new FormData();
-        formData.append('container_id', containerId);
-        formData.append('driver_id', driverId);
-        formData.append('csrfmiddlewaretoken', document.querySelector('[name=csrfmiddlewaretoken]').value);
-
-        fetch('/drivers/assign/', {
-            method: 'POST',
-            credentials: 'same-origin',
-            headers: {
-                'X-CSRFToken': getCookie('csrftoken')
-            },
-            body: formData
-        })
-        .then(response => response.json())
-        .then(data => {
-            if (data.success) {
-                alert(data.message);
-                location.reload();
-            } else {
-                alert('Error: ' + data.message);
-            }
-        })
-        .catch(error => {
-            console.error('Error:', error);
-            alert('Error al realizar la asignación');
-        });
-
-        // Cerrar modal
-        const modal = bootstrap.Modal.getInstance(document.getElementById('driverModal'));
-        modal.hide();
-    }
-}
-
-function editContainer(containerId) {
-    window.open(`/admin/containers/container/${containerId}/change/`, '_blank');
-}
-
-function viewDetails(containerId) {
-    window.open(`/admin/containers/container/${containerId}/change/`, '_blank');
-}
-
-// Función de asignación rápida
-function quickAssign(containerId) {
-    if (!confirm('¿Asignar automáticamente el mejor conductor disponible?')) return;
-    
-    fetch('/drivers/auto-assign-single/', {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-            'X-CSRFToken': getCookie('csrftoken')
-        },
-        body: JSON.stringify({
-            container_id: containerId
-        })
-    })
-    .then(response => response.json())
-    .then(data => {
-        if (data.success) {
-            showAlert('success', data.message);
-            setTimeout(() => location.reload(), 1500);
-        } else {
-            showAlert('danger', data.message || 'Error en asignación automática');
-        }
-    })
-    .catch(error => {
-        showAlert('danger', 'Error de conexión: ' + error.message);
-    });
-}
-
-function autoAssignAll() {
-    if (!confirm('¿Asignar en automático todos los contenedores programados disponibles?')) {
-        return;
-    }
-
-    fetch('/drivers/auto-assign/', {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-            'X-CSRFToken': getCookie('csrftoken')
-        },
-        body: JSON.stringify({})
-    })
-    .then(response => response.json())
-    .then(data => {
-        if (data.success) {
-            showAlert('success', data.message);
-            setTimeout(() => location.reload(), 1800);
-        } else {
-            showAlert('danger', data.message || 'No fue posible auto-asignar a todos los contenedores');
-        }
-    })
-    .catch(error => {
-        showAlert('danger', 'Error de conexión: ' + error.message);
-    });
-}
-
-// Función para mostrar alertas
-function showAlert(type, message) {
-    const alertDiv = document.createElement('div');
-    alertDiv.className = `alert alert-${type} alert-dismissible fade show position-fixed`;
-    alertDiv.style.cssText = 'top: 20px; right: 20px; z-index: 1050; min-width: 300px;';
-    alertDiv.innerHTML = `
-        ${message}
-        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-    `;
-    
-    document.body.appendChild(alertDiv);
-    
-    // Auto-remover después de 5 segundos
-    setTimeout(() => {
-        if (alertDiv && alertDiv.parentNode) {
-            alertDiv.remove();
-        }
-    }, 5000);
-}
-
-// Auto-refresh cada 5 minutos
-setTimeout(function() {
-    location.reload();
-}, 300000);
-
-// Agregar CSRF token oculto
-document.addEventListener('DOMContentLoaded', function() {
-    if (!document.querySelector('[name=csrfmiddlewaretoken]')) {
-        const csrfToken = getCookie('csrftoken');
-        if (csrfToken) {
-            const input = document.createElement('input');
-            input.type = 'hidden';
-            input.name = 'csrfmiddlewaretoken';
-            input.value = csrfToken;
-            document.body.appendChild(input);
-        }
-    }
-});
+    SoptralocActions.scheduleAutoRefresh(300000);
 </script>
+{% endblock %}
 {% endblock %}

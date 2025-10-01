@@ -162,6 +162,17 @@ soptraloc/
 python manage.py test
 ```
 
+### 🧪 Escenario de prueba reducido
+
+Para simular el ciclo completo de un contenedor con un conjunto pequeño de datos, ejecuta:
+
+```bash
+cd soptraloc_system
+python manage.py setup_testing_cycle --replicas 1 --purge
+```
+
+Este comando genera cinco contenedores (programado → finalizado) con conductores de demo y elimina el resto, ideal para pruebas funcionales o demostraciones controladas.
+
 ## 📊 Modelos de Datos Implementados
 
 ### Entidades Core
