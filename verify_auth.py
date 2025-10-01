@@ -184,7 +184,7 @@ def main():
     if all_success:
         print("✅ TODAS LAS VERIFICACIONES PASARON")
         print("\n🔗 Puedes acceder al admin en:")
-        print("   https://soptraloc-tms.onrender.com/admin/")
+        print("   https://soptraloc.onrender.com/admin/")
         print("\n🔐 Credenciales:")
         print("   Usuario: admin")
         print("   Password: 1234")

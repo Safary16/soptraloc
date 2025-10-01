@@ -1,4 +1,12 @@
-# 🔐 Guía de Solución: Problemas de Login en Render
+# 🔐 ## 📊 Diagnóstico del Sistema
+
+### Arquitectura
+- **Local**: SQLite3 (db.sqlite3) - IRRELEVANTE para producción
+- **Render**: PostgreSQL independiente - ESTA es la base de datos real
+- **Deployment**: Render.com (región Oregon, free tier)
+- **Servicio en Render**: `soptraloc-tms` (nombre interno)
+- **URL Pública**: https://soptraloc.onrender.com
+- **URL Admin**: https://soptraloc.onrender.com/admin/ Solución: Problemas de Login en Render
 
 ## 🎯 Problema
 No puedes acceder al panel de admin en Render con las credenciales `admin/1234`
@@ -9,7 +17,7 @@ No puedes acceder al panel de admin en Render con las credenciales `admin/1234`
 - **Local**: SQLite3 (db.sqlite3) - IRRELEVANTE para producción
 - **Render**: PostgreSQL independiente - ESTA es la base de datos real
 - **Deployment**: Render.com (región Oregon, free tier)
-- **URL Admin**: https://soptraloc-tms.onrender.com/admin/
+- **URL Admin**: https://soptraloc.onrender.com/admin/
 
 ### Flujo de Deploy
 1. **Build** (`build.sh`): Instala dependencias y aplica migraciones
@@ -60,8 +68,8 @@ print("✅ Contraseña reseteada")
 - Error de CSRF token
 
 **Solución:**
-- Asegúrate de usar **HTTPS**: https://soptraloc-tms.onrender.com/admin/
-- NO uses HTTP: ~~http://soptraloc-tms.onrender.com/admin/~~
+- Asegúrate de usar **HTTPS**: https://soptraloc.onrender.com/admin/
+- NO uses HTTP: ~~http://soptraloc.onrender.com/admin/~~
 - Limpia cookies del navegador
 - Prueba en modo incógnito
 
@@ -168,7 +176,7 @@ print(f"Resultado: {user}")  # Debería mostrar el usuario, no None
 ```
 
 ### Desde el navegador:
-1. Ve a: https://soptraloc-tms.onrender.com/admin/
+1. Ve a: https://soptraloc.onrender.com/admin/
 2. Ingresa:
    - Usuario: `admin`
    - Contraseña: `1234`
@@ -196,7 +204,7 @@ SECURE_HSTS_SECONDS = 31536000      # HSTS activado
 Antes de pedir ayuda, verifica:
 
 - [ ] Estás usando HTTPS, no HTTP
-- [ ] El dominio es correcto: `soptraloc-tms.onrender.com`
+- [ ] El dominio es correcto: `soptraloc.onrender.com`
 - [ ] Has revisado los logs de deploy en Render
 - [ ] Has ejecutado `debug_render.sh` en Render Shell
 - [ ] Has probado limpiar cookies del navegador
@@ -215,7 +223,7 @@ cd soptraloc_system
 python manage.py createsuperuser --settings=config.settings_production
 ```
 3. Usuario: `admin`, Password: `1234`
-4. Accede a: https://soptraloc-tms.onrender.com/admin/
+4. Accede a: https://soptraloc.onrender.com/admin/
 
 **FIN**
 
