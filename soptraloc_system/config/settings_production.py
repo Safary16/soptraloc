@@ -12,7 +12,10 @@ from decouple import config
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 # SECURITY - Producción estricta
-SECRET_KEY = config('SECRET_KEY')
+SECRET_KEY = config(
+    'SECRET_KEY',
+    default='django-insecure-CHANGE-ME-IN-RENDER-ASAP-' + os.urandom(32).hex()
+)
 DEBUG = False
 
 # Render.com specific configuration

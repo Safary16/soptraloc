@@ -1,4 +1,15 @@
-# 🚀 Render.com - Deploy SoptraLoc TMS v2.0 Optimizado
+# 🚀 Render.com     # 🔨 Build Command - Optimizado
+    buildCommand: chmod +x build.sh && ./build.sh
+
+    # ⚙️ Pre-Deploy - Solo migraciones (preserva datos)
+    preDeployCommand: |
+      cd soptraloc_system
+      echo "🔄 Aplicando migraciones..."
+      python manage.py migrate --settings=config.settings_production --noinput
+      echo "✅ Migraciones completadas"
+    
+    # 📊 Post-Deploy - Carga datos y crea superusuario
+    postDeployCommand: chmod +x post_deploy.sh && ./post_deploy.shSoptraLoc TMS v2.0 Optimizado
 # Sistema TMS con Machine Learning, Reloj ATC y Alertas en Tiempo Real
 # Actualización automática desde GitHub main branch
 
@@ -72,3 +83,12 @@ services:
       
       - key: LC_ALL
         value: "es_ES.UTF-8"
+
+# 🗄️ PostgreSQL Database
+databases:
+  - name: soptraloc-production-db
+    databaseName: soptraloc_prod
+    user: soptraloc
+    plan: free
+    region: oregon  # Misma región que la app
+    ipAllowList: []  # Permite conexiones desde Render
