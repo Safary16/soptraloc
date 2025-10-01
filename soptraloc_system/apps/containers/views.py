@@ -812,3 +812,46 @@ def container_detail_uuid(request, container_id):
     }
 
     return render(request, 'containers/container_detail.html', context)
+
+
+@login_required
+def urgent_containers_api(request):
+    """
+    API endpoint para obtener contenedores con programación urgente (< 2 horas)
+    """
+    from apps.containers.services.proximity_alerts import ProximityAlertSystem
+    
+    # Obtener contenedores programados y liberados
+    containers = Container.objects.filter(
+        is_active=True,
+        status__in=['PROGRAMADO', 'LIBERADO'],
+        scheduled_date__isnull=False
+    ).select_related('client', 'vessel', 'agency')
+    
+    # Obtener contenedores urgentes
+    urgent_containers = ProximityAlertSystem.get_urgent_containers(containers)
+    
+    # Serializar datos
+    data = {
+        'urgent_containers': [
+            {
+                'id': container.id,
+                'container_number': container.container_number,
+                'client': container.client.name if container.client else None,
+                'cd_location': container.cd_location,
+                'scheduled_date': container.scheduled_date.strftime('%d/%m/%Y') if container.scheduled_date else None,
+                'scheduled_time': container.scheduled_time.strftime('%H:%M') if container.scheduled_time else '08:00',
+                'status': container.status,
+                'hours_remaining': round(container._hours_remaining, 2),
+                'minutes_remaining': container._minutes_remaining,
+                'urgency_level': container._urgency_level,
+            }
+            for container in urgent_containers
+        ],
+        'total_urgent': len(urgent_containers),
+        'critical_count': sum(1 for c in urgent_containers if c._urgency_level == 'critical'),
+        'high_count': sum(1 for c in urgent_containers if c._urgency_level == 'high'),
+        'medium_count': sum(1 for c in urgent_containers if c._urgency_level == 'medium'),
+    }
+    
+    return JsonResponse(data)

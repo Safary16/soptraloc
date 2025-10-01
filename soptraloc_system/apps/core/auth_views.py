@@ -108,6 +108,7 @@ def dashboard_view(request):
     """Dashboard principal con contenedores programados"""
     from datetime import timedelta
     from apps.drivers.models import Alert
+    from apps.containers.services.proximity_alerts import ProximityAlertSystem
 
     status_filter = request.GET.get('status', 'all')
     today = timezone.localdate()
@@ -129,7 +130,17 @@ def dashboard_view(request):
         normalized_status = normalize_status(status_filter)
         containers = base_queryset.filter(status__in=related_status_values(normalized_status))
 
-    containers = containers.order_by('scheduled_date', 'container_number')
+    # Anotar contenedores con información de urgencia
+    containers = ProximityAlertSystem.annotate_containers_with_urgency(containers)
+    
+    # Ordenar: urgentes primero, luego por fecha programada
+    containers_list = list(containers)
+    containers_list.sort(key=lambda c: (
+        not getattr(c, '_is_urgent', False),  # Urgentes primero
+        getattr(c, '_hours_remaining', 999),  # Más urgentes primero
+        c.scheduled_date if c.scheduled_date else timezone.localdate() + timedelta(days=999),
+        c.container_number
+    ))
 
     raw_status_counts = Container.objects.values_list('status').annotate(count=Count('id'))
     normalized_counts = {
@@ -179,15 +190,19 @@ def dashboard_view(request):
         if new_alerts:
             Alert.objects.bulk_create(new_alerts)
 
+    # Obtener contenedores urgentes para destacarlos
+    urgent_containers = ProximityAlertSystem.get_urgent_containers(base_queryset)
+    
     context = {
         'title': 'Dashboard - SoptraLoc',
-        'containers': containers,
+        'containers': containers_list,
         'status_filter': status_filter,
         'today': today,
         'tomorrow': tomorrow,
         'stats': stats,
         'alertas_activas': Alert.objects.filter(is_active=True).count(),
         'contenedores_sin_asignar': len(programados_hoy_data),
+        'urgent_count': len(urgent_containers),
     }
 
     return render(request, 'core/dashboard.html', context)

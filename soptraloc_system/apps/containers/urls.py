@@ -12,4 +12,5 @@ urlpatterns = [
     path('assign-driver-quick/', views.assign_driver_quick, name='assign_driver_quick'),
     path('<uuid:container_id>/update-status/', views.update_container_status_view, name='update_container_status'),
     path('<uuid:container_id>/update-position/', views.update_container_position_view, name='update_container_position'),
+    path('urgent/', views.urgent_containers_api, name='urgent_containers_api'),
 ]

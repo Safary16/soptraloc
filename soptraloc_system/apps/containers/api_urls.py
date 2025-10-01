@@ -11,4 +11,5 @@ router.register(r'inspections', views.ContainerInspectionViewSet, basename='cont
 
 urlpatterns = [
     path('', include(router.urls)),
+    path('urgent/', views.urgent_containers_api, name='urgent-containers-api'),
 ]
