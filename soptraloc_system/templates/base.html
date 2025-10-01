@@ -25,18 +25,95 @@
         .status-LIBERADO { background-color: #e2e3e5; color: #383d41; }
         .status-DESCARGADO { background-color: #f8d7da; color: #721c24; }
         .status-EN_SECUENCIA { background-color: #cce5ff; color: #004085; }
+        
+        /* Reloj estilo torre de control */
+        .atc-clock {
+            background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            border-radius: 8px;
+            padding: 8px 16px;
+            font-family: 'Courier New', monospace;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+            margin-left: 20px;
+            min-width: 280px;
+        }
+        
+        .atc-clock-time {
+            font-size: 28px;
+            font-weight: 700;
+            color: #00ff00;
+            letter-spacing: 2px;
+            text-shadow: 0 0 10px rgba(0, 255, 0, 0.5);
+            line-height: 1;
+            margin-bottom: 2px;
+        }
+        
+        .atc-clock-date {
+            font-size: 13px;
+            color: #a0cfff;
+            letter-spacing: 1px;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+        
+        .atc-urgent-badge {
+            position: absolute;
+            top: -8px;
+            right: -8px;
+            background: #dc3545;
+            color: white;
+            border-radius: 50%;
+            width: 24px;
+            height: 24px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 11px;
+            font-weight: bold;
+            animation: pulse-urgent 1.5s infinite;
+            box-shadow: 0 0 10px rgba(220, 53, 69, 0.6);
+            cursor: pointer;
+        }
+        
+        @keyframes pulse-urgent {
+            0%, 100% { transform: scale(1); opacity: 1; }
+            50% { transform: scale(1.1); opacity: 0.8; }
+        }
+        
+        .clock-wrapper {
+            position: relative;
+            display: inline-block;
+        }
     </style>
 </head>
 <body class="bg-light">
     <nav class="navbar navbar-expand-lg navbar-dark bg-primary">
-        <div class="container">
+        <div class="container-fluid px-4">
             <a class="navbar-brand" href="/"><i class="bi bi-boxes"></i> SoptraLoc</a>
-            <div class="navbar-nav ms-auto">
-                <a class="nav-link" href="/">Inicio</a>
-                <a class="nav-link" href="/dashboard/">Dashboard</a>
-                <a class="nav-link" href="/drivers/attendance/">Pase Lista</a>
-                <a class="nav-link" href="/drivers/alerts/">Alertas</a>
-                <a class="nav-link" href="/admin/">Admin</a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <div class="navbar-nav">
+                    <a class="nav-link" href="/">Inicio</a>
+                    <a class="nav-link" href="/dashboard/">Dashboard</a>
+                    <a class="nav-link" href="/drivers/attendance/">Pase Lista</a>
+                    <a class="nav-link" href="/drivers/alerts/">Alertas</a>
+                    <a class="nav-link" href="/admin/">Admin</a>
+                </div>
+                <div class="ms-auto d-flex align-items-center">
+                    <div id="clock-wrapper" class="clock-wrapper">
+                        <div id="atc-clock" class="atc-clock">
+                            <div id="atc-clock-time" class="atc-clock-time">--:--:--</div>
+                            <div id="atc-clock-date" class="atc-clock-date">--- -- ----</div>
+                        </div>
+                        <div id="atc-urgent-badge" class="atc-urgent-badge" style="display: none;" 
+                             data-bs-toggle="modal" data-bs-target="#urgentModal"
+                             title="Contenedores urgentes">
+                            0
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
     </nav>
