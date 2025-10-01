@@ -7,6 +7,8 @@ services:
     branch: main
     buildCommand: ./build.sh
     startCommand: cd soptraloc_system && gunicorn config.wsgi:application --bind=0.0.0.0:$PORT --workers=2 --threads=4 --worker-class=gthread --timeout=120
+    preDeployCommand: cd soptraloc_system && python manage.py migrate --settings=config.settings_production --noinput
+    postDeployCommand: chmod +x post_deploy.sh && ./post_deploy.sh
     envVars:
       - key: PYTHON_VERSION
         value: "3.12.6"

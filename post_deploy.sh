@@ -25,12 +25,13 @@ User = get_user_model()
 # Configuración del superusuario
 username = 'admin'
 email = 'admin@soptraloc.com'
-password = 'SoptraLoc2025!Admin'  # CAMBIAR EN PRODUCCIÓN
+password = '1234'  # Contraseña temporal simple
 
 # Crear solo si no existe
 if not User.objects.filter(username=username).exists():
     User.objects.create_superuser(username=username, email=email, password=password)
     print('✅ Superusuario creado: admin')
+    print('🔐 Contraseña temporal: 1234')
     print('⚠️  IMPORTANTE: Cambiar contraseña en /admin/')
 else:
     print('ℹ️  Superusuario ya existe')
@@ -45,8 +46,8 @@ echo "👤 Superusuario: Verificado"
 echo ""
 echo "🔐 CREDENCIALES INICIALES:"
 echo "   Usuario: admin"
-echo "   Password: SoptraLoc2025!Admin"
+echo "   Password: 1234"
 echo ""
-echo "⚠️  IMPORTANTE: Cambiar contraseña inmediatamente en:"
-echo "   https://soptraloc.onrender.com/admin/"
+echo "⚠️  IMPORTANTE: Esta es una contraseña temporal."
+echo "   Cámbiala inmediatamente en: /admin/"
 echo "======================================================"
