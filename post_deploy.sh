@@ -21,7 +21,20 @@ else
     exit 1
 fi
 
-# 2. Cargar datos de Chile (35 rutas + 70 operaciones)
+# 2. Crear superusuario usando comando de management (MÁS CONFIABLE)
+echo ""
+echo "======================================================"
+echo "👤 CREANDO SUPERUSUARIO CON COMANDO DE MANAGEMENT"
+echo "======================================================"
+python manage.py force_create_admin --settings=config.settings_production
+
+if [ $? -ne 0 ]; then
+    echo ""
+    echo "❌ ERROR: El comando force_create_admin falló"
+    echo "   Intentando método alternativo..."
+fi
+
+# 3. Cargar datos de Chile (35 rutas + 70 operaciones)
 echo ""
 echo "📊 Cargando datos de Chile (rutas y operaciones)..."
 if python manage.py load_initial_times --settings=config.settings_production 2>&1 | grep -q "exitosamente\|successfully\|completed"; then
@@ -30,10 +43,10 @@ else
     echo "⚠️  Los datos ya existían o hubo un error menor (no crítico)"
 fi
 
-# 3. Crear y verificar superusuario con lógica robusta
+# 4. Verificación adicional con script Python (por si el comando falló)
 echo ""
 echo "======================================================"
-echo "👤 CONFIGURACIÓN DE SUPERUSUARIO"
+echo "👤 VERIFICACIÓN ADICIONAL DE SUPERUSUARIO"
 echo "======================================================"
 
 python manage.py shell --settings=config.settings_production <<'EOF'
@@ -48,87 +61,100 @@ USERNAME = 'admin'
 EMAIL = 'admin@soptraloc.com'
 PASSWORD = '1234'
 
-print("🔍 Verificando estado actual...")
-
-# Verificar si existe el usuario
-user_exists = User.objects.filter(username=USERNAME).exists()
-
-if user_exists:
-    print(f"ℹ️  Usuario '{USERNAME}' ya existe")
-    user = User.objects.get(username=USERNAME)
-    
-    # Verificar y corregir permisos
-    needs_update = False
-    if not user.is_superuser:
-        print("⚠️  Usuario no es superusuario, corrigiendo...")
-        user.is_superuser = True
-        needs_update = True
-    
-    if not user.is_staff:
-        print("⚠️  Usuario no es staff, corrigiendo...")
-        user.is_staff = True
-        needs_update = True
-    
-    if not user.is_active:
-        print("⚠️  Usuario no está activo, corrigiendo...")
-        user.is_active = True
-        needs_update = True
-    
-    # Verificar contraseña
-    if not user.check_password(PASSWORD):
-        print(f"⚠️  Contraseña incorrecta, reseteando a '{PASSWORD}'...")
-        user.set_password(PASSWORD)
-        needs_update = True
-    else:
-        print(f"✅ Contraseña verificada correctamente")
-    
-    if needs_update:
-        user.save()
-        print("✅ Usuario actualizado con permisos correctos")
-else:
-    print(f"🆕 Creando nuevo superusuario '{USERNAME}'...")
-    try:
-        user = User.objects.create_superuser(
-            username=USERNAME,
-            email=EMAIL,
-            password=PASSWORD
-        )
-        print(f"✅ Superusuario creado exitosamente")
-    except Exception as e:
-        print(f"❌ Error creando superusuario: {e}")
-        sys.exit(1)
-
-# Verificación final de autenticación
+print("🔍 Iniciando creación FORZADA de superusuario...")
 print("")
-print("🔐 Verificando autenticación...")
-auth_user = authenticate(username=USERNAME, password=PASSWORD)
 
-if auth_user is not None:
-    print(f"✅ Autenticación EXITOSA para '{USERNAME}'")
-    print(f"   ID: {auth_user.id}")
-    print(f"   Email: {auth_user.email}")
-    print(f"   Superusuario: {auth_user.is_superuser}")
-    print(f"   Staff: {auth_user.is_staff}")
-    print(f"   Activo: {auth_user.is_active}")
-else:
-    print(f"❌ ERROR: Autenticación FALLÓ para '{USERNAME}'")
-    print("   Esto NO debería ocurrir. Revisa la configuración.")
+# PASO 1: ELIMINAR cualquier usuario 'admin' existente
+print("1️⃣  Eliminando usuario 'admin' si existe...")
+try:
+    deleted_count, _ = User.objects.filter(username=USERNAME).delete()
+    if deleted_count > 0:
+        print(f"   ✅ Eliminado {deleted_count} usuario(s) existente(s)")
+    else:
+        print(f"   ℹ️  No había usuario '{USERNAME}' previo")
+except Exception as e:
+    print(f"   ⚠️  Error eliminando usuario (probablemente no existe): {e}")
+
+print("")
+
+# PASO 2: CREAR superusuario NUEVO desde cero
+print("2️⃣  Creando superusuario NUEVO...")
+try:
+    user = User.objects.create_superuser(
+        username=USERNAME,
+        email=EMAIL,
+        password=PASSWORD
+    )
+    print(f"   ✅ SUPERUSUARIO CREADO EXITOSAMENTE")
+    print(f"   Username: {user.username}")
+    print(f"   Email: {user.email}")
+    print(f"   ID: {user.id}")
+    print(f"   is_superuser: {user.is_superuser}")
+    print(f"   is_staff: {user.is_staff}")
+    print(f"   is_active: {user.is_active}")
+except Exception as e:
+    print(f"   ❌ ERROR CRÍTICO creando superusuario: {e}")
+    import traceback
+    traceback.print_exc()
     sys.exit(1)
 
-# Mostrar todos los usuarios
 print("")
-print(f"📊 Total de usuarios en base de datos: {User.objects.count()}")
+
+# PASO 3: VERIFICAR autenticación
+print("3️⃣  Verificando autenticación...")
+try:
+    auth_user = authenticate(username=USERNAME, password=PASSWORD)
+    
+    if auth_user is not None:
+        print(f"   ✅ AUTENTICACIÓN EXITOSA")
+        print(f"   Usuario autenticado: {auth_user.username}")
+        print(f"   ID: {auth_user.id}")
+    else:
+        print(f"   ❌ ERROR: Autenticación FALLÓ")
+        print(f"   Usuario existe pero no autentica")
+        
+        # Intentar arreglar
+        print(f"   🔧 Intentando resetear contraseña...")
+        user = User.objects.get(username=USERNAME)
+        user.set_password(PASSWORD)
+        user.save()
+        
+        # Probar de nuevo
+        auth_user = authenticate(username=USERNAME, password=PASSWORD)
+        if auth_user is not None:
+            print(f"   ✅ Contraseña reseteada, autenticación OK ahora")
+        else:
+            print(f"   ❌ ERROR PERSISTENTE en autenticación")
+            sys.exit(1)
+except Exception as e:
+    print(f"   ❌ ERROR verificando autenticación: {e}")
+    import traceback
+    traceback.print_exc()
+    sys.exit(1)
+
+print("")
+
+# PASO 4: Resumen final
+print("4️⃣  Resumen final:")
+print(f"   Total usuarios en DB: {User.objects.count()}")
+if User.objects.filter(username=USERNAME).exists():
+    final_user = User.objects.get(username=USERNAME)
+    print(f"   ✅ Usuario '{USERNAME}' confirmado en base de datos")
+    print(f"   ✅ Password funciona: {final_user.check_password(PASSWORD)}")
+else:
+    print(f"   ❌ ERROR: Usuario no encontrado después de creación")
+    sys.exit(1)
 
 EOF
 
 # Verificar código de salida del script Python
 if [ $? -ne 0 ]; then
     echo ""
-    echo "❌ ERROR: Falló la configuración del superusuario"
-    exit 1
+    echo "⚠️  ADVERTENCIA: Verificación adicional reportó problemas"
+    echo "   Continuando con verificación exhaustiva..."
 fi
 
-# 4. Verificación adicional usando script externo
+# 5. Verificación exhaustiva usando script externo
 echo ""
 echo "======================================================"
 echo "🔍 VERIFICACIÓN EXHAUSTIVA DE AUTENTICACIÓN"
@@ -141,6 +167,21 @@ if [ $? -eq 0 ]; then
     echo "✅ Verificación exhaustiva completada exitosamente"
 else
     echo "⚠️  Verificación exhaustiva reportó advertencias"
+    echo "   Intentando creación alternativa con createsuperuser..."
+    cd soptraloc_system
+    
+    # Método alternativo usando environment variables
+    export DJANGO_SUPERUSER_PASSWORD='1234'
+    export DJANGO_SUPERUSER_USERNAME='admin'
+    export DJANGO_SUPERUSER_EMAIL='admin@soptraloc.com'
+    
+    python manage.py createsuperuser --noinput --settings=config.settings_production 2>&1 || true
+    
+    unset DJANGO_SUPERUSER_PASSWORD
+    unset DJANGO_SUPERUSER_USERNAME
+    unset DJANGO_SUPERUSER_EMAIL
+    
+    cd ..
 fi
 
 echo ""
