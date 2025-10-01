@@ -1,11 +1,12 @@
 # 🚀 Render.com - Deploy SoptraLoc v2.0 Optimizado
 # Sistema de optimización de transporte de contenedores
 # Con reloj en tiempo real y alertas de proximidad
+# ACTUALIZACIÓN sobre servicio existente: soptraloc.onrender.com
 
 services:
   # 🌐 Aplicación Web Principal
   - type: web
-    name: soptraloc-production
+    name: soptraloc
     env: python
     pythonVersion: "3.12.6"
     repo: https://github.com/Safary16/soptraloc.git
@@ -15,13 +16,11 @@ services:
     # 🔨 Comandos de construcción
     buildCommand: ./build.sh
 
-    # 🚀 Pre-deploy: Migraciones y datos iniciales
+    # 🚀 Pre-deploy: Migraciones SOLO (conserva datos existentes)
     preDeployCommand: |
       cd soptraloc_system
       python manage.py migrate --settings=config.settings_production
-      python manage.py reset_test_data --keep-containers 10 --settings=config.settings_production || true
-      python manage.py reset_to_initial_state --keep 10 --settings=config.settings_production || true
-      echo "✅ Base de datos lista con 10 contenedores de prueba"
+      echo "✅ Migraciones aplicadas - datos existentes preservados"
       
     # 🚀 Comando de inicio
     startCommand: |
@@ -44,21 +43,10 @@ services:
       - key: ALLOWED_HOSTS
         value: "*.onrender.com,localhost,127.0.0.1"
       - key: RENDER_EXTERNAL_HOSTNAME
-        value: "soptraloc-production.onrender.com"
+        value: "soptraloc.onrender.com"
       - key: DEPLOYMENT_ENV
         value: "production"
       - key: SYSTEM_VERSION
         value: "v2.0-optimized"
       - key: TZ
         value: "America/Santiago"
-
-# 🗄️ Base de Datos PostgreSQL - Producción
-databases:
-  - name: soptraloc-production-db
-    databaseName: soptraloc_prod
-    user: soptraloc_prod_user
-    plan: free
-    
-    # Inicialización post-creación
-    postCreateCommand: |
-      echo "✅ Base de datos PostgreSQL creada"

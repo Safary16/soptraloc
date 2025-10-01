@@ -1,39 +1,43 @@
-# 🚀 Deploy Rápido en Render
+# � Actualización Rápida del Servicio Existente
 
-## ⚡ Pasos Mínimos (5 minutos)
+## ⚡ Para el servicio existente: https://soptraloc.onrender.com/
 
-### 1. Conectar a Render
+### Opción A: Auto-Deploy (AUTOMÁTICO) ✨
+
+Ya hiciste `git push origin main` → **¡Listo!**
+
+Render detecta el cambio y deploya automáticamente.
+
+**Monitorear en**:
+```
+https://dashboard.render.com/ → soptraloc → Logs
+```
+
+---
+
+### Opción B: Manual Deploy (SI AUTO-DEPLOY ESTÁ OFF)
 
 1. Ir a: https://dashboard.render.com/
-2. Click: **"New +"** → **"Blueprint"**
-3. Conectar GitHub → Seleccionar repo: **`Safary16/soptraloc`**
-4. Branch: **`main`**
+2. Click en servicio: **`soptraloc`**
+3. Click: **"Manual Deploy"** → **"Deploy latest commit"**
+4. Esperar 5 minutos
 
-### 2. Render Detecta Automáticamente
+---
 
-✅ **render.yaml** encontrado  
-✅ Web Service configurado  
-✅ PostgreSQL Database configurado  
+### ✅ Verificación (después de 5 min)
 
-### 3. Click "Apply"
+```bash
+# 1. URL principal
+open https://soptraloc.onrender.com/dashboard/
 
-Render hará automáticamente:
-- ✅ Crear PostgreSQL database
-- ✅ Crear web service
-- ✅ Instalar dependencias
-- ✅ Ejecutar migraciones
-- ✅ Cargar 10 contenedores de prueba
-- ✅ Iniciar gunicorn
+# 2. Verificar reloj en navbar
+# Debe mostrar: HH:MM:SS y fecha actual
 
-### 4. Esperar 5-10 minutos
+# 3. API de urgentes
+curl https://soptraloc.onrender.com/api/v1/containers/urgent/
 
-Monitor del build en tiempo real en el dashboard.
-
-### 5. ¡Listo!
-
-Tu app estará en:
-```
-https://soptraloc-production.onrender.com
+# 4. Health check
+curl https://soptraloc.onrender.com/health/
 ```
 
 ---

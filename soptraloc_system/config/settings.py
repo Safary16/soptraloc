@@ -57,6 +57,7 @@ LOCAL_APPS = [
     'apps.core',
     'apps.containers',
     'apps.warehouses',
+    'apps.routing',  # Sistema de tiempos y ML
     'apps.scheduling',
     'apps.alerts',
     'apps.optimization',
