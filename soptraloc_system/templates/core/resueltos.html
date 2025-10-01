@@ -352,51 +352,15 @@ function updateContainerStatus(containerId, status, successMessage) {
     .then(response => response.json())
     .then(data => {
         if (data.success) {
-            showAlert('success', successMessage);
+            SoptralocActions.showAlert('success', successMessage);
             setTimeout(() => location.reload(), 1500);
         } else {
-            showAlert('danger', data.message || 'Error al actualizar estado');
+            SoptralocActions.showAlert('danger', data.message || 'Error al actualizar estado');
         }
     })
     .catch(error => {
-        showAlert('danger', 'Error de conexión: ' + error.message);
+        SoptralocActions.showAlert('danger', 'Error de conexión: ' + error.message);
     });
-}
-
-// Función para obtener cookie CSRF
-function getCookie(name) {
-    let cookieValue = null;
-    if (document.cookie && document.cookie !== '') {
-        const cookies = document.cookie.split(';');
-        for (let i = 0; i < cookies.length; i++) {
-            const cookie = cookies[i].trim();
-            if (cookie.substring(0, name.length + 1) === (name + '=')) {
-                cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
-                break;
-            }
-        }
-    }
-    return cookieValue;
-}
-
-// Función para mostrar alertas
-function showAlert(type, message) {
-    const alertDiv = document.createElement('div');
-    alertDiv.className = `alert alert-${type} alert-dismissible fade show position-fixed`;
-    alertDiv.style.cssText = 'top: 20px; right: 20px; z-index: 1050; min-width: 300px;';
-    alertDiv.innerHTML = `
-        ${message}
-        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-    `;
-    
-    document.body.appendChild(alertDiv);
-    
-    // Auto-remover después de 5 segundos
-    setTimeout(() => {
-        if (alertDiv && alertDiv.parentNode) {
-            alertDiv.remove();
-        }
-    }, 5000);
 }
 </script>
 {% endblock %}
