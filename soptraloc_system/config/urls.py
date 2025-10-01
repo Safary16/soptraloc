@@ -49,9 +49,7 @@ urlpatterns = [
     path('api/v1/containers/', include('apps.containers.api_urls')),
     path('api/v1/warehouses/', include('apps.warehouses.urls')),
     path('api/v1/routing/', include('apps.routing.urls')),  # Tiempos y ML
-    path('api/v1/scheduling/', include('apps.scheduling.urls')),
-    path('api/v1/alerts/', include('apps.alerts.urls')),
-    path('api/v1/optimization/', include('apps.optimization.urls')),
+    # Apps scheduling, alerts, optimization eliminadas - funcionalidad en apps.drivers
     
     # API Documentation
     path('swagger/', schema_view.with_ui('swagger', cache_timeout=0), name='schema-swagger-ui'),
