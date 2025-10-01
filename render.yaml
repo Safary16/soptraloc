@@ -1,84 +1,165 @@
-# 🚀 Render.com     # 🔨 Build Command - Optimizado
-    buildCommand: chmod +x build.sh && ./build.sh
+# 🚀 Render.com - SoptraLoc TMS v2.0# 🚀 Render.com     # 🔨 Build Command - Optimizado
+
+# Sistema de gestión de transporte con ML    buildCommand: chmod +x build.sh && ./build.sh
+
+# Deploy automático desde GitHub
 
     # ⚙️ Pre-Deploy - Solo migraciones (preserva datos)
-    preDeployCommand: |
-      cd soptraloc_system
-      echo "🔄 Aplicando migraciones..."
-      python manage.py migrate --settings=config.settings_production --noinput
-      echo "✅ Migraciones completadas"
-    
-    # 📊 Post-Deploy - Carga datos y crea superusuario
-    postDeployCommand: chmod +x post_deploy.sh && ./post_deploy.shSoptraLoc TMS v2.0 Optimizado
-# Sistema TMS con Machine Learning, Reloj ATC y Alertas en Tiempo Real
-# Actualización automática desde GitHub main branch
 
-services:
-  # 🌐 Aplicación Web Principal
-  - type: web
-    name: soptraloc
-    env: python
-    runtime: python
-    pythonVersion: "3.12.6"
-    repo: https://github.com/Safary16/soptraloc.git
-    branch: main
-    region: oregon  # us-west (más cerca de Chile)
+services:    preDeployCommand: |
+
+  # 🌐 Aplicación Web Django      cd soptraloc_system
+
+  - type: web      echo "🔄 Aplicando migraciones..."
+
+    name: soptraloc      python manage.py migrate --settings=config.settings_production --noinput
+
+    env: python      echo "✅ Migraciones completadas"
+
+    runtime: python    
+
+    pythonVersion: "3.12.6"    # 📊 Post-Deploy - Carga datos y crea superusuario
+
+    repo: https://github.com/Safary16/soptraloc.git    postDeployCommand: chmod +x post_deploy.sh && ./post_deploy.shSoptraLoc TMS v2.0 Optimizado
+
+    branch: main# Sistema TMS con Machine Learning, Reloj ATC y Alertas en Tiempo Real
+
+    region: oregon# Actualización automática desde GitHub main branch
+
     plan: free
-    
-    # 🔨 Build Command - Optimizado
-    buildCommand: chmod +x build.sh && ./build.sh
 
-    # � Pre-Deploy - Solo migraciones (preserva datos)
-    preDeployCommand: |
-      cd soptraloc_system
-      echo "🔄 Aplicando migraciones..."
-      python manage.py migrate --settings=config.settings_production --noinput
-      echo "✅ Migraciones completadas"
-      
-    # 🚀 Start Command - Gunicorn optimizado
-    startCommand: |
+    services:
+
+    # 🔨 Comandos de construcción  # 🌐 Aplicación Web Principal
+
+    buildCommand: chmod +x build.sh && ./build.sh  - type: web
+
+        name: soptraloc
+
+    # ⚙️ Pre-Deploy: Migraciones    env: python
+
+    preDeployCommand: |    runtime: python
+
+      cd soptraloc_system    pythonVersion: "3.12.6"
+
+      python manage.py migrate --settings=config.settings_production --noinput    repo: https://github.com/Safary16/soptraloc.git
+
+        branch: main
+
+    # 📊 Post-Deploy: Datos y superusuario    region: oregon  # us-west (más cerca de Chile)
+
+    postDeployCommand: chmod +x post_deploy.sh && ./post_deploy.sh    plan: free
+
+        
+
+    # 🚀 Comando de inicio    # 🔨 Build Command - Optimizado
+
+    startCommand: |    buildCommand: chmod +x build.sh && ./build.sh
+
       cd soptraloc_system && \
-      gunicorn config.wsgi:application \
-        --bind=0.0.0.0:$PORT \
-        --workers=2 \
-        --threads=4 \
-        --worker-class=gthread \
-        --timeout=120 \
-        --max-requests=1000 \
-        --max-requests-jitter=50 \
-        --access-logfile=- \
-        --error-logfile=- \
-        --log-level=info
-      
-    # 🌍 Health Check
-    healthCheckPath: /
-    
-    # 🔧 Variables de Entorno - Producción
-    envVars:
-      - key: PYTHON_VERSION
-        value: "3.12.6"
-      
-      - key: DEBUG
-        value: "False"
-      
-      - key: DJANGO_SETTINGS_MODULE
-        value: config.settings_production
-      
-      - key: SECRET_KEY
-        generateValue: true
-      
-      - key: DATABASE_URL
-        fromDatabase:
-          name: soptraloc-production-db
+
+      gunicorn config.wsgi:application \    # � Pre-Deploy - Solo migraciones (preserva datos)
+
+        --bind 0.0.0.0:$PORT \    preDeployCommand: |
+
+        --workers 2 \      cd soptraloc_system
+
+        --threads 4 \      echo "🔄 Aplicando migraciones..."
+
+        --worker-class gthread \      python manage.py migrate --settings=config.settings_production --noinput
+
+        --timeout 120 \      echo "✅ Migraciones completadas"
+
+        --max-requests 1000 \      
+
+        --max-requests-jitter 50 \    # 🚀 Start Command - Gunicorn optimizado
+
+        --access-logfile - \    startCommand: |
+
+        --error-logfile - \      cd soptraloc_system && \
+
+        --log-level info      gunicorn config.wsgi:application \
+
+            --bind=0.0.0.0:$PORT \
+
+    # 🔧 Variables de entorno        --workers=2 \
+
+    envVars:        --threads=4 \
+
+      - key: PYTHON_VERSION        --worker-class=gthread \
+
+        value: "3.12.6"        --timeout=120 \
+
+              --max-requests=1000 \
+
+      - key: DEBUG        --max-requests-jitter=50 \
+
+        value: "False"        --access-logfile=- \
+
+              --error-logfile=- \
+
+      - key: DJANGO_SETTINGS_MODULE        --log-level=info
+
+        value: config.settings_production      
+
+          # 🌍 Health Check
+
+      - key: SECRET_KEY    healthCheckPath: /
+
+        generateValue: true    
+
+          # 🔧 Variables de Entorno - Producción
+
+      - key: DATABASE_URL    envVars:
+
+        fromDatabase:      - key: PYTHON_VERSION
+
+          name: soptraloc-db        value: "3.12.6"
+
+          property: connectionString      
+
+            - key: DEBUG
+
+      - key: RENDER_EXTERNAL_HOSTNAME        value: "False"
+
+        sync: false      
+
+            - key: DJANGO_SETTINGS_MODULE
+
+      - key: TZ        value: config.settings_production
+
+        value: "America/Santiago"      
+
+            - key: SECRET_KEY
+
+      - key: LANG        generateValue: true
+
+        value: "es_ES.UTF-8"      
+
+            - key: DATABASE_URL
+
+      - key: LC_ALL        fromDatabase:
+
+        value: "es_ES.UTF-8"          name: soptraloc-production-db
+
           property: connectionString
-      
-      - key: RENDER_EXTERNAL_HOSTNAME
-        sync: false
-      
-      - key: TZ
-        value: "America/Santiago"
-      
-      - key: LANG
+
+# 🗄️ Base de datos PostgreSQL      
+
+databases:      - key: RENDER_EXTERNAL_HOSTNAME
+
+  - name: soptraloc-db        sync: false
+
+    databaseName: soptraloc_prod      
+
+    user: soptraloc      - key: TZ
+
+    plan: free        value: "America/Santiago"
+
+    region: oregon      
+
+    ipAllowList: []      - key: LANG
+
         value: "es_ES.UTF-8"
       
       - key: LC_ALL
