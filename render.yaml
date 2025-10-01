@@ -1,27 +1,55 @@
-services:
-  - type: web
-    name: soptraloc
-    env: python
-    region: oregon
-    plan: free
-    branch: main
-    buildCommand: ./build.sh
-    startCommand: cd soptraloc_system && gunicorn config.wsgi:application --bind 0.0.0.0:$PORT
-    envVars:
-      - key: PYTHON_VERSION
-        value: 3.12.6
-      - key: SECRET_KEY
-        generateValue: true
-      - key: DATABASE_URL
-        fromDatabase:
-          name: soptraloc-db
-          property: connectionString
-      - key: DJANGO_SETTINGS_MODULE
+services:services:
+
+  - type: web  - type: web
+
+    name: soptraloc-tms    name: soptraloc
+
+    env: python    env: python
+
+    repo: https://github.com/Safary16/soptraloc    region: oregon
+
+    region: oregon    plan: free
+
+    plan: free    branch: main
+
+    branch: main    buildCommand: ./build.sh
+
+    buildCommand: chmod +x build.sh && ./build.sh    startCommand: cd soptraloc_system && gunicorn config.wsgi:application --bind 0.0.0.0:$PORT
+
+    startCommand: cd soptraloc_system && gunicorn config.wsgi:application --bind=0.0.0.0:$PORT --workers=2 --threads=4 --worker-class=gthread --timeout=120    envVars:
+
+    envVars:      - key: PYTHON_VERSION
+
+      - key: PYTHON_VERSION        value: 3.12.6
+
+        value: "3.12.6"      - key: SECRET_KEY
+
+      - key: SECRET_KEY        generateValue: true
+
+        generateValue: true      - key: DATABASE_URL
+
+      - key: DATABASE_URL        fromDatabase:
+
+        fromDatabase:          name: soptraloc-db
+
+          name: soptraloc-postgresql          property: connectionString
+
+          property: connectionString      - key: DJANGO_SETTINGS_MODULE
+
+      - key: DJANGO_SETTINGS_MODULE        value: config.settings_production
+
         value: config.settings_production
 
 databases:
-  - name: soptraloc-db
-    databaseName: soptraloc
-    user: soptraloc
-    region: oregon
+
+databases:  - name: soptraloc-db
+
+  - name: soptraloc-postgresql    databaseName: soptraloc
+
+    databaseName: soptraloc    user: soptraloc
+
+    user: soptraloc    region: oregon
+
+    region: oregon    plan: free
+
     plan: free
