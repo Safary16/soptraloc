@@ -58,10 +58,9 @@ LOCAL_APPS = [
     'apps.containers',
     'apps.warehouses',
     'apps.routing',  # Sistema de tiempos y ML
-    'apps.scheduling',
-    'apps.alerts',
-    'apps.optimization',
     'apps.drivers',
+    # Apps vacías eliminadas: scheduling, alerts, optimization
+    # Las alertas están en apps.drivers.models.Alert
 ]
 
 INSTALLED_APPS = DJANGO_APPS + THIRD_PARTY_APPS + LOCAL_APPS

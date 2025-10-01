@@ -64,14 +64,13 @@ THIRD_PARTY_APPS = [
 ]
 
 LOCAL_APPS = [
-    'apps.core',
-    'apps.containers',
+    'apps.core',         # Modelos base y autenticación ✅
+    'apps.containers',   # Gestión de contenedores ✅
     'apps.routing',      # Sistema de tiempos y ML ✅
-    'apps.drivers',      # Conductores y asignaciones ✅
-    'apps.warehouses',   # Ubicaciones ✅
-    'apps.scheduling',   # Programación ✅
-    'apps.alerts',       # Alertas ✅
-    'apps.optimization', # Optimización (futuro)
+    'apps.drivers',      # Conductores, asignaciones y alertas ✅
+    'apps.warehouses',   # Ubicaciones y almacenes ✅
+    # Apps vacías eliminadas: scheduling, alerts, optimization
+    # Las alertas están en apps.drivers.models.Alert
 ]
 
 INSTALLED_APPS = DJANGO_APPS + THIRD_PARTY_APPS + LOCAL_APPS
@@ -236,7 +235,7 @@ LOGGING = {
         'handlers': ['console'],
         'level': 'INFO',
     },
-}    'loggers': {
+    'loggers': {
         'django': {
             'handlers': ['console'],
             'level': 'INFO',
