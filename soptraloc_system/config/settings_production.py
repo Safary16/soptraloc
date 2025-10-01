@@ -16,17 +16,13 @@ SECRET_KEY = config(
     'SECRET_KEY',
     default='django-insecure-CHANGE-ME-IN-RENDER-ASAP-' + os.urandom(32).hex()
 )
-# TEMPORAL: DEBUG=True para diagnosticar error 500
-# ⚠️ CAMBIAR A FALSE DESPUÉS DE VER EL ERROR
-DEBUG = True
+DEBUG = False
 
 # Render.com specific configuration
 RENDER_EXTERNAL_HOSTNAME = config('RENDER_EXTERNAL_HOSTNAME', default='soptraloc.onrender.com')
 
-# Allowed hosts - TEMPORAL: Permitir todos para diagnóstico
-# ⚠️ RESTRINGIR DESPUÉS DE VER EL ERROR
+# Allowed hosts - Solo dominios autorizados
 ALLOWED_HOSTS = [
-    '*',  # Temporal: permitir todos
     RENDER_EXTERNAL_HOSTNAME,
     '.onrender.com',
     'soptraloc.onrender.com',
@@ -39,18 +35,23 @@ CSRF_TRUSTED_ORIGINS = [
     'https://soptraloc.onrender.com',
 ]
 
-# Security settings - TEMPORALMENTE DESACTIVADO PARA DIAGNÓSTICO
-# ⚠️ REACTIVAR DESPUÉS DE VER EL ERROR
-SECURE_SSL_REDIRECT = False  # Temporal: era True
-SESSION_COOKIE_SECURE = False  # Temporal: era True
-CSRF_COOKIE_SECURE = False  # Temporal: era True
+# Security settings - Producción con ajustes para Render
+SECURE_SSL_REDIRECT = True
+SESSION_COOKIE_SECURE = True
+CSRF_COOKIE_SECURE = True
 SECURE_BROWSER_XSS_FILTER = True
 SECURE_CONTENT_TYPE_NOSNIFF = True
 X_FRAME_OPTIONS = 'DENY'
-SECURE_HSTS_SECONDS = 0  # Temporal: era 31536000
-SECURE_HSTS_INCLUDE_SUBDOMAINS = False  # Temporal: era True
-SECURE_HSTS_PRELOAD = False  # Temporal: era True
+SECURE_HSTS_SECONDS = 31536000
+SECURE_HSTS_INCLUDE_SUBDOMAINS = True
+SECURE_HSTS_PRELOAD = True
 SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+
+# CSRF Settings - Configuración específica para Render
+CSRF_COOKIE_HTTPONLY = False  # Permitir JavaScript acceso si es necesario
+CSRF_COOKIE_SAMESITE = 'Lax'  # Más permisivo que 'Strict' pero seguro
+SESSION_COOKIE_SAMESITE = 'Lax'
+CSRF_USE_SESSIONS = False  # Usar cookies en lugar de sesiones para CSRF
 
 # Application definition
 DJANGO_APPS = [
