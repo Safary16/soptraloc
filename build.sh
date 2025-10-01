@@ -1,10 +1,13 @@
 #!/usr/bin/env bash
-# Build script optimizado para Render.com - SoptraLoc TMS v2.0
+# Build script optimizado para Render.com - SoptraLoc TMS v3.0
+# Deploy desde CERO
 set -o errexit
 
-echo "======================================================"
-echo "🚀 BUILD SOPTRALOC TMS v2.0 - RENDER.COM"
-echo "======================================================"
+echo "=========================================================================="
+echo "🚀 BUILD SOPTRALOC TMS v3.0 - RENDER.COM"
+echo "=========================================================================="
+echo "Fecha: $(date '+%Y-%m-%d %H:%M:%S')"
+echo ""
 
 # Actualizar pip
 echo "📦 Actualizando pip..."
@@ -43,10 +46,12 @@ else
     echo "⚠️  ADVERTENCIA: realtime-clock.js no encontrado"
 fi
 
-echo "======================================================"
+echo ""
+echo "=========================================================================="
 echo "✅ BUILD COMPLETADO EXITOSAMENTE"
-echo "======================================================"
-echo "Sistema: SoptraLoc TMS v2.0"
+echo "=========================================================================="
+echo "Sistema: SoptraLoc TMS v3.0"
 echo "Features: Reloj ATC + ML Routing + Alertas"
-echo "Apps: routing, containers, drivers, warehouses"
-echo "======================================================"
+echo "Apps: routing, containers, drivers, warehouses, core"
+echo "Deploy: Desde CERO - Optimizado"
+echo "=========================================================================="

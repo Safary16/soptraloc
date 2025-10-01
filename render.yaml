@@ -1,12 +1,12 @@
 services:
   - type: web
-    name: soptraloc-tms
+    name: soptraloc
     env: python
     region: oregon
     plan: free
     branch: main
     buildCommand: ./build.sh
-    startCommand: cd soptraloc_system && gunicorn config.wsgi:application --bind=0.0.0.0:$PORT --workers=2 --threads=4 --worker-class=gthread --timeout=120
+    startCommand: cd soptraloc_system && gunicorn config.wsgi:application --bind=0.0.0.0:$PORT --workers=2 --threads=4 --worker-class=gthread --timeout=120 --log-level=info
     preDeployCommand: cd soptraloc_system && python manage.py migrate --settings=config.settings_production --noinput
     postDeployCommand: chmod +x post_deploy.sh && ./post_deploy.sh
     envVars:
@@ -16,13 +16,13 @@ services:
         generateValue: true
       - key: DATABASE_URL
         fromDatabase:
-          name: soptraloc-postgresql
+          name: soptraloc-db
           property: connectionString
       - key: DJANGO_SETTINGS_MODULE
         value: config.settings_production
 
 databases:
-  - name: soptraloc-postgresql
+  - name: soptraloc-db
     databaseName: soptraloc
     user: soptraloc
     region: oregon

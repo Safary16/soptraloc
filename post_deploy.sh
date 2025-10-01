@@ -1,205 +1,214 @@
 #!/usr/bin/env bash
-# Post-deploy script - Carga datos de Chile y crea superusuario automáticamente
-# MEJORADO: Verificación exhaustiva de autenticación
-set -o errexit
+# Post-deploy script optimizado para Render.com
+# Deploy desde CERO - Sistema SoptraLoc TMS v3.0
+set -e  # Exit on error
 
-echo "======================================================"
-echo "🔄 POST-DEPLOY - SOPTRALOC TMS v2.0"
-echo "======================================================"
-echo "Timestamp: $(date '+%Y-%m-%d %H:%M:%S')"
+echo "=========================================================================="
+echo "🚀 POST-DEPLOY SOPTRALOC TMS - DEPLOY COMPLETO"
+echo "=========================================================================="
+echo "Fecha: $(date '+%Y-%m-%d %H:%M:%S %Z')"
+echo "Host: $(hostname)"
 echo ""
 
 cd soptraloc_system
 
-# 1. Verificar conexión a PostgreSQL
-echo "🔍 Verificando conexión a PostgreSQL..."
-python manage.py check --database default --settings=config.settings_production
-if [ $? -eq 0 ]; then
-    echo "✅ Conexión a PostgreSQL exitosa"
-else
-    echo "❌ Error: No se pudo conectar a PostgreSQL"
+# ============================================================================
+# PASO 1: VERIFICAR ENTORNO
+# ============================================================================
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo "📋 PASO 1: Verificando entorno"
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+
+echo "Python version: $(python --version)"
+echo "Django settings: ${DJANGO_SETTINGS_MODULE:-'No configurado'}"
+echo "Database URL: ${DATABASE_URL:0:50}... (truncado)"
+
+# Verificar que Django puede importarse
+python -c "import django; print(f'Django: {django.get_version()}')" || {
+    echo "❌ ERROR: Django no está instalado correctamente"
     exit 1
-fi
+}
 
-# 2. Crear superusuario usando comando de management (MÁS CONFIABLE)
+echo "✅ Entorno verificado"
 echo ""
-echo "======================================================"
-echo "👤 CREANDO SUPERUSUARIO CON COMANDO DE MANAGEMENT"
-echo "======================================================"
-python manage.py force_create_admin --settings=config.settings_production
 
-if [ $? -ne 0 ]; then
-    echo ""
-    echo "❌ ERROR: El comando force_create_admin falló"
-    echo "   Intentando método alternativo..."
-fi
+# ============================================================================
+# PASO 2: VERIFICAR BASE DE DATOS
+# ============================================================================
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo "🗄️  PASO 2: Verificando conexión a PostgreSQL"
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
-# 3. Cargar datos de Chile (35 rutas + 70 operaciones)
+python manage.py check --database default --settings=config.settings_production || {
+    echo "❌ ERROR: No se puede conectar a PostgreSQL"
+    exit 1
+}
+
+echo "✅ Conexión a PostgreSQL exitosa"
 echo ""
-echo "📊 Cargando datos de Chile (rutas y operaciones)..."
-if python manage.py load_initial_times --settings=config.settings_production 2>&1 | grep -q "exitosamente\|successfully\|completed"; then
-    echo "✅ Datos de Chile cargados correctamente"
+
+# ============================================================================
+# PASO 3: CREAR SUPERUSUARIO (MÉTODO DEFINITIVO)
+# ============================================================================
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo "👤 PASO 3: Creando superusuario (MÉTODO DEFINITIVO)"
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+
+# Intentar con comando de management primero
+echo "Intentando con comando force_create_admin..."
+if python manage.py force_create_admin --settings=config.settings_production 2>&1 | tee /tmp/create_admin.log; then
+    echo "✅ Superusuario creado con force_create_admin"
 else
-    echo "⚠️  Los datos ya existían o hubo un error menor (no crítico)"
-fi
-
-# 4. Verificación adicional con script Python (por si el comando falló)
-echo ""
-echo "======================================================"
-echo "👤 VERIFICACIÓN ADICIONAL DE SUPERUSUARIO"
-echo "======================================================"
-
-python manage.py shell --settings=config.settings_production <<'EOF'
-from django.contrib.auth import get_user_model, authenticate
-from django.db import connection
-import sys
+    echo "⚠️  force_create_admin no funcionó, intentando método alternativo..."
+    
+    # Método alternativo: Script Python inline SIMPLIFICADO
+    python manage.py shell --settings=config.settings_production <<'EOFPYTHON'
+from django.contrib.auth import get_user_model
+from django.contrib.auth import authenticate
 
 User = get_user_model()
 
-# Configuración del superusuario
-USERNAME = 'admin'
-EMAIL = 'admin@soptraloc.com'
-PASSWORD = '1234'
+print("=" * 70)
+print("CREANDO SUPERUSUARIO - MÉTODO ALTERNATIVO")
+print("=" * 70)
 
-print("🔍 Iniciando creación FORZADA de superusuario...")
-print("")
+# Eliminar usuario admin si existe
+User.objects.filter(username='admin').delete()
+print("✅ Usuario admin eliminado (si existía)")
 
-# PASO 1: ELIMINAR cualquier usuario 'admin' existente
-print("1️⃣  Eliminando usuario 'admin' si existe...")
-try:
-    deleted_count, _ = User.objects.filter(username=USERNAME).delete()
-    if deleted_count > 0:
-        print(f"   ✅ Eliminado {deleted_count} usuario(s) existente(s)")
-    else:
-        print(f"   ℹ️  No había usuario '{USERNAME}' previo")
-except Exception as e:
-    print(f"   ⚠️  Error eliminando usuario (probablemente no existe): {e}")
+# Crear superusuario
+admin = User.objects.create_superuser(
+    username='admin',
+    email='admin@soptraloc.com',
+    password='1234'
+)
 
-print("")
+print(f"✅ Superusuario creado:")
+print(f"   - Username: {admin.username}")
+print(f"   - Email: {admin.email}")
+print(f"   - ID: {admin.id}")
+print(f"   - is_superuser: {admin.is_superuser}")
+print(f"   - is_staff: {admin.is_staff}")
+print(f"   - is_active: {admin.is_active}")
 
-# PASO 2: CREAR superusuario NUEVO desde cero
-print("2️⃣  Creando superusuario NUEVO...")
-try:
-    user = User.objects.create_superuser(
-        username=USERNAME,
-        email=EMAIL,
-        password=PASSWORD
-    )
-    print(f"   ✅ SUPERUSUARIO CREADO EXITOSAMENTE")
-    print(f"   Username: {user.username}")
-    print(f"   Email: {user.email}")
-    print(f"   ID: {user.id}")
-    print(f"   is_superuser: {user.is_superuser}")
-    print(f"   is_staff: {user.is_staff}")
-    print(f"   is_active: {user.is_active}")
-except Exception as e:
-    print(f"   ❌ ERROR CRÍTICO creando superusuario: {e}")
-    import traceback
-    traceback.print_exc()
-    sys.exit(1)
-
-print("")
-
-# PASO 3: VERIFICAR autenticación
-print("3️⃣  Verificando autenticación...")
-try:
-    auth_user = authenticate(username=USERNAME, password=PASSWORD)
-    
-    if auth_user is not None:
-        print(f"   ✅ AUTENTICACIÓN EXITOSA")
-        print(f"   Usuario autenticado: {auth_user.username}")
-        print(f"   ID: {auth_user.id}")
-    else:
-        print(f"   ❌ ERROR: Autenticación FALLÓ")
-        print(f"   Usuario existe pero no autentica")
-        
-        # Intentar arreglar
-        print(f"   🔧 Intentando resetear contraseña...")
-        user = User.objects.get(username=USERNAME)
-        user.set_password(PASSWORD)
-        user.save()
-        
-        # Probar de nuevo
-        auth_user = authenticate(username=USERNAME, password=PASSWORD)
-        if auth_user is not None:
-            print(f"   ✅ Contraseña reseteada, autenticación OK ahora")
-        else:
-            print(f"   ❌ ERROR PERSISTENTE en autenticación")
-            sys.exit(1)
-except Exception as e:
-    print(f"   ❌ ERROR verificando autenticación: {e}")
-    import traceback
-    traceback.print_exc()
-    sys.exit(1)
-
-print("")
-
-# PASO 4: Resumen final
-print("4️⃣  Resumen final:")
-print(f"   Total usuarios en DB: {User.objects.count()}")
-if User.objects.filter(username=USERNAME).exists():
-    final_user = User.objects.get(username=USERNAME)
-    print(f"   ✅ Usuario '{USERNAME}' confirmado en base de datos")
-    print(f"   ✅ Password funciona: {final_user.check_password(PASSWORD)}")
+# Verificar autenticación
+auth_user = authenticate(username='admin', password='1234')
+if auth_user:
+    print("✅ Autenticación verificada exitosamente")
 else:
-    print(f"   ❌ ERROR: Usuario no encontrado después de creación")
+    print("❌ ERROR: Autenticación falló")
+    import sys
     sys.exit(1)
 
-EOF
+print("=" * 70)
+EOFPYTHON
 
-# Verificar código de salida del script Python
-if [ $? -ne 0 ]; then
-    echo ""
-    echo "⚠️  ADVERTENCIA: Verificación adicional reportó problemas"
-    echo "   Continuando con verificación exhaustiva..."
+    if [ $? -eq 0 ]; then
+        echo "✅ Superusuario creado con método alternativo"
+    else
+        echo "❌ ERROR: Ambos métodos fallaron"
+        echo "Intentando último recurso con createsuperuser..."
+        
+        # Último recurso: createsuperuser con env vars
+        export DJANGO_SUPERUSER_USERNAME='admin'
+        export DJANGO_SUPERUSER_EMAIL='admin@soptraloc.com'
+        export DJANGO_SUPERUSER_PASSWORD='1234'
+        
+        python manage.py createsuperuser --noinput --settings=config.settings_production || true
+        
+        unset DJANGO_SUPERUSER_USERNAME
+        unset DJANGO_SUPERUSER_EMAIL
+        unset DJANGO_SUPERUSER_PASSWORD
+    fi
 fi
 
-# 5. Verificación exhaustiva usando script externo
 echo ""
-echo "======================================================"
-echo "🔍 VERIFICACIÓN EXHAUSTIVA DE AUTENTICACIÓN"
-echo "======================================================"
 
-cd ..
-python verify_auth.py
+# ============================================================================
+# PASO 4: VERIFICACIÓN FINAL DEL SUPERUSUARIO
+# ============================================================================
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo "🔐 PASO 4: Verificación final del superusuario"
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+
+python manage.py shell --settings=config.settings_production <<'EOFPYTHON'
+from django.contrib.auth import get_user_model, authenticate
+
+User = get_user_model()
+
+print("\n📊 Estado de la base de datos:")
+print(f"   Total de usuarios: {User.objects.count()}")
+
+if User.objects.filter(username='admin').exists():
+    admin = User.objects.get(username='admin')
+    print(f"\n✅ Usuario 'admin' encontrado:")
+    print(f"   - ID: {admin.id}")
+    print(f"   - Email: {admin.email}")
+    print(f"   - Superusuario: {admin.is_superuser}")
+    print(f"   - Staff: {admin.is_staff}")
+    print(f"   - Activo: {admin.is_active}")
+    
+    # Verificar autenticación
+    print(f"\n🔐 Verificando autenticación...")
+    auth_user = authenticate(username='admin', password='1234')
+    
+    if auth_user:
+        print(f"✅ AUTENTICACIÓN EXITOSA")
+    else:
+        print(f"❌ ERROR: AUTENTICACIÓN FALLÓ")
+        import sys
+        sys.exit(1)
+else:
+    print("\n❌ ERROR: Usuario 'admin' NO existe")
+    import sys
+    sys.exit(1)
+EOFPYTHON
 
 if [ $? -eq 0 ]; then
-    echo "✅ Verificación exhaustiva completada exitosamente"
+    echo "✅ Verificación completa exitosa"
 else
-    echo "⚠️  Verificación exhaustiva reportó advertencias"
-    echo "   Intentando creación alternativa con createsuperuser..."
-    cd soptraloc_system
-    
-    # Método alternativo usando environment variables
-    export DJANGO_SUPERUSER_PASSWORD='1234'
-    export DJANGO_SUPERUSER_USERNAME='admin'
-    export DJANGO_SUPERUSER_EMAIL='admin@soptraloc.com'
-    
-    python manage.py createsuperuser --noinput --settings=config.settings_production 2>&1 || true
-    
-    unset DJANGO_SUPERUSER_PASSWORD
-    unset DJANGO_SUPERUSER_USERNAME
-    unset DJANGO_SUPERUSER_EMAIL
-    
-    cd ..
+    echo "❌ ERROR CRÍTICO: La verificación final falló"
+    exit 1
 fi
 
 echo ""
-echo "======================================================"
+
+# ============================================================================
+# PASO 5: CARGAR DATOS INICIALES (OPCIONAL)
+# ============================================================================
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo "📊 PASO 5: Cargando datos iniciales de Chile"
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+
+if python manage.py load_initial_times --settings=config.settings_production 2>&1 | grep -q "exitosamente\|successfully\|completed"; then
+    echo "✅ Datos de Chile cargados correctamente"
+else
+    echo "ℹ️  Los datos ya existían o hubo un error menor (no crítico)"
+fi
+
+echo ""
+
+# ============================================================================
+# RESUMEN FINAL
+# ============================================================================
+echo "=========================================================================="
 echo "✅ POST-DEPLOY COMPLETADO EXITOSAMENTE"
-echo "======================================================"
-echo "📊 Datos de Chile: Cargados"
-echo "👤 Superusuario: Verificado y funcionando"
-echo "🔐 Autenticación: Probada exitosamente"
+echo "=========================================================================="
 echo ""
-echo "🌐 URL DE ADMIN:"
-echo "   https://soptraloc.onrender.com/admin/"
+echo "📊 Resumen:"
+echo "   ✅ PostgreSQL: Conectado"
+echo "   ✅ Superusuario: Creado y verificado"
+echo "   ✅ Datos: Cargados"
 echo ""
-echo "🔐 CREDENCIALES:"
-echo "   Usuario: admin"
+echo "🔗 Acceso al sistema:"
+echo "   URL: https://soptraloc.onrender.com/admin/"
+echo ""
+echo "🔐 Credenciales:"
+echo "   Usuario:  admin"
 echo "   Password: 1234"
 echo ""
-echo "⚠️  IMPORTANTE: Cambiar esta contraseña en /admin/"
-echo "======================================================"
-echo "Timestamp: $(date '+%Y-%m-%d %H:%M:%S')"
-echo "======================================================"
+echo "⚠️  IMPORTANTE: Cambia esta contraseña inmediatamente en producción"
+echo ""
+echo "=========================================================================="
+echo "Finalizado: $(date '+%Y-%m-%d %H:%M:%S %Z')"
+echo "=========================================================================="
