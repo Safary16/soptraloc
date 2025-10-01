@@ -50,6 +50,26 @@ echo ""
 echo "=========================================================================="
 echo "✅ BUILD COMPLETADO EXITOSAMENTE"
 echo "=========================================================================="
+
+# Volver al directorio raíz para ejecutar post_deploy
+cd ..
+
+# Ejecutar post-deploy
+echo ""
+echo "=========================================================================="
+echo "🚀 EJECUTANDO POST-DEPLOY"
+echo "=========================================================================="
+
+if [ -f "post_deploy.sh" ]; then
+    bash post_deploy.sh
+else
+    echo "⚠️  WARNING: post_deploy.sh no encontrado"
+fi
+
+echo ""
+echo "=========================================================================="
+echo "✅ DEPLOY COMPLETO"
+echo "=========================================================================="
 echo "Sistema: SoptraLoc TMS v3.0"
 echo "Features: Reloj ATC + ML Routing + Alertas"
 echo "Apps: routing, containers, drivers, warehouses, core"
