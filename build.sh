@@ -27,6 +27,10 @@ cd soptraloc_system
 # Crear directorio de logs si no existe
 mkdir -p logs
 
+# Aplicar migraciones de base de datos
+echo "🔄 Aplicando migraciones de base de datos..."
+python manage.py migrate --settings=config.settings_production --noinput
+
 # Recopilar archivos estáticos con compresión
 echo "📁 Recopilando y comprimiendo archivos estáticos..."
 python manage.py collectstatic --noinput --clear --settings=config.settings_production
