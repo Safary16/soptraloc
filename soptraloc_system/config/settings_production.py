@@ -1,56 +1,48 @@
+"""
+Django settings optimizadas para PRODUCCIÓN en Render.com
+Sistema SoptraLoc TMS con ML - v2.0
+"""
+
 import os
 import dj_database_url
 from pathlib import Path
 from decouple import config
 
-# Build paths inside the project like this: BASE_DIR / 'subdir'.
+# Build paths
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-# SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = config('SECRET_KEY', default='django-insecure-change-me-in-production')
-
-# SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = config('DEBUG', default=False, cast=bool)
+# SECURITY - Producción estricta
+SECRET_KEY = config('SECRET_KEY')
+DEBUG = False
 
 # Render.com specific configuration
-RENDER_EXTERNAL_HOSTNAME = config('RENDER_EXTERNAL_HOSTNAME', default='')
+RENDER_EXTERNAL_HOSTNAME = config('RENDER_EXTERNAL_HOSTNAME', default='soptraloc.onrender.com')
 
-# Allowed hosts configuration
-if RENDER_EXTERNAL_HOSTNAME:
-    ALLOWED_HOSTS = [RENDER_EXTERNAL_HOSTNAME, '*.onrender.com']
-else:
-    ALLOWED_HOSTS = config('ALLOWED_HOSTS', default='localhost,127.0.0.1,0.0.0.0,*.onrender.com', cast=lambda v: [s.strip() for s in v.split(',')])
-
-# CSRF Configuration
-CSRF_TRUSTED_ORIGINS = [
-    'http://localhost:8000',
-    'https://localhost:8000', 
-    'http://127.0.0.1:8000',
-    'https://127.0.0.1:8000',
-    'http://0.0.0.0:8000',
+# Allowed hosts - Solo dominios autorizados
+ALLOWED_HOSTS = [
+    RENDER_EXTERNAL_HOSTNAME,
+    '.onrender.com',
+    'soptraloc.onrender.com',
 ]
 
-# Add Render domain to CSRF trusted origins if in production
-if RENDER_EXTERNAL_HOSTNAME:
-    # Render URLs
-    CSRF_TRUSTED_ORIGINS.extend([
-        f'https://{RENDER_EXTERNAL_HOSTNAME}',
-        'https://*.onrender.com',
-    ])
-    railway_domain = config('RAILWAY_STATIC_URL', default='')
-    if railway_domain:
-        CSRF_TRUSTED_ORIGINS.append(railway_domain)
+# CSRF Configuration - Solo HTTPS en producción
+CSRF_TRUSTED_ORIGINS = [
+    f'https://{RENDER_EXTERNAL_HOSTNAME}',
+    'https://*.onrender.com',
+    'https://soptraloc.onrender.com',
+]
 
-# Para desarrollo - permitir CSRF desde cualquier origen
-if DEBUG:
-    CSRF_TRUSTED_ORIGINS.extend([
-        'http://10.0.0.0:8000',
-        'https://10.0.0.0:8000',
-        'http://172.16.0.0:8000',
-        'https://172.16.0.0:8000',
-        'http://192.168.0.0:8000',
-        'https://192.168.0.0:8000',
-    ])
+# Security settings - Producción endurecida
+SECURE_SSL_REDIRECT = True
+SESSION_COOKIE_SECURE = True
+CSRF_COOKIE_SECURE = True
+SECURE_BROWSER_XSS_FILTER = True
+SECURE_CONTENT_TYPE_NOSNIFF = True
+X_FRAME_OPTIONS = 'DENY'
+SECURE_HSTS_SECONDS = 31536000
+SECURE_HSTS_INCLUDE_SUBDOMAINS = True
+SECURE_HSTS_PRELOAD = True
+SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
 
 # Application definition
 DJANGO_APPS = [
@@ -74,7 +66,12 @@ THIRD_PARTY_APPS = [
 LOCAL_APPS = [
     'apps.core',
     'apps.containers',
-    'apps.drivers',
+    'apps.routing',      # Sistema de tiempos y ML ✅
+    'apps.drivers',      # Conductores y asignaciones ✅
+    'apps.warehouses',   # Ubicaciones ✅
+    'apps.scheduling',   # Programación ✅
+    'apps.alerts',       # Alertas ✅
+    'apps.optimization', # Optimización (futuro)
 ]
 
 INSTALLED_APPS = DJANGO_APPS + THIRD_PARTY_APPS + LOCAL_APPS
@@ -111,20 +108,15 @@ TEMPLATES = [
 
 WSGI_APPLICATION = 'config.wsgi.application'
 
-# Database Configuration
-if 'DATABASE_URL' in os.environ:
-    # Production database (Railway/Heroku style)
-    DATABASES = {
-        'default': dj_database_url.parse(os.environ.get('DATABASE_URL'))
-    }
-else:
-    # Development database
-    DATABASES = {
-        'default': {
-            'ENGINE': 'django.db.backends.sqlite3',
-            'NAME': BASE_DIR / 'db.sqlite3',
-        }
-    }
+# Database - PostgreSQL en Render (SIEMPRE)
+DATABASES = {
+    'default': dj_database_url.config(
+        default=config('DATABASE_URL'),
+        conn_max_age=600,
+        conn_health_checks=True,
+        ssl_require=True,
+    )
+}
 
 # Password validation
 AUTH_PASSWORD_VALIDATORS = [
@@ -165,7 +157,12 @@ MEDIA_ROOT = BASE_DIR / 'media'
 # Default primary key field type
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
-# Django REST Framework Configuration
+# Autenticación
+LOGIN_URL = '/accounts/login/'
+LOGIN_REDIRECT_URL = '/dashboard/'
+LOGOUT_REDIRECT_URL = '/'
+
+# Django REST Framework - Producción
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': [
         'rest_framework_simplejwt.authentication.JWTAuthentication',
@@ -174,75 +171,95 @@ REST_FRAMEWORK = {
     'DEFAULT_PERMISSION_CLASSES': [
         'rest_framework.permissions.IsAuthenticated',
     ],
+    'DEFAULT_FILTER_BACKENDS': [
+        'django_filters.rest_framework.DjangoFilterBackend',
+        'rest_framework.filters.SearchFilter',
+        'rest_framework.filters.OrderingFilter',
+    ],
     'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
-    'PAGE_SIZE': 20,
+    'PAGE_SIZE': 50,
+    'DEFAULT_RENDERER_CLASSES': [
+        'rest_framework.renderers.JSONRenderer',
+    ],
 }
 
 # Simple JWT Configuration
 from datetime import timedelta
 
 SIMPLE_JWT = {
-    'ACCESS_TOKEN_LIFETIME': timedelta(minutes=60),
-    'REFRESH_TOKEN_LIFETIME': timedelta(days=1),
+    'ACCESS_TOKEN_LIFETIME': timedelta(hours=2),
+    'REFRESH_TOKEN_LIFETIME': timedelta(days=7),
     'ROTATE_REFRESH_TOKENS': True,
+    'BLACKLIST_AFTER_ROTATION': True,
 }
 
-# CORS Configuration
+# CORS - Solo dominios autorizados
 CORS_ALLOWED_ORIGINS = [
-    "http://localhost:3000",
-    "http://127.0.0.1:3000",
-    "http://localhost:8000",
-    "http://127.0.0.1:8000",
+    f'https://{RENDER_EXTERNAL_HOSTNAME}',
+    'https://soptraloc.onrender.com',
 ]
+CORS_ALLOW_CREDENTIALS = True
 
-if RENDER_EXTERNAL_HOSTNAME:
-    CORS_ALLOW_ALL_ORIGINS = True
-elif DEBUG:
-    CORS_ALLOW_ALL_ORIGINS = True
-
-# Swagger/OpenAPI Configuration
-SWAGGER_SETTINGS = {
-    'SECURITY_DEFINITIONS': {
-        'Bearer': {
-            'type': 'apiKey',
-            'name': 'Authorization',
-            'in': 'header'
-        }
+# Cache - Local memory (futuro: Redis)
+CACHES = {
+    'default': {
+        'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
+        'LOCATION': 'soptraloc-cache',
     }
 }
 
-# Security settings for production
-if not DEBUG:
-    SECURE_BROWSER_XSS_FILTER = True
-    SECURE_CONTENT_TYPE_NOSNIFF = True
-    X_FRAME_OPTIONS = 'DENY'
-    SECURE_HSTS_SECONDS = 31536000
-    SECURE_HSTS_INCLUDE_SUBDOMAINS = True
-    SECURE_HSTS_PRELOAD = True
-    
-    # Only enforce HTTPS if not on Render (Render handles SSL termination)
-    if not RENDER_EXTERNAL_HOSTNAME:
-        SECURE_SSL_REDIRECT = True
-        SESSION_COOKIE_SECURE = True
-        CSRF_COOKIE_SECURE = True
+# Email - Console backend (futuro: SMTP)
+EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
 
-# Logging
+# Logging optimizado para Render
 LOGGING = {
     'version': 1,
     'disable_existing_loggers': False,
-    'handlers': {
-        'file': {
-            'level': 'INFO',
-            'class': 'logging.FileHandler',
-            'filename': BASE_DIR / 'django.log',
+    'formatters': {
+        'verbose': {
+            'format': '{levelname} {asctime} {module} {message}',
+            'style': '{',
         },
+        'simple': {
+            'format': '{levelname} {message}',
+            'style': '{',
+        },
+    },
+    'handlers': {
         'console': {
             'level': 'INFO',
             'class': 'logging.StreamHandler',
+            'formatter': 'verbose',
         },
     },
     'root': {
-        'handlers': ['console', 'file'],
+        'handlers': ['console'],
         'level': 'INFO',
     },
+}    'loggers': {
+        'django': {
+            'handlers': ['console'],
+            'level': 'INFO',
+            'propagate': False,
+        },
+        'apps': {
+            'handlers': ['console'],
+            'level': 'INFO',
+            'propagate': False,
+        },
+    },
 }
+
+# Print configuración al cargar
+print("=" * 60)
+print("✅ CONFIGURACIÓN DE PRODUCCIÓN CARGADA - RENDER.COM")
+print("=" * 60)
+print(f"DEBUG: {DEBUG}")
+print(f"ALLOWED_HOSTS: {ALLOWED_HOSTS}")
+print(f"DATABASE: PostgreSQL (Render)")
+print(f"STATIC_ROOT: {STATIC_ROOT}")
+print(f"SECURE_SSL_REDIRECT: {SECURE_SSL_REDIRECT}")
+print(f"APPS INSTALADAS: {len(INSTALLED_APPS)}")
+for app in LOCAL_APPS:
+    print(f"  - {app}")
+print("=" * 60)

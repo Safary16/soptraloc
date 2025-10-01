@@ -1,52 +1,74 @@
-# 🚀 Render.com - Deploy SoptraLoc v2.0 Optimizado
-# Sistema de optimización de transporte de contenedores
-# Con reloj en tiempo real y alertas de proximidad
-# ACTUALIZACIÓN sobre servicio existente: soptraloc.onrender.com
+# 🚀 Render.com - Deploy SoptraLoc TMS v2.0 Optimizado
+# Sistema TMS con Machine Learning, Reloj ATC y Alertas en Tiempo Real
+# Actualización automática desde GitHub main branch
 
 services:
   # 🌐 Aplicación Web Principal
   - type: web
     name: soptraloc
     env: python
+    runtime: python
     pythonVersion: "3.12.6"
     repo: https://github.com/Safary16/soptraloc.git
     branch: main
+    region: oregon  # us-west (más cerca de Chile)
     plan: free
     
-    # 🔨 Comandos de construcción
-    buildCommand: ./build.sh
+    # 🔨 Build Command - Optimizado
+    buildCommand: chmod +x build.sh && ./build.sh
 
-    # 🚀 Pre-deploy: Migraciones SOLO (conserva datos existentes)
+    # � Pre-Deploy - Solo migraciones (preserva datos)
     preDeployCommand: |
       cd soptraloc_system
-      python manage.py migrate --settings=config.settings_production
-      echo "✅ Migraciones aplicadas - datos existentes preservados"
+      echo "🔄 Aplicando migraciones..."
+      python manage.py migrate --settings=config.settings_production --noinput
+      echo "✅ Migraciones completadas"
       
-    # 🚀 Comando de inicio
+    # 🚀 Start Command - Gunicorn optimizado
     startCommand: |
-      cd soptraloc_system && gunicorn --bind=0.0.0.0:$PORT --timeout 600 --workers 2 --threads 4 config.wsgi:application
+      cd soptraloc_system && \
+      gunicorn config.wsgi:application \
+        --bind=0.0.0.0:$PORT \
+        --workers=2 \
+        --threads=4 \
+        --worker-class=gthread \
+        --timeout=120 \
+        --max-requests=1000 \
+        --max-requests-jitter=50 \
+        --access-logfile=- \
+        --error-logfile=- \
+        --log-level=info
       
-    # 🔧 Variables de entorno
+    # 🌍 Health Check
+    healthCheckPath: /
+    
+    # 🔧 Variables de Entorno - Producción
     envVars:
       - key: PYTHON_VERSION
         value: "3.12.6"
+      
       - key: DEBUG
         value: "False"
+      
       - key: DJANGO_SETTINGS_MODULE
         value: config.settings_production
+      
       - key: SECRET_KEY
         generateValue: true
+      
       - key: DATABASE_URL
         fromDatabase:
           name: soptraloc-production-db
           property: connectionString
-      - key: ALLOWED_HOSTS
-        value: "*.onrender.com,localhost,127.0.0.1"
+      
       - key: RENDER_EXTERNAL_HOSTNAME
-        value: "soptraloc.onrender.com"
-      - key: DEPLOYMENT_ENV
-        value: "production"
-      - key: SYSTEM_VERSION
-        value: "v2.0-optimized"
+        sync: false
+      
       - key: TZ
         value: "America/Santiago"
+      
+      - key: LANG
+        value: "es_ES.UTF-8"
+      
+      - key: LC_ALL
+        value: "es_ES.UTF-8"

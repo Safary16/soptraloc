@@ -1,19 +1,48 @@
 #!/usr/bin/env bash
-# exit on error
+# Build script optimizado para Render.com - SoptraLoc TMS v2.0
 set -o errexit
 
-echo "🚀 Iniciando build de SoptraLoc para Render..."
+echo "======================================================"
+echo "🚀 BUILD SOPTRALOC TMS v2.0 - RENDER.COM"
+echo "======================================================"
 
-# Instalar dependencias
-echo "📦 Instalando dependencias..."
-pip install --upgrade pip
+# Actualizar pip
+echo "📦 Actualizando pip..."
+pip install --upgrade pip setuptools wheel
+
+# Instalar dependencias de producción
+echo "📦 Instalando dependencias de producción..."
 pip install -r requirements.txt
+
+# Verificar instalación de paquetes críticos
+echo "🔍 Verificando paquetes críticos..."
+python -c "import django; print(f'✅ Django {django.get_version()}')"
+python -c "import psycopg2; print('✅ psycopg2 instalado')"
+python -c "import whitenoise; print('✅ whitenoise instalado')"
+python -c "import gunicorn; print('✅ gunicorn instalado')"
 
 # Navegar al directorio del proyecto
 cd soptraloc_system
 
-# Recopilar archivos estáticos
-echo "📁 Recopilando archivos estáticos..."
-python manage.py collectstatic --noinput --settings=config.settings_production
+# Crear directorio de logs si no existe
+mkdir -p logs
 
-echo "✅ Build completado exitosamente!"
+# Recopilar archivos estáticos con compresión
+echo "📁 Recopilando y comprimiendo archivos estáticos..."
+python manage.py collectstatic --noinput --clear --settings=config.settings_production
+
+# Verificar archivos críticos
+echo "🔍 Verificando archivos estáticos críticos..."
+if [ -f "staticfiles/js/realtime-clock.js" ]; then
+    echo "✅ realtime-clock.js encontrado"
+else
+    echo "⚠️  ADVERTENCIA: realtime-clock.js no encontrado"
+fi
+
+echo "======================================================"
+echo "✅ BUILD COMPLETADO EXITOSAMENTE"
+echo "======================================================"
+echo "Sistema: SoptraLoc TMS v2.0"
+echo "Features: Reloj ATC + ML Routing + Alertas"
+echo "Apps: routing, containers, drivers, warehouses"
+echo "======================================================"
