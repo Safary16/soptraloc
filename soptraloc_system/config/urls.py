@@ -10,6 +10,7 @@ from drf_yasg.views import get_schema_view
 from drf_yasg import openapi
 from apps.core.home_views import HomeView, health_check, api_info
 from apps.core.auth_views import get_token, auth_info, home_view, dashboard_view, resueltos_view
+from apps.containers.views_import import setup_initial_view, check_system_status
 
 schema_view = get_schema_view(
     openapi.Info(
@@ -25,6 +26,10 @@ schema_view = get_schema_view(
 )
 
 urlpatterns = [
+    # Setup inicial (sin autenticación)
+    path('setup/', setup_initial_view, name='setup-initial'),
+    path('api/system-status/', check_system_status, name='system-status'),
+    
     # Página principal y dashboard
     path('', home_view, name='home'),
     path('dashboard/', dashboard_view, name='dashboard'),

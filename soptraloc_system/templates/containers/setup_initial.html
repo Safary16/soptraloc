@@ -1,0 +1,372 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Setup Inicial - SoptraLoc</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+        
+        .container {
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            max-width: 600px;
+            width: 100%;
+            padding: 40px;
+        }
+        
+        .header {
+            text-align: center;
+            margin-bottom: 40px;
+        }
+        
+        .logo {
+            font-size: 48px;
+            margin-bottom: 10px;
+        }
+        
+        h1 {
+            color: #333;
+            font-size: 28px;
+            margin-bottom: 10px;
+        }
+        
+        .subtitle {
+            color: #666;
+            font-size: 16px;
+        }
+        
+        .upload-area {
+            border: 3px dashed #667eea;
+            border-radius: 15px;
+            padding: 60px 20px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s;
+            margin-bottom: 20px;
+        }
+        
+        .upload-area:hover {
+            border-color: #764ba2;
+            background: #f8f9ff;
+        }
+        
+        .upload-area.dragover {
+            background: #e8ebff;
+            border-color: #764ba2;
+        }
+        
+        .upload-icon {
+            font-size: 64px;
+            margin-bottom: 20px;
+        }
+        
+        .upload-text {
+            color: #333;
+            font-size: 18px;
+            margin-bottom: 10px;
+        }
+        
+        .upload-hint {
+            color: #999;
+            font-size: 14px;
+        }
+        
+        .file-input {
+            display: none;
+        }
+        
+        .selected-file {
+            background: #e8f5e9;
+            border: 2px solid #4caf50;
+            border-radius: 10px;
+            padding: 15px;
+            margin-bottom: 20px;
+            display: none;
+        }
+        
+        .selected-file.show {
+            display: block;
+        }
+        
+        .file-name {
+            color: #2e7d32;
+            font-weight: bold;
+            word-break: break-all;
+        }
+        
+        .btn-upload {
+            width: 100%;
+            padding: 15px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 10px;
+            font-size: 18px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: transform 0.2s;
+            display: none;
+        }
+        
+        .btn-upload.show {
+            display: block;
+        }
+        
+        .btn-upload:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 20px rgba(102, 126, 234, 0.4);
+        }
+        
+        .btn-upload:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+        
+        .progress {
+            margin-top: 20px;
+            display: none;
+        }
+        
+        .progress.show {
+            display: block;
+        }
+        
+        .progress-bar {
+            width: 100%;
+            height: 8px;
+            background: #e0e0e0;
+            border-radius: 10px;
+            overflow: hidden;
+        }
+        
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+            width: 0%;
+            transition: width 0.3s;
+            animation: pulse 1s infinite;
+        }
+        
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+        
+        .message {
+            margin-top: 20px;
+            padding: 15px;
+            border-radius: 10px;
+            display: none;
+        }
+        
+        .message.show {
+            display: block;
+        }
+        
+        .message.success {
+            background: #e8f5e9;
+            color: #2e7d32;
+            border: 2px solid #4caf50;
+        }
+        
+        .message.error {
+            background: #ffebee;
+            color: #c62828;
+            border: 2px solid #f44336;
+        }
+        
+        .instructions {
+            background: #f5f5f5;
+            padding: 20px;
+            border-radius: 10px;
+            margin-top: 30px;
+        }
+        
+        .instructions h3 {
+            color: #333;
+            margin-bottom: 15px;
+            font-size: 16px;
+        }
+        
+        .instructions ul {
+            color: #666;
+            font-size: 14px;
+            line-height: 1.8;
+            padding-left: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <div class="logo">📦</div>
+            <h1>Configuración Inicial</h1>
+            <p class="subtitle">Importa los contenedores para iniciar el sistema</p>
+        </div>
+        
+        <form id="uploadForm">
+            {% csrf_token %}
+            <div class="upload-area" id="uploadArea">
+                <div class="upload-icon">⬆️</div>
+                <div class="upload-text">Arrastra tu archivo aquí</div>
+                <div class="upload-hint">o haz clic para seleccionar</div>
+                <div class="upload-hint" style="margin-top: 10px;">Archivos: CSV, XLSX, XLS</div>
+            </div>
+            
+            <input type="file" id="fileInput" class="file-input" accept=".csv,.xlsx,.xls">
+            
+            <div class="selected-file" id="selectedFile">
+                <div>📄 Archivo seleccionado:</div>
+                <div class="file-name" id="fileName"></div>
+            </div>
+            
+            <button type="submit" class="btn-upload" id="btnUpload">
+                🚀 Importar Contenedores
+            </button>
+            
+            <div class="progress" id="progress">
+                <div class="progress-bar">
+                    <div class="progress-fill"></div>
+                </div>
+                <div style="text-align: center; margin-top: 10px; color: #666;">
+                    Importando datos...
+                </div>
+            </div>
+            
+            <div class="message" id="message"></div>
+        </form>
+        
+        <div class="instructions">
+            <h3>📋 Instrucciones:</h3>
+            <ul>
+                <li>Sube un archivo CSV o Excel con los contenedores</li>
+                <li>El formato debe ser compatible con el sistema Walmart</li>
+                <li>Una vez importado, podrás acceder al sistema completo</li>
+                <li>Credenciales por defecto: <strong>admin / 1234</strong></li>
+            </ul>
+        </div>
+    </div>
+    
+    <script>
+        const uploadArea = document.getElementById('uploadArea');
+        const fileInput = document.getElementById('fileInput');
+        const selectedFile = document.getElementById('selectedFile');
+        const fileName = document.getElementById('fileName');
+        const btnUpload = document.getElementById('btnUpload');
+        const uploadForm = document.getElementById('uploadForm');
+        const progress = document.getElementById('progress');
+        const message = document.getElementById('message');
+        
+        let selectedFileObj = null;
+        
+        // Click to upload
+        uploadArea.addEventListener('click', () => fileInput.click());
+        
+        // Drag & drop
+        uploadArea.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            uploadArea.classList.add('dragover');
+        });
+        
+        uploadArea.addEventListener('dragleave', () => {
+            uploadArea.classList.remove('dragover');
+        });
+        
+        uploadArea.addEventListener('drop', (e) => {
+            e.preventDefault();
+            uploadArea.classList.remove('dragover');
+            const files = e.dataTransfer.files;
+            if (files.length > 0) {
+                handleFile(files[0]);
+            }
+        });
+        
+        // File input change
+        fileInput.addEventListener('change', (e) => {
+            if (e.target.files.length > 0) {
+                handleFile(e.target.files[0]);
+            }
+        });
+        
+        function handleFile(file) {
+            const validExtensions = ['csv', 'xlsx', 'xls'];
+            const extension = file.name.split('.').pop().toLowerCase();
+            
+            if (!validExtensions.includes(extension)) {
+                showMessage('Solo se aceptan archivos CSV o Excel', 'error');
+                return;
+            }
+            
+            selectedFileObj = file;
+            fileName.textContent = file.name;
+            selectedFile.classList.add('show');
+            btnUpload.classList.add('show');
+            message.classList.remove('show');
+        }
+        
+        // Submit form
+        uploadForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            if (!selectedFileObj) {
+                showMessage('Por favor selecciona un archivo', 'error');
+                return;
+            }
+            
+            const formData = new FormData();
+            formData.append('file', selectedFileObj);
+            formData.append('csrfmiddlewaretoken', document.querySelector('[name=csrfmiddlewaretoken]').value);
+            
+            btnUpload.disabled = true;
+            progress.classList.add('show');
+            message.classList.remove('show');
+            
+            try {
+                const response = await fetch(window.location.href, {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                const data = await response.json();
+                
+                progress.classList.remove('show');
+                btnUpload.disabled = false;
+                
+                if (data.success) {
+                    showMessage(`✅ ${data.message}`, 'success');
+                    setTimeout(() => {
+                        window.location.href = data.redirect || '/admin/';
+                    }, 2000);
+                } else {
+                    showMessage(`❌ ${data.error}`, 'error');
+                }
+            } catch (error) {
+                progress.classList.remove('show');
+                btnUpload.disabled = false;
+                showMessage(`❌ Error de conexión: ${error.message}`, 'error');
+            }
+        });
+        
+        function showMessage(text, type) {
+            message.textContent = text;
+            message.className = 'message show ' + type;
+        }
+    </script>
+</body>
+</html>

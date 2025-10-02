@@ -93,14 +93,8 @@ def auth_info(request):
 
 def home_view(request):
     """Vista principal con dashboard básico"""
-    try:
-        programados = Container.objects.filter(status__in=related_status_values('PROGRAMADO')).count()
-        total = Container.objects.count()
-    except Exception as e:
-        # Si hay error de BD, usar valores por defecto
-        print(f"⚠️ Error al consultar BD en home_view: {e}")
-        programados = 0
-        total = 0
+    programados = Container.objects.filter(status__in=related_status_values('PROGRAMADO')).count()
+    total = Container.objects.count()
     
     return render(request, 'core/home.html', {
         'title': 'SoptraLoc - Sistema de Gestión Logística',
@@ -116,181 +110,145 @@ def dashboard_view(request):
     from apps.drivers.models import Alert
     from apps.containers.services.proximity_alerts import ProximityAlertSystem
 
-    try:
-        status_filter = request.GET.get('status', 'all')
-        today = timezone.localdate()
-        tomorrow = today + timedelta(days=1)
+    status_filter = request.GET.get('status', 'all')
+    today = timezone.localdate()
+    tomorrow = today + timedelta(days=1)
 
-        base_queryset = Container.objects.select_related(
-            'conductor_asignado',
-            'client',
-            'terminal',
-            'owner_company',
-            'vessel',
-            'agency',
-            'shipping_line'
-        )
+    base_queryset = Container.objects.select_related(
+        'conductor_asignado',
+        'client',
+        'terminal',
+        'owner_company',
+        'vessel',
+        'agency',
+        'shipping_line'
+    )
 
-        if status_filter == 'all':
-            containers = base_queryset.filter(status__in=active_status_filter_values())
-        else:
-            normalized_status = normalize_status(status_filter)
-            containers = base_queryset.filter(status__in=related_status_values(normalized_status))
+    if status_filter == 'all':
+        containers = base_queryset.filter(status__in=active_status_filter_values())
+    else:
+        normalized_status = normalize_status(status_filter)
+        containers = base_queryset.filter(status__in=related_status_values(normalized_status))
 
-        # Anotar contenedores con información de urgencia
-        containers = ProximityAlertSystem.annotate_containers_with_urgency(containers)
-        
-        # Ordenar: urgentes primero, luego por fecha programada
-        containers_list = list(containers)
-        containers_list.sort(key=lambda c: (
-            not getattr(c, '_is_urgent', False),  # Urgentes primero
-            getattr(c, '_hours_remaining', 999),  # Más urgentes primero
-            c.scheduled_date if c.scheduled_date else timezone.localdate() + timedelta(days=999),
-            c.container_number
-        ))
-
-        raw_status_counts = Container.objects.values_list('status').annotate(count=Count('id'))
-        normalized_counts = {
-            summary.code: summary.count for summary in summarize_statuses(raw_status_counts)
-        }
-
-        stats = {
-            'total': sum(normalized_counts.values()),
-            'programados': normalized_counts.get('PROGRAMADO', 0),
-            'en_proceso': normalized_counts.get('EN_PROCESO', 0),
-            'en_transito': normalized_counts.get('EN_TRANSITO', 0),
-            'liberados': normalized_counts.get('LIBERADO', 0),
-            'descargados': normalized_counts.get('DESCARGADO', 0),
-            'en_secuencia': normalized_counts.get('EN_SECUENCIA', 0),
-        }
-
-        programados_hoy_data = list(
-            Container.objects.filter(
-                status__in=related_status_values('PROGRAMADO'),
-                scheduled_date=today,
-                conductor_asignado__isnull=True
-            ).values('id', 'container_number')
-        )
-        programados_hoy_ids = [item['id'] for item in programados_hoy_data]
-
-        if programados_hoy_ids:
-            existing_alert_ids = set(
-                Alert.objects.filter(
-                    tipo='CONTENEDOR_SIN_ASIGNAR',
-                    container_id__in=programados_hoy_ids,
-                    is_active=True
-                ).values_list('container_id', flat=True)
-            )
-            new_alerts = [
-                Alert(
-                    tipo='CONTENEDOR_SIN_ASIGNAR',
-                    prioridad='ALTA',
-                    titulo=f"Contenedor {item['container_number']} sin conductor",
-                    mensaje=(
-                        f"El contenedor {item['container_number']} está programado para hoy y no tiene conductor asignado."
-                    ),
-                    container_id=item['id']
-                )
-                for item in programados_hoy_data
-                if item['id'] not in existing_alert_ids
-            ]
-            if new_alerts:
-                Alert.objects.bulk_create(new_alerts)
-
-        # Obtener contenedores urgentes para destacarlos
-        urgent_containers = ProximityAlertSystem.get_urgent_containers(base_queryset)
-        
-        context = {
-            'title': 'Dashboard - SoptraLoc',
-            'containers': containers_list,
-            'status_filter': status_filter,
-            'today': today,
-            'tomorrow': tomorrow,
-            'stats': stats,
-            'alertas_activas': Alert.objects.filter(is_active=True).count(),
-            'contenedores_sin_asignar': len(programados_hoy_data),
-            'urgent_count': len(urgent_containers),
-        }
-
-        return render(request, 'core/dashboard.html', context)
+    # Anotar contenedores con información de urgencia
+    containers = ProximityAlertSystem.annotate_containers_with_urgency(containers)
     
-    except Exception as e:
-        # Si hay error de BD, mostrar dashboard vacío
-        print(f"⚠️ Error al cargar dashboard: {e}")
-        from datetime import timedelta
-        context = {
-            'title': 'Dashboard - SoptraLoc',
-            'containers': [],
-            'status_filter': 'all',
-            'today': timezone.localdate(),
-            'tomorrow': timezone.localdate() + timedelta(days=1),
-            'stats': {'total': 0, 'programados': 0, 'en_proceso': 0, 'en_transito': 0, 
-                      'liberados': 0, 'descargados': 0, 'en_secuencia': 0},
-            'alertas_activas': 0,
-            'contenedores_sin_asignar': 0,
-            'urgent_count': 0,
-            'db_error': str(e),
-        }
-        return render(request, 'core/dashboard.html', context)
+    # Ordenar: urgentes primero, luego por fecha programada
+    containers_list = list(containers)
+    containers_list.sort(key=lambda c: (
+        not getattr(c, '_is_urgent', False),  # Urgentes primero
+        getattr(c, '_hours_remaining', 999),  # Más urgentes primero
+        c.scheduled_date if c.scheduled_date else timezone.localdate() + timedelta(days=999),
+        c.container_number
+    ))
+
+    raw_status_counts = Container.objects.values_list('status').annotate(count=Count('id'))
+    normalized_counts = {
+        summary.code: summary.count for summary in summarize_statuses(raw_status_counts)
+    }
+
+    stats = {
+        'total': sum(normalized_counts.values()),
+        'programados': normalized_counts.get('PROGRAMADO', 0),
+        'en_proceso': normalized_counts.get('EN_PROCESO', 0),
+        'en_transito': normalized_counts.get('EN_TRANSITO', 0),
+        'liberados': normalized_counts.get('LIBERADO', 0),
+        'descargados': normalized_counts.get('DESCARGADO', 0),
+        'en_secuencia': normalized_counts.get('EN_SECUENCIA', 0),
+    }
+
+    programados_hoy_data = list(
+        Container.objects.filter(
+            status__in=related_status_values('PROGRAMADO'),
+            scheduled_date=today,
+            conductor_asignado__isnull=True
+        ).values('id', 'container_number')
+    )
+    programados_hoy_ids = [item['id'] for item in programados_hoy_data]
+
+    if programados_hoy_ids:
+        existing_alert_ids = set(
+            Alert.objects.filter(
+                tipo='CONTENEDOR_SIN_ASIGNAR',
+                container_id__in=programados_hoy_ids,
+                is_active=True
+            ).values_list('container_id', flat=True)
+        )
+        new_alerts = [
+            Alert(
+                tipo='CONTENEDOR_SIN_ASIGNAR',
+                prioridad='ALTA',
+                titulo=f"Contenedor {item['container_number']} sin conductor",
+                mensaje=(
+                    f"El contenedor {item['container_number']} está programado para hoy y no tiene conductor asignado."
+                ),
+                container_id=item['id']
+            )
+            for item in programados_hoy_data
+            if item['id'] not in existing_alert_ids
+        ]
+        if new_alerts:
+            Alert.objects.bulk_create(new_alerts)
+
+    # Obtener contenedores urgentes para destacarlos
+    urgent_containers = ProximityAlertSystem.get_urgent_containers(base_queryset)
+    
+    context = {
+        'title': 'Dashboard - SoptraLoc',
+        'containers': containers_list,
+        'status_filter': status_filter,
+        'today': today,
+        'tomorrow': tomorrow,
+        'stats': stats,
+        'alertas_activas': Alert.objects.filter(is_active=True).count(),
+        'contenedores_sin_asignar': len(programados_hoy_data),
+        'urgent_count': len(urgent_containers),
+    }
+
+    return render(request, 'core/dashboard.html', context)
 
 
 @login_required
 def resueltos_view(request):
     """Vista para contenedores resueltos (asignados)"""
-    try:
-        # Filtrar contenedores asignados o en proceso
-        contenedores_resueltos = Container.objects.filter(
-            conductor_asignado__isnull=False
-        ).select_related(
-            'conductor_asignado', 'client', 'terminal', 'vessel', 'agency', 'shipping_line'
-        ).order_by('-scheduled_date', 'container_number')
-        
-        # Filtros adicionales
-        estado_filter = request.GET.get('estado')
-        conductor_filter = request.GET.get('conductor')
-        
-        if estado_filter:
-            contenedores_resueltos = contenedores_resueltos.filter(status=estado_filter)
-        
-        if conductor_filter:
-            contenedores_resueltos = contenedores_resueltos.filter(conductor_asignado_id=conductor_filter)
-        
-        # Estadísticas
-        stats = {
-            'total_resueltos': contenedores_resueltos.count(),
-            'asignados': contenedores_resueltos.filter(status='ASIGNADO').count(),
-            'en_ruta': contenedores_resueltos.filter(status='EN_RUTA').count(),
-            'arribados': contenedores_resueltos.filter(status='ARRIBADO').count(),
-            'finalizados': contenedores_resueltos.filter(status='FINALIZADO').count(),
-        }
-        
-        # Lista de conductores para el filtro
-        from apps.drivers.models import Driver
-        conductores = Driver.objects.filter(is_active=True).order_by('nombre')
-        
-        context = {
-            'title': 'Contenedores Resueltos - SoptraLoc',
-            'contenedores': contenedores_resueltos,
-            'stats': stats,
-            'conductores': conductores,
-            'estado_filter': estado_filter,
-            'conductor_filter': conductor_filter,
-            'today': timezone.now().date(),
-        }
-        
-        return render(request, 'core/resueltos.html', context)
+    # Filtrar contenedores asignados o en proceso
+    contenedores_resueltos = Container.objects.filter(
+        conductor_asignado__isnull=False
+    ).select_related(
+        'conductor_asignado', 'client', 'terminal', 'vessel', 'agency', 'shipping_line'
+    ).order_by('-scheduled_date', 'container_number')
     
-    except Exception as e:
-        # Si hay error de BD, mostrar vista vacía
-        print(f"⚠️ Error al cargar resueltos: {e}")
-        context = {
-            'title': 'Contenedores Resueltos - SoptraLoc',
-            'contenedores': [],
-            'stats': {'total_resueltos': 0, 'asignados': 0, 'en_ruta': 0, 'arribados': 0, 'finalizados': 0},
-            'conductores': [],
-            'estado_filter': None,
-            'conductor_filter': None,
-            'today': timezone.now().date(),
-            'db_error': str(e),
-        }
-        return render(request, 'core/resueltos.html', context)
+    # Filtros adicionales
+    estado_filter = request.GET.get('estado')
+    conductor_filter = request.GET.get('conductor')
+    
+    if estado_filter:
+        contenedores_resueltos = contenedores_resueltos.filter(status=estado_filter)
+    
+    if conductor_filter:
+        contenedores_resueltos = contenedores_resueltos.filter(conductor_asignado_id=conductor_filter)
+    
+    # Estadísticas
+    stats = {
+        'total_resueltos': contenedores_resueltos.count(),
+        'asignados': contenedores_resueltos.filter(status='ASIGNADO').count(),
+        'en_ruta': contenedores_resueltos.filter(status='EN_RUTA').count(),
+        'arribados': contenedores_resueltos.filter(status='ARRIBADO').count(),
+        'finalizados': contenedores_resueltos.filter(status='FINALIZADO').count(),
+    }
+    
+    # Lista de conductores para el filtro
+    from apps.drivers.models import Driver
+    conductores = Driver.objects.filter(is_active=True).order_by('nombre')
+    
+    context = {
+        'title': 'Contenedores Resueltos - SoptraLoc',
+        'contenedores': contenedores_resueltos,
+        'stats': stats,
+        'conductores': conductores,
+        'estado_filter': estado_filter,
+        'conductor_filter': conductor_filter,
+        'today': timezone.now().date(),
+    }
+    
+    return render(request, 'core/resueltos.html', context)
