@@ -127,9 +127,18 @@ DATABASES = {
         default=DATABASE_URL,
         conn_max_age=600,
         conn_health_checks=True,
-        ssl_require=True,
+        # SSL configurado para Render - no requerir certificado
+        ssl_require=False,  # Render maneja SSL en el proxy
     )
 }
+
+# Configuración adicional de SSL para PostgreSQL en Render
+# Render usa SSL pero no requiere verificación de certificado
+if 'DATABASE_URL' in os.environ:
+    # Si estamos en Render (tiene DATABASE_URL), configurar SSL sin verificación
+    DATABASES['default']['OPTIONS'] = {
+        'sslmode': 'require',  # Usar SSL pero sin verificar certificado
+    }
 
 # Password validation
 AUTH_PASSWORD_VALIDATORS = [
