@@ -29,6 +29,48 @@
             width: 100%;
             padding: 40px;
         }
+
+        .alert {
+            border-radius: 12px;
+            padding: 16px 20px;
+            line-height: 1.5;
+            border: 2px solid transparent;
+        }
+
+        .alert-warning {
+            background: #fff8e1;
+            border-color: #ffb300;
+            color: #8c6d1f;
+        }
+
+        .alert-success {
+            background: #e8f5e9;
+            border-color: #66bb6a;
+            color: #2e7d32;
+        }
+
+        .import-mode .form-check {
+            margin-bottom: 8px;
+            display: flex;
+            gap: 8px;
+            align-items: center;
+            font-size: 14px;
+            color: #333;
+        }
+
+        .form-check-input {
+            width: 18px;
+            height: 18px;
+            accent-color: #667eea;
+        }
+
+        .import-mode label {
+            cursor: pointer;
+        }
+
+        .fw-semibold {
+            font-weight: 600;
+        }
         
         .header {
             text-align: center;
@@ -222,6 +264,33 @@
         
         <form id="uploadForm">
             {% csrf_token %}
+            {% if has_data %}
+            <div class="alert alert-warning" role="alert" style="margin-bottom: 20px;">
+                <strong>Ya existen contenedores en el sistema.</strong>
+                Actualmente hay <strong>{{ total_containers }}</strong> registros.
+                Puedes elegir si deseas <strong>agregar</strong> los nuevos contenedores o <strong>reemplazar</strong> los existentes.
+            </div>
+            {% else %}
+            <div class="alert alert-success" role="alert" style="margin-bottom: 20px;">
+                No se encontraron contenedores cargados. ¡Sube tu archivo para iniciar el sistema!
+            </div>
+            {% endif %}
+
+            <div class="import-mode" style="margin-bottom: 20px;">
+                <label class="fw-semibold" style="display:block; margin-bottom: 8px;">Modo de importación</label>
+                <div class="form-check">
+                    <input class="form-check-input" type="radio" name="mode" id="mode-append" value="append" checked>
+                    <label class="form-check-label" for="mode-append">
+                        Agregar contenedores (mantiene los existentes y suma los nuevos)
+                    </label>
+                </div>
+                <div class="form-check">
+                    <input class="form-check-input" type="radio" name="mode" id="mode-replace" value="replace">
+                    <label class="form-check-label" for="mode-replace">
+                        Reemplazar todo (elimina los existentes antes de importar)
+                    </label>
+                </div>
+            </div>
             <div class="upload-area" id="uploadArea">
                 <div class="upload-icon">⬆️</div>
                 <div class="upload-text">Arrastra tu archivo aquí</div>
@@ -250,6 +319,7 @@
             </div>
             
             <div class="message" id="message"></div>
+            <div class="message success" id="statsMessage" style="display:none;"></div>
         </form>
         
         <div class="instructions">
@@ -270,8 +340,9 @@
         const fileName = document.getElementById('fileName');
         const btnUpload = document.getElementById('btnUpload');
         const uploadForm = document.getElementById('uploadForm');
-        const progress = document.getElementById('progress');
-        const message = document.getElementById('message');
+    const progress = document.getElementById('progress');
+    const message = document.getElementById('message');
+    const statsMessage = document.getElementById('statsMessage');
         
         let selectedFileObj = null;
         
@@ -331,11 +402,13 @@
             
             const formData = new FormData();
             formData.append('file', selectedFileObj);
+            formData.append('mode', document.querySelector('input[name="mode"]:checked').value);
             formData.append('csrfmiddlewaretoken', document.querySelector('[name=csrfmiddlewaretoken]').value);
             
             btnUpload.disabled = true;
             progress.classList.add('show');
             message.classList.remove('show');
+            statsMessage.style.display = 'none';
             
             try {
                 const response = await fetch(window.location.href, {
@@ -350,9 +423,13 @@
                 
                 if (data.success) {
                     showMessage(`✅ ${data.message}`, 'success');
+                    if (typeof data.total === 'number') {
+                        statsMessage.textContent = `📦 Total de contenedores en el sistema: ${data.total}`;
+                        statsMessage.style.display = 'block';
+                    }
                     setTimeout(() => {
                         window.location.href = data.redirect || '/admin/';
-                    }, 2000);
+                    }, 2500);
                 } else {
                     showMessage(`❌ ${data.error}`, 'error');
                 }

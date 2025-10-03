@@ -1,38 +1,53 @@
-"""
-Vista pública para importar datos iniciales al sistema
-NO REQUIERE AUTENTICACIÓN - Solo para setup inicial
-"""
-from django.shortcuts import render
-from django.http import JsonResponse
-from django.views.decorators.csrf import csrf_exempt
+"""Views para importación inicial y diagnóstico del sistema."""
+from pathlib import Path
+
+from django.contrib.auth import get_user_model
 from django.core.management import call_command
-from django.contrib.auth.models import User
+from django.http import JsonResponse
+from django.shortcuts import render
+
 from apps.containers.models import Container
+
+import logging
 import os
 import tempfile
-import logging
 
 logger = logging.getLogger(__name__)
+User = get_user_model()
+
+
+def _get_default_import_user():
+    """Obtiene (o crea) el usuario que se utilizará como owner en la importación."""
+    user = User.objects.filter(is_superuser=True).order_by('id').first()
+    if user:
+        return user
+
+    # Si no existe, crea un administrador por defecto (coincide con force_create_admin)
+    user = User.objects.create_superuser(
+        username='admin',
+        email='admin@soptraloc.com',
+        password='1234'
+    )
+    logger.info("Se creó un superusuario por defecto para la importación (admin / 1234)")
+    return user
 
 
 def setup_initial_view(request):
-    """
-    Vista pública para importar datos iniciales
-    GET: Muestra formulario
-    POST: Procesa el archivo Excel/CSV
-    """
-    # Si ya hay contenedores, redirigir al dashboard
-    if Container.objects.exists():
-        return render(request, 'containers/setup_complete.html', {
-            'total_containers': Container.objects.count(),
-            'message': 'El sistema ya tiene contenedores cargados.'
-        })
-    
+    """Vista pública para importar datos desde Excel o CSV."""
+    total_containers = Container.objects.count()
+    context = {
+        'total_containers': total_containers,
+        'has_data': total_containers > 0,
+    }
+
     if request.method == 'GET':
-        return render(request, 'containers/setup_initial.html')
+        return render(request, 'containers/setup_initial.html', context)
     
     # POST - Procesar archivo
     if request.method == 'POST':
+        mode = request.POST.get('mode', 'append')
+        truncate_before_import = mode == 'replace'
+
         if 'file' not in request.FILES:
             logger.warning("Setup inicial: No se subió archivo")
             return JsonResponse({
@@ -61,6 +76,9 @@ def setup_initial_view(request):
             }, status=400)
         
         try:
+            import_user = _get_default_import_user()
+            logger.info("Setup inicial: Usando usuario %s (ID %s) para la importación", import_user.username, import_user.id)
+
             # Guardar archivo temporal
             logger.info("Setup inicial: Guardando archivo temporal")
             with tempfile.NamedTemporaryFile(delete=False, suffix=file_extension) as tmp_file:
@@ -72,11 +90,17 @@ def setup_initial_view(request):
             
             # Ejecutar comando de importación
             logger.info(f"Setup inicial: Ejecutando comando de importación")
+            before_count = Container.objects.count()
+
+            command_args = [tmp_path, '--user', str(import_user.id)]
+            if truncate_before_import:
+                command_args.insert(1, '--truncate')
+
             if file_extension == '.csv':
-                call_command('import_containers', tmp_path, '--truncate', '--user', '1')
+                call_command('import_containers', *command_args)
             else:
                 # Para Excel usar el importador correspondiente
-                call_command('import_containers_walmart', tmp_path, '--truncate', '--user', '1')
+                call_command('import_containers_walmart', *command_args)
             
             logger.info("Setup inicial: Importación completada")
             
@@ -93,12 +117,20 @@ def setup_initial_view(request):
                 logger.warning(f"Setup inicial: Error al normalizar estados (no crítico): {e}")
             
             total_imported = Container.objects.count()
+            created_delta = max(total_imported - before_count, 0)
             logger.info(f"Setup inicial: ✅ {total_imported} contenedores importados exitosamente")
             
+            context.update({
+                'total_containers': total_imported,
+                'has_data': total_imported > 0,
+            })
+
             return JsonResponse({
                 'success': True,
                 'message': f'Se importaron {total_imported} contenedores exitosamente',
                 'total': total_imported,
+                'created_delta': created_delta,
+                'mode': mode,
                 'redirect': '/admin/'  # Redirigir al admin después
             })
             
