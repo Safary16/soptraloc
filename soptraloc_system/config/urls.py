@@ -9,6 +9,7 @@ from rest_framework import permissions
 from drf_yasg.views import get_schema_view
 from drf_yasg import openapi
 from apps.core.home_views import HomeView, health_check, api_info
+from apps.core.health_views import health_check_detailed, health_check_simple
 from apps.core.auth_views import get_token, auth_info, home_view, dashboard_view, resueltos_view
 from apps.containers.views_import import setup_initial_view, check_system_status
 
@@ -30,14 +31,17 @@ urlpatterns = [
     path('setup/', setup_initial_view, name='setup-initial'),
     path('api/system-status/', check_system_status, name='system-status'),
     
+    # Health checks (para Render y monitoring)
+    path('health/', health_check_simple, name='health-check-simple'),
+    path('api/health/', health_check_detailed, name='health-check-detailed'),
+    path('api/info/', api_info, name='api-info'),
+    
     # Página principal y dashboard
     path('', home_view, name='home'),
     path('dashboard/', dashboard_view, name='dashboard'),
     path('resueltos/', resueltos_view, name='resueltos'),
     path('drivers/', include('apps.drivers.urls')),
     path('containers/', include('apps.containers.urls')),
-    path('health/', health_check, name='health-check'),
-    path('api/info/', api_info, name='api-info'),
     
     # Autenticación
     path('accounts/', include('django.contrib.auth.urls')),

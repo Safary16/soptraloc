@@ -2,7 +2,7 @@ from django.contrib.auth import authenticate
 from django.contrib.auth.models import User
 from django.shortcuts import render
 from django.contrib.auth.decorators import login_required
-from django.db.models import Count
+from django.db.models import Count, Prefetch
 from django.utils import timezone
 from rest_framework import status
 from rest_framework.decorators import api_view, permission_classes
@@ -17,6 +17,9 @@ from apps.containers.services.status_utils import (
     related_status_values,
     summarize_statuses,
 )
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 @api_view(['POST'])

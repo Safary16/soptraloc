@@ -271,6 +271,14 @@ class Container(BaseModel):
         verbose_name = 'Contenedor'
         verbose_name_plural = 'Contenedores'
         ordering = ['sequence_id', 'container_number']
+        indexes = [
+            models.Index(fields=['status'], name='idx_status'),
+            models.Index(fields=['scheduled_date'], name='idx_scheduled'),
+            models.Index(fields=['conductor_asignado'], name='idx_driver'),
+            models.Index(fields=['container_number'], name='idx_number'),
+            models.Index(fields=['status', 'scheduled_date'], name='idx_status_date'),
+            models.Index(fields=['conductor_asignado', 'status'], name='idx_driver_status'),
+        ]
         
     def __str__(self):
         if self.client:

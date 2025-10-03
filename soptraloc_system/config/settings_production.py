@@ -138,6 +138,8 @@ if 'DATABASE_URL' in os.environ:
     # Si estamos en Render (tiene DATABASE_URL), configurar SSL sin verificación
     DATABASES['default']['OPTIONS'] = {
         'sslmode': 'require',  # Usar SSL pero sin verificar certificado
+        'connect_timeout': 10,  # Timeout de conexión 10 segundos
+        'options': '-c statement_timeout=30000'  # Timeout de queries 30 segundos
     }
 
 # Password validation
@@ -272,16 +274,18 @@ LOGGING = {
     },
 }
 
-# Print configuración al cargar
-print("=" * 60)
-print("✅ CONFIGURACIÓN DE PRODUCCIÓN CARGADA - RENDER.COM")
-print("=" * 60)
-print(f"DEBUG: {DEBUG}")
-print(f"ALLOWED_HOSTS: {ALLOWED_HOSTS}")
-print(f"DATABASE: PostgreSQL (Render)")
-print(f"STATIC_ROOT: {STATIC_ROOT}")
-print(f"SECURE_SSL_REDIRECT: {SECURE_SSL_REDIRECT}")
-print(f"APPS INSTALADAS: {len(INSTALLED_APPS)}")
+# Logging de configuración al cargar (usando logger)
+import logging
+logger = logging.getLogger(__name__)
+logger.info("=" * 60)
+logger.info("✅ CONFIGURACIÓN DE PRODUCCIÓN CARGADA - RENDER.COM")
+logger.info("=" * 60)
+logger.info(f"DEBUG: {DEBUG}")
+logger.info(f"ALLOWED_HOSTS: {ALLOWED_HOSTS}")
+logger.info(f"DATABASE: PostgreSQL (Render)")
+logger.info(f"STATIC_ROOT: {STATIC_ROOT}")
+logger.info(f"SECURE_SSL_REDIRECT: {SECURE_SSL_REDIRECT}")
+logger.info(f"APPS INSTALADAS: {len(INSTALLED_APPS)}")
 for app in LOCAL_APPS:
-    print(f"  - {app}")
-print("=" * 60)
+    logger.info(f"  - {app}")
+logger.info("=" * 60)
