@@ -46,6 +46,8 @@ fi
 
 DEFAULT_RENDER_REMOTE="render"
 RENDER_REMOTE_NAME=${RENDER_REMOTE_NAME:-$DEFAULT_RENDER_REMOTE}
+DEFAULT_RENDER_REMOTE_URL=${DEFAULT_RENDER_REMOTE_URL:-"https://git.render.com/soptraloc/soptraloc.git"}
+RENDER_REMOTE_URL=${RENDER_REMOTE_URL:-$DEFAULT_RENDER_REMOTE_URL}
 
 if git remote get-url origin >/dev/null 2>&1; then
   step "Empujando a origin"

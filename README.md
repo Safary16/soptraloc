@@ -174,12 +174,10 @@ El script realiza, en orden:
 5. Migraciones y `collectstatic` en tu entorno local.
 6. Validación de árbol Git limpio y, si encuentra un remoto válido, hace push automático a `origin` y a `render`.
 
-> 💡 ¿No tienes configurado el remoto de Render aún?
-> - Exporta la URL una sola vez: `export RENDER_REMOTE_URL="https://git.render.com/<tu-servicio>.git"`
-> - (Opcional) Cambia el nombre del remoto con `RENDER_REMOTE_NAME=my-render`.
-> - El script añadirá el remoto si no existe y realizará el push automáticamente.
-
-> ℹ️ Configura previamente tu remoto con `git remote add render <URL-de-Render>` para habilitar el push automático.
+> 💡 El script configura por defecto el remoto `render` apuntando a `https://git.render.com/soptraloc/soptraloc.git`.
+> - Si tu servicio usa otra URL, sobreescríbela con `export RENDER_REMOTE_URL="https://git.render.com/tu-servicio.git"` antes de ejecutar el script.
+> - (Opcional) cambia el nombre del remoto con `RENDER_REMOTE_NAME=my-render`.
+> - Siempre que detecte el remoto (o lo cree automáticamente) hará push a `origin` y a Render.
 
 ### Comandos Post-Deploy
 ```bash
