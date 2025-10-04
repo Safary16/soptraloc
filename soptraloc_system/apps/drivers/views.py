@@ -66,13 +66,28 @@ def _preferred_driver_types(container):
     return ['TRONCO', 'TRONCO_PM', 'LEASING']
 
 
-def _estimate_assignment_duration_minutes(origin, destination):
+def _estimate_assignment_duration_minutes(origin, destination, assignment_type, scheduled_datetime):
     if origin and destination:
+        try:
+            from apps.drivers.services.duration_predictor import DriverDurationPredictor
+        except ImportError:
+            DriverDurationPredictor = None
+
+        if DriverDurationPredictor is not None:
+            prediction = DriverDurationPredictor().predict(
+                origin=origin,
+                destination=destination,
+                assignment_type=assignment_type,
+                scheduled_datetime=scheduled_datetime,
+            )
+            if prediction and prediction.minutes:
+                return prediction.minutes
+
         try:
             time_matrix = TimeMatrix.objects.get(from_location=origin, to_location=destination)
             return time_matrix.get_total_time()
         except TimeMatrix.DoesNotExist:
-            return DEFAULT_ASSIGNMENT_DURATION
+            pass
     return DEFAULT_ASSIGNMENT_DURATION
 
 
@@ -105,7 +120,7 @@ def _has_schedule_conflict(driver, start_datetime, duration_minutes):
     return False
 
 
-def _assign_driver_to_container(container, driver, user, scheduled_datetime=None):
+def _assign_driver_to_container(container, driver, user, scheduled_datetime=None, assignment_type='ENTREGA'):
     """Centraliza la creación de asignaciones y la actualización de estados."""
     scheduled_datetime = scheduled_datetime or _compute_scheduled_datetime(container)
     origin_location, destination_location = _resolve_assignment_locations(driver, container)
@@ -114,7 +129,12 @@ def _assign_driver_to_container(container, driver, user, scheduled_datetime=None
     if driver.ultimo_registro_asistencia != today or not driver.hora_ingreso_hoy:
         raise ValueError(f'El conductor {driver.nombre} no ha registrado asistencia hoy')
 
-    duration_minutes = _estimate_assignment_duration_minutes(origin_location, destination_location)
+    duration_minutes = _estimate_assignment_duration_minutes(
+        origin_location,
+        destination_location,
+        assignment_type,
+        scheduled_datetime,
+    )
     if _has_schedule_conflict(driver, scheduled_datetime, duration_minutes):
         raise ValueError(
             f'El conductor {driver.nombre} tiene otra asignación en horario conflictivo'
@@ -130,10 +150,11 @@ def _assign_driver_to_container(container, driver, user, scheduled_datetime=None
         origen_legacy=driver.get_ubicacion_actual_display() if hasattr(driver, 'get_ubicacion_actual_display') else driver.ubicacion_actual,
         destino_legacy=container.cd_location or 'CD No definido',
         created_by=user,
-        tiempo_estimado=duration_minutes
+        tiempo_estimado=duration_minutes,
+        tipo_asignacion=assignment_type
     )
 
-    assignment.calculate_estimated_time()
+    assignment.calculate_estimated_time(refresh=False)
     assignment.save(update_fields=['tiempo_estimado'])
 
     driver.contenedor_asignado = container
@@ -451,6 +472,8 @@ def get_available_drivers(request):
             tipo_requerido = 'TRONCO'
         
         scheduled_datetime = _compute_scheduled_datetime(container)
+        container_status = normalize_status(container.status)
+        assignment_type = 'DEVOLUCION' if container_status in {'DISPONIBLE_DEVOLUCION', 'EN_RUTA_DEVOLUCION'} else 'ENTREGA'
         
         # Obtener conductores disponibles del tipo adecuado y con asistencia registrada
         available_drivers = Driver.objects.filter(
@@ -466,7 +489,12 @@ def get_available_drivers(request):
         drivers_data = []
         for driver in candidates:
             origin, destination = _resolve_assignment_locations(driver, container)
-            duration = _estimate_assignment_duration_minutes(origin, destination)
+            duration = _estimate_assignment_duration_minutes(
+                origin,
+                destination,
+                assignment_type,
+                scheduled_datetime,
+            )
 
             if _has_schedule_conflict(driver, scheduled_datetime, duration):
                 continue

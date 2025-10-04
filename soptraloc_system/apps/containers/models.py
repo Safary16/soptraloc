@@ -252,11 +252,14 @@ class Container(BaseModel):
     tiempo_llegada = models.DateTimeField(null=True, blank=True, verbose_name="Tiempo de llegada")
     tiempo_descarga = models.DateTimeField(null=True, blank=True, verbose_name="Tiempo de descarga")
     tiempo_finalizacion = models.DateTimeField(null=True, blank=True, verbose_name="Tiempo finalización")
+    tiempo_inicio_devolucion = models.DateTimeField(null=True, blank=True, verbose_name="Inicio devolución")
+    tiempo_arribo_devolucion = models.DateTimeField(null=True, blank=True, verbose_name="Arribo devolución")
     
     # Duración calculada (en minutos)
     duracion_total = models.IntegerField(null=True, blank=True, verbose_name="Duración total (minutos)")
     duracion_ruta = models.IntegerField(null=True, blank=True, verbose_name="Duración ruta (minutos)")
     duracion_descarga = models.IntegerField(null=True, blank=True, verbose_name="Duración descarga (minutos)")
+    duracion_devolucion = models.IntegerField(null=True, blank=True, verbose_name="Duración devolución (minutos)")
     
     def save(self, *args, **kwargs):
         # Usar owner_company como client si no hay client específico

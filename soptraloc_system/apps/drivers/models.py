@@ -1,6 +1,7 @@
 from django.db import models
 from django.contrib.auth.models import User
 from datetime import datetime, timedelta
+from django.utils import timezone
 
 
 class Location(models.Model):
@@ -53,27 +54,57 @@ class TimeMatrix(models.Model):
     def __str__(self):
         return f"{self.from_location} → {self.to_location} ({self.travel_time}min)"
     
-    def get_total_time(self):
-        """Tiempo total incluyendo viaje, carga y descarga"""
-        return self.travel_time + self.loading_time + self.unloading_time
+    def get_total_time(self, use_learned: bool = True) -> int:
+        """Tiempo total estimado incluyendo viaje, carga y descarga."""
+        travel_component = self.travel_time
+        if use_learned and self.avg_travel_time is not None:
+            travel_component = int(round(self.avg_travel_time))
+
+        total = travel_component + self.loading_time + self.unloading_time
+        return max(int(round(total)), 15)
     
-    def update_historical_data(self, actual_time):
-        """Actualiza los datos históricos con un tiempo real"""
+    def update_historical_data(self, actual_total_minutes: int, route_minutes: int | None = None, unloading_minutes: int | None = None):
+        """Actualiza la matriz de tiempos con datos reales recibidos."""
+        if actual_total_minutes is None:
+            return
+
+        actual_total_minutes = max(int(actual_total_minutes), 0)
+
+        inferred_route = route_minutes
+        if inferred_route is None:
+            inferred_route = max(actual_total_minutes - (self.loading_time + self.unloading_time), 0)
+
+        smoothing = 0.6
+
         if self.avg_travel_time is None:
-            self.avg_travel_time = actual_time
+            self.avg_travel_time = inferred_route
         else:
-            # Media ponderada para dar más peso a datos recientes
-            weight = 0.8
-            self.avg_travel_time = (self.avg_travel_time * weight) + (actual_time * (1 - weight))
-        
-        if self.min_travel_time is None or actual_time < self.min_travel_time:
-            self.min_travel_time = actual_time
-        
-        if self.max_travel_time is None or actual_time > self.max_travel_time:
-            self.max_travel_time = actual_time
-        
+            self.avg_travel_time = (self.avg_travel_time * smoothing) + (inferred_route * (1 - smoothing))
+
+        # Ajustar límites observados
+        if self.min_travel_time is None or inferred_route < self.min_travel_time:
+            self.min_travel_time = inferred_route
+
+        if self.max_travel_time is None or inferred_route > self.max_travel_time:
+            self.max_travel_time = inferred_route
+
+        # Actualizar tiempos manuales si el dato aprendido es más representativo
+        if inferred_route > 0:
+            self.travel_time = max(int(round(self.avg_travel_time)), 1)
+
+        if unloading_minutes is not None:
+            self.unloading_time = max(unloading_minutes, self.unloading_time)
+
         self.total_trips += 1
-        self.save()
+        self.save(update_fields=[
+            'avg_travel_time',
+            'min_travel_time',
+            'max_travel_time',
+            'travel_time',
+            'unloading_time',
+            'total_trips',
+            'updated_at'
+        ])
 
 class Driver(models.Model):
     """Modelo para gestionar conductores"""
@@ -187,6 +218,11 @@ class Assignment(models.Model):
         ('COMPLETADA', 'Completada'),
         ('CANCELADA', 'Cancelada'),
     ]
+
+    TIPO_ASIGNACION_CHOICES = [
+        ('ENTREGA', 'Entrega a cliente'),
+        ('DEVOLUCION', 'Devolución a depósito/CCTI'),
+    ]
     
     container = models.ForeignKey('containers.Container', on_delete=models.CASCADE)
     driver = models.ForeignKey(Driver, on_delete=models.CASCADE)
@@ -200,9 +236,17 @@ class Assignment(models.Model):
     # Tiempo estimado basado en matriz de tiempos
     tiempo_estimado = models.IntegerField(default=120, help_text="Tiempo estimado en minutos")
     tiempo_real = models.IntegerField(null=True, blank=True, help_text="Tiempo real en minutos")
+    ruta_minutos_real = models.IntegerField(null=True, blank=True, help_text="Tiempo real de ruta")
+    descarga_minutos_real = models.IntegerField(null=True, blank=True, help_text="Tiempo real de descarga")
     
     # Estado y ubicaciones
     estado = models.CharField(max_length=20, choices=ESTADO_ASIGNACION_CHOICES, default='PENDIENTE')
+    tipo_asignacion = models.CharField(
+        max_length=20,
+        choices=TIPO_ASIGNACION_CHOICES,
+        default='ENTREGA',
+        verbose_name='Tipo de asignación'
+    )
     origen = models.ForeignKey(Location, on_delete=models.SET_NULL, null=True, related_name='assignments_from')
     destino = models.ForeignKey(Location, on_delete=models.SET_NULL, null=True, related_name='assignments_to')
     
@@ -237,38 +281,68 @@ class Assignment(models.Model):
         
         return not overlapping.exists()
     
-    def calculate_estimated_time(self):
-        """Calcula el tiempo estimado basado en la matriz de tiempos"""
-        if self.origen and self.destino:
-            try:
-                time_matrix = TimeMatrix.objects.get(
-                    from_location=self.origen,
-                    to_location=self.destino
-                )
-                self.tiempo_estimado = time_matrix.get_total_time()
-            except TimeMatrix.DoesNotExist:
-                # Usar tiempo por defecto si no existe en la matriz
-                self.tiempo_estimado = 120  # 2 horas por defecto
+    def calculate_estimated_time(self, refresh: bool = True, predicted_minutes: int | None = None):
+        """Calcula o reutiliza el tiempo estimado de duración."""
+        DEFAULT_MINUTES = 120
+
+        if not refresh:
+            return self.tiempo_estimado or DEFAULT_MINUTES
+
+        if predicted_minutes is not None and predicted_minutes > 0:
+            minutes = predicted_minutes
         else:
-            self.tiempo_estimado = 120
-    
-    def complete_assignment(self, actual_minutes):
-        """Completa la asignación y actualiza los datos históricos"""
-        self.fecha_completada = datetime.now()
-        self.tiempo_real = actual_minutes
+            scheduled = self.fecha_programada or timezone.now()
+            minutes = None
+            if self.origen and self.destino:
+                try:
+                    from .services.duration_predictor import DriverDurationPredictor
+                except ImportError:
+                    DriverDurationPredictor = None
+
+                if DriverDurationPredictor is not None:
+                    predictor = DriverDurationPredictor()
+                    prediction = predictor.predict(
+                        origin=self.origen,
+                        destination=self.destino,
+                        assignment_type=self.tipo_asignacion or 'ENTREGA',
+                        scheduled_datetime=scheduled,
+                    )
+                    minutes = prediction.minutes if prediction else None
+
+                if minutes is None:
+                    try:
+                        time_matrix = TimeMatrix.objects.get(
+                            from_location=self.origen,
+                            to_location=self.destino
+                        )
+                        minutes = time_matrix.get_total_time()
+                    except TimeMatrix.DoesNotExist:
+                        minutes = None
+
+        self.tiempo_estimado = int(minutes) if minutes else DEFAULT_MINUTES
+        return self.tiempo_estimado
+
+    def record_actual_times(self, *, total_minutes: int, route_minutes: int | None = None, unloading_minutes: int | None = None):
+        """Guarda los tiempos reales y alimenta la matriz de tiempos."""
+        now = timezone.now()
+        self.tiempo_real = max(int(total_minutes), 0)
+        self.ruta_minutos_real = route_minutes if route_minutes is None else max(int(route_minutes), 0)
+        self.descarga_minutos_real = unloading_minutes if unloading_minutes is None else max(int(unloading_minutes), 0)
+        self.fecha_completada = now
         self.estado = 'COMPLETADA'
-        self.save()
-        
-        # Actualizar matriz de tiempos con datos reales
+        self.save(update_fields=['tiempo_real', 'ruta_minutos_real', 'descarga_minutos_real', 'fecha_completada', 'estado'])
+
         if self.origen and self.destino:
             try:
-                time_matrix = TimeMatrix.objects.get(
-                    from_location=self.origen,
-                    to_location=self.destino
-                )
-                time_matrix.update_historical_data(actual_minutes)
+                time_matrix = TimeMatrix.objects.get(from_location=self.origen, to_location=self.destino)
             except TimeMatrix.DoesNotExist:
-                pass
+                return
+
+            time_matrix.update_historical_data(
+                actual_total_minutes=self.tiempo_real,
+                route_minutes=self.ruta_minutos_real,
+                unloading_minutes=self.descarga_minutos_real,
+            )
 
 
 class Alert(models.Model):

@@ -158,6 +158,11 @@ def dashboard_view(request):
         'liberados': normalized_counts.get('LIBERADO', 0),
         'descargados': normalized_counts.get('DESCARGADO', 0),
         'en_secuencia': normalized_counts.get('EN_SECUENCIA', 0),
+        'arribados': normalized_counts.get('ARRIBADO', 0),
+        'descargado_cd': normalized_counts.get('DESCARGADO_CD', 0),
+        'disponibles_devolucion': normalized_counts.get('DISPONIBLE_DEVOLUCION', 0),
+        'en_ruta_devolucion': normalized_counts.get('EN_RUTA_DEVOLUCION', 0),
+        'finalizados': normalized_counts.get('FINALIZADO', 0),
     }
 
     programados_hoy_data = list(
@@ -196,6 +201,10 @@ def dashboard_view(request):
     # Obtener contenedores urgentes para destacarlos
     urgent_containers = ProximityAlertSystem.get_urgent_containers(base_queryset)
     
+    return_containers = base_queryset.filter(
+        status__in=['DISPONIBLE_DEVOLUCION', 'EN_RUTA_DEVOLUCION']
+    ).order_by('updated_at')
+
     context = {
         'title': 'Dashboard - SoptraLoc',
         'containers': containers_list,
@@ -206,6 +215,7 @@ def dashboard_view(request):
         'alertas_activas': Alert.objects.filter(is_active=True).count(),
         'contenedores_sin_asignar': len(programados_hoy_data),
         'urgent_count': len(urgent_containers),
+        'return_containers': return_containers,
     }
 
     return render(request, 'core/dashboard.html', context)

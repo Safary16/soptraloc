@@ -413,6 +413,112 @@
             .catch((error) => showAlert('danger', error.message || 'Error al obtener conductores disponibles'));
     };
 
+    actions.markReadyForReturn = function (containerId) {
+        if (!confirmAction('¿Confirmar que el contenedor está listo para devolver?')) {
+            return Promise.resolve(null);
+        }
+        return postJson('/containers/mark-ready-for-return/', { container_id: containerId }).then((data) => {
+            if (data.success) {
+                showAlert('success', data.message || 'Contenedor listo para devolución');
+                reloadAfterDelay(1200);
+            } else {
+                showAlert('danger', data.message || 'No fue posible marcar el contenedor');
+            }
+            return data;
+        }).catch((error) => {
+            showAlert('danger', error.message || 'Error al marcar contenedor');
+            throw error;
+        });
+    };
+
+    actions.assignReturnDriver = function (containerId) {
+        fetchWithCsrf(`/drivers/available/?container_id=${containerId}`)
+            .then(handleJsonResponse)
+            .then((data) => {
+                if (!data.success) {
+                    showAlert('danger', data.message || 'No fue posible obtener conductores disponibles');
+                    return;
+                }
+                const { element, instance } = renderDriverModal(data.container, data.drivers || []);
+                const handler = (event) => {
+                    const target = event.target.closest('[data-driver-id]');
+                    if (!target) {
+                        return;
+                    }
+                    const driverId = target.getAttribute('data-driver-id');
+                    const driverName = target.querySelector('h6') ? target.querySelector('h6').textContent : '';
+                    if (!confirmAction(`¿Asignar el conductor ${driverName} para la devolución?`)) {
+                        return;
+                    }
+                    const returnLocation = window.prompt('Destino de devolución (ej: CCTI, DEPOSITO_DEVOLUCION)', 'CCTI') || 'CCTI';
+                    postJson('/containers/assign-return-driver/', {
+                        container_id: containerId,
+                        driver_id: driverId,
+                        return_location: returnLocation
+                    }).then((response) => {
+                        if (response.success) {
+                            showAlert('success', response.message || 'Conductor asignado para devolución');
+                            reloadAfterDelay(1500);
+                        } else {
+                            showAlert('danger', response.message || 'No fue posible asignar el conductor');
+                        }
+                    }).catch((error) => {
+                        showAlert('danger', error.message || 'Error al asignar devolución');
+                    });
+                    element.removeEventListener('click', handler);
+                    const modalInstance = bootstrap.Modal.getInstance(element);
+                    if (modalInstance) {
+                        modalInstance.hide();
+                    }
+                };
+                element.addEventListener('click', handler);
+                instance.show();
+            })
+            .catch((error) => showAlert('danger', error.message || 'Error al obtener conductores disponibles'));
+    };
+
+    actions.startReturnTrip = function (containerId) {
+        if (!confirmAction('¿Iniciar ruta de devolución para este contenedor?')) {
+            return Promise.resolve(null);
+        }
+        return postJson('/containers/start-return-route/', { container_id: containerId }).then((data) => {
+            if (data.success) {
+                showAlert('success', data.message || 'Ruta de devolución iniciada');
+                reloadAfterDelay(1200);
+            } else {
+                showAlert('danger', data.message || 'No fue posible iniciar la devolución');
+            }
+            return data;
+        }).catch((error) => {
+            showAlert('danger', error.message || 'Error al iniciar devolución');
+            throw error;
+        });
+    };
+
+    actions.finalizeReturn = function (containerId) {
+        if (!confirmAction('¿Confirmar devolución y finalizar el contenedor?')) {
+            return Promise.resolve(null);
+        }
+        const hasEir = confirmAction('¿Registrar EIR entregado?');
+        const finalPosition = window.prompt('Ubicación final (por defecto DEPOSITO_DEVOLUCION)', 'DEPOSITO_DEVOLUCION') || 'DEPOSITO_DEVOLUCION';
+        return postJson('/containers/finalize-container/', {
+            container_id: containerId,
+            has_eir: hasEir,
+            final_position: finalPosition
+        }).then((data) => {
+            if (data.success) {
+                showAlert('success', data.message || 'Contenedor finalizado');
+                reloadAfterDelay(1500);
+            } else {
+                showAlert('danger', data.message || 'No fue posible finalizar la devolución');
+            }
+            return data;
+        }).catch((error) => {
+            showAlert('danger', error.message || 'Error al finalizar devolución');
+            throw error;
+        });
+    };
+
     actions.uploadExcelForm = function (form) {
         if (!form) {
             return Promise.resolve(null);

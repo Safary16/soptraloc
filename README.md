@@ -93,6 +93,7 @@ source venv/bin/activate  # En Linux/Mac
 ```bash
 pip install -r requirements.txt
 ```
+> 💡 Este paso instala bibliotecas de machine learning como `scikit-learn` y `scipy`. El proceso puede tardar unos minutos en la primera ejecución.
 
 ### 4. Configurar Variables de Entorno
 ```bash
@@ -154,6 +155,31 @@ El sistema estará disponible en:
    - `gunicorn config.wsgi:application`
 
 **Archivo `render.yaml` incluido con configuración completa**
+
+### 🚀 Despliegue guiado desde local (`deploy_render.sh`)
+
+Para automatizar el ciclo "verificar → probar → desplegar" ejecuta:
+
+```bash
+chmod +x deploy_render.sh
+./deploy_render.sh
+```
+
+El script realiza, en orden:
+
+1. Instalación/actualización de dependencias.
+2. Verificación de migraciones pendientes (`makemigrations --check`).
+3. Ejecución de pruebas críticas (`drivers` ML + importadores Excel).
+4. `manage.py check --deploy` con settings de producción.
+5. Migraciones y `collectstatic` en tu entorno local.
+6. Validación de árbol Git limpio y, si encuentra un remoto válido, hace push automático a `origin` y a `render`.
+
+> 💡 ¿No tienes configurado el remoto de Render aún?
+> - Exporta la URL una sola vez: `export RENDER_REMOTE_URL="https://git.render.com/<tu-servicio>.git"`
+> - (Opcional) Cambia el nombre del remoto con `RENDER_REMOTE_NAME=my-render`.
+> - El script añadirá el remoto si no existe y realizará el push automáticamente.
+
+> ℹ️ Configura previamente tu remoto con `git remote add render <URL-de-Render>` para habilitar el push automático.
 
 ### Comandos Post-Deploy
 ```bash

@@ -1,16 +1,77 @@
-"""
-Vistas adicionales para el flujo de devolución de contenedores
-"""
+"""Vistas adicionales para el flujo de devolución de contenedores."""
+import json
+import logging
+
 from django.contrib.auth.decorators import login_required
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
+
 from apps.containers.models import Container, ContainerMovement
 from apps.core.models import MovementCode
-from apps.drivers.models import Driver, Assignment
-import logging
+from apps.drivers.models import Driver, Assignment, Location
+from apps.drivers.views import _has_schedule_conflict, _estimate_assignment_duration_minutes
 
 logger = logging.getLogger(__name__)
+
+
+def _extract_payload(request):
+    """Obtiene el payload desde JSON o formulario clásico."""
+    if request.content_type and 'application/json' in request.content_type:
+        try:
+            raw_body = request.body.decode('utf-8').strip() if request.body else ''
+            return json.loads(raw_body) if raw_body else {}
+        except (ValueError, UnicodeDecodeError):
+            logger.warning("Payload JSON inválido en solicitud de devolución")
+            return {}
+    if request.method == 'POST':
+        return request.POST
+    return {}
+
+
+def _fetch_or_create_location(value: str | None) -> Location | None:
+    """Busca una Location por código/nombre y la crea si es necesario."""
+    if not value:
+        return None
+
+    normalized = value.strip()
+    if not normalized:
+        return None
+
+    code_candidate = normalized.upper().replace(' ', '_')[:20]
+
+    location = Location.objects.filter(code=code_candidate).first()
+    if location:
+        return location
+
+    location = Location.objects.filter(name__iexact=normalized).first()
+    if location:
+        return location
+
+    # Crear una nueva ubicación si no existe (evita duplicados con sufijo incremental)
+    base_code = code_candidate or 'RETORNO'
+    final_code = base_code
+    suffix = 1
+    while Location.objects.filter(code=final_code).exists():
+        suffix += 1
+        final_code = f"{base_code[:17]}_{suffix}"[:20]
+
+    return Location.objects.create(
+        name=normalized[:100],
+        code=final_code,
+        address=''
+    )
+
+
+def _resolve_return_locations(container: Container, return_location_label: str) -> tuple[Location | None, Location | None]:
+    origin = None
+    if container.current_position:
+        origin = _fetch_or_create_location(container.current_position)
+    if origin is None and container.cd_location:
+        origin = _fetch_or_create_location(container.cd_location)
+
+    destination = _fetch_or_create_location(return_location_label)
+    return origin, destination
 
 
 @login_required
@@ -21,7 +82,8 @@ def mark_ready_for_return(request):
     """
     if request.method == 'POST':
         try:
-            container_id = request.POST.get('container_id')
+            data = _extract_payload(request)
+            container_id = data.get('container_id')
             container = get_object_or_404(Container, id=container_id)
             
             # Validar que el contenedor esté en estado apropiado
@@ -35,7 +97,7 @@ def mark_ready_for_return(request):
             # Cambiar estado
             old_status = container.status
             container.status = 'DISPONIBLE_DEVOLUCION'
-            container.save(update_fields=['status'])
+            container.save(update_fields=['status', 'updated_at'])
             
             # Registrar movimiento
             movement_code = MovementCode.generate_code('transfer')
@@ -80,9 +142,10 @@ def assign_return_driver(request):
     """
     if request.method == 'POST':
         try:
-            container_id = request.POST.get('container_id')
-            driver_id = request.POST.get('driver_id')
-            return_location = request.POST.get('return_location', 'CCTI')  # CCTI por defecto
+            data = _extract_payload(request)
+            container_id = data.get('container_id')
+            driver_id = data.get('driver_id')
+            return_location = data.get('return_location', 'CCTI')  # CCTI por defecto
             
             container = get_object_or_404(Container, id=container_id)
             driver = get_object_or_404(Driver, id=driver_id)
@@ -101,24 +164,44 @@ def assign_return_driver(request):
                     'message': f'El conductor ya tiene asignado el contenedor {driver.contenedor_asignado.container_number}'
                 })
             
-            # Crear asignación de devolución
+            scheduled_datetime = timezone.now()
+            origin_location, destination_location = _resolve_return_locations(container, return_location)
+
+            duration_minutes = _estimate_assignment_duration_minutes(
+                origin_location,
+                destination_location,
+                'DEVOLUCION',
+                scheduled_datetime,
+            )
+
+            if _has_schedule_conflict(driver, scheduled_datetime, duration_minutes):
+                return JsonResponse({
+                    'success': False,
+                    'message': f'El conductor {driver.nombre} tiene otra asignación en curso en ese horario'
+                })
+
             assignment = Assignment.objects.create(
                 container=container,
                 driver=driver,
-                fecha_asignacion=timezone.now(),
+                fecha_programada=scheduled_datetime,
                 estado='PENDIENTE',
+                origen=origin_location,
+                destino=destination_location,
+                origen_legacy=(origin_location.name if origin_location else container.current_position or 'Origen no definido'),
+                destino_legacy=destination_location.name if destination_location else return_location,
                 tipo_asignacion='DEVOLUCION',
-                # origen será el CD actual, destino será el return_location
-                created_by=request.user
+                created_by=request.user,
+                tiempo_estimado=duration_minutes,
             )
-            
-            # Actualizar contenedor y conductor
+
+            assignment.calculate_estimated_time(refresh=False)
+            assignment.save(update_fields=['tiempo_estimado'])
+
             container.conductor_asignado = driver
-            container.status = 'ASIGNADO'  # Vuelve a ASIGNADO para la devolución
-            container.save(update_fields=['conductor_asignado', 'status'])
+            container.save(update_fields=['conductor_asignado', 'updated_at'])
             
             driver.contenedor_asignado = container
-            driver.save(update_fields=['contenedor_asignado'])
+            driver.save(update_fields=['contenedor_asignado', 'updated_at'])
             
             # Registrar movimiento
             movement_code = MovementCode.generate_code('load')
@@ -143,7 +226,8 @@ def assign_return_driver(request):
             
             return JsonResponse({
                 'success': True,
-                'message': f'Conductor {driver.nombre} asignado para devolución'
+                'message': f'Conductor {driver.nombre} asignado para devolución',
+                'assignment_id': assignment.id,
             })
             
         except Exception as e:
@@ -164,27 +248,30 @@ def start_return_route(request):
     """
     if request.method == 'POST':
         try:
-            container_id = request.POST.get('container_id')
+            data = _extract_payload(request)
+            container_id = data.get('container_id')
             container = get_object_or_404(Container, id=container_id)
-            
-            if container.status != 'ASIGNADO' or not container.conductor_asignado:
+
+            if container.status not in ['DISPONIBLE_DEVOLUCION', 'ASIGNADO'] or not container.conductor_asignado:
                 return JsonResponse({
                     'success': False,
                     'message': 'El contenedor debe tener conductor asignado para devolución'
                 })
             
-            # Cambiar estado
+            now = timezone.now()
             container.status = 'EN_RUTA_DEVOLUCION'
             container.current_position = 'EN_RUTA'
-            now = timezone.now()
-            container.tiempo_inicio_ruta = now
-            container.save(update_fields=['status', 'current_position', 'tiempo_inicio_ruta'])
+            container.position_status = 'chassis'
+            if not container.tiempo_inicio_devolucion:
+                container.tiempo_inicio_devolucion = now
+            container.save(update_fields=['status', 'current_position', 'position_status', 'tiempo_inicio_devolucion', 'updated_at'])
             
             # Actualizar assignment
             assignment = Assignment.objects.filter(
                 container=container,
                 driver=container.conductor_asignado,
-                estado='PENDIENTE'
+                estado='PENDIENTE',
+                tipo_asignacion='DEVOLUCION'
             ).first()
             
             if assignment:
@@ -235,8 +322,10 @@ def finalize_container(request):
     """
     if request.method == 'POST':
         try:
-            container_id = request.POST.get('container_id')
-            has_eir = request.POST.get('has_eir', 'false').lower() == 'true'
+            data = _extract_payload(request)
+            container_id = data.get('container_id')
+            has_eir = str(data.get('has_eir', 'false')).lower() == 'true'
+            final_position = data.get('final_position', 'DEPOSITO_DEVOLUCION')
             
             container = get_object_or_404(Container, id=container_id)
             
@@ -249,17 +338,36 @@ def finalize_container(request):
             # Finalizar contenedor
             now = timezone.now()
             container.status = 'FINALIZADO'
-            container.current_position = 'DEPOSITO_DEVOLUCION'
+            container.current_position = final_position or 'DEPOSITO_DEVOLUCION'
+            container.position_status = 'warehouse'
             container.return_date = now.date()
             container.has_eir = has_eir
-            
-            # Calcular tiempo total del ciclo
-            if container.tiempo_asignacion:
+
+            if container.tiempo_inicio_devolucion:
+                delta_dev = now - container.tiempo_inicio_devolucion
+                container.duracion_devolucion = int(delta_dev.total_seconds() / 60)
+
+            if not container.tiempo_arribo_devolucion:
+                container.tiempo_arribo_devolucion = now
+
+            if not container.tiempo_finalizacion:
+                container.tiempo_finalizacion = now
+
+            if container.tiempo_asignacion and not container.duracion_total:
                 delta = now - container.tiempo_asignacion
                 container.duracion_total = int(delta.total_seconds() / 60)
-            
+
             container.save(update_fields=[
-                'status', 'current_position', 'return_date', 'has_eir', 'duracion_total'
+                'status',
+                'current_position',
+                'position_status',
+                'return_date',
+                'has_eir',
+                'duracion_total',
+                'duracion_devolucion',
+                'tiempo_arribo_devolucion',
+                'tiempo_finalizacion',
+                'updated_at'
             ])
             
             # Liberar conductor
@@ -272,19 +380,23 @@ def finalize_container(request):
                 assignment = Assignment.objects.filter(
                     container=container,
                     driver=driver,
-                    estado='EN_CURSO'
+                    estado__in=['PENDIENTE', 'EN_CURSO'],
+                    tipo_asignacion='DEVOLUCION'
                 ).first()
                 
                 if assignment:
-                    assignment.estado = 'COMPLETADA'
-                    assignment.fecha_completada = now
                     if assignment.fecha_inicio:
-                        elapsed = now - assignment.fecha_inicio
-                        assignment.tiempo_real = int(elapsed.total_seconds() / 60)
-                    assignment.save(update_fields=['estado', 'fecha_completada', 'tiempo_real'])
+                        total_minutes = int((now - assignment.fecha_inicio).total_seconds() / 60)
+                    else:
+                        total_minutes = container.duracion_devolucion or container.duracion_total or 0
+
+                    assignment.record_actual_times(
+                        total_minutes=total_minutes,
+                        route_minutes=container.duracion_devolucion,
+                    )
                 
                 container.conductor_asignado = None
-                container.save(update_fields=['conductor_asignado'])
+                container.save(update_fields=['conductor_asignado', 'updated_at'])
             
             # Registrar movimiento final
             movement_code = MovementCode.generate_code('unload')
@@ -309,7 +421,8 @@ def finalize_container(request):
             return JsonResponse({
                 'success': True,
                 'message': f'Contenedor {container.container_number} finalizado exitosamente',
-                'cycle_duration_minutes': container.duracion_total
+                'cycle_duration_minutes': container.duracion_total,
+                'return_duration_minutes': container.duracion_devolucion
             })
             
         except Exception as e:

@@ -539,16 +539,18 @@ def update_status(request):
                     assignment = Assignment.objects.filter(
                         container=container,
                         driver=container.conductor_asignado,
-                        estado='EN_CURSO'
+                        estado__in=['PENDIENTE', 'EN_CURSO']
                     ).first()
                     
                     if assignment:
-                        assignment.estado = 'COMPLETADA'
-                        assignment.fecha_completada = now
+                        if assignment.estado != 'EN_CURSO':
+                            assignment.estado = 'EN_CURSO'
                         if assignment.fecha_inicio:
                             elapsed = now - assignment.fecha_inicio
-                            assignment.tiempo_real = int(elapsed.total_seconds() / 60)
-                        assignment.save(update_fields=['estado', 'fecha_completada', 'tiempo_real'])
+                            assignment.ruta_minutos_real = int(elapsed.total_seconds() / 60)
+                            assignment.save(update_fields=['estado', 'ruta_minutos_real'])
+                        else:
+                            assignment.save(update_fields=['estado'])
                     
                     return JsonResponse({
                         'success': True,
@@ -661,6 +663,48 @@ def update_container_status_view(request, container_id):
                         container.duracion_total = int(delta_total.total_seconds() / 60)
             
             container.save()
+
+            if new_status == 'ARRIBADO':
+                assignment = Assignment.objects.filter(
+                    container=container,
+                    driver=container.conductor_asignado,
+                    estado__in=['PENDIENTE', 'EN_CURSO']
+                ).first()
+                if assignment and assignment.fecha_inicio:
+                    route_minutes = container.duracion_ruta or int((now - assignment.fecha_inicio).total_seconds() / 60)
+                    assignment.ruta_minutos_real = max(route_minutes, 0)
+                    if assignment.estado != 'EN_CURSO':
+                        assignment.estado = 'EN_CURSO'
+                    assignment.save(update_fields=['ruta_minutos_real', 'estado'])
+
+            if new_status == 'FINALIZADO':
+                assignment = Assignment.objects.filter(
+                    container=container,
+                    driver=container.conductor_asignado,
+                    estado__in=['PENDIENTE', 'EN_CURSO']
+                ).first()
+
+                unloading_minutes = container.duracion_descarga if container.duracion_descarga is not None else None
+                route_recorded = container.duracion_ruta
+
+                if assignment:
+                    if assignment.fecha_inicio:
+                        total_minutes = int((now - assignment.fecha_inicio).total_seconds() / 60)
+                    else:
+                        total_minutes = container.duracion_total or container.duracion_ruta or 0
+
+                    assignment.record_actual_times(
+                        total_minutes=total_minutes,
+                        route_minutes=route_recorded,
+                        unloading_minutes=unloading_minutes,
+                    )
+
+                if container.conductor_asignado:
+                    driver = container.conductor_asignado
+                    driver.contenedor_asignado = None
+                    driver.save(update_fields=['contenedor_asignado', 'updated_at'])
+                    container.conductor_asignado = None
+                    container.save(update_fields=['conductor_asignado'])
             
             movement_code = MovementCode.generate_code('transfer')
             movement_code.created_by = request.user
