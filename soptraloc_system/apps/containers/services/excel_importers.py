@@ -387,10 +387,21 @@ def apply_release_schedule(uploaded: BytesIO, user: User) -> ImportSummary:
                 if release_time:
                     container.release_time = release_time
 
-                container.status = normalize_status("LIBERADO")
-                container.position_status = "warehouse"
-                if not container.current_position or container.current_position == "EN_RUTA":
-                    _attach_operational_location(container, user)
+                # ⚠️ VALIDACIÓN CRÍTICA: Solo cambiar a LIBERADO si la fecha ya pasó
+                today = timezone.now().date()
+                if release_date and release_date > today:
+                    # Fecha futura - mantener en POR_ARRIBAR o estado actual
+                    logger.info(
+                        "Contenedor %s: fecha liberación futura (%s). Manteniendo estado %s",
+                        container.container_number, release_date, container.status
+                    )
+                    # Solo actualizar la fecha pero no el estado
+                else:
+                    # Fecha actual o pasada - cambiar a LIBERADO
+                    container.status = normalize_status("LIBERADO")
+                    container.position_status = "warehouse"
+                    if not container.current_position or container.current_position == "EN_RUTA":
+                        _attach_operational_location(container, user)
 
                 depot = _clean_str(row.get(column_lookup.get("devolucionvacio")))
                 if depot:
@@ -582,13 +593,36 @@ def create_demurrage_alert_if_needed(container: Container) -> Optional[Alert]:
     return alert
 
 
-def export_liberated_containers() -> BytesIO:
+def export_liberated_containers(reference_date: Optional[date] = None, include_future: bool = False) -> BytesIO:
+    """
+    Exporta contenedores liberados a Excel con validación de fechas.
+    
+    Args:
+        reference_date: Fecha de referencia (default: hoy)
+        include_future: Si True, incluye contenedores con liberación futura
+    """
+    from django.db import models as django_models
+    
+    if reference_date is None:
+        reference_date = timezone.now().date()
+    
     liberated = Container.objects.filter(
         status__in=[normalize_status("LIBERADO"), normalize_status("PROGRAMADO")]
-    ).order_by("scheduled_date", "container_number")
+    )
+    
+    # Filtrar por fecha de liberación si no se incluyen futuros
+    if not include_future:
+        liberated = liberated.filter(
+            django_models.Q(release_date__isnull=True) | django_models.Q(release_date__lte=reference_date)
+        )
+    
+    liberated = liberated.order_by("scheduled_date", "container_number")
 
     rows = []
     for container in liberated:
+        # Determinar si la liberación es futura
+        is_future = container.release_date and container.release_date > reference_date
+        
         rows.append(
             {
                 "Contenedor": container.container_number,
@@ -597,6 +631,7 @@ def export_liberated_containers() -> BytesIO:
                 "ETA": container.eta.strftime("%d/%m/%Y") if container.eta else "",
                 "Liberación": container.release_date.strftime("%d/%m/%Y") if container.release_date else "",
                 "Hora Liberación": container.release_time.strftime("%H:%M") if container.release_time else "",
+                "Liberación Futura": "SÍ" if is_future else "NO",
                 "Demurrage": container.demurrage_date.strftime("%d/%m/%Y") if container.demurrage_date else "",
                 "CD Destino": container.cd_location or "",
                 "Programado Para": container.scheduled_date.strftime("%d/%m/%Y") if container.scheduled_date else "",

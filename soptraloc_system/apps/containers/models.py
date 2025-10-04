@@ -73,16 +73,19 @@ class Container(BaseModel):
         ('maintenance', 'Mantenimiento'),
         ('damaged', 'Dañado'),
         ('out_of_service', 'Fuera de Servicio'),
-        # Estados específicos de importación
-        ('POR_ARRIBAR', 'Por Arribar'),
-        ('EN_SECUENCIA', 'En Secuencia'),
-        ('DESCARGADO', 'Descargado'),
-        ('LIBERADO', 'Liberado'),
-        ('PROGRAMADO', 'Programado'),
-        ('ASIGNADO', 'Asignado'),
-        ('EN_RUTA', 'En Ruta'),
-        ('ARRIBADO', 'Arribado'),
-        ('FINALIZADO', 'Finalizado'),
+        # Estados específicos de importación (ciclo completo)
+        ('POR_ARRIBAR', 'Por Arribar'),                    # 1. Nave viene con contenedor
+        ('EN_SECUENCIA', 'En Secuencia'),                  # Intermedio
+        ('DESCARGADO', 'Descargado'),                      # Descargado en puerto
+        ('LIBERADO', 'Liberado'),                          # 2. Liberado por aduana
+        ('PROGRAMADO', 'Programado'),                      # 3. Programado para CD
+        ('ASIGNADO', 'Asignado'),                          # 4. Con conductor asignado
+        ('EN_RUTA', 'En Ruta'),                            # 5. En camino a CD
+        ('ARRIBADO', 'Arribado'),                          # 6. Arribado a CD
+        ('DESCARGADO_CD', 'Descargado en CD'),             # 7. Descargado en CD
+        ('DISPONIBLE_DEVOLUCION', 'Disponible Devolución'), # 8. Listo para devolver
+        ('EN_RUTA_DEVOLUCION', 'En Ruta Devolución'),     # 9. Devolviendo a puerto/CCTI
+        ('FINALIZADO', 'Finalizado'),                      # 10. Ciclo completo
         ('TRG', 'TRG'),
         ('SECUENCIADO', 'Secuenciado'),
     ]
@@ -103,7 +106,7 @@ class Container(BaseModel):
     # Identificación
     container_number = models.CharField(max_length=50, unique=True)
     container_type = models.CharField(max_length=20, choices=CONTAINER_TYPES)
-    status = models.CharField(max_length=20, choices=CONTAINER_STATUS, default='available')
+    status = models.CharField(max_length=30, choices=CONTAINER_STATUS, default='available')
     position_status = models.CharField(max_length=20, choices=POSITION_STATUS, default='floor')
     
     # Propietario/Cliente
