@@ -6,33 +6,55 @@ from .models import Container, ContainerMovement, ContainerDocument, ContainerIn
 class ContainerAdmin(admin.ModelAdmin):
     list_display = (
         'container_number', 'container_type', 'status', 'position_status', 
-        'owner_company', 'current_location', 'current_vehicle', 'is_active'
+        'client', 'vessel', 'eta', 'conductor_asignado', 'is_active'
     )
     list_filter = (
-        'container_type', 'status', 'position_status', 'owner_company', 
-        'is_active', 'created_at'
+        'container_type', 'status', 'position_status', 'client', 
+        'vessel', 'is_active', 'created_at'
     )
-    search_fields = ('container_number', 'seal_number', 'customs_document')
+    search_fields = ('container_number', 'seal_number', 'customs_document', 'client__name', 'vessel__name')
     readonly_fields = ('id', 'created_at', 'updated_at')
     
     fieldsets = (
         ('Información Básica', {
-            'fields': ('container_number', 'container_type', 'status', 'position_status', 'owner_company')
+            'fields': ('container_number', 'container_type', 'status', 'position_status')
         }),
-        ('Especificaciones', {
-            'fields': ('weight_empty', 'weight_loaded', 'max_weight')
+        ('Información de Importación', {
+            'fields': ('sequence_id', 'client', 'port', 'eta', 'vessel', 'cargo_description',
+                      'shipping_line', 'agency', 'terminal')
+        }),
+        ('Liberación y Programación', {
+            'fields': ('release_date', 'release_time', 'scheduled_date', 'scheduled_time', 
+                      'cd_location', 'demurrage_alert')
+        }),
+        ('Asignación y Transporte', {
+            'fields': ('conductor_asignado', 'current_position', 'position_updated_at')
+        }),
+        ('Pesos y Especificaciones', {
+            'fields': ('cargo_weight', 'total_weight', 'weight_empty', 'max_weight')
         }),
         ('Ubicación Actual', {
-            'fields': ('current_location', 'current_vehicle')
+            'fields': ('current_location', 'current_vehicle', 'owner_company')
         }),
         ('Información Adicional', {
-            'fields': ('seal_number', 'customs_document', 'special_requirements')
+            'fields': ('seal_number', 'customs_document', 'special_requirements', 
+                      'observation_1', 'observation_2', 'additional_service')
+        }),
+        ('Devolución', {
+            'fields': ('deposit_return', 'return_date'),
+            'classes': ('collapse',)
         }),
         ('Auditoría', {
             'fields': ('is_active', 'created_at', 'updated_at', 'created_by', 'updated_by'),
             'classes': ('collapse',)
         })
     )
+    
+    def get_readonly_fields(self, request, obj=None):
+        """Make container_number readonly after creation"""
+        if obj:  # Editing existing object
+            return self.readonly_fields + ('container_number',)
+        return self.readonly_fields
 
 
 @admin.register(ContainerMovement)

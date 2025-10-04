@@ -61,6 +61,7 @@ STATUS_ALIASES: Dict[str, str] = {
 
 # Statuses considered "active" for dashboard visibility
 ACTIVE_STATUS_CODES: List[str] = [
+    "POR_ARRIBAR",
     "PROGRAMADO",
     "EN_PROCESO",
     "EN_TRANSITO",

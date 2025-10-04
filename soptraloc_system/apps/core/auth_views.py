@@ -151,6 +151,7 @@ def dashboard_view(request):
 
     stats = {
         'total': sum(normalized_counts.values()),
+        'por_arribar': normalized_counts.get('POR_ARRIBAR', 0),
         'programados': normalized_counts.get('PROGRAMADO', 0),
         'en_proceso': normalized_counts.get('EN_PROCESO', 0),
         'en_transito': normalized_counts.get('EN_TRANSITO', 0),
