@@ -130,7 +130,7 @@ class Container(BaseModel):
     # Información de importación
     sequence_id = models.IntegerField(null=True, blank=True, verbose_name="ID Secuencia")
     client = models.ForeignKey(Company, on_delete=models.CASCADE, null=True, blank=True, related_name='import_containers', verbose_name="Cliente")
-    port = models.CharField(max_length=10, blank=True, verbose_name="Puerto")
+    port = models.CharField(max_length=50, blank=True, verbose_name="Puerto")
     eta = models.DateField(null=True, blank=True, verbose_name="ETA")
     vessel = models.ForeignKey(Vessel, on_delete=models.CASCADE, null=True, blank=True, verbose_name="Nave")
     cargo_description = models.TextField(blank=True, verbose_name="Descripción de carga")
