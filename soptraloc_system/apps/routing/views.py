@@ -124,13 +124,23 @@ class RouteViewSet(viewsets.ViewSet):
         
         data = []
         for route in routes:
+            driver_payload = None
+            if route.driver:
+                driver_name = None
+                if hasattr(route.driver, "user") and route.driver.user:
+                    driver_name = route.driver.user.get_full_name() or route.driver.user.username
+                else:
+                    driver_name = str(route.driver)
+
+                driver_payload = {
+                    'id': str(route.driver.id),
+                    'name': driver_name
+                }
+
             data.append({
                 'id': str(route.id),
                 'name': route.name,
-                'driver': {
-                    'id': str(route.driver.id),
-                    'name': f"{route.driver.first_name} {route.driver.last_name}"
-                } if route.driver else None,
+                'driver': driver_payload,
                 'status': route.status,
                 'total_containers': route.total_containers,
                 'completed_stops': route.completed_stops,

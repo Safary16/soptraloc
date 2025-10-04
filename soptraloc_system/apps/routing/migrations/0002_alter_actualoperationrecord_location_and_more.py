@@ -18,7 +18,7 @@ class Migration(migrations.Migration):
             field=models.ForeignKey(
                 on_delete=django.db.models.deletion.CASCADE,
                 related_name="operation_records",
-                to="drivers.location",
+                to="core.location",
             ),
         ),
         migrations.AlterField(
@@ -27,7 +27,7 @@ class Migration(migrations.Migration):
             field=models.ForeignKey(
                 on_delete=django.db.models.deletion.CASCADE,
                 related_name="trips_to",
-                to="drivers.location",
+                to="core.location",
                 verbose_name="Destino",
             ),
         ),
@@ -38,7 +38,7 @@ class Migration(migrations.Migration):
                 blank=True,
                 null=True,
                 on_delete=django.db.models.deletion.SET_NULL,
-                to="drivers.driver",
+                to="core.driver",
                 verbose_name="Conductor",
             ),
         ),
@@ -48,7 +48,7 @@ class Migration(migrations.Migration):
             field=models.ForeignKey(
                 on_delete=django.db.models.deletion.CASCADE,
                 related_name="trips_from",
-                to="drivers.location",
+                to="core.location",
                 verbose_name="Origen",
             ),
         ),
@@ -58,7 +58,7 @@ class Migration(migrations.Migration):
             field=models.ForeignKey(
                 on_delete=django.db.models.deletion.CASCADE,
                 related_name="routes_to",
-                to="drivers.location",
+                to="core.location",
                 verbose_name="Destino",
             ),
         ),
@@ -68,7 +68,7 @@ class Migration(migrations.Migration):
             field=models.ForeignKey(
                 on_delete=django.db.models.deletion.CASCADE,
                 related_name="routes_from",
-                to="drivers.location",
+                to="core.location",
                 verbose_name="Origen",
             ),
         ),
@@ -78,7 +78,7 @@ class Migration(migrations.Migration):
             field=models.ForeignKey(
                 on_delete=django.db.models.deletion.CASCADE,
                 related_name="operation_times",
-                to="drivers.location",
+                to="core.location",
                 verbose_name="Ubicación",
             ),
         ),
@@ -88,7 +88,7 @@ class Migration(migrations.Migration):
             field=models.ForeignKey(
                 on_delete=django.db.models.deletion.CASCADE,
                 related_name="routes",
-                to="drivers.driver",
+                to="core.driver",
                 verbose_name="Conductor",
             ),
         ),
@@ -97,7 +97,7 @@ class Migration(migrations.Migration):
             name="location",
             field=models.ForeignKey(
                 on_delete=django.db.models.deletion.CASCADE,
-                to="drivers.location",
+                to="core.location",
                 verbose_name="Ubicación",
             ),
         ),

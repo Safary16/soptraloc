@@ -5,9 +5,11 @@ Sistema híbrido: Tiempos manuales + Machine Learning predictivo
 from django.db import models
 from django.core.validators import MinValueValidator, MaxValueValidator
 from django.utils import timezone
-from apps.core.models import BaseModel, Vehicle
-from apps.drivers.models import Location, Driver
+from apps.core.models import BaseModel, Vehicle, Location as CoreLocation, Driver as CoreDriver
 from apps.containers.models import Container
+
+Location = CoreLocation
+Driver = CoreDriver
 
 
 class LocationPair(BaseModel):
@@ -576,7 +578,14 @@ class Route(BaseModel):
         ]
     
     def __str__(self):
-        return f"{self.name} - {self.driver.first_name} {self.driver.last_name} ({self.route_date})"
+        driver_label = "Sin conductor"
+        if self.driver:
+            if hasattr(self.driver, "user") and self.driver.user:
+                driver_label = self.driver.user.get_full_name() or self.driver.user.username
+            else:
+                driver_label = str(self.driver)
+
+        return f"{self.name} - {driver_label} ({self.route_date})"
     
     def calculate_totals(self):
         """Recalcula estadísticas de la ruta."""
