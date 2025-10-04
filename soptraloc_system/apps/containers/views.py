@@ -1,6 +1,6 @@
 from datetime import timedelta
 
-from django.db.models import Count, Q
+from django.db.models import Count
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework import status, viewsets
 from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
@@ -886,16 +886,16 @@ def urgent_containers_api(request):
                 'scheduled_date': container.scheduled_date.strftime('%d/%m/%Y') if container.scheduled_date else None,
                 'scheduled_time': container.scheduled_time.strftime('%H:%M') if container.scheduled_time else '08:00',
                 'status': container.status,
-                'hours_remaining': round(container._hours_remaining, 2),
-                'minutes_remaining': container._minutes_remaining,
-                'urgency_level': container._urgency_level,
+                'hours_remaining': round(container.dashboard_hours_remaining, 2),
+                'minutes_remaining': container.dashboard_minutes_remaining,
+                'urgency_level': container.dashboard_urgency_level,
             }
             for container in urgent_containers
         ],
         'total_urgent': len(urgent_containers),
-        'critical_count': sum(1 for c in urgent_containers if c._urgency_level == 'critical'),
-        'high_count': sum(1 for c in urgent_containers if c._urgency_level == 'high'),
-        'medium_count': sum(1 for c in urgent_containers if c._urgency_level == 'medium'),
+        'critical_count': sum(1 for c in urgent_containers if c.dashboard_urgency_level == 'critical'),
+        'high_count': sum(1 for c in urgent_containers if c.dashboard_urgency_level == 'high'),
+        'medium_count': sum(1 for c in urgent_containers if c.dashboard_urgency_level == 'medium'),
     }
     
     return JsonResponse(data)

@@ -1,9 +1,8 @@
 """
 Sistema de reloj en tiempo real y alertas de proximidad de programación.
 """
-from datetime import datetime, timedelta
+from datetime import datetime
 from django.utils import timezone
-from typing import List, Dict
 import logging
 
 logger = logging.getLogger(__name__)
@@ -16,7 +15,7 @@ class ProximityAlertSystem:
     ALERT_THRESHOLD_HOURS = 2
     
     @classmethod
-    def get_urgent_containers(cls, containers_qs) -> List:
+    def get_urgent_containers(cls, containers_qs) -> list:
         """
         Obtiene contenedores con programación urgente (< 2 horas)
         

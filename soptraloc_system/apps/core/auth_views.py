@@ -1,8 +1,7 @@
 from django.contrib.auth import authenticate
-from django.contrib.auth.models import User
 from django.shortcuts import render
 from django.contrib.auth.decorators import login_required
-from django.db.models import Count, Prefetch
+from django.db.models import Count
 from django.utils import timezone
 from rest_framework import status
 from rest_framework.decorators import api_view, permission_classes
@@ -139,8 +138,8 @@ def dashboard_view(request):
     # Ordenar: urgentes primero, luego por fecha programada
     containers_list = list(containers)
     containers_list.sort(key=lambda c: (
-        not getattr(c, '_is_urgent', False),  # Urgentes primero
-        getattr(c, '_hours_remaining', 999),  # Más urgentes primero
+        not getattr(c, 'dashboard_is_urgent', False),  # Urgentes primero
+        getattr(c, 'dashboard_hours_remaining', 999),  # Más urgentes primero
         c.scheduled_date if c.scheduled_date else timezone.localdate() + timedelta(days=999),
         c.container_number
     ))

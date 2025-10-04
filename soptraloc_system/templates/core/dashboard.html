@@ -280,13 +280,13 @@
                         </thead>
                         <tbody>
                             {% for container in containers %}
-                            <tr class="{% if container._is_urgent %}table-{% if container._urgency_level == 'critical' %}danger{% elif container._urgency_level == 'high' %}warning{% else %}info{% endif %}{% endif %}">
+                            <tr class="{% if container.dashboard_is_urgent %}table-{% if container.dashboard_urgency_level == 'critical' %}danger{% elif container.dashboard_urgency_level == 'high' %}warning{% else %}info{% endif %}{% endif %}">
                                 <td>
                                     <strong>{{ container.container_number }}</strong>
-                                    {% if container._is_urgent %}
-                                        <span class="badge {% if container._urgency_level == 'critical' %}bg-danger{% elif container._urgency_level == 'high' %}bg-warning{% else %}bg-info{% endif %} ms-2">
-                                            <i class="bi {% if container._urgency_level == 'critical' %}bi-exclamation-triangle-fill{% elif container._urgency_level == 'high' %}bi-exclamation-circle-fill{% else %}bi-clock-fill{% endif %}"></i>
-                                            {% if container._urgency_level == 'critical' %}¡URGENTE!{% elif container._urgency_level == 'high' %}PRIORIDAD{% else %}< 2h{% endif %}
+                                    {% if container.dashboard_is_urgent %}
+                                        <span class="badge {% if container.dashboard_urgency_level == 'critical' %}bg-danger{% elif container.dashboard_urgency_level == 'high' %}bg-warning{% else %}bg-info{% endif %} ms-2">
+                                            <i class="bi {% if container.dashboard_urgency_level == 'critical' %}bi-exclamation-triangle-fill{% elif container.dashboard_urgency_level == 'high' %}bi-exclamation-circle-fill{% else %}bi-clock-fill{% endif %}"></i>
+                                            {% if container.dashboard_urgency_level == 'critical' %}¡URGENTE!{% elif container.dashboard_urgency_level == 'high' %}PRIORIDAD{% else %}< 2h{% endif %}
                                         </span>
                                     {% endif %}
                                     {% if container.seal_number %}
@@ -307,10 +307,10 @@
                                         {% if container.scheduled_time %}
                                             <br><small class="text-muted">{{ container.scheduled_time|time:"H:i" }}</small>
                                         {% endif %}
-                                        {% if container._is_urgent %}
+                                        {% if container.dashboard_is_urgent %}
                                             <br><span class="badge bg-danger">
                                                 <i class="bi bi-clock-fill"></i> 
-                                                Faltan {% if container._hours_remaining < 1 %}{{ container._minutes_remaining }} min{% else %}{{ container._hours_remaining|floatformat:1 }}h{% endif %}
+                                                Faltan {% if container.dashboard_hours_remaining < 1 %}{{ container.dashboard_minutes_remaining }} min{% else %}{{ container.dashboard_hours_remaining|floatformat:1 }}h{% endif %}
                                             </span>
                                         {% elif container.scheduled_date == today %}
                                             <br><span class="badge bg-warning text-dark">HOY</span>
@@ -482,7 +482,7 @@
                                 </td>
                                 <td>
                                     <div class="btn-group btn-group-sm">
-                                        {% if container.status in ('ARRIBADO', 'DESCARGADO_CD') %}
+                                        {% if container.status == 'ARRIBADO' or container.status == 'DESCARGADO_CD' %}
                                         <button class="btn btn-outline-success" onclick="SoptralocActions.markReadyForReturn('{{ container.id }}')">
                                             <i class="bi bi-arrow-counterclockwise"></i>
                                         </button>
