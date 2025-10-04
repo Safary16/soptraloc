@@ -39,14 +39,14 @@ class ProximityAlertSystem:
             
             # Si está dentro del threshold (< 2 horas) y no ha pasado
             if 0 < hours_remaining <= cls.ALERT_THRESHOLD_HOURS:
-                container._hours_remaining = hours_remaining
-                container._minutes_remaining = int((hours_remaining * 60) % 60)
-                container._is_urgent = True
-                container._urgency_level = cls._calculate_urgency_level(hours_remaining)
+                container.dashboard_hours_remaining = hours_remaining
+                container.dashboard_minutes_remaining = int((hours_remaining * 60) % 60)
+                container.dashboard_is_urgent = True
+                container.dashboard_urgency_level = cls._calculate_urgency_level(hours_remaining)
                 urgent_containers.append(container)
         
         # Ordenar por proximidad (más urgente primero)
-        urgent_containers.sort(key=lambda c: c._hours_remaining)
+        urgent_containers.sort(key=lambda c: c.dashboard_hours_remaining)
         
         return urgent_containers
     
@@ -101,10 +101,10 @@ class ProximityAlertSystem:
         Anota los contenedores con información de urgencia
         
         Agrega atributos:
-        - _hours_remaining
-        - _minutes_remaining
-        - _is_urgent
-        - _urgency_level
+        - dashboard_hours_remaining
+        - dashboard_minutes_remaining
+        - dashboard_is_urgent
+        - dashboard_urgency_level
         """
         now = timezone.now()
         
@@ -116,13 +116,19 @@ class ProximityAlertSystem:
                 hours_remaining = time_diff.total_seconds() / 3600
                 
                 if 0 < hours_remaining <= cls.ALERT_THRESHOLD_HOURS:
-                    container._hours_remaining = hours_remaining
-                    container._minutes_remaining = int((hours_remaining * 60) % 60)
-                    container._is_urgent = True
-                    container._urgency_level = cls._calculate_urgency_level(hours_remaining)
+                    container.dashboard_hours_remaining = hours_remaining
+                    container.dashboard_minutes_remaining = int((hours_remaining * 60) % 60)
+                    container.dashboard_is_urgent = True
+                    container.dashboard_urgency_level = cls._calculate_urgency_level(hours_remaining)
                 else:
-                    container._is_urgent = False
+                    container.dashboard_is_urgent = False
+                    container.dashboard_hours_remaining = None
+                    container.dashboard_minutes_remaining = None
+                    container.dashboard_urgency_level = None
             else:
-                container._is_urgent = False
+                container.dashboard_is_urgent = False
+                container.dashboard_hours_remaining = None
+                container.dashboard_minutes_remaining = None
+                container.dashboard_urgency_level = None
         
         return containers_qs
