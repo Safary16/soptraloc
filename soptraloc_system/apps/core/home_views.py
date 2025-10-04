@@ -4,7 +4,8 @@ from django.views.generic import TemplateView
 from django.contrib.auth.decorators import login_required
 from django.utils.decorators import method_decorator
 from apps.containers.models import Container
-from apps.core.models import Company, Vehicle, Driver, Location
+from apps.core.models import Company
+from apps.drivers.models import Driver, Location
 
 
 class HomeView(TemplateView):
@@ -17,7 +18,6 @@ class HomeView(TemplateView):
             'title': 'SOPTRALOC - Sistema de Optimización de Transporte',
             'total_containers': Container.objects.count(),
             'total_companies': Company.objects.count(),
-            'total_vehicles': Vehicle.objects.count(),
             'total_drivers': Driver.objects.count(),
         })
         return context

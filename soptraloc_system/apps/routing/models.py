@@ -5,7 +5,8 @@ Sistema híbrido: Tiempos manuales + Machine Learning predictivo
 from django.db import models
 from django.core.validators import MinValueValidator, MaxValueValidator
 from django.utils import timezone
-from apps.core.models import BaseModel, Location, Driver, Vehicle
+from apps.core.models import BaseModel, Vehicle
+from apps.drivers.models import Location, Driver
 from apps.containers.models import Container
 
 

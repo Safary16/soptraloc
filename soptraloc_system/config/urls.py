@@ -29,6 +29,7 @@ schema_view = get_schema_view(
 urlpatterns = [
     # Setup inicial (sin autenticación)
     path('setup/', setup_initial_view, name='setup-initial'),
+    path('setup/initial/', setup_initial_view, name='setup-initial-alt'),
     path('api/system-status/', check_system_status, name='system-status'),
     
     # Health checks (para Render y monitoring)

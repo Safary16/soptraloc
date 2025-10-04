@@ -1,6 +1,7 @@
 from django.core.management.base import BaseCommand
 from django.contrib.auth.models import User
-from apps.core.models import Company, Driver, Vehicle, Location, MovementCode
+from apps.core.models import Company, Vehicle, MovementCode
+from apps.drivers.models import Driver, Location
 
 
 class Command(BaseCommand):
