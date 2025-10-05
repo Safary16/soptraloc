@@ -1,11 +1,12 @@
 from django.contrib import admin
+from django.utils.html import format_html
 from .models import Container, ContainerMovement, ContainerDocument, ContainerInspection
 
 
 @admin.register(Container)
 class ContainerAdmin(admin.ModelAdmin):
     list_display = (
-        'container_number', 'container_type', 'status', 'position_status', 
+        'container_number', 'container_type', 'status_colored', 'position_status', 
         'client', 'vessel', 'eta', 'conductor_asignado', 'is_active'
     )
     list_filter = (
@@ -14,6 +15,37 @@ class ContainerAdmin(admin.ModelAdmin):
     )
     search_fields = ('container_number', 'seal_number', 'customs_document', 'client__name', 'vessel__name')
     readonly_fields = ('id', 'created_at', 'updated_at')
+    list_per_page = 25
+    date_hierarchy = 'eta'
+    
+    def status_colored(self, obj):
+        """Muestra el estado con color"""
+        colors = {
+            'DISPONIBLE': '#28a745',
+            'ASIGNADO': '#007bff',
+            'EN_RUTA': '#ffc107',
+            'ENTREGADO': '#6c757d',
+            'DEVUELTO': '#17a2b8',
+        }
+        color = colors.get(obj.status, '#6c757d')
+        return format_html(
+            '<span style="color: {}; font-weight: bold;">{}</span>',
+            color,
+            obj.get_status_display()
+        )
+    status_colored.short_description = 'Estado'
+    
+    actions = ['mark_as_disponible', 'mark_as_entregado']
+    
+    def mark_as_disponible(self, request, queryset):
+        updated = queryset.update(status='DISPONIBLE')
+        self.message_user(request, f'{updated} contenedor(es) marcado(s) como disponible.')
+    mark_as_disponible.short_description = "Marcar como disponible"
+    
+    def mark_as_entregado(self, request, queryset):
+        updated = queryset.update(status='ENTREGADO')
+        self.message_user(request, f'{updated} contenedor(es) marcado(s) como entregado.')
+    mark_as_entregado.short_description = "Marcar como entregado"
     
     fieldsets = (
         ('Información Básica', {
@@ -55,6 +87,10 @@ class ContainerAdmin(admin.ModelAdmin):
         if obj:  # Editing existing object
             return self.readonly_fields + ('container_number',)
         return self.readonly_fields
+    
+    class Meta:
+        verbose_name = "Contenedor"
+        verbose_name_plural = "Contenedores"
 
 
 @admin.register(ContainerMovement)
@@ -67,6 +103,7 @@ class ContainerMovementAdmin(admin.ModelAdmin):
     search_fields = ('container__container_number', 'movement_code__code', 'notes')
     readonly_fields = ('id', 'created_at', 'updated_at')
     date_hierarchy = 'movement_date'
+    list_per_page = 25
     
     fieldsets = (
         ('Información del Movimiento', {
@@ -86,6 +123,10 @@ class ContainerMovementAdmin(admin.ModelAdmin):
             'classes': ('collapse',)
         })
     )
+    
+    class Meta:
+        verbose_name = "Movimiento de Contenedor"
+        verbose_name_plural = "Movimientos de Contenedores"
 
 
 @admin.register(ContainerDocument)
@@ -98,6 +139,11 @@ class ContainerDocumentAdmin(admin.ModelAdmin):
     search_fields = ('container__container_number', 'document_number', 'description')
     readonly_fields = ('id', 'created_at', 'updated_at')
     date_hierarchy = 'document_date'
+    list_per_page = 25
+    
+    class Meta:
+        verbose_name = "Documento de Contenedor"
+        verbose_name_plural = "Documentos de Contenedores"
 
 
 @admin.register(ContainerInspection)
@@ -113,6 +159,7 @@ class ContainerInspectionAdmin(admin.ModelAdmin):
     search_fields = ('container__container_number', 'inspector_name', 'observations')
     readonly_fields = ('id', 'created_at', 'updated_at')
     date_hierarchy = 'inspection_date'
+    list_per_page = 25
     
     fieldsets = (
         ('Información de la Inspección', {
@@ -135,3 +182,7 @@ class ContainerInspectionAdmin(admin.ModelAdmin):
             'classes': ('collapse',)
         })
     )
+    
+    class Meta:
+        verbose_name = "Inspección de Contenedor"
+        verbose_name_plural = "Inspecciones de Contenedores"

@@ -13,6 +13,11 @@ from apps.core.health_views import health_check_detailed, health_check_simple
 from apps.core.auth_views import get_token, auth_info, home_view, dashboard_view, resueltos_view
 from apps.containers.views_import import setup_initial_view, check_system_status
 
+# Personalización del sitio admin
+admin.site.site_header = "SoptraLoc - Administración"
+admin.site.site_title = "SoptraLoc Admin"
+admin.site.index_title = "Panel de Administración del Sistema"
+
 schema_view = get_schema_view(
     openapi.Info(
         title="SOPTRALOC API",
