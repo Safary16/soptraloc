@@ -1,8 +1,14 @@
-# 🔧 Script de Corrección de Datos: Cliente vs Vendor
+# � CORRECCIÓN AUTOMÁTICA DE DATOS - Guía Simplificada
 
-## 📋 Problema
+## ⚡ Solución RÁPIDA (Sin acceso a shell)
 
-Cuando se importaron contenedores **antes del fix del 5 de octubre**, el campo `client` se llenó incorrectamente con el vendor (proveedor de mercancía) en lugar de "Cliente Demo".
+Ya tienes todo lo que necesitas en el código. El comando de corrección está disponible como Django management command.
+
+### 📋 Estado Actual
+- ✅ Código corregido y commiteado (commit b2a8cf2)
+- ✅ Comando de corrección disponible: `fix_client_vendor_data`
+- ✅ Base de datos actualmente vacía (0 contenedores)
+- ✅ Deploy automático activado en Render
 
 ### Síntomas
 ```
