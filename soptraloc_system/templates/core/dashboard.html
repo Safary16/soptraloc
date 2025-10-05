@@ -282,7 +282,7 @@
                                 <th>Contenedor</th>
                                 <th>Cliente</th>
                                 <th>Tipo</th>
-                                <th>Fecha Programada</th>
+                                <th>Fecha Liberación/Programación</th>
                                 <th>CD Destino</th>
                                 <th>Conductor Asignado</th>
                                 <th>Estado</th>
@@ -313,7 +313,13 @@
                                     {% endif %}
                                 </td>
                                 <td>
-                                    {% if container.scheduled_date %}
+                                    {% if container.status == 'LIBERADO' and container.release_date %}
+                                        {{ container.release_date|date:"d/m/Y" }}
+                                        {% if container.release_time %}
+                                            <br><small class="text-muted">{{ container.release_time|time:"H:i" }}</small>
+                                        {% endif %}
+                                        <br><span class="badge bg-success">Liberado</span>
+                                    {% elif container.scheduled_date %}
                                         {{ container.scheduled_date|date:"d/m/Y" }}
                                         {% if container.scheduled_time %}
                                             <br><small class="text-muted">{{ container.scheduled_time|time:"H:i" }}</small>

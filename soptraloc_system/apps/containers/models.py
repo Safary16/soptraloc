@@ -262,10 +262,6 @@ class Container(BaseModel):
     duracion_devolucion = models.IntegerField(null=True, blank=True, verbose_name="Duración devolución (minutos)")
     
     def save(self, *args, **kwargs):
-        # Usar owner_company como client si no hay client específico
-        if not self.client and self.owner_company:
-            self.client = self.owner_company
-            
         # Calcular días si hay fechas disponibles
         if self.release_date and self.cd_arrival_date:
             delta = self.cd_arrival_date - self.release_date

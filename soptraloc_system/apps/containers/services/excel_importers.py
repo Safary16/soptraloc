@@ -352,13 +352,19 @@ def import_vessel_manifest(files: Iterable[BytesIO], user: User) -> List[ImportS
                         container = Container(container_number=container_number)
                         container.created_by = user
 
-                    company_name = row.get(column_lookup.get("vendor")) or row.get(column_lookup.get("division"))
-                    company = _get_or_create_company(company_name, user)
+                    # Vendor es el dueño de la mercancía (ej: ANIKET METALS)
+                    vendor_name = row.get(column_lookup.get("vendor")) or row.get(column_lookup.get("division"))
+                    vendor_company = _get_or_create_company(vendor_name, user)
+                    
+                    # Cliente es quien solicita el servicio de transporte (Cliente Demo)
+                    client_company = _get_or_create_company("CLIENTE DEMO", user)
+                    
                     shipping_line = _get_or_create_shipping_line(row.get(column_lookup.get("carrier")), user)
                     vessel = _get_or_create_vessel(row.get(column_lookup.get("naveconfirmado")), shipping_line, user)
                     agency = _get_or_create_agency(row.get(column_lookup.get("agencia")), user)
 
-                    container.owner_company = company
+                    container.owner_company = vendor_company  # Dueño de mercancía
+                    container.client = client_company  # Cliente del servicio de transporte
                     container.shipping_line = shipping_line
                     container.vessel = vessel
                     container.agency = agency
