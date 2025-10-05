@@ -237,7 +237,7 @@ def match_existing_container(container_number: str) -> Optional[Container]:
 def _get_or_create_company(name: Optional[str], user: User) -> Company:
     """Wrapper para EntityFactory.get_or_create_company con user"""
     from apps.containers.services.utils import EntityFactory
-    cleaned = _clean_str(name) or "WALMART"
+    cleaned = _clean_str(name) or "CLIENTE DEMO"
     return EntityFactory.get_or_create_company(cleaned, user)
 
 

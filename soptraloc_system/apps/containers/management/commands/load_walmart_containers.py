@@ -1,5 +1,5 @@
 """
-Comando para cargar automáticamente los 692 contenedores de Walmart
+Comando para cargar automáticamente contenedores de prueba
 Se ejecuta automáticamente en el deploy de Render
 """
 
@@ -13,7 +13,7 @@ import random
 
 
 class Command(BaseCommand):
-    help = 'Carga automáticamente los 692 contenedores de Walmart con datos realistas'
+    help = 'Carga automáticamente contenedores de prueba con datos realistas'
 
     def add_arguments(self, parser):
         parser.add_argument(
@@ -30,7 +30,7 @@ class Command(BaseCommand):
             )
             return
 
-        self.stdout.write('🚀 Iniciando carga de contenedores de Walmart...')
+        self.stdout.write('🚀 Iniciando carga de contenedores de prueba...')
 
         # Crear datos base
         company = self.create_company()
@@ -42,32 +42,32 @@ class Command(BaseCommand):
 
         self.stdout.write(
             self.style.SUCCESS(
-                f'✅ ¡Completado! Se crearon {containers_created} contenedores de Walmart'
+                f'✅ ¡Completado! Se crearon {containers_created} contenedores de prueba'
             )
         )
 
     def create_company(self):
-        """Crear compañía Walmart"""
+        """Crear compañía demo"""
         company, created = Company.objects.get_or_create(
-            code="WAL-CORP",
+            code="CLIENTEDEMO",
             defaults={
-                'name': "Walmart Inc.",
+                'name': "Cliente Demo S.A.",
                 'rut': "12345678-9",
-                'email': 'operations@walmart.com',
-                'phone': '+1-800-WALMART',
-                'address': '702 SW 8th Street, Bentonville, AR 72716, USA'
+                'email': 'operations@clientedemo.com',
+                'phone': '+56-2-1234567',
+                'address': 'Av. Apoquindo 3000, Las Condes, Santiago, Chile'
             }
         )
         return company
 
     def create_warehouses(self, company):
-        """Crear almacenes de Walmart"""
+        """Crear almacenes de cliente demo"""
         warehouses_data = [
-            ('WAL-001', 'Walmart DC Miami', 'Miami, FL', 'container_yard'),
-            ('WAL-002', 'Walmart DC Los Angeles', 'Los Angeles, CA', 'container_yard'),
-            ('WAL-003', 'Walmart Hub New York', 'New York, NY', 'covered'),
-            ('WAL-004', 'Walmart Center Houston', 'Houston, TX', 'container_yard'),
-            ('WAL-005', 'Walmart DC Chicago', 'Chicago, IL', 'covered'),
+            ('CLD-001', 'CD Quilicura', 'Santiago, RM', 'container_yard'),
+            ('CLD-002', 'CD El Peñón', 'Santiago, RM', 'container_yard'),
+            ('CLD-003', 'CD Puerto Madero', 'Santiago, RM', 'covered'),
+            ('CLD-004', 'CD Campos', 'Santiago, RM', 'container_yard'),
+            ('CLD-005', 'CD Maipú', 'Santiago, RM', 'covered'),
         ]
         
         warehouses = []
@@ -95,8 +95,8 @@ class Command(BaseCommand):
                     'operating_hours_start': time(6, 0),
                     'operating_hours_end': time(18, 0),
                     'operates_weekends': False,
-                    'contact_phone': '+1-305-555-0100',
-                    'contact_email': f'warehouse.{code.lower()}@walmart.com',
+                    'contact_phone': '+56-2-1234567',
+                    'contact_email': f'warehouse.{code.lower()}@clientedemo.com',
                     'has_crane': True,
                     'has_power': True,
                     'has_security': True

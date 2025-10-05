@@ -45,7 +45,7 @@ def build_manifest_file(container_number: str = "MSCU1234567") -> BytesIO:
                 "Container Size": "40HC",
                 "Container Seal": "SEL123",
                 "Weight Kgs": "24000",
-                "Vendor": "Walmart",
+                "Vendor": "Cliente Demo",
                 "Carrier": "CMA CGM",
                 "Agencia": "Agencia Uno",
             }
@@ -109,7 +109,7 @@ class ExcelImporterServiceTests(TestCase):
         container = Container.objects.get(container_number="MSCU 123456-7")
         self.assertEqual(container.status, "POR_ARRIBAR")
         self.assertEqual(container.shipping_line.name, "CMA CGM")
-        self.assertEqual(container.owner_company.name, "Walmart")
+        self.assertEqual(container.owner_company.name, "Cliente Demo")
 
     def test_release_import_updates_container(self):
         import_vessel_manifest([build_manifest_file()], self.user)

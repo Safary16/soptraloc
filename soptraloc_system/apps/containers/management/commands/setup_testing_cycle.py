@@ -268,7 +268,7 @@ class Command(BaseCommand):
         ])
 
     def _get_or_create_company(self) -> Company:
-        company = Company.objects.filter(code__in=["WALMART", "WMSYS", "WAL"], is_active=True).first()
+        company = Company.objects.filter(code__in=["CLIENTEDEMO", "CLIDEMO", "CLD"], is_active=True).first()
         if company:
             return company
         return Company.objects.create(

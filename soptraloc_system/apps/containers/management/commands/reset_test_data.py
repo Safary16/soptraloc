@@ -1,6 +1,12 @@
 """
 Management command para resetear datos de testing.
-Mantiene solo una cantidad limitada de contenedores para pruebas.
+Mantiene solo una cantidad limitada de contenedore        # Crear cliente demo si no existe
+        cliente_demo, created = Company.objects.get_or_create(
+            code='CLIENTEDEMO',
+            defaults={
+                'name': 'Cliente Demo',
+                'rut': '12345678-9',
+                'email': 'cliente@example.com',pruebas.
 """
 from django.core.management.base import BaseCommand
 from django.db import transaction
@@ -115,4 +121,6 @@ class Command(BaseCommand):
             }
         )
         if created:
-            self.stdout.write('✓ Creado cliente Walmart')
+            self.stdout.write('✓ Creado cliente demo')
+        else:
+            self.stdout.write('✓ Cliente demo ya existe')
