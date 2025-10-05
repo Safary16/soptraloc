@@ -1,12 +1,15 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Optional
+from typing import Optional, TYPE_CHECKING, Any
 import pandas as pd
 from django.db.models import Avg, Count
 from django.utils import timezone
 
 from ..models import Assignment, Location, TimeMatrix
+
+if TYPE_CHECKING:
+    from sklearn.pipeline import Pipeline
 
 try:  # pragma: no cover - la importación puede fallar en entornos sin scikit-learn
     from sklearn.compose import ColumnTransformer
@@ -38,7 +41,7 @@ class DriverDurationPredictor:
     CACHE_TTL_SECONDS = 300
 
     def __init__(self) -> None:
-        self._model: Optional[Pipeline] = None
+        self._model: Optional[Any] = None
         self._model_sample_size: int = 0
         self._dataset_cached_at: Optional[float] = None
         self._samples: Optional[pd.DataFrame] = None
