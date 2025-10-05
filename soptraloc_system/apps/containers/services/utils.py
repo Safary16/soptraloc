@@ -141,8 +141,8 @@ class DateTimeParser:
     
     @staticmethod
     def parse_date(value) -> Optional[date]:
-        """Parsea una fecha desde Excel o string"""
-        if pd.isna(value) or value is None:
+        """Parsea una fecha desde Excel o string con múltiples formatos"""
+        if pd.isna(value) or value is None or value == "":
             return None
         
         if isinstance(value, date) and not isinstance(value, datetime):
@@ -152,14 +152,32 @@ class DateTimeParser:
             return value.date()
         
         try:
-            return pd.to_datetime(value).date()
-        except:
+            # Formatos comunes de fecha en español
+            date_formats = [
+                "%d/%m/%Y", "%d-%m-%Y", "%Y-%m-%d",
+                "%d/%m/%y", "%d-%m-%y", 
+                "%d.%m.%Y", "%d.%m.%y"
+            ]
+            
+            # Si es string, intentar formatos explícitos primero
+            if isinstance(value, str):
+                value_clean = value.strip()
+                for fmt in date_formats:
+                    try:
+                        return datetime.strptime(value_clean, fmt).date()
+                    except ValueError:
+                        continue
+            
+            # Fallback a pandas con dayfirst=True para formato español
+            return pd.to_datetime(value, dayfirst=True, errors='coerce').date()
+        except Exception as e:
+            logger.warning(f"Error parsing date '{value}': {e}")
             return None
     
     @staticmethod
     def parse_time(value) -> Optional[time]:
-        """Parsea una hora desde Excel o string"""
-        if pd.isna(value) or value is None:
+        """Parsea una hora desde Excel o string con múltiples formatos"""
+        if pd.isna(value) or value is None or value == "":
             return None
         
         if isinstance(value, time):
@@ -169,8 +187,33 @@ class DateTimeParser:
             return value.time()
         
         try:
+            # Formatos comunes de hora
+            time_formats = [
+                "%H:%M:%S", "%H:%M", "%I:%M %p", "%I:%M%p",
+                "%H.%M", "%H,%M"
+            ]
+            
+            if isinstance(value, str):
+                value_clean = value.strip()
+                for fmt in time_formats:
+                    try:
+                        return datetime.strptime(value_clean, fmt).time()
+                    except ValueError:
+                        continue
+            
+            # Manejar valores numéricos (tiempo serial de Excel)
+            elif isinstance(value, (int, float)):
+                # Excel guarda tiempos como fracciones de día
+                total_seconds = value * 86400  # 24 * 60 * 60
+                hours = int(total_seconds // 3600)
+                minutes = int((total_seconds % 3600) // 60)
+                seconds = int(total_seconds % 60)
+                return time(hours, minutes, seconds)
+            
+            # Fallback a pandas
             return pd.to_datetime(value).time()
-        except:
+        except Exception as e:
+            logger.warning(f"Error parsing time '{value}': {e}")
             return None
 
 

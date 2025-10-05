@@ -261,7 +261,8 @@
     };
 
     actions.editContainer = function (containerId) {
-        window.open(`/admin/containers/container/${containerId}/change/`, '_blank');
+        // Redirigir a la vista de detalle del contenedor
+        window.location.href = `/containers/${containerId}/`;
     };
 
     actions.refreshPage = function () {

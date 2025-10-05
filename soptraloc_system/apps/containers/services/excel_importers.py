@@ -50,22 +50,36 @@ RELEASE_COLUMN_MAP = {
     "devolucionvacio": "empty_return",
     "almacen": "warehouse",
     "transportes": "transport_company",
+    "pesounidades": "cargo_weight",
+    "peso": "cargo_weight",
+    "pesokg": "cargo_weight",
+    "pesokgs": "cargo_weight",
+    "tipoconttemperat": "container_type",
+    "tipoconttemperatura": "container_type",
 }
 
 PROGRAM_COLUMN_MAP = {
     "contenedor": "container_number",
     "destino": "cd_location",
     "cd": "cd_location",
+    "bodega": "cd_location",
     "fechadespacho": "scheduled_date",
+    "fechadeprogramacion": "scheduled_date",
     "fechaprogramacion": "scheduled_date",
     "fecha": "scheduled_date",
     "horaprogramacion": "scheduled_time",
     "hora": "scheduled_time",
     "demurrage": "demurrage_date",
+    "fechademurrage": "demurrage_date",
     "tipocontenedor": "container_type",
     "tipocont": "container_type",
+    "tipo": "container_type",
+    "med": "container_size",
     "deposito": "deposit_return",
     "devolucion": "deposit_return",
+    "nave": "vessel_name",
+    "referencia": "reference",
+    "producto": "product",
 }
 
 PORT_LOCATION_MAP = {
@@ -123,11 +137,54 @@ def _normalize_header(value: object) -> str:
     value = str(value).replace("\ufeff", "").strip()
     value = unicodedata.normalize("NFKD", value)
     value = "".join(ch for ch in value if not unicodedata.combining(ch))
-    return re.sub(r"[^a-z0-9]+", "", value.lower())
+    normalized = re.sub(r"[^a-z0-9]+", "", value.lower())
+    return normalized
+
+
+def _log_column_mapping(df: pd.DataFrame, column_map: dict, file_type: str) -> None:
+    """Log which columns were found and mapped for debugging"""
+    logger.info(f"=== Análisis de columnas para archivo {file_type} ===")
+    
+    # Columnas originales
+    logger.info(f"Columnas originales: {list(df.columns)}")
+    
+    # Columnas normalizadas
+    normalized = {col: _normalize_header(col) for col in df.columns}
+    logger.info(f"Columnas normalizadas: {normalized}")
+    
+    # Mapping encontrado
+    reverse_map = {v: k for k, v in column_map.items()}
+    found_mappings = {}
+    for col in df.columns:
+        norm = _normalize_header(col)
+        if norm in reverse_map:
+            found_mappings[col] = reverse_map[norm]
+    
+    logger.info(f"Columnas mapeadas exitosamente: {found_mappings}")
+    logger.info("=" * 60)
 
 
 def _clean_str(value: Optional[str]) -> str:
     return str(value).strip() if value is not None else ""
+
+
+def _normalize_cd_location(value: Optional[str]) -> str:
+    """
+    Normaliza el formato de CD/Bodega.
+    Ejemplos:
+        "6020 - PEÑÓN" -> "PEÑÓN"
+        "QUILICURA" -> "QUILICURA"
+        "6030 - QUILICURA" -> "QUILICURA"
+    """
+    if not value:
+        return ""
+    cleaned = _clean_str(value)
+    # Si tiene formato "código - nombre", extraer solo el nombre
+    if " - " in cleaned:
+        parts = cleaned.split(" - ", 1)
+        if len(parts) == 2:
+            return parts[1].strip().upper()
+    return cleaned.upper()
 
 
 def _parse_decimal(value: Optional[str]) -> Optional[Decimal]:
@@ -361,6 +418,9 @@ def apply_release_schedule(uploaded: BytesIO, user: User) -> ImportSummary:
         return summary
 
     column_lookup = {_normalize_header(col): col for col in df.columns}
+    
+    # Debug: mostrar mapeo de columnas
+    _log_column_mapping(df, RELEASE_COLUMN_MAP, "LIBERACION")
     if "contenedor" not in column_lookup:
         summary.record_error(0, "No se encontró la columna de contenedores")
         return summary
@@ -379,8 +439,26 @@ def apply_release_schedule(uploaded: BytesIO, user: User) -> ImportSummary:
 
         try:
             with transaction.atomic():
-                release_date = _parse_date(row.get(column_lookup.get("fechasalida")) or row.get(column_lookup.get("fecha")))
-                release_time = _parse_time(row.get(column_lookup.get("horasalida")) or row.get(column_lookup.get("hora")))
+                # Intentar diferentes columnas para fecha
+                date_value = (
+                    row.get(column_lookup.get("fechasalida")) 
+                    or row.get(column_lookup.get("fecha"))
+                    or row.get(column_lookup.get("fechaliberacion"))
+                )
+                release_date = _parse_date(date_value)
+                
+                # Intentar diferentes columnas para hora
+                time_value = (
+                    row.get(column_lookup.get("horasalida")) 
+                    or row.get(column_lookup.get("hora"))
+                    or row.get(column_lookup.get("horaliberacion"))
+                )
+                release_time = _parse_time(time_value)
+
+                logger.info(
+                    "Procesando liberación %s: fecha_raw=%s -> %s, hora_raw=%s -> %s",
+                    container_number, date_value, release_date, time_value, release_time
+                )
 
                 if release_date:
                     container.release_date = release_date
@@ -409,6 +487,16 @@ def apply_release_schedule(uploaded: BytesIO, user: User) -> ImportSummary:
                 warehouse = _clean_str(row.get(column_lookup.get("almacen")))
                 if warehouse:
                     container.storage_location = warehouse
+                
+                # Extraer peso de carga
+                cargo_weight = _parse_decimal(
+                    row.get(column_lookup.get("pesounidades"))
+                    or row.get(column_lookup.get("peso"))
+                    or row.get(column_lookup.get("pesokg"))
+                    or row.get(column_lookup.get("pesokgs"))
+                )
+                if cargo_weight:
+                    container.cargo_weight = cargo_weight
 
                 container.updated_by = user
                 container.save()
@@ -440,6 +528,10 @@ def apply_programming(uploaded: BytesIO, user: User) -> ImportSummary:
         return summary
 
     column_lookup = {_normalize_header(col): col for col in df.columns}
+    
+    # Debug: mostrar mapeo de columnas
+    _log_column_mapping(df, PROGRAM_COLUMN_MAP, "PROGRAMACION")
+    
     if "contenedor" not in column_lookup:
         summary.record_error(0, "No se encontró la columna de contenedores")
         return summary
@@ -457,14 +549,37 @@ def apply_programming(uploaded: BytesIO, user: User) -> ImportSummary:
 
         try:
             with transaction.atomic():
-                scheduled_date = _parse_date(
+                # Intentar diferentes columnas para fecha programada
+                date_value = (
                     row.get(column_lookup.get("fechadespacho"))
                     or row.get(column_lookup.get("fechaprogramacion"))
+                    or row.get(column_lookup.get("fechadeprogramacion"))
                     or row.get(column_lookup.get("fecha"))
                 )
-                scheduled_time = _parse_time(row.get(column_lookup.get("horaprogramacion")) or row.get(column_lookup.get("hora")))
-                cd_location = _clean_str(row.get(column_lookup.get("destino")) or row.get(column_lookup.get("cd")))
-                demurrage_date = _parse_date(row.get(column_lookup.get("demurrage")))
+                scheduled_date = _parse_date(date_value)
+                
+                # Intentar diferentes columnas para hora programada
+                time_value = (
+                    row.get(column_lookup.get("horaprogramacion")) 
+                    or row.get(column_lookup.get("hora"))
+                    or row.get(column_lookup.get("horadespacho"))
+                )
+                scheduled_time = _parse_time(time_value)
+                
+                # Intentar diferentes columnas para CD/destino
+                cd_value = (
+                    row.get(column_lookup.get("destino")) 
+                    or row.get(column_lookup.get("cd")) 
+                    or row.get(column_lookup.get("bodega"))
+                    or row.get(column_lookup.get("cdlocation"))
+                )
+                cd_location = _normalize_cd_location(cd_value)
+                
+                logger.info(
+                    "Procesando programación %s: fecha_raw=%s -> %s, hora_raw=%s -> %s, cd_raw=%s -> %s",
+                    container_number, date_value, scheduled_date, time_value, scheduled_time, cd_value, cd_location
+                )
+                demurrage_date = _parse_date(row.get(column_lookup.get("demurrage")) or row.get(column_lookup.get("fechademurrage")))
                 deposit_return = _clean_str(row.get(column_lookup.get("deposito")) or row.get(column_lookup.get("devolucion")))
                 container_type = _derive_container_type(
                     row.get(column_lookup.get("tipocontenedor")) or row.get(column_lookup.get("tipocont"))

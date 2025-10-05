@@ -120,7 +120,10 @@ class ExcelImporterServiceTests(TestCase):
 
         container.refresh_from_db()
         self.assertEqual(container.status, "LIBERADO")
-        self.assertIsNotNone(container.release_date)
+        self.assertIsNotNone(container.release_date, "La fecha de liberación debería estar guardada")
+        self.assertIsNotNone(container.release_time, "La hora de liberación debería estar guardada")
+        self.assertEqual(container.release_date, timezone.now().date(), "La fecha debe ser hoy")
+        self.assertEqual(str(container.release_time), "08:30:00", "La hora debe ser 08:30")
         self.assertEqual(container.deposit_return, "DEP TEST")
         self.assertEqual(container.storage_location, "ALM 1")
 
@@ -133,8 +136,12 @@ class ExcelImporterServiceTests(TestCase):
 
         container.refresh_from_db()
         self.assertEqual(container.status, "PROGRAMADO")
-        self.assertEqual(container.cd_location, "CD Quilicura")
-        self.assertIsNotNone(container.scheduled_date)
+        self.assertEqual(container.cd_location, "CD QUILICURA")
+        self.assertIsNotNone(container.scheduled_date, "La fecha de programación debería estar guardada")
+        self.assertIsNotNone(container.scheduled_time, "La hora de programación debería estar guardada")
+        tomorrow = timezone.now().date() + timedelta(days=1)
+        self.assertEqual(container.scheduled_date, tomorrow, "La fecha debe ser mañana")
+        self.assertEqual(str(container.scheduled_time), "09:45:00", "La hora debe ser 09:45")
 
         self.assertTrue(
             Alert.objects.filter(
