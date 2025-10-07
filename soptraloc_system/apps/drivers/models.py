@@ -385,3 +385,157 @@ class Alert(models.Model):
     
     def __str__(self):
         return f"[{self.get_prioridad_display()}] {self.titulo}"
+
+
+class TrafficAlert(models.Model):
+    """
+    Alertas de tráfico generadas automáticamente al iniciar rutas.
+    Proviene de datos en tiempo real de Google Maps API.
+    """
+    
+    TRAFFIC_LEVEL_CHOICES = [
+        ('low', 'Tráfico Bajo'),
+        ('medium', 'Tráfico Medio'),
+        ('high', 'Tráfico Alto'),
+        ('very_high', 'Tráfico Muy Alto'),
+    ]
+    
+    ALERT_TYPE_CHOICES = [
+        ('TRAFFIC', 'Tráfico Denso'),
+        ('ACCIDENT', 'Accidente'),
+        ('ROAD_CLOSURE', 'Carretera Cerrada'),
+        ('CONSTRUCTION', 'Obras en Ruta'),
+        ('DELAY', 'Retraso Estimado'),
+        ('ALTERNATIVE', 'Ruta Alternativa Disponible'),
+    ]
+    
+    # Relaciones
+    assignment = models.ForeignKey(
+        Assignment, 
+        on_delete=models.CASCADE, 
+        related_name='traffic_alerts',
+        help_text="Asignación asociada"
+    )
+    driver = models.ForeignKey(
+        Driver, 
+        on_delete=models.CASCADE,
+        related_name='traffic_alerts',
+        help_text="Conductor notificado"
+    )
+    
+    # Información de la ruta
+    origin_name = models.CharField(max_length=200, help_text="Origen")
+    destination_name = models.CharField(max_length=200, help_text="Destino")
+    
+    # Datos de tráfico
+    traffic_level = models.CharField(
+        max_length=20,
+        choices=TRAFFIC_LEVEL_CHOICES,
+        help_text="Nivel de tráfico"
+    )
+    alert_type = models.CharField(
+        max_length=30,
+        choices=ALERT_TYPE_CHOICES,
+        help_text="Tipo de alerta"
+    )
+    
+    # Tiempos
+    estimated_time_minutes = models.IntegerField(
+        help_text="Tiempo estimado sin tráfico (minutos)"
+    )
+    actual_time_minutes = models.IntegerField(
+        help_text="Tiempo actual con tráfico (minutos)"
+    )
+    delay_minutes = models.IntegerField(
+        help_text="Retraso adicional por tráfico (minutos)"
+    )
+    
+    # ETA
+    departure_time = models.DateTimeField(
+        help_text="Hora de salida"
+    )
+    estimated_arrival = models.DateTimeField(
+        help_text="Hora estimada de llegada (ETA)"
+    )
+    
+    # Mensaje
+    message = models.TextField(
+        help_text="Mensaje de la alerta para el conductor"
+    )
+    warnings = models.JSONField(
+        default=list,
+        blank=True,
+        help_text="Advertencias específicas (JSON array)"
+    )
+    
+    # Rutas alternativas
+    has_alternatives = models.BooleanField(
+        default=False,
+        help_text="¿Hay rutas alternativas disponibles?"
+    )
+    alternative_routes = models.JSONField(
+        default=list,
+        blank=True,
+        help_text="Rutas alternativas sugeridas (JSON array)"
+    )
+    
+    # Datos crudos de la API
+    raw_data = models.JSONField(
+        default=dict,
+        blank=True,
+        help_text="Datos completos de Google Maps API"
+    )
+    
+    # Estado
+    is_active = models.BooleanField(
+        default=True,
+        help_text="¿Alerta activa?"
+    )
+    acknowledged = models.BooleanField(
+        default=False,
+        help_text="¿Conductor confirmó recepción?"
+    )
+    acknowledged_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="Fecha de confirmación"
+    )
+    
+    # Metadata
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        db_table = 'drivers_traffic_alert'
+        verbose_name = 'Alerta de Tráfico'
+        verbose_name_plural = 'Alertas de Tráfico'
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['driver', '-created_at']),
+            models.Index(fields=['assignment', '-created_at']),
+            models.Index(fields=['is_active', '-created_at']),
+        ]
+    
+    def __str__(self):
+        return f"{self.get_alert_type_display()} - {self.driver.nombre} ({self.get_traffic_level_display()})"
+    
+    def get_delay_text(self):
+        """Retorna texto descriptivo del retraso"""
+        if self.delay_minutes <= 5:
+            return "Sin retraso significativo"
+        elif self.delay_minutes <= 15:
+            return f"Retraso leve: +{self.delay_minutes} minutos"
+        elif self.delay_minutes <= 30:
+            return f"Retraso moderado: +{self.delay_minutes} minutos"
+        else:
+            return f"Retraso importante: +{self.delay_minutes} minutos"
+    
+    def get_traffic_emoji(self):
+        """Emoji representativo del nivel de tráfico"""
+        emojis = {
+            'low': '🟢',
+            'medium': '🟡',
+            'high': '🟠',
+            'very_high': '🔴',
+        }
+        return emojis.get(self.traffic_level, '⚪')
