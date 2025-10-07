@@ -16,8 +16,8 @@ class Command(BaseCommand):
         parser.add_argument(
             '--count',
             type=int,
-            default=25,
-            help='Número de conductores a crear (default: 25)',
+            default=82,
+            help='Número de conductores a crear (default: 82)',
         )
         parser.add_argument(
             '--force',
@@ -66,13 +66,21 @@ class Command(BaseCommand):
             'Manuel', 'David', 'Daniel', 'Roberto', 'Rafael', 'Eduardo', 'Fernando',
             'Jorge', 'Alejandro', 'Ricardo', 'Andrés', 'Javier', 'Pedro',
             'María', 'Ana', 'Carmen', 'Rosa', 'Patricia', 'Laura', 'Elena',
-            'Sandra', 'Mónica', 'Claudia', 'Silvia', 'Adriana', 'Gabriela'
+            'Sandra', 'Mónica', 'Claudia', 'Silvia', 'Adriana', 'Gabriela',
+            'Sergio', 'Raúl', 'Óscar', 'Pablo', 'Ramón', 'Enrique', 'Héctor',
+            'Víctor', 'Arturo', 'Ignacio', 'Diego', 'Rubén', 'Felipe', 'Mario',
+            'Alberto', 'Cristian', 'Rodrigo', 'Mauricio', 'Sebastián', 'Marcelo',
+            'Lucía', 'Isabel', 'Beatriz', 'Pilar', 'Teresa', 'Cristina', 'Marta',
+            'Verónica', 'Natalia', 'Daniela', 'Carolina', 'Valentina', 'Camila'
         ]
         
         last_names = [
             'García', 'Rodríguez', 'González', 'Fernández', 'López', 'Martínez',
             'Sánchez', 'Pérez', 'Gómez', 'Martín', 'Jiménez', 'Ruiz', 'Hernández',
-            'Díaz', 'Moreno', 'Muñoz', 'Álvarez', 'Romero', 'Alonso', 'Gutiérrez'
+            'Díaz', 'Moreno', 'Muñoz', 'Álvarez', 'Romero', 'Alonso', 'Gutiérrez',
+            'Navarro', 'Torres', 'Domínguez', 'Vázquez', 'Ramos', 'Gil', 'Ramírez',
+            'Serrano', 'Blanco', 'Suárez', 'Molina', 'Castro', 'Ortiz', 'Rubio',
+            'Marín', 'Sanz', 'Iglesias', 'Núñez', 'Medina', 'Garrido'
         ]
         
         tipos_conductor = ['LEASING', 'LOCALERO', 'TRONCO_PM', 'TRONCO']

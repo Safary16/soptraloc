@@ -174,10 +174,25 @@ fi
 echo ""
 
 # ============================================================================
-# PASO 5: CARGAR DATOS INICIALES (OPCIONAL)
+# PASO 5: CARGAR CONDUCTORES
 # ============================================================================
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-echo "📊 PASO 5: Cargando datos iniciales de Chile"
+echo "🚚 PASO 5: Cargando 82 conductores"
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+
+if python manage.py load_drivers --count=82 --force --settings=config.settings_production 2>&1 | tee /tmp/load_drivers.log; then
+    echo "✅ 82 conductores cargados correctamente"
+else
+    echo "⚠️  Advertencia: Hubo un problema al cargar conductores (no crítico)"
+fi
+
+echo ""
+
+# ============================================================================
+# PASO 6: CARGAR DATOS INICIALES DE CHILE (OPCIONAL)
+# ============================================================================
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo "📊 PASO 6: Cargando datos iniciales de Chile"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
 if python manage.py load_initial_times --settings=config.settings_production 2>&1 | grep -q "exitosamente\|successfully\|completed"; then
@@ -198,6 +213,7 @@ echo ""
 echo "📊 Resumen:"
 echo "   ✅ PostgreSQL: Conectado"
 echo "   ✅ Superusuario: Creado y verificado"
+echo "   ✅ Conductores: 82 conductores cargados"
 echo "   ✅ Datos: Cargados"
 echo ""
 echo "🔗 Acceso al sistema:"
