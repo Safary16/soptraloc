@@ -65,17 +65,30 @@ class RouteStartService:
                 
                 # 3. Obtener información de tráfico en tiempo real
                 departure_time = timezone.now()
+                
+                # Determinar si usar códigos de ubicación o coordenadas
+                # Si origin_name es un código conocido, usarlo; sino usar coordenadas
+                from apps.routing.locations_catalog import get_location
+                
+                origin_loc = get_location(origin_name)
+                dest_loc = get_location(destination_name)
+                
+                origin_query = origin_name if origin_loc else (origin_lat, origin_lng)
+                dest_query = destination_name if dest_loc else (dest_lat, dest_lng)
+                
                 eta, traffic_data = gmaps_service.get_eta(
-                    origin_lat=origin_lat,
-                    origin_lng=origin_lng,
-                    dest_lat=dest_lat,
-                    dest_lng=dest_lng,
+                    origin=origin_query,
+                    destination=dest_query,
                     departure_time=departure_time
                 )
                 
+                # Usar nombres del catálogo si existen
+                origin_display = origin_loc.name if origin_loc else origin_name
+                dest_display = dest_loc.name if dest_loc else destination_name
+                
                 logger.info(f"🚦 Información de tráfico obtenida para {driver.nombre}")
-                logger.info(f"   Origen: {origin_name}")
-                logger.info(f"   Destino: {destination_name}")
+                logger.info(f"   Origen: {origin_display}")
+                logger.info(f"   Destino: {dest_display}")
                 logger.info(f"   Distancia: {traffic_data['distance_km']} km")
                 logger.info(f"   Tiempo sin tráfico: {traffic_data['duration_minutes']} min")
                 logger.info(f"   Tiempo con tráfico: {traffic_data['duration_in_traffic_minutes']} min")
@@ -96,8 +109,8 @@ class RouteStartService:
                 alerts_created = RouteStartService._generate_traffic_alerts(
                     assignment=assignment,
                     driver=driver,
-                    origin_name=origin_name,
-                    destination_name=destination_name,
+                    origin_name=origin_display,
+                    destination_name=dest_display,
                     departure_time=departure_time,
                     eta=eta,
                     traffic_data=traffic_data

@@ -3,11 +3,12 @@ Servicio de integración con Google Maps Distance Matrix API
 Para obtener tiempos de viaje en tiempo real considerando tráfico actual
 """
 import requests
-from typing import Dict, Optional, Tuple
+from typing import Dict, Optional, Tuple, Union
 from datetime import datetime, timedelta
 from django.conf import settings
 from django.core.cache import cache
 import logging
+from .locations_catalog import get_location, get_static_travel_time
 
 logger = logging.getLogger(__name__)
 
@@ -28,22 +29,42 @@ class GoogleMapsService:
         if not self.api_key:
             logger.warning("⚠️  GOOGLE_MAPS_API_KEY no configurada. Usando tiempos estáticos.")
     
+    def _process_location(self, location: Union[str, Tuple[float, float]]) -> Tuple[str, str]:
+        """
+        Procesa una ubicación y retorna (query_string, display_name).
+        
+        Args:
+            location: Código de ubicación o tupla (lat, lng)
+        
+        Returns:
+            Tuple de (query_string para API, nombre para mostrar)
+        """
+        if isinstance(location, str):
+            # Es un código de ubicación
+            loc_info = get_location(location)
+            if loc_info:
+                # Usar dirección completa
+                return loc_info.get_google_maps_query(), loc_info.name
+            else:
+                # Asumir que es una dirección directa
+                return location, location
+        else:
+            # Es una tupla de coordenadas
+            lat, lng = location
+            return f"{lat},{lng}", f"({lat}, {lng})"
+    
     def get_travel_time_with_traffic(
         self,
-        origin_lat: float,
-        origin_lng: float,
-        dest_lat: float,
-        dest_lng: float,
+        origin: Union[str, Tuple[float, float]],
+        destination: Union[str, Tuple[float, float]],
         departure_time: Optional[datetime] = None
     ) -> Dict:
         """
         Obtiene tiempo de viaje considerando tráfico actual o en un tiempo específico.
         
         Args:
-            origin_lat: Latitud origen
-            origin_lng: Longitud origen
-            dest_lat: Latitud destino
-            dest_lng: Longitud destino
+            origin: Código de ubicación (ej: 'CCTI', 'CD_PENON') o tupla (lat, lng)
+            destination: Código de ubicación o tupla (lat, lng)
             departure_time: Hora de salida (None = ahora)
         
         Returns:
@@ -54,12 +75,22 @@ class GoogleMapsService:
             - traffic_level: 'low', 'medium', 'high', 'very_high'
             - warnings: Lista de advertencias (accidentes, cierres, etc.)
             - alternative_routes: Rutas alternativas si las hay
+            - origin_name: Nombre de origen
+            - destination_name: Nombre de destino
+        
+        Examples:
+            >>> service.get_travel_time_with_traffic('CCTI', 'CD_PENON')
+            >>> service.get_travel_time_with_traffic((-33.5167, -70.8667), (-33.6370, -70.7050))
         """
+        # Procesar origen y destino
+        origin_query, origin_name = self._process_location(origin)
+        dest_query, dest_name = self._process_location(destination)
+        
         if not self.api_key:
-            return self._fallback_response()
+            return self._fallback_response(origin, destination, origin_name, dest_name)
         
         # Crear cache key
-        cache_key = f"gmaps_travel:{origin_lat},{origin_lng}:{dest_lat},{dest_lng}"
+        cache_key = f"gmaps_travel:{origin_query}:{dest_query}"
         
         # Buscar en caché (válido por 5 minutos)
         cached = cache.get(cache_key)
@@ -70,8 +101,8 @@ class GoogleMapsService:
         try:
             # Parámetros para Distance Matrix API
             params = {
-                'origins': f"{origin_lat},{origin_lng}",
-                'destinations': f"{dest_lat},{dest_lng}",
+                'origins': origin_query,
+                'destinations': dest_query,
                 'mode': 'driving',
                 'language': 'es',
                 'units': 'metric',
@@ -89,7 +120,7 @@ class GoogleMapsService:
             # Solicitar información de tráfico
             params['traffic_model'] = 'best_guess'  # o 'pessimistic' / 'optimistic'
             
-            logger.info(f"🌐 Consultando Google Maps API: {params['origins']} → {params['destinations']}")
+            logger.info(f"🌐 Consultando Google Maps API: {origin_name} → {dest_name}")
             
             response = requests.get(self.BASE_URL, params=params, timeout=10)
             response.raise_for_status()
@@ -132,11 +163,13 @@ class GoogleMapsService:
                 'warnings': [],
                 'alternative_routes': [],
                 'timestamp': datetime.now().isoformat(),
-                'source': 'google_maps_api'
+                'source': 'google_maps_api',
+                'origin_name': origin_name,
+                'destination_name': dest_name
             }
             
             # Obtener detalles adicionales con Directions API
-            directions_data = self._get_directions_details(origin_lat, origin_lng, dest_lat, dest_lng)
+            directions_data = self._get_directions_details(origin_query, dest_query)
             if directions_data:
                 result['warnings'] = directions_data.get('warnings', [])
                 result['alternative_routes'] = directions_data.get('alternatives', [])
@@ -151,25 +184,27 @@ class GoogleMapsService:
             
         except requests.exceptions.RequestException as e:
             logger.error(f"❌ Error conectando a Google Maps API: {e}")
-            return self._fallback_response()
+            return self._fallback_response(origin, destination, origin_name, dest_name)
         except Exception as e:
             logger.error(f"❌ Error inesperado: {e}")
-            return self._fallback_response()
+            return self._fallback_response(origin, destination, origin_name, dest_name)
     
     def _get_directions_details(
         self,
-        origin_lat: float,
-        origin_lng: float,
-        dest_lat: float,
-        dest_lng: float
+        origin_query: str,
+        dest_query: str
     ) -> Optional[Dict]:
         """
         Obtiene detalles de la ruta incluyendo advertencias y rutas alternativas.
+        
+        Args:
+            origin_query: Query de origen (coordenadas o dirección)
+            dest_query: Query de destino (coordenadas o dirección)
         """
         try:
             params = {
-                'origin': f"{origin_lat},{origin_lng}",
-                'destination': f"{dest_lat},{dest_lng}",
+                'origin': origin_query,
+                'destination': dest_query,
                 'mode': 'driving',
                 'language': 'es',
                 'alternatives': 'true',  # Obtener rutas alternativas
@@ -242,40 +277,61 @@ class GoogleMapsService:
         else:
             return 'very_high'
     
-    def _fallback_response(self) -> Dict:
+    def _fallback_response(
+        self, 
+        origin: Union[str, Tuple[float, float]], 
+        destination: Union[str, Tuple[float, float]],
+        origin_name: str,
+        dest_name: str
+    ) -> Dict:
         """
         Respuesta de fallback cuando la API no está disponible.
-        Usa tiempos estáticos.
+        Usa tiempos estáticos del catálogo.
         """
+        # Intentar obtener tiempo estático si son códigos de ubicación
+        static_time = 60  # Default 60 minutos
+        
+        if isinstance(origin, str) and isinstance(destination, str):
+            static_time = get_static_travel_time(origin, destination)
+        
         return {
-            'duration_minutes': 0,
-            'duration_in_traffic_minutes': 0,
+            'duration_minutes': static_time,
+            'duration_in_traffic_minutes': static_time,
             'distance_km': 0,
             'traffic_level': 'unknown',
             'traffic_ratio': 1.0,
             'delay_minutes': 0,
-            'warnings': ['No se pudo obtener información de tráfico en tiempo real'],
+            'warnings': ['No se pudo obtener información de tráfico en tiempo real. Usando tiempo estimado.'],
             'alternative_routes': [],
             'timestamp': datetime.now().isoformat(),
-            'source': 'fallback'
+            'source': 'fallback',
+            'origin_name': origin_name,
+            'destination_name': dest_name
         }
     
     def get_eta(
         self,
-        origin_lat: float,
-        origin_lng: float,
-        dest_lat: float,
-        dest_lng: float,
+        origin: Union[str, Tuple[float, float]],
+        destination: Union[str, Tuple[float, float]],
         departure_time: Optional[datetime] = None
     ) -> Tuple[datetime, Dict]:
         """
         Calcula la hora estimada de llegada (ETA) considerando tráfico.
         
+        Args:
+            origin: Código de ubicación o tupla (lat, lng)
+            destination: Código de ubicación o tupla (lat, lng)
+            departure_time: Hora de salida (None = ahora)
+        
         Returns:
             Tuple de (ETA datetime, datos completos de tráfico)
+        
+        Examples:
+            >>> eta, data = service.get_eta('CCTI', 'CD_PENON')
+            >>> eta, data = service.get_eta((-33.5167, -70.8667), 'CD_QUILICURA')
         """
         travel_data = self.get_travel_time_with_traffic(
-            origin_lat, origin_lng, dest_lat, dest_lng, departure_time
+            origin, destination, departure_time
         )
         
         if not departure_time:

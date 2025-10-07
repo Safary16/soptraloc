@@ -189,10 +189,25 @@ fi
 echo ""
 
 # ============================================================================
-# PASO 6: CARGAR DATOS INICIALES DE CHILE (OPCIONAL)
+# PASO 6: CARGAR UBICACIONES DEL CATÁLOGO
 # ============================================================================
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-echo "📊 PASO 6: Cargando datos iniciales de Chile"
+echo "📍 PASO 6: Cargando ubicaciones del catálogo"
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+
+if python manage.py load_locations --force --settings=config.settings_production 2>&1; then
+    echo "✅ Ubicaciones cargadas correctamente"
+else
+    echo "⚠️  Advertencia: Hubo un problema al cargar ubicaciones (no crítico)"
+fi
+
+echo ""
+
+# ============================================================================
+# PASO 7: CARGAR DATOS INICIALES DE CHILE (OPCIONAL)
+# ============================================================================
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo "📊 PASO 7: Cargando datos iniciales de Chile"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
 if python manage.py load_initial_times --settings=config.settings_production 2>&1 | grep -q "exitosamente\|successfully\|completed"; then
@@ -214,6 +229,7 @@ echo "📊 Resumen:"
 echo "   ✅ PostgreSQL: Conectado"
 echo "   ✅ Superusuario: Creado y verificado"
 echo "   ✅ Conductores: 82 conductores cargados"
+echo "   ✅ Ubicaciones: 6 ubicaciones cargadas (CDs + CCTI + CLEP)"
 echo "   ✅ Datos: Cargados"
 echo ""
 echo "🔗 Acceso al sistema:"
