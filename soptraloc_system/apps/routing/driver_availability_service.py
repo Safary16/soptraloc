@@ -48,12 +48,12 @@ class DriverAvailabilityService:
         
         driver = Driver.objects.get(id=driver_id)
         
-        # Buscar asignaciones activas
+        # Buscar asignaciones activas (EN_CURSO)
         active_assignments = Assignment.objects.filter(
-            conductor=driver,
-            tiempo_inicio_ruta__isnull=False,
-            tiempo_llegada_real__isnull=True  # No ha llegado aún
-        ).order_by('-tiempo_inicio_ruta')
+            driver=driver,
+            estado='EN_CURSO',
+            fecha_completada__isnull=True  # No ha completado aún
+        ).order_by('-fecha_inicio')
         
         if not active_assignments.exists():
             return {
@@ -68,7 +68,12 @@ class DriverAvailabilityService:
         
         # Conductor tiene ruta activa
         current_assignment = active_assignments.first()
-        eta = current_assignment.tiempo_llegada_estimado
+        
+        # Calcular ETA: fecha_inicio + tiempo_estimado
+        if current_assignment.fecha_inicio and current_assignment.tiempo_estimado:
+            eta = current_assignment.fecha_inicio + timedelta(minutes=current_assignment.tiempo_estimado)
+        else:
+            eta = None
         
         if not eta:
             # No hay ETA calculado, asumir en ruta
@@ -206,22 +211,27 @@ class DriverAvailabilityService:
         
         # Asignaciones del día
         assignments = Assignment.objects.filter(
-            conductor=driver,
+            driver=driver,
             fecha_asignacion__range=(day_start, day_end)
         ).order_by('fecha_asignacion')
         
         schedule = []
         
         for assignment in assignments:
+            # Calcular ETA si tiene fecha_inicio y tiempo_estimado
+            estimated_arrival = None
+            if assignment.fecha_inicio and assignment.tiempo_estimado:
+                estimated_arrival = assignment.fecha_inicio + timedelta(minutes=assignment.tiempo_estimado)
+            
             schedule_item = {
                 'assignment': assignment,
                 'assignment_id': assignment.id,
-                'start_time': assignment.tiempo_inicio_ruta,
-                'estimated_arrival': assignment.tiempo_llegada_estimado,
-                'actual_arrival': assignment.tiempo_llegada_real,
-                'duration_minutes': assignment.ruta_minutos_estimado,
-                'status': 'completed' if assignment.tiempo_llegada_real else (
-                    'in_progress' if assignment.tiempo_inicio_ruta else 'pending'
+                'start_time': assignment.fecha_inicio,
+                'estimated_arrival': estimated_arrival,
+                'actual_arrival': assignment.fecha_completada,
+                'duration_minutes': assignment.tiempo_estimado,
+                'status': 'completed' if assignment.fecha_completada else (
+                    'in_progress' if assignment.fecha_inicio else 'pending'
                 )
             }
             schedule.append(schedule_item)
@@ -281,26 +291,36 @@ class DriverAvailabilityService:
         """
         driver = Driver.objects.get(id=driver_id)
         
-        # Buscar asignaciones que se traslapen
+        # Buscar asignaciones que se traslapen (EN_CURSO o PENDIENTE)
         conflicting = Assignment.objects.filter(
-            conductor=driver,
-            tiempo_inicio_ruta__isnull=False,
-            tiempo_llegada_real__isnull=True
-        ).filter(
-            Q(tiempo_inicio_ruta__range=(start_time, estimated_end_time)) |
-            Q(tiempo_llegada_estimado__range=(start_time, estimated_end_time)) |
-            Q(tiempo_inicio_ruta__lte=start_time, tiempo_llegada_estimado__gte=estimated_end_time)
+            driver=driver,
+            estado__in=['EN_CURSO', 'PENDIENTE'],
+            fecha_inicio__isnull=False
         )
         
         conflicts = []
         for assignment in conflicting:
-            conflicts.append({
-                'assignment': assignment,
-                'assignment_id': assignment.id,
-                'start': assignment.tiempo_inicio_ruta,
-                'estimated_end': assignment.tiempo_llegada_estimado,
-                'overlap': True
-            })
+            # Calcular fin estimado
+            if assignment.fecha_inicio and assignment.tiempo_estimado:
+                estimated_end = assignment.fecha_inicio + timedelta(minutes=assignment.tiempo_estimado)
+            else:
+                continue  # Skip si no tiene datos para calcular overlap
+            
+            # Verificar traslape
+            has_overlap = (
+                (assignment.fecha_inicio <= start_time < estimated_end) or
+                (assignment.fecha_inicio < estimated_end_time <= estimated_end) or
+                (start_time <= assignment.fecha_inicio and estimated_end_time >= estimated_end)
+            )
+            
+            if has_overlap:
+                conflicts.append({
+                    'assignment': assignment,
+                    'assignment_id': assignment.id,
+                    'start': assignment.fecha_inicio,
+                    'estimated_end': estimated_end,
+                    'overlap': True
+                })
         
         if conflicts:
             logger.warning(f"⚠️  {len(conflicts)} conflictos de horario encontrados para conductor {driver.nombre}")

@@ -1,6 +1,6 @@
 """
 Servicio para gestionar inicio de rutas y cálculo de tiempos en tiempo real.
-Integra Google Maps API para obtener datos de tráfico actualizados.
+Integra Mapbox API para obtener datos de tráfico actualizados.
 """
 from datetime import datetime
 from typing import Dict, Optional, Tuple
@@ -9,7 +9,7 @@ from django.db import transaction
 import logging
 
 from apps.drivers.models import Assignment, Driver, TrafficAlert
-from apps.routing.google_maps_service import gmaps_service
+from apps.routing.mapbox_service import mapbox_service
 
 logger = logging.getLogger(__name__)
 
@@ -76,7 +76,7 @@ class RouteStartService:
                 origin_query = origin_name if origin_loc else (origin_lat, origin_lng)
                 dest_query = destination_name if dest_loc else (dest_lat, dest_lng)
                 
-                eta, traffic_data = gmaps_service.get_eta(
+                eta, traffic_data = mapbox_service.get_eta(
                     origin=origin_query,
                     destination=dest_query,
                     departure_time=departure_time
@@ -96,13 +96,13 @@ class RouteStartService:
                 logger.info(f"   ETA: {eta.strftime('%H:%M:%S')}")
                 
                 # 4. Actualizar la asignación
-                assignment.tiempo_inicio_ruta = departure_time
-                assignment.tiempo_llegada_estimado = eta
-                assignment.ruta_minutos_estimado = traffic_data['duration_in_traffic_minutes']
+                assignment.fecha_inicio = departure_time
+                assignment.tiempo_estimado = traffic_data['duration_in_traffic_minutes']
+                assignment.estado = 'EN_CURSO'
                 assignment.save(update_fields=[
-                    'tiempo_inicio_ruta', 
-                    'tiempo_llegada_estimado', 
-                    'ruta_minutos_estimado'
+                    'fecha_inicio', 
+                    'tiempo_estimado',
+                    'estado'
                 ])
                 
                 # 5. Generar alertas según condiciones de tráfico

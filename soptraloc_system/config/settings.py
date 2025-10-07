@@ -237,7 +237,7 @@ logs_dir = BASE_DIR / 'logs'
 if not os.path.exists(logs_dir):
     os.makedirs(logs_dir)
 
-# Google Maps API (for real-time traffic information)
-# Available with GitHub Student Pack - $200 credit
-# Distance Matrix API cost: ~$0.005 per element
-GOOGLE_MAPS_API_KEY = config('GOOGLE_MAPS_API_KEY', default=None)
+# Mapbox API (for real-time traffic information and routing)
+# Available with GitHub Student Pack - $75 credit + 50,000 requests/month free
+# Directions API cost: $0.50 per 1,000 requests after free tier
+MAPBOX_API_KEY = config('MAPBOX_API_KEY', default=None)

@@ -1,8 +1,8 @@
-# 🚦 Sistema de Estimación de Tiempos en Tiempo Real con Google Maps
+# 🚦 Sistema de Estimación de Tiempos en Tiempo Real con Mapbox
 
 ## 📋 Resumen
 
-Sistema que obtiene información de tráfico en tiempo real usando Google Maps Distance Matrix API para calcular ETAs (Estimated Time of Arrival) precisas y generar alertas automáticas cuando un conductor inicia una ruta.
+Sistema que obtiene información de tráfico en tiempo real usando Mapbox Directions API para calcular ETAs (Estimated Time of Arrival) precisas y generar alertas automáticas cuando un conductor inicia una ruta.
 
 **Características principales:**
 - ✅ Tráfico en tiempo real considerando condiciones actuales
@@ -10,7 +10,8 @@ Sistema que obtiene información de tráfico en tiempo real usando Google Maps D
 - ✅ Sugerencias de rutas alternativas
 - ✅ Alertas automáticas para conductores
 - ✅ Sin necesidad de GPS en los vehículos
-- ✅ Usa API gratuita de GitHub Student Pack ($200 crédito)
+- ✅ **Mapbox:** 10x más barato que Google Maps ($0.50 vs $5.00 por 1,000 requests)
+- ✅ **50,000 requests gratis/mes permanente** + $75 GitHub Student Pack
 
 ---
 
@@ -30,22 +31,20 @@ Sistema que obtiene información de tráfico en tiempo real usando Google Maps D
 - ✅ Sugerencias de rutas alternativas más rápidas
 
 ---
-
 ## 🏗️ Arquitectura del Sistema
 
-### 1. **Google Maps Service** (`apps/routing/google_maps_service.py`)
+### 1. **Mapbox Service** (`apps/routing/mapbox_service.py`)
 
-Servicio que se comunica con Google Maps Distance Matrix API.
+Servicio que se comunica con Mapbox Directions API.
 
 **Métodos principales:**
 ```python
 # Obtener tiempo de viaje con tráfico
-gmaps_service.get_travel_time_with_traffic(
-    origin_lat=-33.5089,
-    origin_lng=-70.7593,
-    dest_lat=-33.6297,
-    dest_lng=-70.7045,
+mapbox_service.get_travel_time_with_traffic(
+    origin='CCTI',  # O coordenadas: (-33.5089, -70.7593)
+    destination='CD_PENON',  # O coordenadas: (-33.6297, -70.7045)
     departure_time=None  # None = ahora
+)   departure_time=None  # None = ahora
 )
 
 # Retorna:
@@ -60,14 +59,12 @@ gmaps_service.get_travel_time_with_traffic(
 }
 
 # Calcular ETA directamente
-eta, traffic_data = gmaps_service.get_eta(
-    origin_lat=-33.5089,
-    origin_lng=-70.7593,
-    dest_lat=-33.6297,
-    dest_lng=-70.7045
+# Calcular ETA directamente
+eta, traffic_data = mapbox_service.get_eta(
+    origin='CCTI',
+    destination='CD_PENON'
 )
 # eta = datetime con hora estimada de llegada
-```
 
 **Caché inteligente:**
 - Los datos se cachean por 5 minutos
@@ -243,30 +240,45 @@ GET /api/v1/routing/route-tracking/traffic-summary/
 ## 🔧 Configuración
 
 ### 1. **Obtener API Key de Google Maps**
+## 🔧 Configuración
 
-Con GitHub Student Pack tienes $200 de crédito en Google Cloud:
+### 1. **Obtener Token de Mapbox**
 
-1. Ve a https://console.cloud.google.com/
-2. Crea un proyecto nuevo
-3. Habilita las APIs:
-   - Distance Matrix API
-   - Directions API
-4. Crea una API Key
-5. Restringe la key (opcional pero recomendado):
-   - Restricción de API: Solo Distance Matrix y Directions
-   - Restricción de HTTP: Tu dominio
+**📚 Ver guía completa: `CONFIGURAR_MAPBOX_PASO_A_PASO.md`**
+
+Resumen rápido con GitHub Student Pack:
+
+1. Activa GitHub Student Pack: https://education.github.com/pack
+2. Ve a https://account.mapbox.com/auth/signup/ 
+3. Crea cuenta con email .edu (aplica $75 de crédito automáticamente)
+4. Ve a https://account.mapbox.com/access-tokens/
+5. Crea un token con estos scopes:
+   - ✅ `styles:read`
+   - ✅ `fonts:read`  
+   - ✅ `datasets:read`
+   - ✅ `vision:read`
+   - ✅ `directions:read` (IMPORTANTE)
 
 **Costos:**
-- Distance Matrix API: $0.005 por elemento
-- Con $200 de crédito = 40,000 consultas gratis
-- Para este sistema: ~5 consultas/ruta iniciada
-- Capacidad: ~8,000 rutas con el crédito gratuito
+- **50,000 requests gratis/mes permanente** 🎉
+- **$75 crédito** = 150,000 requests adicionales
+- Después: $0.50 por 1,000 requests (10x más barato que Google)
+- Para este sistema: ~1 consulta/ruta iniciada
+- Capacidad inicial: **200,000 rutas gratis**
+
+**Comparación vs Google Maps:**
+| Característica | Google Maps | Mapbox |
+|---------------|-------------|--------|
+| Precio/1000 req | $5.00 | **$0.50** |
+| Gratis/mes | 0 | **50,000** |
+| Crédito Student | $200 | $75 |
+| **Total gratis** | 40,000 | **200,000** |
 
 ### 2. **Configurar Variable de Entorno**
 
 ```bash
 # .env
-GOOGLE_MAPS_API_KEY=AIzaSyC... (tu key aquí)
+MAPBOX_API_KEY=pk.eyJ1... (tu token aquí)
 ```
 
 ### 3. **Aplicar Migraciones**
@@ -279,11 +291,8 @@ python manage.py migrate drivers
 ### 4. **Configurar en Render**
 
 En el dashboard de Render, agregar variable de entorno:
-- Key: `GOOGLE_MAPS_API_KEY`
-- Value: Tu API key de Google Maps
-
----
-
+- Key: `MAPBOX_API_KEY`
+- Value: Tu token de Mapbox (empieza con `pk.`)
 ## 💻 Uso del Sistema
 
 ### Escenario 1: Conductor Inicia Ruta desde CCTI a CD El Peñón
@@ -310,12 +319,12 @@ POST /api/v1/routing/route-tracking/start-route/
     }
 }
 
-# Google Maps consulta tráfico actual y responde:
+# Mapbox consulta tráfico actual y responde:
 # - Distancia: 15.2 km
 # - Tiempo sin tráfico: 25 minutos
 # - Tiempo con tráfico: 35 minutos (tráfico alto)
 # - ETA: 15:50
-# - Advertencia: "Tráfico denso en Ruta 5 Sur"
+# - Rutas alternativas disponibles
 
 # Sistema genera automáticamente:
 ✅ Alerta de tráfico alto
@@ -327,7 +336,7 @@ POST /api/v1/routing/route-tracking/start-route/
 ### Escenario 2: Accidente Detectado en la Ruta
 
 ```python
-# Google Maps detecta accidente y lo reporta
+# Mapbox detecta accidente y lo reporta
 # Sistema genera alerta automática:
 
 TrafficAlert {
@@ -392,7 +401,7 @@ En `/admin/drivers/trafficalert/` puedes ver todas las alertas:
 **Acciones disponibles:**
 - Marcar como reconocida por conductor
 - Desactivar alertas
-- Ver detalles completos de Google Maps API
+- Ver detalles completos de Mapbox API
 
 ---
 
@@ -410,11 +419,13 @@ En `/admin/drivers/trafficalert/` puedes ver todas las alertas:
 - ✅ **Alertas:** Informa problemas específicos
 - ✅ **Optimización:** Sugiere rutas alternativas
 
-### GitHub Student Pack:
-- ✅ **Gratis:** $200 de crédito = ~8,000 rutas
-- ✅ **Confiable:** API de Google Maps (99.9% uptime)
+### GitHub Student Pack + Mapbox:
+- ✅ **Gratis:** 50,000 requests/mes permanente + $75 crédito
+- ✅ **Económico:** 10x más barato que Google Maps
+- ✅ **Confiable:** API de Mapbox (99.9% uptime)
 - ✅ **Actualizado:** Datos de tráfico en tiempo real
 - ✅ **Global:** Funciona en cualquier país
+- ✅ **Escalable:** 200,000 rutas gratis inicialmente
 
 ---
 
@@ -425,7 +436,8 @@ El sistema almacena:
 - ✅ Nivel de tráfico por horario
 - ✅ Rutas más problemáticas
 - ✅ Efectividad de rutas alternativas
-- ✅ Tiempos de respuesta de Google Maps API
+- ✅ Tiempos de respuesta de Mapbox API
+- ✅ Uso mensual de requests para monitoreo
 
 **Reportes disponibles:**
 - Rutas con mayor tráfico
@@ -437,34 +449,39 @@ El sistema almacena:
 
 ## 🔐 Seguridad y Mejores Prácticas
 
-### API Key Protection:
+### API Token Protection:
 ```python
 # ✅ Bueno - Variable de entorno
-GOOGLE_MAPS_API_KEY = config('GOOGLE_MAPS_API_KEY', default=None)
+MAPBOX_API_KEY = config('MAPBOX_API_KEY', default=None)
 
 # ❌ Malo - Hardcoded
-GOOGLE_MAPS_API_KEY = "AIzaSyC..."
+MAPBOX_API_KEY = "pk.eyJ1..."
 ```
 
 ### Restricciones Recomendadas:
-1. **API Restrictions:**
-   - Solo Distance Matrix API
-   - Solo Directions API
+1. **Token Scopes (al crear token):**
+   - ✅ `directions:read` (REQUERIDO)
+   - ✅ `styles:read`
+   - ✅ `fonts:read`
+   - ❌ `styles:write` (no necesario)
+   - ❌ `tokens:write` (no necesario)
 
-2. **Application Restrictions:**
-   - HTTP referrers: `https://tu-dominio.com/*`
-   - IP addresses: IP de tu servidor
+2. **URL Restrictions (opcional):**
+   - Restringir token a tu dominio: `https://tu-dominio.com/*`
+   - Evita uso no autorizado
 
 3. **Quota Management:**
-   - Límite diario: 1,000 consultas/día (ajustable)
-   - Alertas de uso
+   - Monitorear en: https://account.mapbox.com/statistics/
+   - Configurar alertas al llegar a 80% del límite
+   - Revisar uso mensualmente
 
 ---
 
 ## 🚀 Roadmap Futuro
 
 ### Fase 1: ✅ Completado
-- [x] Integración con Google Maps API
+- [x] Integración con Mapbox Directions API
+- [x] Migración desde Google Maps (10x más económico)
 - [x] Modelo de alertas de tráfico
 - [x] API para inicio de ruta
 - [x] Admin de Django
