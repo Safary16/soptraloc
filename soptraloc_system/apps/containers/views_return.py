@@ -8,6 +8,10 @@ from django.shortcuts import get_object_or_404
 from django.utils import timezone
 
 from apps.containers.models import Container, ContainerMovement
+from apps.containers.services.demurrage import (
+    create_demurrage_alert_if_needed,
+    resolve_demurrage_alerts,
+)
 from apps.core.models import MovementCode
 from apps.drivers.models import Driver, Assignment, Location
 from apps.drivers.views import _has_schedule_conflict, _estimate_assignment_duration_minutes
@@ -112,6 +116,8 @@ def mark_ready_for_return(request):
                 notes=f'Marcado como disponible para devolución (de {old_status})',
                 created_by=request.user
             )
+
+            create_demurrage_alert_if_needed(container, resolved_by=request.user)
             
             logger.info(
                 "Contenedor %s marcado como disponible para devolución por usuario %s",
@@ -216,6 +222,8 @@ def assign_return_driver(request):
                 notes=f'Asignado a {driver.nombre} para devolución a {return_location}',
                 created_by=request.user
             )
+
+            create_demurrage_alert_if_needed(container, resolved_by=request.user)
             
             logger.info(
                 "Conductor %s asignado para devolver contenedor %s a %s",
@@ -292,6 +300,8 @@ def start_return_route(request):
                 notes='Inicio de ruta de devolución',
                 created_by=request.user
             )
+
+            create_demurrage_alert_if_needed(container, resolved_by=request.user)
             
             logger.info(
                 "Contenedor %s inició ruta de devolución con conductor %s",
@@ -411,6 +421,8 @@ def finalize_container(request):
                 notes=f'Contenedor devuelto y finalizado. EIR: {has_eir}',
                 created_by=request.user
             )
+
+            resolve_demurrage_alerts(container, resolved_by=request.user)
             
             logger.info(
                 "Contenedor %s finalizado. Ciclo completo. EIR: %s",

@@ -27,12 +27,17 @@ from .serializers import (
     ContainerSummarySerializer,
 )
 from apps.drivers.models import Driver, Assignment
+from apps.containers.services.demurrage import (
+    create_demurrage_alert_if_needed,
+    resolve_demurrage_alerts,
+)
 from apps.containers.services.excel_importers import (
     apply_programming,
     apply_release_schedule,
     export_liberated_containers,
     import_vessel_manifest,
 )
+from apps.containers.services.empty_inventory import get_empty_inventory_by_cd
 import json
 
 
@@ -182,6 +187,12 @@ class ContainerViewSet(viewsets.ModelViewSet):
         on_floor = self.queryset.filter(position_status='floor')
         serializer = self.get_serializer(on_floor, many=True)
         return Response(serializer.data)
+
+    @action(detail=False, methods=['get'], url_path='empty-inventory')
+    def empty_inventory(self, request):
+        """Resumen de contenedores vacíos disponibles por CD."""
+        inventory = [row.as_dict() for row in get_empty_inventory_by_cd()]
+        return Response({'items': inventory})
 
     @action(detail=True, methods=['get'])
     def movements(self, request, pk=None):
@@ -728,12 +739,28 @@ def update_status(request):
                     if assignment:
                         if assignment.estado != 'EN_CURSO':
                             assignment.estado = 'EN_CURSO'
+
                         if assignment.fecha_inicio:
                             elapsed = now - assignment.fecha_inicio
-                            assignment.ruta_minutos_real = int(elapsed.total_seconds() / 60)
-                            assignment.save(update_fields=['estado', 'ruta_minutos_real'])
+                            route_minutes = max(int(elapsed.total_seconds() / 60), 0)
                         else:
-                            assignment.save(update_fields=['estado'])
+                            route_minutes = container.duracion_ruta or 0
+
+                        assignment.record_actual_times(
+                            total_minutes=route_minutes,
+                            route_minutes=route_minutes,
+                        )
+
+                    if container.conductor_asignado:
+                        driver = container.conductor_asignado
+                        driver.contenedor_asignado = None
+                        if driver.estado != 'OPERATIVO':
+                            driver.estado = 'OPERATIVO'
+                        driver.save(update_fields=['contenedor_asignado', 'estado', 'updated_at'])
+                        container.conductor_asignado = None
+                        container.save(update_fields=['conductor_asignado'])
+
+                    create_demurrage_alert_if_needed(container, resolved_by=request.user)
                     
                     return JsonResponse({
                         'success': True,
@@ -847,18 +874,31 @@ def update_container_status_view(request, container_id):
             
             container.save()
 
-            if new_status == 'ARRIBADO':
+            if new_status in ['ARRIBADO', 'DESCARGADO_CD']:
                 assignment = Assignment.objects.filter(
                     container=container,
                     driver=container.conductor_asignado,
                     estado__in=['PENDIENTE', 'EN_CURSO']
                 ).first()
+
                 if assignment and assignment.fecha_inicio:
                     route_minutes = container.duracion_ruta or int((now - assignment.fecha_inicio).total_seconds() / 60)
-                    assignment.ruta_minutos_real = max(route_minutes, 0)
-                    if assignment.estado != 'EN_CURSO':
-                        assignment.estado = 'EN_CURSO'
-                    assignment.save(update_fields=['ruta_minutos_real', 'estado'])
+                    assignment.record_actual_times(
+                        total_minutes=route_minutes,
+                        route_minutes=route_minutes,
+                    )
+                elif assignment:
+                    # Completar asignación aun sin fechas para evitar duplicados
+                    assignment.record_actual_times(total_minutes=container.duracion_ruta or 0)
+
+                if container.conductor_asignado:
+                    driver = container.conductor_asignado
+                    driver.contenedor_asignado = None
+                    if driver.estado != 'OPERATIVO':
+                        driver.estado = 'OPERATIVO'
+                    driver.save(update_fields=['contenedor_asignado', 'estado', 'updated_at'])
+                    container.conductor_asignado = None
+                    container.save(update_fields=['conductor_asignado'])
 
             if new_status == 'FINALIZADO':
                 assignment = Assignment.objects.filter(
@@ -870,7 +910,7 @@ def update_container_status_view(request, container_id):
                 unloading_minutes = container.duracion_descarga if container.duracion_descarga is not None else None
                 route_recorded = container.duracion_ruta
 
-                if assignment:
+                if assignment and assignment.estado != 'COMPLETADA':
                     if assignment.fecha_inicio:
                         total_minutes = int((now - assignment.fecha_inicio).total_seconds() / 60)
                     else:
@@ -903,6 +943,11 @@ def update_container_status_view(request, container_id):
                 notes=f'Estado cambiado de {old_status} a {new_status}',
                 created_by=request.user
             )
+
+            if new_status in {'ARRIBADO', 'DESCARGADO_CD', 'DISPONIBLE_DEVOLUCION', 'EN_RUTA_DEVOLUCION'}:
+                create_demurrage_alert_if_needed(container, resolved_by=request.user)
+            elif new_status == 'FINALIZADO':
+                resolve_demurrage_alerts(container, resolved_by=request.user)
             
             return JsonResponse({
                 'success': True,

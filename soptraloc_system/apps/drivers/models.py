@@ -1,16 +1,28 @@
+from typing import Optional
+
 from django.db import models
 from django.contrib.auth.models import User
 from datetime import timedelta
 from django.utils import timezone
+import uuid
+
+
+def generate_location_id() -> str:
+    """Genera un identificador UUID sin guiones para las ubicaciones."""
+    return uuid.uuid4().hex
 
 
 class Location(models.Model):
     """Modelo para gestionar ubicaciones del sistema - TMS Central Location Model"""
-    import uuid
-    
-    id = models.CharField(max_length=32, primary_key=True, default='')  # UUID sin guiones desde core_location
+
+    id = models.CharField(
+        max_length=32,
+        primary_key=True,
+        default=generate_location_id,
+        editable=False,
+    )  # UUID sin guiones desde core_location
     name = models.CharField(max_length=200, unique=True, verbose_name="Nombre")
-    code = models.CharField(max_length=20, unique=True, verbose_name="Código")
+    code = models.CharField(max_length=20, unique=True, blank=False, verbose_name="Código")
     address = models.TextField(blank=True, verbose_name="Dirección")
     latitude = models.DecimalField(max_digits=10, decimal_places=8, null=True, blank=True, verbose_name="Latitud")
     longitude = models.DecimalField(max_digits=11, decimal_places=8, null=True, blank=True, verbose_name="Longitud")
@@ -31,6 +43,31 @@ class Location(models.Model):
     
     def __str__(self):
         return f"{self.name} ({self.code})"
+
+    @staticmethod
+    def _build_code_seed(name: Optional[str]) -> str:
+        if not name:
+            return "LOC"
+        cleaned = "".join(ch for ch in name.upper() if ch.isalnum())
+        return cleaned[:12] or "LOC"
+
+    def ensure_code(self) -> None:
+        if self.code:
+            return
+
+        base = self._build_code_seed(self.name)
+        candidate = base
+        suffix = 1
+
+        while Location.objects.filter(code=candidate).exclude(pk=self.pk).exists():
+            suffix += 1
+            candidate = f"{base[:10]}{suffix:02d}"
+
+        self.code = candidate
+
+    def save(self, *args, **kwargs):
+        self.ensure_code()
+        super().save(*args, **kwargs)
 
 
 class TimeMatrix(models.Model):
@@ -195,7 +232,16 @@ class Driver(models.Model):
         ordering = ['nombre']
     
     def __str__(self):
-        return f"{self.nombre} ({self.ppu}) - {self.get_tipo_conductor_display()}"
+        return f"{self.display_name} ({self.ppu}) - {self.get_tipo_conductor_display()}"
+
+    @property
+    def display_name(self) -> str:
+        """Nombre legible para UI y reportes."""
+        user = getattr(self, "user", None)
+        if user:
+            full_name = user.get_full_name()
+            return full_name or user.username
+        return self.nombre
     
     @property
     def esta_disponible(self):

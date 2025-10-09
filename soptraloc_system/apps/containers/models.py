@@ -272,7 +272,7 @@ class Container(BaseModel):
         'damaged': ['maintenance', 'out_of_service'],
         'out_of_service': ['maintenance'],
         # Flujo de importación
-        'POR_ARRIBAR': ['EN_SECUENCIA', 'DESCARGADO'],
+    'POR_ARRIBAR': ['EN_SECUENCIA', 'DESCARGADO', 'LIBERADO', 'PROGRAMADO'],
         'EN_SECUENCIA': ['DESCARGADO'],
         'DESCARGADO': ['LIBERADO', 'TRG'],
         'TRG': ['LIBERADO', 'SECUENCIADO'],
@@ -288,21 +288,26 @@ class Container(BaseModel):
         'FINALIZADO': [],  # Estado terminal
     }
     
-    def can_transition_to(self, new_status):
+    def can_transition_to(self, current_status, new_status):
         """Verifica si la transición de estado es válida."""
-        if not self.status:  # Si es nuevo, cualquier estado inicial es válido
+        if not current_status:  # Si es nuevo, cualquier estado inicial es válido
+            return True
+
+        if current_status == new_status:
             return True
         
-        allowed = self.ALLOWED_TRANSITIONS.get(self.status, [])
+        allowed = self.ALLOWED_TRANSITIONS.get(current_status, [])
         return new_status in allowed
     
-    def validate_status_transition(self, new_status):
+    def validate_status_transition(self, new_status, *, from_status=None):
         """Valida y retorna error si la transición no es permitida."""
-        if not self.can_transition_to(new_status):
+        origin_status = from_status if from_status is not None else self.status
+
+        if not self.can_transition_to(origin_status, new_status):
             from django.core.exceptions import ValidationError
             raise ValidationError(
-                f"Transición no permitida: {self.status} → {new_status}. "
-                f"Estados permitidos desde {self.status}: {', '.join(self.ALLOWED_TRANSITIONS.get(self.status, []))}"
+                f"Transición no permitida: {origin_status or 'SIN_ESTADO'} → {new_status}. "
+                f"Estados permitidos desde {origin_status or 'SIN_ESTADO'}: {', '.join(self.ALLOWED_TRANSITIONS.get(origin_status, []))}"
             )
     
     def save(self, *args, **kwargs):
@@ -312,7 +317,7 @@ class Container(BaseModel):
                 old_instance = Container.objects.get(pk=self.pk)
                 if old_instance.status != self.status:
                     # Validar transición
-                    self.validate_status_transition(self.status)
+                    self.validate_status_transition(self.status, from_status=old_instance.status)
             except Container.DoesNotExist:
                 pass  # Objeto nuevo, no validar
         

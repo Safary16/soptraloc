@@ -580,10 +580,7 @@ class Route(BaseModel):
     def __str__(self):
         driver_label = "Sin conductor"
         if self.driver:
-            if hasattr(self.driver, "user") and self.driver.user:
-                driver_label = self.driver.user.get_full_name() or self.driver.user.username
-            else:
-                driver_label = str(self.driver)
+            driver_label = getattr(self.driver, "display_name", None) or str(self.driver)
 
         return f"{self.name} - {driver_label} ({self.route_date})"
     

@@ -15,9 +15,10 @@ from django.db import transaction
 from django.utils import timezone
 
 from apps.containers.models import Agency, Container, ShippingLine, Vessel
+from apps.containers.services.demurrage import create_demurrage_alert_if_needed
 from apps.containers.services.status_utils import normalize_status
 from apps.core.models import Company
-from apps.drivers.models import Alert, Assignment, Driver, Location, TimeMatrix
+from apps.drivers.models import Assignment, Driver, Location, TimeMatrix
 
 logger = logging.getLogger(__name__)
 
@@ -96,9 +97,6 @@ PORT_LOCATION_MAP = {
         "driver_code": "ZEAL_VAP",
     },
 }
-
-DEMURRAGE_ALERT_THRESHOLD_DAYS = 2
-
 
 # ---------------------------------------------------------------------------
 # Structured responses
@@ -700,31 +698,6 @@ def _estimate_duration(origin: Optional[Location], destination: Optional[Locatio
         except TimeMatrix.DoesNotExist:
             return 120
     return 120
-
-
-def create_demurrage_alert_if_needed(container: Container) -> Optional[Alert]:
-    if not container.demurrage_date:
-        return None
-    today = timezone.localdate()
-    days_until = (container.demurrage_date - today).days
-    if days_until > DEMURRAGE_ALERT_THRESHOLD_DAYS:
-        return None
-
-    alert, created = Alert.objects.get_or_create(
-        tipo="DEMURRAGE_PROXIMO",
-        container=container,
-        defaults={
-            "prioridad": "ALTA" if days_until >= 0 else "CRITICA",
-            "titulo": f"Demurrage próximo para {container.container_number}",
-            "mensaje": f"El contenedor debe devolverse antes de {container.demurrage_date.strftime('%d/%m/%Y')}",
-        },
-    )
-    if not created:
-        alert.is_active = True
-        alert.prioridad = "ALTA" if days_until >= 0 else "CRITICA"
-        alert.mensaje = f"El contenedor debe devolverse antes de {container.demurrage_date.strftime('%d/%m/%Y')}"
-        alert.save(update_fields=["is_active", "prioridad", "mensaje", "updated_at"])
-    return alert
 
 
 def export_liberated_containers(reference_date: Optional[date] = None, include_future: bool = False) -> BytesIO:
