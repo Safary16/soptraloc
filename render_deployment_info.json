@@ -1,0 +1,16 @@
+{
+  "deployment_date": "2025-10-09T17:23:56Z",
+  "repository": "https://github.com/Safary16/soptraloc",
+  "branch": "main",
+  "secret_key": "FmNTEAe3_jfryE4BncosvG7fxzC6Tj6cgLkqLH-KLddQQfn0ZfDVEtUJdfgkzAwyvJg",
+  "mapbox_api_key": "pk.eyJ1Ijoic2FmYXJ5MTYiLCJhIjoiY200cTN6MGY5MGlqMDJpb2o5a3RvYTh2dSJ9.B0A7Nw0nDCXzjUBBN0i4aQ",
+  "services": {
+    "database": "soptraloc-db",
+    "redis": "soptraloc-redis",
+    "web": "soptraloc-web",
+    "celery_worker": "soptraloc-celery-worker",
+    "celery_beat": "soptraloc-celery-beat"
+  },
+  "regions": "oregon",
+  "plans": "starter (free tier)"
+}
