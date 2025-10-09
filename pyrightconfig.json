@@ -1,7 +1,6 @@
 {
   "include": [
-    "soptraloc_system",
-    "fix_client_data_standalone.py"
+    "soptraloc_system"
   ],
   "extraPaths": [
     "./soptraloc_system",

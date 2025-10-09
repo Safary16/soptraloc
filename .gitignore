@@ -1,89 +1,57 @@
+# ============================================
+# SOPTRALOC TMS - .gitignore
+# ============================================
+
 # Python
 __pycache__/
 *.py[cod]
 *$py.class
 *.so
 .Python
+*.egg
+*.egg-info/
+.eggs/
+.installed.cfg
 
-# Virtual Environment
+# Virtual Environments
 venv/
 env/
 ENV/
+.venv
+env.bak/
+venv.bak/
+
+# Django
+*.log
+db.sqlite3
+db.sqlite3-journal
+staticfiles/
+media/
+local_settings.py
+
+# Celery
+celerybeat-schedule
+celerybeat-schedule.db
+celerybeat.pid
+
+# Testing & Coverage
+.pytest_cache/
+.tox/
+.coverage
+htmlcov/
+.mypy_cache/
 
 # Development
 build/
 develop-eggs/
 dist/
 downloads/
-.coverage
-
-# Django
-*.log
-db.sqlite3
-staticfiles/
-
-# IDE
-.vscode/
-.idea/
-
-# OS
-.DS_Store
-Thumbs.db
-
-# Environment variables
-.env
-.env.local
-.env.production
-
-.pytest_cache/eggs/
-
-.mypy_cache/.eggs/
-
+sdist/
+wheels/
+parts/
+var/
 lib/
-
-# Djangolib64/
-
-*.logparts/
-
-local_settings.pysdist/
-
-db.sqlite3var/
-
-staticfiles/wheels/
-
-media/*.egg-info/
-
-.installed.cfg
-
-# Environment variables*.egg
-
-.env
-
-# Django
-
-# IDE & OS*.log
-
-.vscode/local_settings.py
-
-.idea/db.sqlite3
-
-.DS_Storedb.sqlite3-journal
-
-Thumbs.dbmedia/
-
-staticfiles/
-
-# Renderstatic/
-
-.render/
-# Environment variables
-.env
-.venv
-env/
-venv/
-ENV/
-env.bak/
-venv.bak/
+lib64/
 
 # IDE
 .vscode/
@@ -101,30 +69,26 @@ venv.bak/
 ehthumbs.db
 Thumbs.db
 
-# Testing
-.tox/
-.coverage
-.pytest_cache/
-htmlcov/
+# Environment Variables
+.env
+.env.local
+.env.production
 
-# Celery
-celerybeat-schedule
-celerybeat.pid
+# Logs
+logs/
+
+# Temporary Files
+*.tmp
+*.temp
 
 # Docker
 .docker/
 
-# Logs
-logs/
-*.log
-
-# Temporary files
-*.tmp
-*.temp
-
-# Node.js (if using frontend)
+# Node.js (if needed)
 node_modules/
 npm-debug.log*
 yarn-debug.log*
-yarn-error.log*__pycache__/
-.env.render
+yarn-error.log*
+
+# Render
+.render/
