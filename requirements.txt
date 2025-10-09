@@ -14,7 +14,7 @@ drf-yasg==1.21.11
 django-extensions==4.1
 django-stubs==5.1.0
 django-stubs-ext==5.1.0
-types-requests==2.32.0.20241022
+types-requests==2.32.0.20241016
 types-Pillow==10.4.0.20241016
 pandas-stubs==2.2.2.241009
 
