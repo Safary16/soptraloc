@@ -250,9 +250,14 @@ def resueltos_view(request):
         'finalizados': contenedores_resueltos.filter(status='FINALIZADO').count(),
     }
     
-    # Lista de conductores para el filtro
+    # Lista de conductores para el filtro (solo los que tienen asignaciones recientes)
     from apps.drivers.models import Driver
-    conductores = Driver.objects.filter(is_active=True).order_by('nombre')
+    from datetime import timedelta
+    thirty_days_ago = timezone.now() - timedelta(days=30)
+    conductores = Driver.objects.filter(
+        is_active=True,
+        assignments__created_at__gte=thirty_days_ago
+    ).distinct().order_by('nombre')[:50]  # Limitar a 50 conductores activos
     
     context = {
         'title': 'Contenedores Resueltos - SoptraLoc',
