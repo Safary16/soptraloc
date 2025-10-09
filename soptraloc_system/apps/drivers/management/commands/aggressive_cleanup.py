@@ -31,51 +31,68 @@ class Command(BaseCommand):
         )
 
     def calculate_completeness_score(self, driver):
-        """Calcula un puntaje de completitud para un conductor"""
+        """Calcula un puntaje de completitud para un conductor basado en campos reales"""
         score = 0
         
         # Campos básicos (1 punto cada uno)
         if driver.nombre and len(driver.nombre.strip()) > 3:
-            score += 1
+            score += 2
         if driver.rut and len(driver.rut.strip()) > 5:
-            score += 1
+            score += 2
         if driver.telefono and len(driver.telefono.strip()) > 5:
             score += 1
-        if driver.email and '@' in driver.email:
-            score += 1
-        if driver.direccion and len(driver.direccion.strip()) > 5:
-            score += 1
         
-        # Campos de licencia (2 puntos cada uno)
-        if driver.licencia_numero:
+        # Información del vehículo (2 puntos cada uno)
+        if driver.ppu and len(driver.ppu.strip()) > 3:
             score += 2
-        if driver.licencia_tipo:
-            score += 2
-        if driver.licencia_vencimiento:
+        if driver.tracto and len(driver.tracto.strip()) > 3:
             score += 2
         
-        # Estado activo (1 punto)
+        # Tipo y estado (1 punto)
+        if driver.tipo_conductor:
+            score += 1
+        if driver.estado == 'OPERATIVO':
+            score += 2  # Bonus por estar operativo
+        
+        # Estado activo (2 puntos)
         if driver.is_active:
+            score += 2
+        
+        # Coordinación y faena (1 punto cada uno)
+        if driver.coordinador and len(driver.coordinador.strip()) > 2:
+            score += 1
+        if driver.faena and len(driver.faena.strip()) > 2:
             score += 1
         
-        # Asignaciones (5 puntos por tener al menos una)
-        assignment_count = driver.assignments.count()
-        if assignment_count > 0:
-            score += 5
-        if assignment_count > 5:
-            score += 3  # Bonus por múltiples asignaciones
+        # Ubicación actual válida (1 punto)
+        if driver.ubicacion_actual and driver.ubicacion_actual != 'EN_RUTA':
+            score += 1
         
-        # Vehículo asignado (3 puntos)
-        if hasattr(driver, 'vehicle') and driver.vehicle:
+        # Contenedor asignado actualmente (3 puntos)
+        if driver.contenedor_asignado:
             score += 3
         
-        # Datos adicionales
-        if driver.comuna:
+        # Historial de contenedores asignados (5 puntos + bonus)
+        if hasattr(driver, 'contenedores_asignados'):
+            assignment_count = driver.contenedores_asignados.count()
+            if assignment_count > 0:
+                score += 5
+            if assignment_count > 5:
+                score += 3  # Bonus por múltiples asignaciones
+            if assignment_count > 10:
+                score += 2  # Extra bonus
+        
+        # Observaciones (indica seguimiento)
+        if driver.observaciones and len(driver.observaciones.strip()) > 10:
             score += 1
-        if driver.fecha_nacimiento:
-            score += 1
-        if driver.contacto_emergencia:
-            score += 1
+        
+        # Updated_at reciente (indica actividad)
+        if driver.updated_at:
+            from datetime import timedelta
+            from django.utils import timezone
+            thirty_days_ago = timezone.now() - timedelta(days=30)
+            if driver.updated_at >= thirty_days_ago:
+                score += 2
         
         return score
 
@@ -99,8 +116,8 @@ class Command(BaseCommand):
         # Calcular puntaje de completitud para todos los conductores
         self.stdout.write(f"\n🔍 Analizando completitud de {total_drivers} conductores...")
         
-        # Prefetch assignments para optimizar
-        all_drivers = Driver.objects.prefetch_related('assignments').all()
+        # Prefetch contenedores asignados para optimizar
+        all_drivers = Driver.objects.prefetch_related('contenedores_asignados').all()
         
         driver_scores = []
         for driver in all_drivers:
@@ -117,10 +134,13 @@ class Command(BaseCommand):
         self.stdout.write(self.style.SUCCESS(f'\n✅ Se mantendrán {len(to_keep)} conductores con mejor información:'))
         self.stdout.write('='*80)
         for i, (driver, score) in enumerate(to_keep[:10], 1):
-            assignment_count = driver.assignments.count()
+            # Contar asignaciones de contenedores
+            assignment_count = 0
+            if hasattr(driver, 'contenedores_asignados'):
+                assignment_count = driver.contenedores_asignados.count()
             self.stdout.write(
                 f"{i:2d}. {driver.nombre[:30]:30s} | Score: {score:2d} | "
-                f"RUT: {driver.rut or 'N/A':12s} | Asignaciones: {assignment_count}"
+                f"RUT: {driver.rut or 'N/A':12s} | Contenedores: {assignment_count}"
             )
         if len(to_keep) > 10:
             self.stdout.write(f"    ... y {len(to_keep) - 10} más\n")
@@ -128,10 +148,13 @@ class Command(BaseCommand):
         self.stdout.write(self.style.ERROR(f'\n🗑️  Se eliminarán {len(to_delete)} conductores:'))
         self.stdout.write('='*80)
         for i, (driver, score) in enumerate(to_delete[:10], 1):
-            assignment_count = driver.assignments.count()
+            # Contar asignaciones de contenedores
+            assignment_count = 0
+            if hasattr(driver, 'contenedores_asignados'):
+                assignment_count = driver.contenedores_asignados.count()
             self.stdout.write(
                 f"{i:2d}. {driver.nombre[:30]:30s} | Score: {score:2d} | "
-                f"RUT: {driver.rut or 'N/A':12s} | Asignaciones: {assignment_count}"
+                f"RUT: {driver.rut or 'N/A':12s} | Contenedores: {assignment_count}"
             )
         if len(to_delete) > 10:
             self.stdout.write(f"    ... y {len(to_delete) - 10} más\n")

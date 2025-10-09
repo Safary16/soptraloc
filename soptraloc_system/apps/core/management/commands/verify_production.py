@@ -6,8 +6,7 @@ Uso: python manage.py verify_production
 from django.core.management.base import BaseCommand
 from django.conf import settings
 from apps.routing.locations_catalog import LOCATIONS_CATALOG
-from apps.drivers.models import Driver
-from apps.core.models import Location
+from apps.drivers.models import Driver, Location
 
 
 class Command(BaseCommand):
@@ -67,7 +66,7 @@ class Command(BaseCommand):
         self.stdout.write('\n4️⃣  Verificando conductores...')
         total_drivers = Driver.objects.count()
         active_drivers = Driver.objects.filter(is_active=True).count()
-        drivers_with_assignments = Driver.objects.filter(assignments__isnull=False).distinct().count()
+        drivers_with_assignments = Driver.objects.filter(assignment__isnull=False).distinct().count()
         
         self.stdout.write(f'   👨‍💼 Total de conductores: {total_drivers}')
         self.stdout.write(f'   ✅ Conductores activos: {active_drivers}')
