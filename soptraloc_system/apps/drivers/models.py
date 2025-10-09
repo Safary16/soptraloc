@@ -1,24 +1,33 @@
 from django.db import models
 from django.contrib.auth.models import User
-from datetime import datetime, timedelta
+from datetime import timedelta
 from django.utils import timezone
 
 
 class Location(models.Model):
-    """Modelo para gestionar ubicaciones del sistema"""
+    """Modelo para gestionar ubicaciones del sistema - TMS Central Location Model"""
+    import uuid
     
-    name = models.CharField(max_length=100, unique=True)
-    code = models.CharField(max_length=20, unique=True)
-    address = models.CharField(max_length=200, blank=True)
-    latitude = models.DecimalField(max_digits=10, decimal_places=8, null=True, blank=True)
-    longitude = models.DecimalField(max_digits=11, decimal_places=8, null=True, blank=True)
-    is_active = models.BooleanField(default=True)
+    id = models.CharField(max_length=32, primary_key=True, default='')  # UUID sin guiones desde core_location
+    name = models.CharField(max_length=200, unique=True, verbose_name="Nombre")
+    code = models.CharField(max_length=20, unique=True, verbose_name="Código")
+    address = models.TextField(blank=True, verbose_name="Dirección")
+    latitude = models.DecimalField(max_digits=10, decimal_places=8, null=True, blank=True, verbose_name="Latitud")
+    longitude = models.DecimalField(max_digits=11, decimal_places=8, null=True, blank=True, verbose_name="Longitud")
+    city = models.CharField(max_length=100, blank=True, default='', verbose_name="Ciudad")
+    region = models.CharField(max_length=100, blank=True, default='', verbose_name="Región")
+    country = models.CharField(max_length=100, default='Chile', verbose_name="País")
+    is_active = models.BooleanField(default=True, verbose_name="Activo")
     
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     
     class Meta:
-        db_table = 'drivers_location'
+        # NOTA: Container FK apunta a 'core_location', usamos esa tabla
+        db_table = 'core_location'
+        verbose_name = 'Ubicación'
+        verbose_name_plural = 'Ubicaciones'
+        ordering = ['name']
     
     def __str__(self):
         return f"{self.name} ({self.code})"
@@ -258,6 +267,26 @@ class Assignment(models.Model):
     observaciones = models.TextField(blank=True)
     created_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True)
     
+    # 🆕 Información de tráfico (Mapbox)
+    traffic_level_at_assignment = models.CharField(
+        max_length=20,
+        choices=[
+            ('low', 'Tráfico Bajo'),
+            ('medium', 'Tráfico Medio'),
+            ('high', 'Tráfico Alto'),
+            ('very_high', 'Tráfico Muy Alto'),
+            ('unknown', 'Desconocido'),
+        ],
+        default='unknown',
+        help_text='Nivel de tráfico al momento de crear la asignación (desde Mapbox)'
+    )
+    
+    mapbox_data = models.JSONField(
+        null=True,
+        blank=True,
+        help_text='Datos completos de Mapbox API (rutas alternativas, warnings, etc.)'
+    )
+    
     class Meta:
         db_table = 'assignments'
         verbose_name = 'Asignación'
@@ -266,6 +295,16 @@ class Assignment(models.Model):
     
     def __str__(self):
         return f"{self.container.container_number} -> {self.driver.nombre} ({self.get_estado_display()})"
+    
+    def get_traffic_emoji(self):
+        """Retorna emoji según nivel de tráfico."""
+        return {
+            'low': '🟢',
+            'medium': '🟡',
+            'high': '🟠',
+            'very_high': '🔴',
+            'unknown': '⚪',
+        }.get(self.traffic_level_at_assignment, '⚪')
     
     def is_available_for_new_assignment(self, start_time, duration_minutes):
         """Verifica si el conductor está disponible para una nueva asignación"""
@@ -351,6 +390,9 @@ class Alert(models.Model):
     TIPO_ALERTA_CHOICES = [
         ('CONTENEDOR_SIN_ASIGNAR', 'Contenedor sin asignar'),
         ('DEMURRAGE_PROXIMO', 'Demurrage próximo'),
+        ('DEMURRAGE_VENCIDO', 'Demurrage vencido'),
+        ('ENTREGA_RETRASADA', 'Entrega retrasada'),
+        ('ASIGNACION_PENDIENTE', 'Asignación sin iniciar'),
         ('CONDUCTOR_INACTIVO', 'Conductor inactivo'),
         ('RETRASO_PROGRAMACION', 'Retraso en programación'),
     ]
@@ -390,7 +432,7 @@ class Alert(models.Model):
 class TrafficAlert(models.Model):
     """
     Alertas de tráfico generadas automáticamente al iniciar rutas.
-    Proviene de datos en tiempo real de Google Maps API.
+    Se alimentan de datos en tiempo real obtenidos desde Mapbox Directions API.
     """
     
     TRAFFIC_LEVEL_CHOICES = [
@@ -483,7 +525,7 @@ class TrafficAlert(models.Model):
     raw_data = models.JSONField(
         default=dict,
         blank=True,
-        help_text="Datos completos de Google Maps API"
+        help_text="Datos completos devueltos por Mapbox API"
     )
     
     # Estado

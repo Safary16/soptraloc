@@ -1,5 +1,7 @@
 # ✅ Resumen de Correcciones - Dashboard (5 Oct 2025)
 
+> ⚠️ **Documento archivado (Oct 8, 2025):** Este resumen aplica solo al estado previo a la migración Mapbox y se mantiene como material histórico. Para el comportamiento actual del dashboard revisa `ENTREGA_FINAL_OCT_07_2025.md` y la guía rápida vigente.
+
 ## 🎯 Problemas Reportados
 
 1. **"Los programados no muestran la fecha en el dashboard"**

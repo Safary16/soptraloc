@@ -7,7 +7,8 @@ from django.db import connection
 from django.conf import settings
 from apps.containers.models import Container
 from apps.drivers.models import Driver, Alert
-from apps.core.models import Company, Location
+from apps.core.models import Company
+from apps.drivers.models import Location
 import os
 
 
@@ -38,10 +39,22 @@ class Command(BaseCommand):
         # 2. Base de datos
         self.stdout.write('\n🗄️  BASE DE DATOS:')
         try:
+            engine = connection.settings_dict.get('ENGINE', '')
             with connection.cursor() as cursor:
-                cursor.execute('SELECT version()')
-                version = cursor.fetchone()[0]
-                self.stdout.write(self.style.SUCCESS(f'  ✅ Conectado: {version.split(",")[0]}'))
+                if 'postgresql' in engine or 'postgis' in engine:
+                    cursor.execute("SHOW server_version")
+                    version = cursor.fetchone()[0]
+                    label = f'PostgreSQL {version}'
+                elif 'sqlite' in engine:
+                    cursor.execute('SELECT sqlite_version()')
+                    version = cursor.fetchone()[0]
+                    label = f'SQLite {version}'
+                else:
+                    cursor.execute('SELECT version()')
+                    version = cursor.fetchone()[0]
+                    label = version.split(',')[0]
+
+                self.stdout.write(self.style.SUCCESS(f'  ✅ Conectado: {label}'))
         except Exception as e:
             self.stdout.write(self.style.ERROR(f'  ❌ Error: {e}'))
         

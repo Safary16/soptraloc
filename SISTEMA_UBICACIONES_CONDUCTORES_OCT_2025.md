@@ -11,7 +11,7 @@
 Se ha implementado un **sistema completo de gestión de ubicaciones** y **seguimiento de disponibilidad de conductores** que permite:
 
 1. ✅ **Catálogo de ubicaciones fijas** con direcciones completas de todos los CDs
-2. ✅ **Consultas a Google Maps usando direcciones** en lugar de solo coordenadas
+2. ✅ **Consultas a Mapbox Directions usando direcciones** en lugar de solo coordenadas
 3. ✅ **Tracking de disponibilidad de conductores** en tiempo real
 4. ✅ **Prevención de asignaciones duplicadas**
 5. ✅ **Horarios y programación** de conductores por día
@@ -235,7 +235,7 @@ POST /api/v1/routing/route-tracking/start-route/
 
 El sistema **automáticamente**:
 1. Reconoce "CCTI" y "CD_PENON" como códigos del catálogo
-2. Usa las direcciones completas para consultar Google Maps
+2. Usa las direcciones completas para consultar Mapbox Directions
 3. Calcula ETA considerando tráfico real
 4. Actualiza el estado del conductor a "ocupado"
 5. Genera alertas si hay tráfico o problemas
@@ -249,7 +249,7 @@ El sistema **automáticamente**:
 ```python
 from apps.routing.locations_catalog import get_location, format_route_name
 from apps.routing.driver_availability_service import driver_availability
-from apps.routing.google_maps_service import gmaps_service
+from apps.routing.mapbox_service import mapbox_service
 ```
 
 ### Obtener Información de Ubicación
@@ -258,7 +258,7 @@ from apps.routing.google_maps_service import gmaps_service
 # Por código
 location = get_location('CD_PENON')
 print(location.full_name)  # "Centro de Distribución El Peñón"
-print(location.get_google_maps_query())  # Dirección completa
+print(location.get_mapbox_query())  # Dirección completa
 
 # Por alias
 location = get_location('QUILICURA')  # También funciona
@@ -271,7 +271,7 @@ location = get_location('cd el penon')  # Case-insensitive
 from datetime import datetime
 
 # Usando códigos de ubicación
-traffic_data = gmaps_service.get_travel_time_with_traffic(
+traffic_data = mapbox_service.get_travel_time_with_traffic(
     origin='CCTI',
     destination='CD_PENON',
     departure_time=datetime.now()
@@ -386,7 +386,7 @@ if conflicts:
 
 ### Archivos Modificados
 
-1. **`apps/routing/google_maps_service.py`**
+1. **`apps/routing/mapbox_service.py`**
    - ✅ Ahora acepta códigos de ubicación O coordenadas
    - ✅ Usa direcciones completas para consultas más precisas
    - ✅ Retorna nombres de origen/destino en respuesta
@@ -524,7 +524,7 @@ from apps.routing.locations_catalog import get_location, list_all_locations
 
 # Probar búsqueda
 ccti = get_location('CCTI')
-print(ccti.get_google_maps_query())
+print(ccti.get_mapbox_query())
 
 # Probar aliases
 quilicura = get_location('CD_QL')
@@ -651,17 +651,17 @@ print(f"Promedio: {total_time / len(all_drivers):.1f} min/conductor")
    - Optimización de rutas
 
 5. **Geocoding Automático**
-   - Actualizar coordenadas desde Google Maps
-   - Validar direcciones al crear ubicaciones
-   - Cache de geocoding results
+  - Actualizar coordenadas desde Mapbox o servicio equivalente
+  - Validar direcciones al crear ubicaciones
+  - Cache de geocoding results
 
 ---
 
 ## 📞 Soporte
 
 **Documentación relacionada:**
-- `SISTEMA_TRAFICO_TIEMPO_REAL_OCT_2025.md` - Sistema de tráfico completo
-- `INICIO_RAPIDO_TRAFICO.md` - Guía rápida de activación
+- `CONFIGURAR_MAPBOX_PASO_A_PASO.md` - Configuración y buenas prácticas con Mapbox
+- `ROUTING_ML_QUICKSTART.md` - Uso del motor de rutas y predicciones
 - `COORDENADAS_CHILE_EJEMPLOS.md` - Ejemplos de coordenadas reales
 
 **Archivos importantes:**
@@ -675,7 +675,7 @@ print(f"Promedio: {total_time / len(all_drivers):.1f} min/conductor")
 
 - [x] Crear catálogo de ubicaciones con 6 CDs
 - [x] Implementar servicio de disponibilidad de conductores
-- [x] Modificar Google Maps service para usar direcciones
+- [x] Integrar Mapbox service para uso de direcciones y tráfico
 - [x] Crear 4 nuevos endpoints REST
 - [x] Crear comando `load_locations`
 - [x] Actualizar `post_deploy.sh`

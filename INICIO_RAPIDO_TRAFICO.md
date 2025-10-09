@@ -2,20 +2,20 @@
 
 ## ⚡ 5 Pasos para Activar el Sistema
 
-### 1️⃣ Obtener API Key de Google Maps (5 minutos)
+### 1️⃣ Obtener token de Mapbox (5 minutos)
 
-Con tu **GitHub Student Pack** tienes $200 de crédito gratis.
+Con tu **GitHub Student Pack** recibes $75 de crédito y 50,000 requests mensuales gratis.
 
 **Pasos:**
-1. Ve a: https://console.cloud.google.com/
-2. Click en "Crear proyecto" → Nombre: "SoptraLoc"
-3. Habilitar APIs:
-   - Distance Matrix API ✅
-   - Directions API ✅
-4. Ir a "Credenciales" → "Crear credenciales" → "API Key"
-5. Copiar la API Key generada
+1. Ve a: https://account.mapbox.com/auth/signup/
+2. Crea la cuenta usando tu email institucional (.edu) para activar el beneficio
+3. En el panel, entra a **Access tokens** → "Create a token"
+4. Nombre recomendado: `SOPTRALOC Production`
+5. Habilita los scopes necesarios (incluye `directions:read`)
+6. Opcional: restringe con `https://soptraloc.onrender.com/*`
+7. Guarda el token generado (comienza con `pk.`)
 
-**Ejemplo:** `AIzaSyC4hJ7...` (tu key será diferente)
+**Ejemplo:** `pk.eyJ1Ijoic2FmYXJ5MTYiLCJhIjoiY21naHlvYTQ5MDNlbDJrbjJjcXRtZGg1YSJ9.WCiyTSY_CCfB02N_Nfx7kg`
 
 ---
 
@@ -26,11 +26,12 @@ Con tu **GitHub Student Pack** tienes $200 de crédito gratis.
 3. Click en "Environment" (menú izquierdo)
 4. Click en "Add Environment Variable"
 5. Agregar:
-   ```
-   Key:   GOOGLE_MAPS_API_KEY
-   Value: AIzaSyC4hJ7...  (tu key)
-   ```
-6. Click "Save Changes"
+  ```
+  Key:   MAPBOX_API_KEY
+  Value: pk.eyJ1...  (tu token)
+  ```
+6. Elimina la variable `GOOGLE_MAPS_API_KEY` si existía
+7. Click "Save Changes"
 
 **Render redeplegará automáticamente** ✅
 
@@ -43,10 +44,10 @@ Espera a que termine el deploy (~5 minutos) y verifica:
 ```bash
 # Verificar en logs
 # Deberías ver algo como:
-# ✅ Google Maps API configurada correctamente
+# ✅ Mapbox API configurada correctamente
 
 # NO deberías ver:
-# ⚠️  GOOGLE_MAPS_API_KEY no configurada
+# ⚠️  MAPBOX_API_KEY no configurada
 ```
 
 ---
@@ -124,7 +125,7 @@ curl -X POST https://soptraloc.onrender.com/api/v1/routing/route-tracking/start-
 
 ## ✅ Checklist de Verificación
 
-- [ ] API Key de Google Maps obtenida
+- [ ] Token de Mapbox obtenido
 - [ ] Variable configurada en Render
 - [ ] Deploy completado sin errores
 - [ ] API responde correctamente
@@ -142,7 +143,7 @@ curl -X POST https://soptraloc.onrender.com/api/v1/routing/route-tracking/start-
 POST /api/v1/routing/route-tracking/start-route/
 
 # Sistema automáticamente:
-✅ Consulta Google Maps
+✅ Consulta Mapbox Directions API
 ✅ Obtiene tráfico en tiempo real
 ✅ Calcula ETA preciso
 ✅ Genera alertas si hay problemas
@@ -230,17 +231,17 @@ Más coordenadas en: `COORDENADAS_CHILE_EJEMPLOS.md`
 
 ## 🆘 Troubleshooting
 
-### Error: "GOOGLE_MAPS_API_KEY no configurada"
+### Error: "MAPBOX_API_KEY no configurada"
 **Solución:** Agrega la variable en Render (ver paso 2)
 
 ### Error: "API status != OK"
-**Solución:** Verifica que las APIs estén habilitadas en Google Cloud Console
+**Solución:** Verifica que el token siga activo y que tenga `directions:read`
 
 ### Error: "Quota exceeded"
-**Solución:** Has usado los $200 de crédito. Agrega billing en Google Cloud.
+**Solución:** Revisa el panel de Mapbox; puedes regenerar el token o ampliar el límite
 
-### Error: "Invalid API key"
-**Solución:** Verifica que copiaste la key completa sin espacios
+### Error: "Invalid token"
+**Solución:** Verifica que copiaste el token completo sin espacios
 
 ---
 
@@ -286,9 +287,9 @@ Con $200 de crédito:
 - `COORDENADAS_CHILE_EJEMPLOS.md` → Ejemplos y coordenadas
 - `RESUMEN_SISTEMA_TRAFICO_OCT_2025.md` → Resumen ejecutivo
 
-### APIs de Google:
-- Distance Matrix: https://developers.google.com/maps/documentation/distance-matrix
-- Directions: https://developers.google.com/maps/documentation/directions
+### APIs de Mapbox:
+- Directions API: https://docs.mapbox.com/api/navigation/directions/
+- Rate limits: https://docs.mapbox.com/api/navigation/directions/#rate-limits
 
 ### GitHub Student Pack:
 - https://education.github.com/pack

@@ -25,20 +25,22 @@ python manage.py load_locations
 
 ## 📍 Paso 2: Usar Códigos de Ubicación
 
-### Antes (solo coordenadas):
+### Antes (Google Maps - obsoleto):
 ```python
-traffic_data = gmaps_service.get_travel_time_with_traffic(
-    origin_lat=-33.5167,
-    origin_lng=-70.8667,
-    dest_lat=-33.6370,
-    dest_lng=-70.7050,
-    departure_time=datetime.now()
-)
+# gmaps_service.get_travel_time_with_traffic(
+#     origin_lat=-33.5167,
+#     origin_lng=-70.8667,
+#     dest_lat=-33.6370,
+#     dest_lng=-70.7050,
+#     departure_time=datetime.now()
+# )
 ```
 
-### Ahora (códigos simples):
+### Ahora (Mapbox con códigos simples):
 ```python
-traffic_data = gmaps_service.get_travel_time_with_traffic(
+from apps.routing.mapbox_service import mapbox_service
+
+traffic_data = mapbox_service.get_travel_time_with_traffic(
     origin='CCTI',
     destination='CD_PENON',
     departure_time=datetime.now()
@@ -294,9 +296,9 @@ if not status['is_available']:
 
 ### 2. Ver tráfico actual entre ubicaciones
 ```python
-from apps.routing.google_maps_service import gmaps_service
+from apps.routing.mapbox_service import mapbox_service
 
-data = gmaps_service.get_travel_time_with_traffic('CCTI', 'CD_PENON')
+data = mapbox_service.get_travel_time_with_traffic('CCTI', 'CD_PENON')
 print(f"Tiempo: {data['duration_in_traffic_minutes']} min")
 print(f"Tráfico: {data['traffic_level']}")
 ```
@@ -341,8 +343,8 @@ python manage.py shell
 
 Para información detallada, ver:
 - `SISTEMA_UBICACIONES_CONDUCTORES_OCT_2025.md` - Documentación completa (400+ líneas)
-- `SISTEMA_TRAFICO_TIEMPO_REAL_OCT_2025.md` - Sistema de tráfico
-- `INICIO_RAPIDO_TRAFICO.md` - Activación de Google Maps API
+- `CONFIGURAR_MAPBOX_PASO_A_PASO.md` - Configuración del tráfico en tiempo real
+- `ROUTING_ML_QUICKSTART.md` - Predicciones y uso del motor de rutas
 
 ---
 

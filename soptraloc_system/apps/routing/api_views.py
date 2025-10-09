@@ -7,7 +7,7 @@ from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
-from datetime import datetime, timedelta
+from datetime import datetime
 import logging
 
 from apps.drivers.models import Assignment, Driver, TrafficAlert
@@ -30,7 +30,7 @@ class RouteTrackingViewSet(viewsets.ViewSet):
         Endpoint para reportar inicio de ruta.
         
         El conductor (o sistema) reporta que inicia una ruta desde un origen
-        hacia un destino. El sistema consulta Google Maps API para obtener
+        hacia un destino. El sistema consulta Mapbox Directions API para obtener
         información de tráfico actual y genera alertas automáticas.
         
         POST /api/v1/routing/route-tracking/start-route/

@@ -20,7 +20,7 @@
 ```
 ✅ CONFIGURAR_MAPBOX_PASO_A_PASO.md (470+ líneas - guía completa)
 ✅ MIGRACION_MAPBOX_OCT_2025.md (resumen ejecutivo)
-✅ SISTEMA_TRAFICO_TIEMPO_REAL_OCT_2025.md (actualizado)
+✅ ROUTING_ML_QUICKSTART.md (uso del motor de rutas + ML)
 ✅ soptraloc_system/apps/routing/mapbox_service.py (nuevo)
 ✅ soptraloc_system/config/settings.py (actualizado)
 ❌ soptraloc_system/apps/routing/google_maps_service.py (eliminado)
@@ -360,7 +360,7 @@ curl https://soptraloc.onrender.com/api/v1/routing/route-tracking/available-driv
 ### Documentación:
 - **Guía completa:** `CONFIGURAR_MAPBOX_PASO_A_PASO.md`
 - **Migración:** `MIGRACION_MAPBOX_OCT_2025.md`
-- **Sistema tráfico:** `SISTEMA_TRAFICO_TIEMPO_REAL_OCT_2025.md`
+- **Sistema tráfico:** `CONFIGURAR_MAPBOX_PASO_A_PASO.md`
 
 ### Links útiles:
 - **Mapbox Dashboard:** https://account.mapbox.com/

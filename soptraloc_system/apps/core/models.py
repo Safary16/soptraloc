@@ -47,21 +47,6 @@ class Company(BaseModel):
         return f"{self.name} ({self.code})"
 
 
-class Driver(BaseModel):
-    """Modelo para conductores."""
-    user = models.OneToOneField(User, on_delete=models.CASCADE)
-    license_number = models.CharField(max_length=50, unique=True)
-    phone = models.CharField(max_length=20)
-    is_available = models.BooleanField(default=True)
-    
-    class Meta:
-        verbose_name = 'Conductor'
-        verbose_name_plural = 'Conductores'
-        
-    def __str__(self):
-        return f"{self.user.first_name} {self.user.last_name} - {self.license_number}"
-
-
 class Vehicle(BaseModel):
     """Modelo para vehículos/chasis."""
     VEHICLE_TYPES = [
@@ -91,24 +76,6 @@ class Vehicle(BaseModel):
         
     def __str__(self):
         return f"{self.plate} - {self.get_vehicle_type_display()}"
-
-
-class Location(BaseModel):
-    """Modelo para ubicaciones geográficas."""
-    name = models.CharField(max_length=200)
-    address = models.TextField()
-    latitude = models.DecimalField(max_digits=10, decimal_places=8, null=True, blank=True)
-    longitude = models.DecimalField(max_digits=11, decimal_places=8, null=True, blank=True)
-    city = models.CharField(max_length=100)
-    region = models.CharField(max_length=100)
-    country = models.CharField(max_length=100, default='Chile')
-    
-    class Meta:
-        verbose_name = 'Ubicación'
-        verbose_name_plural = 'Ubicaciones'
-        
-    def __str__(self):
-        return f"{self.name} - {self.city}"
 
 
 class MovementCode(BaseModel):

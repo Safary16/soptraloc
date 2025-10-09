@@ -12,6 +12,11 @@ drf-yasg==1.21.11
 
 # Development and utilities
 django-extensions==4.1
+django-stubs==5.1.0
+django-stubs-ext==5.1.0
+types-requests==2.32.0.20241022
+types-Pillow==10.4.0.20241016
+pandas-stubs==2.2.2.241009
 
 # File processing and reports
 Pillow==10.4.0
@@ -30,6 +35,11 @@ dj-database-url==2.2.0
 
 # HTTP and integrations
 requests==2.32.3
+
+# Celery and async task queue
+celery==5.4.0
+redis==5.2.0
+flower==2.0.1
 
 # Additional utilities for optimization and analysis
 unicodedata2==15.1.0

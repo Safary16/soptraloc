@@ -38,7 +38,7 @@ La migración de Google Maps a Mapbox ha sido completada exitosamente. El sistem
 | `CONFIGURAR_MAPBOX_PASO_A_PASO.md` | 470+ líneas | Guía completa paso a paso |
 | `MIGRACION_MAPBOX_OCT_2025.md` | 280+ líneas | Resumen ejecutivo de migración |
 | `DEPLOY_MAPBOX_PRODUCCION.md` | 396 líneas | Checklist para deploy |
-| `SISTEMA_TRAFICO_TIEMPO_REAL_OCT_2025.md` | Actualizado | Referencias a Mapbox |
+| `CONFIGURAR_MAPBOX_PASO_A_PASO.md` | Actualizado | Referencias a Mapbox |
 
 **Total:** ~1,146 líneas de documentación ✅
 
@@ -200,7 +200,7 @@ soptraloc/
 │   ├── CONFIGURAR_MAPBOX_PASO_A_PASO.md ✅ (470+ líneas)
 │   ├── MIGRACION_MAPBOX_OCT_2025.md ✅ (280+ líneas)
 │   ├── DEPLOY_MAPBOX_PRODUCCION.md ✅ (396 líneas)
-│   └── SISTEMA_TRAFICO_TIEMPO_REAL_OCT_2025.md ✏️ (actualizado)
+│   └── CONFIGURAR_MAPBOX_PASO_A_PASO.md ✏️ (actualizado)
 │
 ├── 📱 Sistema SOPTRALOC:
 │   └── soptraloc_system/
@@ -277,7 +277,7 @@ soptraloc/
 ### Para Desarrolladores:
 1. **`CONFIGURAR_MAPBOX_PASO_A_PASO.md`** - Configuración inicial
 2. **`MIGRACION_MAPBOX_OCT_2025.md`** - Resumen técnico de cambios
-3. **`SISTEMA_TRAFICO_TIEMPO_REAL_OCT_2025.md`** - Documentación del sistema
+3. **`CONFIGURAR_MAPBOX_PASO_A_PASO.md`** - Documentación del sistema
 
 ### Para DevOps:
 1. **`DEPLOY_MAPBOX_PRODUCCION.md`** - Checklist de deploy

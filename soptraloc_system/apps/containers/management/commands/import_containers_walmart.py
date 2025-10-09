@@ -17,7 +17,8 @@ from django.db import models, transaction
 
 from apps.containers.models import Agency, Container, ShippingLine, Vessel
 from apps.containers.services.status_utils import normalize_status
-from apps.core.models import Company, Location
+from apps.core.models import Company
+from apps.drivers.models import Location
 
 UserModel = get_user_model()
 

@@ -1,5 +1,7 @@
 # 📝 Resumen de Cambios - 5 de Octubre 2025
 
+> ⚠️ **Documento archivado (Oct 8, 2025):** Cambios previos a la migración Mapbox, conservados solo como referencia histórica.
+
 ## 🎯 Objetivo Principal
 Mejorar la extracción de datos de archivos Excel (liberación y programación) y anonimizar datos sensibles para presentación.
 

@@ -1,5 +1,7 @@
 # 🎯 ACCIÓN REQUERIDA: Corregir Datos en Producción
 
+> ⚠️ **Documento archivado (Oct 8, 2025):** Esta guía corresponde al incidente previo a la migración de Mapbox y se conserva solo como referencia histórica. Para el estado actual del sistema y procedimientos vigentes, consulta `RESUMEN_FINAL_MIGRACION.md` y `CONFIGURAR_MAPBOX_PASO_A_PASO.md`.
+
 ## 📋 Situación Actual
 
 ### ✅ Lo que YA está correcto:

@@ -1,6 +1,7 @@
 from django.db import models
 from django.utils import timezone
-from apps.core.models import BaseModel, Company, Vehicle, Location, MovementCode
+from apps.core.models import BaseModel, Company, Vehicle, MovementCode
+from apps.drivers.models import Location
 
 
 class ShippingLine(BaseModel):
@@ -261,7 +262,60 @@ class Container(BaseModel):
     duracion_descarga = models.IntegerField(null=True, blank=True, verbose_name="Duración descarga (minutos)")
     duracion_devolucion = models.IntegerField(null=True, blank=True, verbose_name="Duración devolución (minutos)")
     
+    # Máquina de estados: transiciones permitidas
+    ALLOWED_TRANSITIONS = {
+        'available': ['loading', 'maintenance', 'POR_ARRIBAR'],
+        'in_transit': ['loading', 'unloading'],
+        'loading': ['in_transit', 'available'],
+        'unloading': ['available', 'warehouse'],
+        'maintenance': ['available', 'damaged', 'out_of_service'],
+        'damaged': ['maintenance', 'out_of_service'],
+        'out_of_service': ['maintenance'],
+        # Flujo de importación
+        'POR_ARRIBAR': ['EN_SECUENCIA', 'DESCARGADO'],
+        'EN_SECUENCIA': ['DESCARGADO'],
+        'DESCARGADO': ['LIBERADO', 'TRG'],
+        'TRG': ['LIBERADO', 'SECUENCIADO'],
+        'SECUENCIADO': ['LIBERADO'],
+        'LIBERADO': ['PROGRAMADO'],
+        'PROGRAMADO': ['ASIGNADO'],
+        'ASIGNADO': ['EN_RUTA', 'PROGRAMADO'],  # Puede volver a PROGRAMADO si se cancela
+        'EN_RUTA': ['ARRIBADO'],
+        'ARRIBADO': ['DESCARGADO_CD'],
+        'DESCARGADO_CD': ['DISPONIBLE_DEVOLUCION'],
+        'DISPONIBLE_DEVOLUCION': ['EN_RUTA_DEVOLUCION'],
+        'EN_RUTA_DEVOLUCION': ['FINALIZADO'],
+        'FINALIZADO': [],  # Estado terminal
+    }
+    
+    def can_transition_to(self, new_status):
+        """Verifica si la transición de estado es válida."""
+        if not self.status:  # Si es nuevo, cualquier estado inicial es válido
+            return True
+        
+        allowed = self.ALLOWED_TRANSITIONS.get(self.status, [])
+        return new_status in allowed
+    
+    def validate_status_transition(self, new_status):
+        """Valida y retorna error si la transición no es permitida."""
+        if not self.can_transition_to(new_status):
+            from django.core.exceptions import ValidationError
+            raise ValidationError(
+                f"Transición no permitida: {self.status} → {new_status}. "
+                f"Estados permitidos desde {self.status}: {', '.join(self.ALLOWED_TRANSITIONS.get(self.status, []))}"
+            )
+    
     def save(self, *args, **kwargs):
+        # Validar transición de estado si está cambiando
+        if self.pk:  # Solo para objetos existentes
+            try:
+                old_instance = Container.objects.get(pk=self.pk)
+                if old_instance.status != self.status:
+                    # Validar transición
+                    self.validate_status_transition(self.status)
+            except Container.DoesNotExist:
+                pass  # Objeto nuevo, no validar
+        
         # Calcular días si hay fechas disponibles
         if self.release_date and self.cd_arrival_date:
             delta = self.cd_arrival_date - self.release_date

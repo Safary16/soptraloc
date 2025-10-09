@@ -16,8 +16,8 @@ from django.utils import timezone
 
 from apps.containers.models import Agency, Container, ShippingLine, Vessel
 from apps.containers.services.status_utils import normalize_status
-from apps.core.models import Company, Location as CoreLocation
-from apps.drivers.models import Alert, Assignment, Driver, Location as DriverLocation, TimeMatrix
+from apps.core.models import Company
+from apps.drivers.models import Alert, Assignment, Driver, Location, TimeMatrix
 
 logger = logging.getLogger(__name__)
 
@@ -266,26 +266,39 @@ def _get_or_create_agency(name: Optional[str], user: User) -> Optional[Agency]:
     return EntityFactory.get_or_create_agency(cleaned, user)
 
 
-def _get_or_create_core_location(name: str, city: str, user: User) -> CoreLocation:
-    location = CoreLocation.objects.filter(name__iexact=name).first()
+def _get_or_create_location(name: str, code: str = None, city: str = '') -> Location:
+    """
+    Obtiene o crea una ubicación. 
+    Usa primero el código si está disponible, sino busca por nombre.
+    """
+    if code:
+        location = Location.objects.filter(code=code).first()
+        if location:
+            return location
+    
+    location = Location.objects.filter(name__iexact=name).first()
     if location:
         return location
-    return CoreLocation.objects.create(
+    
+    # Crear nueva ubicación
+    if not code:
+        # Generar código a partir del nombre
+        code = name.upper().replace(' ', '_')[:20]
+        # Asegurar unicidad
+        base_code = code
+        counter = 1
+        while Location.objects.filter(code=code).exists():
+            code = f"{base_code}_{counter}"
+            counter += 1
+    
+    return Location.objects.create(
         name=name,
+        code=code,
         address=name,
-        city=city,
-        region="Metropolitana",
-        country="Chile",
-        created_by=user,
-        updated_by=user,
+        city=city or '',
+        region='Metropolitana',
+        country='Chile'
     )
-
-
-def _get_or_create_driver_location(name: str, code: str) -> DriverLocation:
-    location = DriverLocation.objects.filter(code=code).first()
-    if location:
-        return location
-    return DriverLocation.objects.create(name=name, code=code)
 
 
 def _derive_container_type(raw_type: Optional[str]) -> str:
@@ -311,8 +324,7 @@ def _attach_operational_location(container: Container, user: User) -> None:
 
     container.current_position = meta["position_code"]
     container.position_status = "warehouse"
-    container.current_location = _get_or_create_core_location(meta["display"], meta["city"], user)
-    _get_or_create_driver_location(meta["display"], meta["driver_code"])
+    container.current_location = _get_or_create_location(meta["display"], meta["driver_code"], meta["city"])
 
 
 # ---------------------------------------------------------------------------
@@ -679,7 +691,8 @@ def preferred_driver_types(container: Container) -> List[str]:
     return ["TRONCO", "TRONCO_PM", "LEASING", "LOCALERO"]
 
 
-def _estimate_duration(origin: Optional[DriverLocation], destination: Optional[DriverLocation]) -> int:
+def _estimate_duration(origin: Optional[Location], destination: Optional[Location]) -> int:
+    """Estima la duración de una ruta basada en la matriz de tiempos."""
     if origin and destination:
         try:
             matrix = TimeMatrix.objects.get(from_location=origin, to_location=destination)

@@ -2,14 +2,14 @@
 Modelos para gestión de tiempos y rutas
 Sistema híbrido: Tiempos manuales + Machine Learning predictivo
 """
+from datetime import timedelta
+
 from django.db import models
 from django.core.validators import MinValueValidator, MaxValueValidator
 from django.utils import timezone
-from apps.core.models import BaseModel, Vehicle, Location as CoreLocation, Driver as CoreDriver
+from apps.core.models import BaseModel, Vehicle
+from apps.drivers.models import Location, Driver
 from apps.containers.models import Container
-
-Location = CoreLocation
-Driver = CoreDriver
 
 
 class LocationPair(BaseModel):
@@ -717,7 +717,7 @@ class RouteStop(BaseModel):
         
         if not self.actual_arrival:
             # Si no se registró llegada, asumir que fue hace X minutos
-            self.actual_arrival = self.actual_departure - timezone.timedelta(
+            self.actual_arrival = self.actual_departure - timedelta(
                 minutes=self.estimated_operation_time or 15
             )
         

@@ -1,6 +1,6 @@
 from datetime import timedelta
 
-from django.db.models import Count
+from django.db.models import Count, Q
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework import status, viewsets
 from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
@@ -225,6 +225,189 @@ class ContainerViewSet(viewsets.ModelViewSet):
         
         serializer = self.get_serializer(container)
         return Response(serializer.data)
+    
+    @action(detail=True, methods=['post'])
+    def assign_driver(self, request, pk=None):
+        """
+        Asigna un conductor a un contenedor PROGRAMADO.
+        
+        Body esperado:
+        {
+            "driver_id": 123,
+            "scheduled_datetime": "2025-10-08T10:00:00Z",  # Opcional
+            "origin_id": 5,  # Opcional si el contenedor ya tiene terminal
+            "destination_id": 12,  # Opcional si el contenedor ya tiene cd_location
+            "tipo_asignacion": "ENTREGA"  # ENTREGA o DEVOLUCION
+        }
+        """
+        container = self.get_object()
+        
+        # Validar estado
+        if container.status not in ['PROGRAMADO', 'LIBERADO']:
+            return Response({
+                'success': False,
+                'error': f'El contenedor debe estar en estado PROGRAMADO o LIBERADO. Estado actual: {container.get_status_display()}'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Obtener datos del request
+        driver_id = request.data.get('driver_id')
+        if not driver_id:
+            return Response({
+                'success': False,
+                'error': 'driver_id es requerido'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Validar conductor
+        try:
+            driver = Driver.objects.get(id=driver_id, is_active=True)
+        except Driver.DoesNotExist:
+            return Response({
+                'success': False,
+                'error': 'Conductor no encontrado o inactivo'
+            }, status=status.HTTP_404_NOT_FOUND)
+        
+        # Validar disponibilidad del conductor
+        if not driver.esta_disponible:
+            return Response({
+                'success': False,
+                'error': f'Conductor {driver.nombre} no está disponible. Estado: {driver.get_estado_display()}'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Obtener ubicaciones (origen y destino)
+        origin_id = request.data.get('origin_id')
+        destination_id = request.data.get('destination_id')
+        
+        # Usar ubicaciones del contenedor si no se proporcionan
+        from apps.drivers.models import Location
+        try:
+            if origin_id:
+                origin = Location.objects.get(id=origin_id)
+            elif container.terminal:
+                origin = container.terminal
+            elif container.current_location:
+                origin = container.current_location
+            else:
+                return Response({
+                    'success': False,
+                    'error': 'No se pudo determinar ubicación de origen. Proporcione origin_id.'
+                }, status=status.HTTP_400_BAD_REQUEST)
+            
+            if destination_id:
+                destination = Location.objects.get(id=destination_id)
+            elif container.cd_location:
+                # Si cd_location es CharField, buscar Location por nombre/código
+                cd_code = container.cd_location.upper().replace(' ', '_')
+                destination = Location.objects.filter(
+                    Q(code__icontains=cd_code) | 
+                    Q(name__icontains=container.cd_location)
+                ).first()
+                if not destination:
+                    return Response({
+                        'success': False,
+                        'error': f'No se encontró Location para CD: {container.cd_location}'
+                    }, status=status.HTTP_400_BAD_REQUEST)
+            else:
+                return Response({
+                    'success': False,
+                    'error': 'No se pudo determinar ubicación de destino. Proporcione destination_id.'
+                }, status=status.HTTP_400_BAD_REQUEST)
+                
+        except Location.DoesNotExist:
+            return Response({
+                'success': False,
+                'error': 'Ubicación origen o destino no encontrada'
+            }, status=status.HTTP_404_NOT_FOUND)
+        
+        # Fecha programada (usar la del contenedor si existe, o ahora + 1 hora)
+        scheduled_datetime = request.data.get('scheduled_datetime')
+        if scheduled_datetime:
+            from django.utils.dateparse import parse_datetime
+            scheduled_datetime = parse_datetime(scheduled_datetime)
+        elif container.scheduled_date and container.scheduled_time:
+            from datetime import datetime
+            scheduled_datetime = timezone.make_aware(
+                datetime.combine(container.scheduled_date, container.scheduled_time)
+            )
+        else:
+            scheduled_datetime = timezone.now() + timedelta(hours=1)
+        
+        # Tipo de asignación
+        tipo_asignacion = request.data.get('tipo_asignacion', 'ENTREGA')
+        if tipo_asignacion not in ['ENTREGA', 'DEVOLUCION']:
+            tipo_asignacion = 'ENTREGA'
+        
+        # Crear asignación
+        assignment = Assignment.objects.create(
+            container=container,
+            driver=driver,
+            fecha_programada=scheduled_datetime,
+            origen=origin,
+            destino=destination,
+            tipo_asignacion=tipo_asignacion,
+            estado='PENDIENTE',
+            created_by=request.user
+        )
+        
+        # Calcular tiempo estimado usando la matriz de tiempos
+        assignment.calculate_estimated_time(refresh=True)
+        assignment.save()
+        
+        # Actualizar container
+        container.status = 'ASIGNADO'
+        container.conductor_asignado = driver
+        container.tiempo_asignacion = timezone.now()
+        if request.user and hasattr(container, 'updated_by'):
+            container.updated_by = request.user
+        container.save()
+        
+        # Actualizar driver
+        driver.contenedor_asignado = container
+        driver.save()
+        
+        from apps.drivers.serializers import AssignmentSerializer
+        assignment_data = AssignmentSerializer(assignment).data
+        
+        return Response({
+            'success': True,
+            'message': f'Contenedor {container.container_number} asignado exitosamente a {driver.nombre}',
+            'assignment': assignment_data,
+            'estimated_duration_minutes': assignment.tiempo_estimado
+        })
+    
+    @action(detail=True, methods=['post'])
+    def unassign_driver(self, request, pk=None):
+        """Desasigna el conductor de un contenedor (cancela la asignación)."""
+        container = self.get_object()
+        
+        if not container.conductor_asignado:
+            return Response({
+                'success': False,
+                'error': 'El contenedor no tiene conductor asignado'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        driver = container.conductor_asignado
+        
+        # Cancelar assignments pendientes o en curso
+        Assignment.objects.filter(
+            container=container,
+            driver=driver,
+            estado__in=['PENDIENTE', 'EN_CURSO']
+        ).update(estado='CANCELADA')
+        
+        # Limpiar asignación
+        driver.contenedor_asignado = None
+        driver.save()
+        
+        container.conductor_asignado = None
+        container.status = 'PROGRAMADO'  # Volver a programado
+        if request.user and hasattr(container, 'updated_by'):
+            container.updated_by = request.user
+        container.save()
+        
+        return Response({
+            'success': True,
+            'message': f'Conductor {driver.nombre} desasignado del contenedor {container.container_number}'
+        })
 
 
 class ContainerMovementViewSet(viewsets.ModelViewSet):
@@ -348,7 +531,7 @@ def container_detail(request, container_id):
     context = {
         'container': container,
         'today': timezone.now().date(),
-        'tomorrow': timezone.now().date() + timezone.timedelta(days=1),
+    'tomorrow': timezone.now().date() + timedelta(days=1),
     }
     
     return render(request, 'containers/container_detail.html', context)

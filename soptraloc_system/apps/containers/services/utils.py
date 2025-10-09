@@ -11,7 +11,8 @@ import pandas as pd
 from django.contrib.auth.models import User
 
 from apps.containers.models import Container, Vessel, ShippingLine, Agency
-from apps.core.models import Company, Location
+from apps.core.models import Company
+from apps.drivers.models import Location
 
 logger = logging.getLogger(__name__)
 

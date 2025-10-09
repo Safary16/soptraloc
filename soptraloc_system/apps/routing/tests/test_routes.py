@@ -5,7 +5,7 @@ from django.test import TestCase
 from django.utils import timezone
 from rest_framework.test import APIRequestFactory, force_authenticate
 
-from apps.core.models import Driver as CoreDriver
+from apps.drivers.models import Driver
 from apps.routing.models import Route
 from apps.routing.views import RouteViewSet
 
@@ -18,10 +18,12 @@ class RouteModelTests(TestCase):
             first_name="Ana",
             last_name="Pérez",
         )
-        self.driver = CoreDriver.objects.create(
-            user=self.user,
-            license_number="LIC123",
-            phone="+56999999999",
+        self.driver = Driver.objects.create(
+            nombre="Ana Pérez",
+            rut="11111111-1",
+            ppu="TEST01",
+            tipo_conductor="LEASING",
+            telefono="+56999999999",
         )
 
     def test_route_str_uses_driver_full_name(self):

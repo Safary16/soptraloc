@@ -1,6 +1,7 @@
 from rest_framework import serializers
 from .models import Container, ContainerMovement, ContainerDocument, ContainerInspection
-from apps.core.serializers import CompanySerializer, LocationSerializer, VehicleSerializer, MovementCodeSerializer
+from apps.core.serializers import CompanySerializer, VehicleSerializer, MovementCodeSerializer
+from apps.drivers.serializers import LocationSerializer
 
 
 class ContainerSerializer(serializers.ModelSerializer):

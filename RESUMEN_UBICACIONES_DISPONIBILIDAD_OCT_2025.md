@@ -21,7 +21,7 @@ Se creó un catálogo completo con las 6 ubicaciones principales del sistema:
 | **CLEP San Antonio** | Av. Las Factorías 7373 | San Antonio |
 
 **Ventajas:**
-- ✅ Direcciones completas para consultas precisas a Google Maps
+- ✅ Direcciones completas para consultas precisas a Mapbox
 - ✅ Soporte para múltiples aliases (ej: "QUILICURA", "CD_QL", "CD QUILICURA")
 - ✅ Búsqueda case-insensitive y flexible
 - ✅ Tiempos estáticos de fallback si API no disponible
@@ -47,21 +47,21 @@ Seguimiento en tiempo real del estado de cada conductor:
 
 ---
 
-### 3. **Integración Mejorada con Google Maps** 🗺️
-El sistema ahora puede usar:
+### 3. **Integración con Mapbox Directions** 🗺️
+El sistema ahora consulta Mapbox usando:
 - **Códigos de ubicación** (ej: 'CCTI', 'CD_PENON')
 - **Coordenadas** (lat, lng) - como antes
 - **Direcciones directas** - para ubicaciones no catalogadas
 
 ```python
 # Antes (solo coordenadas)
-gmaps_service.get_travel_time(
+mapbox_service.get_travel_time_with_traffic(
     origin_lat=-33.5167, origin_lng=-70.8667,
     dest_lat=-33.6370, dest_lng=-70.7050
 )
 
 # Ahora (códigos simples)
-gmaps_service.get_travel_time('CCTI', 'CD_PENON')
+mapbox_service.get_travel_time_with_traffic('CCTI', 'CD_PENON')
 ```
 
 ---
@@ -91,7 +91,7 @@ gmaps_service.get_travel_time('CCTI', 'CD_PENON')
 - ✅ **Imposible** asignar conductor ocupado (sistema valida)
 - ✅ Se sabe **exactamente** dónde estará cada conductor y cuándo
 - ✅ Se pueden asignar rutas desde ubicación actual del conductor
-- ✅ ETAs consideran **tráfico real** vía Google Maps
+- ✅ ETAs consideran **tráfico real** vía Mapbox
 - ✅ Se usan **códigos simples** como 'CCTI' o 'CD_PENON'
 - ✅ Sistema sugiere **mejor conductor** automáticamente
 
@@ -136,7 +136,7 @@ status = driver_availability.get_driver_status(45, at_time='16:05')
 
 # 2. Si disponible, calcular ruta desde CD El Peñón
 if status['is_available']:
-    traffic = gmaps_service.get_travel_time('CD_PENON', 'CCTI')
+   traffic = mapbox_service.get_travel_time_with_traffic('CD_PENON', 'CCTI')
     # Asignar ruta de entrega de vacíos
 ```
 
@@ -190,10 +190,10 @@ for ruta in schedule:
    - Se ejecuta automáticamente en deploy
 
 ### Archivos Modificados (4):
-1. **`apps/routing/google_maps_service.py`**
-   - Ahora acepta códigos O coordenadas
-   - Usa direcciones completas
-   - Retorna nombres en respuesta
+1. **`apps/routing/mapbox_service.py`**
+   - Calcula tráfico en tiempo real con Mapbox Directions
+   - Estima retrasos vs. tiempos base del catálogo
+   - Incluye fallback Haversine cuando la API no responde
 
 2. **`apps/routing/route_start_service.py`**
    - Detecta si usar código o coordenadas
@@ -244,14 +244,14 @@ curl https://tu-app.onrender.com/api/v1/routing/route-tracking/locations/
 
 ## 💰 Costos
 
-### Google Maps API:
-- **$0.005 por consulta** (Distance Matrix + Directions)
-- **Ubicaciones con direcciones completas** = consultas más precisas
-- **Fallback automático** si se agota crédito
-- **GitHub Student Pack:** $200 gratis = ~40,000 consultas
+### Mapbox Directions API:
+- **$0.50 por 1,000 requests** después del nivel gratuito
+- **50,000 requests/mes** incluidos en el plan estándar
+- **Fallback automático** con tiempos estáticos y Haversine
+- **GitHub Student Pack:** $75 en créditos + requests sin costo adicional
 
 ### Beneficio:
-- ✅ Mismo costo que antes
+- ✅ Costos muy inferiores frente a la integración previa
 - ✅ Resultados más precisos (direcciones completas)
 - ✅ Fallback mejorado (tiempos estáticos por ruta)
 
@@ -301,12 +301,12 @@ curl https://tu-app.onrender.com/api/v1/routing/route-tracking/locations/
 - [x] GET /locations/
 - [x] POST /start-route/ (mejorado)
 
-### Google Maps:
+### Mapbox:
 - [x] Acepta códigos de ubicación
 - [x] Acepta coordenadas (backward compatible)
 - [x] Usa direcciones completas
 - [x] Fallback mejorado
-- [x] Retorna nombres en respuesta
+- [x] Retorna nombres en respuesta con tiempos de tráfico
 
 ### Documentación:
 - [x] Documentación técnica completa
@@ -323,7 +323,7 @@ curl https://tu-app.onrender.com/api/v1/routing/route-tracking/locations/
 1. **Monitorear uso** en producción
 2. **Recopilar feedback** de operadores
 3. **Ajustar tiempos estáticos** basado en datos reales
-4. **Optimizar cache** de Google Maps API
+4. **Optimizar cache** de Mapbox Directions API
 
 ### Mediano Plazo (1 mes):
 1. **Dashboard visual** de disponibilidad
@@ -344,7 +344,7 @@ curl https://tu-app.onrender.com/api/v1/routing/route-tracking/locations/
 **Documentación:**
 - `SISTEMA_UBICACIONES_CONDUCTORES_OCT_2025.md` - Técnica completa
 - `INICIO_RAPIDO_UBICACIONES.md` - Guía rápida
-- `SISTEMA_TRAFICO_TIEMPO_REAL_OCT_2025.md` - Sistema de tráfico
+- `CONFIGURAR_MAPBOX_PASO_A_PASO.md` - Sistema de tráfico y configuración
 
 **Archivos clave:**
 - `apps/routing/locations_catalog.py`

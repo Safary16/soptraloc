@@ -15,17 +15,17 @@ Se implementó un **sistema integral** que resuelve tres problemas clave:
 1. **📍 Catálogo de Ubicaciones**
    - 6 ubicaciones principales con direcciones completas
    - Soporte para aliases múltiples
-   - Integración con Google Maps API
+    - Integración con Mapbox Directions API
 
 2. **🚗 Disponibilidad de Conductores en Tiempo Real**
    - Estado actual de cada conductor
    - Prevención de asignaciones duplicadas
    - Horarios y programación automática
 
-3. **🗺️ Integración Mejorada con Google Maps**
-   - Ahora acepta códigos simples ('CCTI', 'CD_PENON')
-   - Consultas más precisas con direcciones completas
-   - Fallback automático con tiempos estáticos
+3. **🗺️ Integración Mejorada con Mapbox**
+    - Ahora acepta códigos simples ('CCTI', 'CD_PENON')
+    - Consultas más precisas con direcciones completas
+    - Fallback automático con tiempos estáticos + Haversine
 
 ---
 
@@ -86,11 +86,11 @@ schedule = driver_availability.get_driver_schedule(driver_id=45)
 **✅ Ahora:** Códigos simples y memorables
 
 ```python
-# Antes
-gmaps_service.get_travel_time(-33.5167, -70.8667, -33.6370, -70.7050)
+# Antes (Google Maps - obsoleto)
+# gmaps_service.get_travel_time(-33.5167, -70.8667, -33.6370, -70.7050)
 
-# Ahora
-gmaps_service.get_travel_time('CCTI', 'CD_PENON')
+# Ahora (Mapbox - actual)
+mapbox_service.get_travel_time_with_traffic('CCTI', 'CD_PENON')
 ```
 
 ---
@@ -165,6 +165,7 @@ else:
 
 ```python
 from apps.drivers.models import Driver
+from apps.routing.mapbox_service import mapbox_service
 
 # Ver estado de todos los conductores
 for driver in Driver.objects.filter(is_active=True):
@@ -184,7 +185,7 @@ for driver in Driver.objects.filter(is_active=True):
 # Asignar entrega de vacíos desde CD El Peñón a CCTI
 
 # 1. Calcular tiempo de viaje
-traffic_data = gmaps_service.get_travel_time_with_traffic(
+traffic_data = mapbox_service.get_travel_time_with_traffic(
     'CD_PENON',
     'CCTI'
 )
@@ -265,7 +266,7 @@ nueva_asignacion = Assignment.objects.create(
 # ✅ 6 ubicaciones cargadas
 # ✅ Búsqueda con alias funciona
 # ✅ Formateo de rutas OK
-# ✅ Google Maps service OK (con fallback)
+# ✅ Mapbox service OK (con fallback)
 # ✅ Disponibilidad de conductores OK
 ```
 
@@ -275,7 +276,7 @@ nueva_asignacion = Assignment.objects.create(
 
 ### Inmediato (Hoy):
 1. ✅ **HECHO:** Todo implementado y desplegado
-2. **Siguiente:** Configurar `GOOGLE_MAPS_API_KEY` en Render (ver `INICIO_RAPIDO_TRAFICO.md`)
+2. **Siguiente:** Configurar `MAPBOX_API_KEY` en Render (ver `CONFIGURAR_MAPBOX_PASO_A_PASO.md`)
 3. **Opcional:** Cargar 82 conductores para probar disponibilidad
 
 ### Esta Semana:
@@ -306,10 +307,10 @@ nueva_asignacion = Assignment.objects.create(
 - ✅ Backward compatible (coordenadas siguen funcionando)
 
 ### Económicos:
-- 💰 Mismo costo que antes ($0.005/consulta)
-- 💰 Consultas más precisas (direcciones completas)
+- 💰 Costos 10x menores vs. Google Maps ($0.50 / 1,000 requests)
+- 💰 50,000 requests/mes incluidos en el plan estándar
 - 💰 Fallback mejorado (reduce consultas necesarias)
-- 💰 GitHub Student Pack: $200 gratis
+- 💰 GitHub Student Pack: $75 en créditos adicionales
 
 ---
 
@@ -318,7 +319,7 @@ nueva_asignacion = Assignment.objects.create(
 ### Implementación:
 - [x] Catálogo de ubicaciones creado
 - [x] Servicio de disponibilidad implementado
-- [x] Google Maps service actualizado
+- [x] Mapbox service optimizado
 - [x] 4 endpoints REST creados
 - [x] Comando load_locations creado
 - [x] post_deploy.sh actualizado
@@ -344,7 +345,7 @@ nueva_asignacion = Assignment.objects.create(
 - [Sistema Completo](./SISTEMA_UBICACIONES_CONDUCTORES_OCT_2025.md)
 - [Guía Rápida](./INICIO_RAPIDO_UBICACIONES.md)
 - [Resumen Ejecutivo](./RESUMEN_UBICACIONES_DISPONIBILIDAD_OCT_2025.md)
-- [Sistema de Tráfico](./SISTEMA_TRAFICO_TIEMPO_REAL_OCT_2025.md)
+- [Sistema de Tráfico](./CONFIGURAR_MAPBOX_PASO_A_PASO.md)
 
 ### Código Fuente:
 - [Catálogo de Ubicaciones](./soptraloc_system/apps/routing/locations_catalog.py)

@@ -2,13 +2,15 @@
 Servicio para gestionar inicio de rutas y cálculo de tiempos en tiempo real.
 Integra Mapbox API para obtener datos de tráfico actualizados.
 """
-from datetime import datetime
-from typing import Dict, Optional, Tuple
-from django.utils import timezone
-from django.db import transaction
 import logging
+from datetime import datetime
+from typing import Dict
+
+from django.db import transaction
+from django.utils import timezone
 
 from apps.drivers.models import Assignment, Driver, TrafficAlert
+from apps.routing.locations_catalog import get_location
 from apps.routing.mapbox_service import mapbox_service
 
 logger = logging.getLogger(__name__)
@@ -19,7 +21,7 @@ class RouteStartService:
     Servicio para procesar el inicio de una ruta.
     
     Cuando un conductor reporta que inicia una ruta:
-    1. Consulta Google Maps API para obtener tiempo real con tráfico
+    1. Consulta Mapbox Directions API para obtener tráfico en tiempo real
     2. Calcula ETA considerando condiciones actuales
     3. Genera alertas si hay tráfico, accidentes o cierres
     4. Sugiere rutas alternativas si aplica
@@ -56,11 +58,15 @@ class RouteStartService:
         try:
             with transaction.atomic():
                 # 1. Obtener asignación y conductor
-                assignment = Assignment.objects.select_for_update().get(id=assignment_id)
-                driver = Driver.objects.get(id=driver_id)
+                assignment = (
+                    Assignment.objects.select_for_update()
+                    .select_related('driver')
+                    .get(id=assignment_id)
+                )
+                driver = assignment.driver
                 
                 # 2. Validar que el conductor corresponde a la asignación
-                if assignment.conductor_id != driver_id:
+                if assignment.driver_id != driver_id:
                     raise ValueError(f"El conductor {driver_id} no corresponde a la asignación {assignment_id}")
                 
                 # 3. Obtener información de tráfico en tiempo real
@@ -68,8 +74,6 @@ class RouteStartService:
                 
                 # Determinar si usar códigos de ubicación o coordenadas
                 # Si origin_name es un código conocido, usarlo; sino usar coordenadas
-                from apps.routing.locations_catalog import get_location
-                
                 origin_loc = get_location(origin_name)
                 dest_loc = get_location(destination_name)
                 
@@ -90,8 +94,11 @@ class RouteStartService:
                 logger.info(f"   Origen: {origin_display}")
                 logger.info(f"   Destino: {dest_display}")
                 logger.info(f"   Distancia: {traffic_data['distance_km']} km")
-                logger.info(f"   Tiempo sin tráfico: {traffic_data['duration_minutes']} min")
-                logger.info(f"   Tiempo con tráfico: {traffic_data['duration_in_traffic_minutes']} min")
+                logger.info(
+                    "   Tiempo sin tráfico: %s min | con tráfico: %s min",
+                    traffic_data['duration_minutes'],
+                    traffic_data['duration_in_traffic_minutes'],
+                )
                 logger.info(f"   Nivel de tráfico: {traffic_data['traffic_level']}")
                 logger.info(f"   ETA: {eta.strftime('%H:%M:%S')}")
                 
@@ -157,9 +164,6 @@ class RouteStartService:
                 
         except Assignment.DoesNotExist:
             logger.error(f"❌ Asignación {assignment_id} no encontrada")
-            raise
-        except Driver.DoesNotExist:
-            logger.error(f"❌ Conductor {driver_id} no encontrado")
             raise
         except Exception as e:
             logger.error(f"❌ Error iniciando ruta: {e}")

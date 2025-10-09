@@ -8,7 +8,7 @@ Uso:
 from django.core.management.base import BaseCommand
 from django.utils import timezone
 
-from apps.core.models import Location
+from apps.drivers.models import Location
 from apps.routing.models import LocationPair, OperationTime
 
 

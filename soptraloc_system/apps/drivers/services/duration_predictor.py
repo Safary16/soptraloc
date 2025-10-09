@@ -142,6 +142,47 @@ class DriverDurationPredictor:
         except TimeMatrix.DoesNotExist:
             return None
 
+    def _mapbox_estimate(
+        self,
+        origin: Location,
+        destination: Location,
+        scheduled_datetime
+    ) -> Optional[tuple[int, str]]:
+        """
+        Obtiene tiempo estimado desde Mapbox con tráfico en tiempo real.
+        
+        Returns:
+            Tuple de (minutos_con_trafico, nivel_trafico) o None si falla
+        """
+        try:
+            from apps.routing.mapbox_service import mapbox_service
+            import logging
+            logger = logging.getLogger(__name__)
+            
+            result = mapbox_service.get_travel_time_with_traffic(
+                origin=origin.code,
+                destination=destination.code,
+                departure_time=scheduled_datetime
+            )
+            
+            # Solo usar si realmente vino de Mapbox API (no fallback)
+            if result.get('source') == 'mapbox_api':
+                logger.info(
+                    f"🗺️  Mapbox: {origin.code} → {destination.code} = "
+                    f"{result['duration_in_traffic_minutes']} min "
+                    f"(tráfico: {result['traffic_level']})"
+                )
+                return (
+                    result['duration_in_traffic_minutes'],
+                    result['traffic_level']
+                )
+        except Exception as e:
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.debug(f"Mapbox no disponible: {e}")
+        
+        return None
+
     # ------------------------------------------------------------------
     # Machine learning model
     # ------------------------------------------------------------------
@@ -237,6 +278,12 @@ class DriverDurationPredictor:
         assignment_type = assignment_type or 'ENTREGA'
         scheduled_datetime = scheduled_datetime or timezone.now()
 
+        # 🆕 PRIORIDAD 1: Mapbox con tráfico en tiempo real
+        mapbox_result = self._mapbox_estimate(origin, destination, scheduled_datetime)
+        mapbox_minutes = mapbox_result[0] if mapbox_result else None
+        traffic_level = mapbox_result[1] if mapbox_result else 'unknown'
+
+        # PRIORIDAD 2-4: Fuentes tradicionales
         historical_avg, historical_count = self._historical_route_average(origin, destination, assignment_type)
         matrix_minutes = self._time_matrix_estimate(origin, destination)
         model_minutes = self._predict_with_model(
@@ -251,22 +298,31 @@ class DriverDurationPredictor:
             if model_minutes <= 0 or model_minutes > 720:
                 model_minutes = None
 
+        # Construir lista de estimaciones con pesos
         estimates: list[tuple[str, float, int]] = []
+        
+        # Mapbox tiene máxima prioridad (70%) si está disponible
+        if mapbox_minutes and mapbox_minutes > 0:
+            estimates.append(('mapbox_realtime', mapbox_minutes, 1000))
+        
         if model_minutes and model_minutes > 0:
             estimates.append(('ml', model_minutes, self._model_sample_size))
+        
         if historical_avg and historical_avg > 0:
             estimates.append(('historical', historical_avg, historical_count))
+        
         if matrix_minutes and matrix_minutes > 0:
             estimates.append(('matrix', matrix_minutes, historical_count))
 
         if not estimates:
             return PredictionResult(minutes=DEFAULT_FALLBACK_MINUTES, source='default', sample_size=0)
 
-        # Promedio ponderado favorenciendo el modelo si está disponible
+        # Promedio ponderado favoreciendo Mapbox
         weights = {
-            'ml': 0.6,
-            'historical': 0.3,
-            'matrix': 0.2,
+            'mapbox_realtime': 0.70,  # 🆕 Máxima prioridad para tráfico real
+            'ml': 0.15,
+            'historical': 0.10,
+            'matrix': 0.05,
         }
 
         total_weight = 0.0

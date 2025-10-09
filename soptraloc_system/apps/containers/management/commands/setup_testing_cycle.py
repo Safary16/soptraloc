@@ -8,7 +8,8 @@ from django.db import transaction
 from django.utils import timezone
 
 from apps.containers.models import Agency, Container, ShippingLine, Vessel
-from apps.core.models import Company, Location
+from apps.core.models import Company
+from apps.drivers.models import Location
 from apps.drivers.models import Driver
 
 

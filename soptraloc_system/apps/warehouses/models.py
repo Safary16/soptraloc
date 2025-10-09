@@ -1,5 +1,6 @@
 from django.db import models
-from apps.core.models import BaseModel, Location, Company
+from apps.core.models import BaseModel, Company
+from apps.drivers.models import Location
 from apps.containers.models import Container
 
 

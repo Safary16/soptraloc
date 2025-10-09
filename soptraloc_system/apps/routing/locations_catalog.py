@@ -1,6 +1,6 @@
 """
 Catálogo de ubicaciones fijas para el sistema SOPTRALOC.
-Incluye direcciones completas para consultas a Google Maps API.
+Incluye direcciones completas y coordenadas listas para consultas a Mapbox Directions API.
 """
 from typing import Dict, Optional
 from dataclasses import dataclass
@@ -19,8 +19,8 @@ class LocationInfo:
     latitude: Optional[float] = None
     longitude: Optional[float] = None
     
-    def get_google_maps_query(self) -> str:
-        """Retorna la dirección formateada para Google Maps API."""
+    def get_mapbox_query(self) -> str:
+        """Retorna la dirección formateada para Mapbox (fallback con dirección)."""
         return f"{self.address}, {self.city}, {self.region}, Chile"
     
     def __str__(self):

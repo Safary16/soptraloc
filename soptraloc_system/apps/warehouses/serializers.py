@@ -1,6 +1,7 @@
 from rest_framework import serializers
 from .models import Warehouse, WarehouseZone, WarehouseStock, WarehouseOperation, WarehouseReservation
-from apps.core.serializers import LocationSerializer, CompanySerializer
+from apps.core.serializers import CompanySerializer
+from apps.drivers.serializers import LocationSerializer
 from apps.containers.serializers import ContainerSerializer
 
 

@@ -2,7 +2,7 @@
 Management command para cargar ubicaciones del catálogo a la base de datos.
 """
 from django.core.management.base import BaseCommand
-from apps.core.models import Location
+from apps.drivers.models import Location
 from apps.routing.locations_catalog import LOCATIONS_CATALOG
 import logging
 
@@ -32,8 +32,9 @@ class Command(BaseCommand):
         
         for code, loc_info in LOCATIONS_CATALOG.items():
             try:
-                # Buscar si ya existe
-                existing = Location.objects.filter(name=loc_info.name).first()
+                # Buscar si ya existe (por code o por name)
+                existing = Location.objects.filter(code=code).first() or \
+                           Location.objects.filter(name=loc_info.name).first()
                 
                 if existing and not force:
                     self.stdout.write(
@@ -45,7 +46,8 @@ class Command(BaseCommand):
                 # Datos de ubicación
                 location_data = {
                     'name': loc_info.name,
-                    'address': loc_info.get_google_maps_query(),
+                    'code': code,  # Usar el code del catálogo
+                    'address': loc_info.get_mapbox_query(),
                     'city': loc_info.city,
                     'region': loc_info.region,
                     'country': 'Chile',

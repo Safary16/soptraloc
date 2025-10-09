@@ -1,5 +1,7 @@
 # 🎯 RESUMEN EJECUTIVO - 5 Octubre 2025
 
+> ⚠️ **Documento archivado (Oct 8, 2025):** Estado previo a la optimización completa y migración a Mapbox. Usa `RESUMEN_FINAL_MIGRACION.md` o `RESUMEN_UBICACIONES_DISPONIBILIDAD_OCT_2025.md` para información vigente.
+
 ## ✅ Estado Actual del Sistema
 
 ### Código: 100% CORRECTO ✅

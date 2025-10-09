@@ -2,12 +2,15 @@
 Servicio de integración con Mapbox Directions API
 Para obtener tiempos de viaje en tiempo real considerando tráfico actual
 """
-import requests
-from typing import Dict, Optional, Tuple, Union
+import logging
+import math
 from datetime import datetime, timedelta
+from typing import Dict, Optional, Tuple, Union
+
+import requests
 from django.conf import settings
 from django.core.cache import cache
-import logging
+
 from .locations_catalog import get_location, get_static_travel_time
 
 logger = logging.getLogger(__name__)
@@ -30,7 +33,7 @@ class MapboxService:
         if not self.api_key:
             logger.warning("⚠️  MAPBOX_API_KEY no configurada. Usando tiempos estáticos.")
     
-    def _process_location(self, location: Union[str, Tuple[float, float]]) -> Tuple[str, str, float, float]:
+    def _process_location(self, location: Union[str, Tuple[float, float]]) -> Tuple[str, str, Optional[float], Optional[float], Optional[str]]:
         """
         Procesa una ubicación y retorna (query_string, display_name, lat, lng).
         
@@ -45,14 +48,20 @@ class MapboxService:
             loc_info = get_location(location)
             if loc_info and loc_info.latitude and loc_info.longitude:
                 # Mapbox usa formato: longitude,latitude (al revés de lo normal)
-                return f"{loc_info.longitude},{loc_info.latitude}", loc_info.name, float(loc_info.latitude), float(loc_info.longitude)
+                return (
+                    f"{loc_info.longitude},{loc_info.latitude}",
+                    loc_info.name,
+                    float(loc_info.latitude),
+                    float(loc_info.longitude),
+                    loc_info.code,
+                )
             else:
                 raise ValueError(f"Ubicación '{location}' no encontrada o sin coordenadas")
         else:
             # Es una tupla de coordenadas (lat, lng)
             lat, lng = location
             # Mapbox usa formato: longitude,latitude
-            return f"{lng},{lat}", f"({lat}, {lng})", lat, lng
+            return f"{lng},{lat}", f"({lat}, {lng})", lat, lng, None
     
     def get_travel_time_with_traffic(
         self,
@@ -84,8 +93,8 @@ class MapboxService:
             >>> service.get_travel_time_with_traffic((-33.5167, -70.8667), (-33.6370, -70.7050))
         """
         # Procesar origen y destino
-        origin_query, origin_name, origin_lat, origin_lng = self._process_location(origin)
-        dest_query, dest_name, dest_lat, dest_lng = self._process_location(destination)
+        origin_query, origin_name, origin_lat, origin_lng, origin_code = self._process_location(origin)
+        dest_query, dest_name, dest_lat, dest_lng, dest_code = self._process_location(destination)
         
         if not self.api_key:
             return self._fallback_response(origin, destination, origin_name, dest_name)
@@ -113,6 +122,7 @@ class MapboxService:
                 'language': 'es',
                 'alternatives': 'true',  # Obtener rutas alternativas
                 'continue_straight': 'false',
+                # Preferir rutas rápidas (no excluir autopistas ni toll roads)
             }
             
             # Si hay hora de salida, usar depart_at
@@ -135,24 +145,64 @@ class MapboxService:
             # Ruta principal
             route = data['routes'][0]
             
-            # Tiempo y distancia
-            duration_seconds = route['duration']
+            # Tiempo y distancia CON tráfico
+            duration_with_traffic_seconds = route['duration']
             distance_meters = route['distance']
             
-            duration_minutes = duration_seconds / 60
+            duration_with_traffic_minutes = duration_with_traffic_seconds / 60
             distance_km = distance_meters / 1000
             
-            # Mapbox Directions con 'driving-traffic' ya incluye tráfico en duration
-            # No hay un "tiempo sin tráfico" explícito, pero podemos estimarlo
-            
+            # 🆕 Obtener tiempo SIN tráfico consultando perfil 'driving'
+            # Esto nos da el baseline real, no un estimado del catálogo
+            baseline_minutes = None
+            try:
+                url_no_traffic = f"https://api.mapbox.com/directions/v5/mapbox/driving/{origin_query};{dest_query}"
+                params_no_traffic = {
+                    'access_token': self.api_key,
+                    'overview': 'simplified',
+                    'geometries': 'geojson',
+                }
+                response_no_traffic = requests.get(url_no_traffic, params=params_no_traffic, timeout=10)
+                data_no_traffic = response_no_traffic.json()
+                
+                if 'routes' in data_no_traffic and data_no_traffic['routes']:
+                    baseline_seconds = data_no_traffic['routes'][0]['duration']
+                    baseline_minutes = baseline_seconds / 60
+                    logger.debug(f"Tiempo sin tráfico (driving): {baseline_minutes:.1f} min")
+            except Exception as e:
+                logger.warning(f"No se pudo obtener tiempo sin tráfico: {e}")
+                # Fallback: usar tiempo con tráfico como baseline
+                baseline_minutes = duration_with_traffic_minutes
+
+            if baseline_minutes is None:
+                baseline_minutes = duration_with_traffic_minutes
+
+            delay_minutes = max(int(round(duration_with_traffic_minutes - baseline_minutes)), 0)
+            traffic_ratio = duration_with_traffic_minutes / baseline_minutes if baseline_minutes else 1.0
+
+            if traffic_ratio <= 1.1:
+                traffic_level = 'low'
+            elif traffic_ratio <= 1.3:
+                traffic_level = 'medium'
+            elif traffic_ratio <= 1.6:
+                traffic_level = 'high'
+            else:
+                traffic_level = 'very_high'
+
+            warnings: list[str] = []
+            if traffic_level in {'high', 'very_high'}:
+                warnings.append(
+                    f'Tráfico intenso detectado. Retraso estimado de +{delay_minutes} minutos.'
+                )
+
             result = {
-                'duration_minutes': int(round(duration_minutes)),
-                'duration_in_traffic_minutes': int(round(duration_minutes)),
+                'duration_minutes': int(round(baseline_minutes)),
+                'duration_in_traffic_minutes': int(round(duration_with_traffic_minutes)),
                 'distance_km': round(distance_km, 2),
-                'traffic_level': 'unknown',  # Mapbox no da nivel explícito
-                'traffic_ratio': 1.0,
-                'delay_minutes': 0,
-                'warnings': [],
+                'traffic_level': traffic_level,
+                'traffic_ratio': round(traffic_ratio, 2),
+                'delay_minutes': delay_minutes,
+                'warnings': warnings,
                 'alternative_routes': [],
                 'timestamp': datetime.now().isoformat(),
                 'source': 'mapbox_api',
@@ -172,8 +222,9 @@ class MapboxService:
                         'summary': 'Ruta alternativa'
                     })
             
-            # Guardar en caché por 5 minutos
-            cache.set(cache_key, result, 300)
+            # Guardar en caché por 5 minutos (solo cuando es consulta inmediata)
+            if not departure_time:
+                cache.set(cache_key, result, 300)
             
             logger.info(f"✅ Tiempo estimado: {result['duration_in_traffic_minutes']}min "
                        f"(distancia: {result['distance_km']}km, fuente: mapbox)")
@@ -204,10 +255,25 @@ class MapboxService:
         if isinstance(origin, str) and isinstance(destination, str):
             static_time = get_static_travel_time(origin, destination)
         
+        distance_km = 0
+        origin_info = get_location(origin) if isinstance(origin, str) else None
+        dest_info = get_location(destination) if isinstance(destination, str) else None
+
+        if origin_info and dest_info and origin_info.latitude and origin_info.longitude and dest_info.latitude and dest_info.longitude:
+            distance_km = round(
+                self._haversine_distance_km(
+                    origin_info.latitude,
+                    origin_info.longitude,
+                    dest_info.latitude,
+                    dest_info.longitude,
+                ),
+                2,
+            )
+
         return {
             'duration_minutes': static_time,
             'duration_in_traffic_minutes': static_time,
-            'distance_km': 0,
+            'distance_km': distance_km,
             'traffic_level': 'unknown',
             'traffic_ratio': 1.0,
             'delay_minutes': 0,
@@ -250,6 +316,23 @@ class MapboxService:
         eta = departure_time + timedelta(minutes=travel_data['duration_in_traffic_minutes'])
         
         return eta, travel_data
+
+    @staticmethod
+    def _haversine_distance_km(lat1: float, lng1: float, lat2: float, lng2: float) -> float:
+        """Calcula la distancia en kilómetros usando la fórmula de Haversine."""
+        radius = 6371.0  # Radio de la tierra en km
+
+        lat1_rad = math.radians(lat1)
+        lng1_rad = math.radians(lng1)
+        lat2_rad = math.radians(lat2)
+        lng2_rad = math.radians(lng2)
+
+        dlat = lat2_rad - lat1_rad
+        dlng = lng2_rad - lng1_rad
+
+        a = math.sin(dlat / 2) ** 2 + math.cos(lat1_rad) * math.cos(lat2_rad) * math.sin(dlng / 2) ** 2
+        c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
+        return radius * c
 
 
 # Instancia global del servicio

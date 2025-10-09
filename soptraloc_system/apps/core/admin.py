@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import Company, Driver, Vehicle, Location, MovementCode
+from .models import Company, Vehicle, MovementCode
 
 
 @admin.register(Company)
@@ -24,42 +24,6 @@ class CompanyAdmin(admin.ModelAdmin):
             'classes': ('collapse',)
         })
     )
-    
-    class Meta:
-        verbose_name = "Empresa"
-        verbose_name_plural = "Empresas"
-
-
-@admin.register(Driver)
-class DriverAdmin(admin.ModelAdmin):
-    list_display = ('get_full_name', 'license_number', 'phone', 'is_available', 'is_active')
-    list_filter = ('is_available', 'is_active', 'created_at')
-    search_fields = ('user__first_name', 'user__last_name', 'license_number', 'phone')
-    readonly_fields = ('id', 'created_at', 'updated_at')
-    
-    fieldsets = (
-        ('Conductor', {
-            'fields': ('user', 'license_number', 'license_type')
-        }),
-        ('Contacto', {
-            'fields': ('phone', 'emergency_contact')
-        }),
-        ('Disponibilidad', {
-            'fields': ('is_available', 'is_active')
-        }),
-        ('Auditoría', {
-            'fields': ('id', 'created_at', 'updated_at'),
-            'classes': ('collapse',)
-        })
-    )
-    
-    def get_full_name(self, obj):
-        return f"{obj.user.first_name} {obj.user.last_name}"
-    get_full_name.short_description = 'Nombre Completo'
-    
-    class Meta:
-        verbose_name = "Conductor"
-        verbose_name_plural = "Conductores"
 
 
 @admin.register(Vehicle)
@@ -74,7 +38,7 @@ class VehicleAdmin(admin.ModelAdmin):
             'fields': ('plate', 'vehicle_type', 'brand', 'model', 'year')
         }),
         ('Especificaciones', {
-            'fields': ('capacity', 'fuel_type', 'vin')
+            'fields': ('max_capacity',)
         }),
         ('Estado', {
             'fields': ('status', 'is_active')
@@ -84,42 +48,6 @@ class VehicleAdmin(admin.ModelAdmin):
             'classes': ('collapse',)
         })
     )
-    
-    class Meta:
-        verbose_name = "Vehículo"
-        verbose_name_plural = "Vehículos"
-
-
-@admin.register(Location)
-class LocationAdmin(admin.ModelAdmin):
-    list_display = ('name', 'city', 'region', 'country', 'is_active')
-    list_filter = ('city', 'region', 'country', 'is_active', 'created_at')
-    search_fields = ('name', 'city', 'address')
-    readonly_fields = ('id', 'created_at', 'updated_at')
-    
-    fieldsets = (
-        ('Ubicación', {
-            'fields': ('name', 'code')
-        }),
-        ('Dirección', {
-            'fields': ('address', 'city', 'region', 'country', 'postal_code')
-        }),
-        ('Coordenadas', {
-            'fields': ('latitude', 'longitude'),
-            'classes': ('collapse',)
-        }),
-        ('Estado', {
-            'fields': ('is_active',)
-        }),
-        ('Auditoría', {
-            'fields': ('id', 'created_at', 'updated_at'),
-            'classes': ('collapse',)
-        })
-    )
-    
-    class Meta:
-        verbose_name = "Ubicación"
-        verbose_name_plural = "Ubicaciones"
 
 
 @admin.register(MovementCode)
@@ -131,10 +59,10 @@ class MovementCodeAdmin(admin.ModelAdmin):
     
     fieldsets = (
         ('Código de Movimiento', {
-            'fields': ('code', 'movement_type')
+            'fields': ('code', 'movement_type', 'description')
         }),
         ('Uso', {
-            'fields': ('used_at', 'used_by')
+            'fields': ('used_at',)
         }),
         ('Estado', {
             'fields': ('is_active',)
@@ -144,7 +72,3 @@ class MovementCodeAdmin(admin.ModelAdmin):
             'classes': ('collapse',)
         })
     )
-    
-    class Meta:
-        verbose_name = "Código de Movimiento"
-        verbose_name_plural = "Códigos de Movimiento"

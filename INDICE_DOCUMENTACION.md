@@ -71,22 +71,21 @@
 
 #### Documentos de Tráfico:
 
-8. **`SISTEMA_TRAFICO_TIEMPO_REAL_OCT_2025.md`** (15 KB) ⭐
-   - Sistema completo de tráfico con Mapbox
-   - Mapbox Service detallado
-   - Traffic Alerts model
-   - Flujo de inicio de ruta
-   - Configuración y uso
+8. **`CONFIGURAR_MAPBOX_PASO_A_PASO.md`** (12.3 KB) ⭐
+    - Guía paso a paso de configuración
+    - Variables de entorno y validaciones
+    - Buenas prácticas operativas
 
-9. **`RESUMEN_SISTEMA_TRAFICO_OCT_2025.md`** (8.5 KB)
-   - Resumen ejecutivo
-   - Características principales
-   - Casos de uso
+9. **`MIGRACION_MAPBOX_OCT_2025.md`** (8.1 KB)
+    - Resumen ejecutivo de la migración
+    - Comparativa de costos Google vs Mapbox
+    - Impacto en rutas y métricas
 
-10. **`INICIO_RAPIDO_TRAFICO.md`** (7.2 KB)
-    - Quick start para tráfico
-    - Ejemplos rápidos
-    - Troubleshooting básico
+10. **Documentos archivados**
+     - `SISTEMA_TRAFICO_TIEMPO_REAL_OCT_2025.md`
+     - `RESUMEN_SISTEMA_TRAFICO_OCT_2025.md`
+     - `INICIO_RAPIDO_TRAFICO.md`
+     - *Todos redirigen a la documentación vigente de Mapbox*
 
 ---
 
@@ -195,15 +194,17 @@
     - Sistema de ubicaciones y disponibilidad
     - Testing completo
 
-24. **`CAMBIOS_OCT_05_2025.md`** (7.6 KB)
+> **Nota:** Los siguientes documentos se mantienen solo como referencia histórica anterior a la migración Mapbox.
+
+24. **`CAMBIOS_OCT_05_2025.md`** (7.6 KB) *(Archivado)*
     - Cambios del 5 de octubre
     - Features agregados
     - Bugs resueltos
 
-25. **`RESUMEN_FINAL_DASHBOARD_OCT05.md`** (9.2 KB)
-    - Dashboard mejorado
-    - Métricas y KPIs
-    - Nuevas visualizaciones
+25. **`RESUMEN_FINAL_DASHBOARD_OCT05.md`** (9.2 KB) *(Archivado)*
+    - Dashboard antes de las optimizaciones finales
+    - Métricas y KPIs históricos
+    - Nuevas visualizaciones (estado previo)
 
 ---
 
@@ -216,9 +217,9 @@
     - Estado del proyecto
     - Próximos pasos
 
-27. **`RESUMEN_EJECUTIVO.md`** (4.5 KB)
-    - Resumen general del sistema
-    - Visión de alto nivel
+27. **`RESUMEN_EJECUTIVO.md`** (4.5 KB) *(Archivado - Oct 5)*
+    - Resumen general del sistema previo a optimizaciones
+    - Visión de alto nivel histórica
 
 ---
 
@@ -226,10 +227,10 @@
 
 #### Alertas y TODOs:
 
-28. **`ACCION_REQUERIDA.md`** (7.3 KB)
-    - Acciones pendientes
-    - Items críticos
-    - TODOs
+28. **`ACCION_REQUERIDA.md`** (7.3 KB) *(Archivado)*
+    - Acciones pendientes ya resueltas (Oct 5)
+    - Items críticos históricos
+    - TODOs completados
 
 ---
 

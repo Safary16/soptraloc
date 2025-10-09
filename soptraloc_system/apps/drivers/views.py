@@ -67,7 +67,16 @@ def _preferred_driver_types(container):
 
 
 def _estimate_assignment_duration_minutes(origin, destination, assignment_type, scheduled_datetime):
+    """
+    Estima duración de asignación priorizando Mapbox (tráfico real).
+    
+    Orden de prioridad:
+    1. DriverDurationPredictor (que internamente usa Mapbox → ML → histórico → matrix)
+    2. TimeMatrix estática
+    3. DEFAULT_ASSIGNMENT_DURATION
+    """
     if origin and destination:
+        # Intentar con DriverDurationPredictor (ya integra Mapbox internamente)
         try:
             from apps.drivers.services.duration_predictor import DriverDurationPredictor
         except ImportError:
@@ -81,17 +90,30 @@ def _estimate_assignment_duration_minutes(origin, destination, assignment_type, 
                 scheduled_datetime=scheduled_datetime,
             )
             if prediction and prediction.minutes:
+                import logging
+                logger = logging.getLogger(__name__)
+                logger.info(
+                    f"📊 Predicción: {origin.code} → {destination.code} = "
+                    f"{prediction.minutes} min (fuente: {prediction.source})"
+                )
                 return prediction.minutes
 
+        # Fallback: TimeMatrix estática
         try:
             time_matrix = TimeMatrix.objects.get(from_location=origin, to_location=destination)
             return time_matrix.get_total_time()
         except TimeMatrix.DoesNotExist:
             pass
+    
     return DEFAULT_ASSIGNMENT_DURATION
 
 
 def _has_schedule_conflict(driver, start_datetime, duration_minutes):
+    """
+    Verifica conflictos de horario considerando tráfico en tiempo real.
+    
+    Para asignaciones EN_CURSO, intenta recalcular tiempo restante con tráfico actual.
+    """
     if start_datetime is None:
         start_datetime = timezone.now()
     if duration_minutes is None or duration_minutes <= 0:
@@ -104,16 +126,45 @@ def _has_schedule_conflict(driver, start_datetime, duration_minutes):
     active_assignments = Assignment.objects.filter(
         driver=driver,
         estado__in=['PENDIENTE', 'EN_CURSO']
-    )
+    ).select_related('origen', 'destino')
 
     for assignment in active_assignments:
         assign_start = assignment.fecha_programada or assignment.fecha_inicio or timezone.now()
         if assignment.estado == 'EN_CURSO' and assignment.fecha_inicio:
             assign_start = assignment.fecha_inicio
 
+        # Usar tiempo estimado original
         assign_duration = assignment.tiempo_estimado or DEFAULT_ASSIGNMENT_DURATION
+        
+        # 🆕 Si la asignación está EN_CURSO, recalcular con tráfico actual
+        if (assignment.estado == 'EN_CURSO' and 
+            assignment.origen and 
+            assignment.destino):
+            try:
+                # Recalcular tiempo restante con tráfico actual
+                recalculated_duration = _estimate_assignment_duration_minutes(
+                    origin=assignment.origen,
+                    destination=assignment.destino,
+                    assignment_type=assignment.tipo_asignacion or 'ENTREGA',
+                    scheduled_datetime=timezone.now()
+                )
+                
+                if recalculated_duration:
+                    import logging
+                    logger = logging.getLogger(__name__)
+                    logger.debug(
+                        f"🔄 Recalculado conflicto: {assignment.id} "
+                        f"{assignment.tiempo_estimado} → {recalculated_duration} min"
+                    )
+                    assign_duration = recalculated_duration
+            except Exception as e:
+                import logging
+                logger = logging.getLogger(__name__)
+                logger.debug(f"No se pudo recalcular duración: {e}")
+        
         assign_end = assign_start + timedelta(minutes=assign_duration)
 
+        # Verificar overlap
         if (assign_start - buffer) < window_end and window_start < (assign_end + buffer):
             return True
 

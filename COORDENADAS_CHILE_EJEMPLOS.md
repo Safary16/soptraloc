@@ -403,7 +403,7 @@ echo "$response" | jq -r '.alerts[] | "\(.emoji) \(.type): \(.message)"'
 | Puerto Valparaíso | CD Quilicura | ~120 km | 1h 30min | 2h |
 | Puerto San Antonio | CD El Peñón | ~110 km | 1h 25min | 1h 55min |
 
-**Nota:** Los tiempos reales varían según tráfico actual. El sistema consulta Google Maps API en tiempo real para obtener datos precisos.
+**Nota:** Los tiempos reales varían según tráfico actual. El sistema utiliza Mapbox Directions API para obtener tiempos con tráfico en tiempo real.
 
 ---
 
@@ -425,4 +425,4 @@ echo "$response" | jq -r '.alerts[] | "\(.emoji) \(.type): \(.message)"'
 
 **Fecha:** 7 de octubre de 2025  
 **Para usar con:** Sistema de Tráfico en Tiempo Real de SoptraLoc  
-**Referencia:** SISTEMA_TRAFICO_TIEMPO_REAL_OCT_2025.md
+**Referencia:** CONFIGURAR_MAPBOX_PASO_A_PASO.md

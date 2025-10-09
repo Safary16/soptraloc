@@ -132,7 +132,7 @@ Servicio que procesa el inicio de una ruta.
 
 **Flujo:**
 1. Conductor reporta inicio de ruta
-2. Consulta Google Maps API con origen y destino
+2. Consulta Mapbox Directions API con origen y destino
 3. Calcula ETA con tráfico actual
 4. Genera alertas automáticas según condiciones
 5. Actualiza asignación con tiempos calculados
@@ -237,9 +237,6 @@ GET /api/v1/routing/route-tracking/traffic-summary/
 
 ---
 
-## 🔧 Configuración
-
-### 1. **Obtener API Key de Google Maps**
 ## 🔧 Configuración
 
 ### 1. **Obtener Token de Mapbox**
@@ -505,10 +502,10 @@ MAPBOX_API_KEY = "pk.eyJ1..."
 soptraloc_system/
 ├── apps/
 │   ├── routing/
-│   │   ├── google_maps_service.py    ← Servicio Google Maps API
+│   │   ├── mapbox_service.py         ← Integración Mapbox Directions API
 │   │   ├── route_start_service.py    ← Lógica de inicio de ruta
 │   │   ├── api_views.py              ← API endpoints
-│   │   └── urls.py                    ← URLs actualizadas
+│   │   └── urls.py                   ← URLs actualizadas
 │   │
 │   └── drivers/
 │       ├── models.py                  ← Modelo TrafficAlert agregado
@@ -517,9 +514,9 @@ soptraloc_system/
 │           └── 0007_trafficalert.py   ← Nueva migración
 │
 ├── config/
-│   └── settings.py                    ← GOOGLE_MAPS_API_KEY agregado
+│   └── settings.py                   ← MAPBOX_API_KEY agregado
 │
-└── .env.example                       ← Variable de ejemplo agregada
+└── .env.example                      ← Variable de ejemplo agregada
 ```
 
 ---
@@ -529,9 +526,9 @@ soptraloc_system/
 ### GitHub Student Pack:
 - https://education.github.com/pack
 
-### Google Maps APIs:
-- Distance Matrix: https://developers.google.com/maps/documentation/distance-matrix
-- Directions: https://developers.google.com/maps/documentation/directions
+### Mapbox APIs:
+- Directions API: https://docs.mapbox.com/api/navigation/directions/
+- Rate limits: https://docs.mapbox.com/api/navigation/directions/#rate-limits
 
 ### Documentación:
 - Esta documentación: `/SISTEMA_TRAFICO_TIEMPO_REAL_OCT_2025.md`

@@ -7,7 +7,8 @@ from django.core.management.base import BaseCommand
 from django.db import transaction
 from apps.containers.models import Container
 from apps.warehouses.models import Warehouse
-from apps.core.models import Location, Company
+from apps.core.models import Company
+from apps.drivers.models import Location
 from datetime import datetime, timedelta, time
 import random
 

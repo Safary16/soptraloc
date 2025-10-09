@@ -33,7 +33,7 @@ if not os.path.exists(django_dir):
     sys.exit(1)
 
 sys.path.insert(0, django_dir)
-os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'soptraloc_system.settings')
+os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'config.settings')
 
 try:
     django.setup()

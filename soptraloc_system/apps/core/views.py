@@ -3,11 +3,8 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework.filters import SearchFilter, OrderingFilter
-from .models import Company, Driver, Vehicle, Location, MovementCode
-from .serializers import (
-    CompanySerializer, DriverSerializer, VehicleSerializer, 
-    LocationSerializer, MovementCodeSerializer
-)
+from .models import Company, Vehicle, MovementCode
+from .serializers import CompanySerializer, VehicleSerializer, MovementCodeSerializer
 
 
 class CompanyViewSet(viewsets.ModelViewSet):
@@ -24,29 +21,6 @@ class CompanyViewSet(viewsets.ModelViewSet):
 
     def perform_update(self, serializer):
         serializer.save(updated_by=self.request.user)
-
-
-class DriverViewSet(viewsets.ModelViewSet):
-    queryset = Driver.objects.filter(is_active=True)
-    serializer_class = DriverSerializer
-    filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]
-    filterset_fields = ['is_available', 'is_active']
-    search_fields = ['user__first_name', 'user__last_name', 'license_number']
-    ordering_fields = ['user__first_name', 'created_at']
-    ordering = ['user__first_name']
-
-    def perform_create(self, serializer):
-        serializer.save(created_by=self.request.user)
-
-    def perform_update(self, serializer):
-        serializer.save(updated_by=self.request.user)
-
-    @action(detail=False, methods=['get'])
-    def available(self, request):
-        """Obtiene solo los conductores disponibles."""
-        available_drivers = self.queryset.filter(is_available=True)
-        serializer = self.get_serializer(available_drivers, many=True)
-        return Response(serializer.data)
 
 
 class VehicleViewSet(viewsets.ModelViewSet):
@@ -89,22 +63,6 @@ class VehicleViewSet(viewsets.ModelViewSet):
         
         serializer = self.get_serializer(vehicle)
         return Response(serializer.data)
-
-
-class LocationViewSet(viewsets.ModelViewSet):
-    queryset = Location.objects.filter(is_active=True)
-    serializer_class = LocationSerializer
-    filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]
-    filterset_fields = ['city', 'region', 'country', 'is_active']
-    search_fields = ['name', 'city', 'address']
-    ordering_fields = ['name', 'city', 'created_at']
-    ordering = ['name']
-
-    def perform_create(self, serializer):
-        serializer.save(created_by=self.request.user)
-
-    def perform_update(self, serializer):
-        serializer.save(updated_by=self.request.user)
 
 
 class MovementCodeViewSet(viewsets.ModelViewSet):

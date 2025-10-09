@@ -23,7 +23,7 @@ schema_view = get_schema_view(
         title="SOPTRALOC API",
         default_version='v1',
         description="Sistema de optimización para transporte de contenedores",
-        terms_of_service="https://www.google.com/policies/terms/",
+        terms_of_service="https://www.mapbox.com/legal/tos/",
         contact=openapi.Contact(email="contact@soptraloc.local"),
         license=openapi.License(name="BSD License"),
     ),

@@ -2,14 +2,13 @@
 Servicio para gestionar la disponibilidad y ocupación de conductores.
 Considera rutas activas y tiempos estimados para saber dónde estará cada conductor.
 """
+import logging
 from datetime import datetime, timedelta
 from typing import Dict, List, Optional, Tuple
-from django.utils import timezone
-from django.db.models import Q
-import logging
 
-from apps.drivers.models import Driver, Assignment
-from apps.routing.locations_catalog import get_location, format_route_name
+from django.utils import timezone
+
+from apps.drivers.models import Assignment, Driver
 
 logger = logging.getLogger(__name__)
 
@@ -26,7 +25,12 @@ class DriverAvailabilityService:
     """
     
     @staticmethod
-    def get_driver_status(driver_id: int, check_time: Optional[datetime] = None) -> Dict:
+    def get_driver_status(
+        driver_id: int,
+        check_time: Optional[datetime] = None,
+        *,
+        driver: Optional[Driver] = None,
+    ) -> Dict:
         """
         Obtiene el estado actual de un conductor.
         
@@ -46,11 +50,11 @@ class DriverAvailabilityService:
         if not check_time:
             check_time = timezone.now()
         
-        driver = Driver.objects.get(id=driver_id)
+        driver_obj = driver or Driver.objects.get(id=driver_id)
         
         # Buscar asignaciones activas (EN_CURSO)
         active_assignments = Assignment.objects.filter(
-            driver=driver,
+            driver=driver_obj,
             estado='EN_CURSO',
             fecha_completada__isnull=True  # No ha completado aún
         ).order_by('-fecha_inicio')
@@ -63,7 +67,7 @@ class DriverAvailabilityService:
                 'estimated_location': 'Base/Disponible',
                 'available_at': check_time,
                 'estimated_arrival': None,
-                'message': f'{driver.nombre} está disponible'
+                'message': f'{driver_obj.nombre} está disponible'
             }
         
         # Conductor tiene ruta activa
@@ -84,7 +88,7 @@ class DriverAvailabilityService:
                 'estimated_location': 'En ruta (sin ETA calculado)',
                 'available_at': check_time + timedelta(minutes=30),  # Estimación genérica
                 'estimated_arrival': None,
-                'message': f'{driver.nombre} está en ruta sin ETA calculado'
+                'message': f'{driver_obj.nombre} está en ruta sin ETA calculado'
             }
         
         # Comparar tiempo de verificación con ETA
@@ -99,7 +103,7 @@ class DriverAvailabilityService:
                 'estimated_location': f'En ruta (llegará en {minutes_remaining} min)',
                 'available_at': eta,
                 'estimated_arrival': eta,
-                'message': f'{driver.nombre} llegará a destino a las {eta.strftime("%H:%M")}'
+                'message': f'{driver_obj.nombre} llegará a destino a las {eta.strftime("%H:%M")}'
             }
         else:
             # Ya debería haber llegado
@@ -110,7 +114,7 @@ class DriverAvailabilityService:
                 'estimated_location': f'Disponible (llegó a las {eta.strftime("%H:%M")})',
                 'available_at': eta,
                 'estimated_arrival': eta,
-                'message': f'{driver.nombre} debería estar disponible desde las {eta.strftime("%H:%M")}'
+                'message': f'{driver_obj.nombre} debería estar disponible desde las {eta.strftime("%H:%M")}'
             }
     
     @staticmethod
@@ -135,7 +139,7 @@ class DriverAvailabilityService:
         available = []
         
         for driver in all_drivers:
-            status = DriverAvailabilityService.get_driver_status(driver.id, at_time)
+            status = DriverAvailabilityService.get_driver_status(driver.id, at_time, driver=driver)
             
             if status['is_available']:
                 available.append({
