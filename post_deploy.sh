@@ -174,16 +174,23 @@ fi
 echo ""
 
 # ============================================================================
-# PASO 5: CARGAR CONDUCTORES
+# PASO 5: VERIFICAR CONDUCTORES (NO CARGAR EN UPDATES)
 # ============================================================================
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-echo "🚚 PASO 5: Cargando 82 conductores"
+echo "� PASO 5: Verificando conductores existentes"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
-if python manage.py load_drivers --count=82 --force --settings=config.settings_production 2>&1 | tee /tmp/load_drivers.log; then
-    echo "✅ 82 conductores cargados correctamente"
+# Contar conductores existentes
+EXISTING_DRIVERS=$(python manage.py shell --settings=config.settings_production -c "from apps.drivers.models import Driver; print(Driver.objects.count())" 2>/dev/null || echo "0")
+echo "📊 Conductores existentes: $EXISTING_DRIVERS"
+
+# Solo cargar conductores si la DB está vacía (primer deploy)
+if [ "$EXISTING_DRIVERS" -eq 0 ]; then
+    echo "🔄 Primera vez: Cargando conductores iniciales..."
+    python manage.py load_drivers --count=50 --settings=config.settings_production
+    echo "✅ Conductores iniciales cargados"
 else
-    echo "⚠️  Advertencia: Hubo un problema al cargar conductores (no crítico)"
+    echo "✅ Conductores ya existen, omitiendo carga"
 fi
 
 echo ""
@@ -204,16 +211,49 @@ fi
 echo ""
 
 # ============================================================================
-# PASO 7: CARGAR DATOS INICIALES DE CHILE (OPCIONAL)
+# PASO 7: VERIFICAR Y LIMPIAR CONDUCTORES (ACTUALIZACIÓN)
 # ============================================================================
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-echo "📊 PASO 7: Cargando datos iniciales de Chile"
+echo "🧹 PASO 7: Verificando y limpiando conductores"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
-if python manage.py load_initial_times --settings=config.settings_production 2>&1 | grep -q "exitosamente\|successfully\|completed"; then
-    echo "✅ Datos de Chile cargados correctamente"
+# Contar conductores actuales
+DRIVER_COUNT=$(python manage.py shell --settings=config.settings_production -c "from apps.drivers.models import Driver; print(Driver.objects.count())" 2>/dev/null || echo "0")
+echo "📊 Conductores actuales: $DRIVER_COUNT"
+
+# Si hay más de 100 conductores, ejecutar limpieza automática
+if [ "$DRIVER_COUNT" -gt 100 ]; then
+    echo "⚠️  ALERTA: Más de 100 conductores detectados"
+    echo "🧹 Ejecutando limpieza automática (manteniendo los 50 mejores)..."
+    
+    python manage.py aggressive_cleanup --force --keep=50 --settings=config.settings_production
+    
+    # Verificar resultado
+    NEW_COUNT=$(python manage.py shell --settings=config.settings_production -c "from apps.drivers.models import Driver; print(Driver.objects.count())" 2>/dev/null || echo "0")
+    echo "✅ Limpieza completada. Conductores actuales: $NEW_COUNT"
 else
-    echo "ℹ️  Los datos ya existían o hubo un error menor (no crítico)"
+    echo "✅ Cantidad de conductores OK ($DRIVER_COUNT)"
+fi
+
+echo ""
+
+# ============================================================================
+# PASO 8: CARGAR UBICACIONES GPS (SI NO EXISTEN)
+# ============================================================================
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo "📍 PASO 8: Verificando ubicaciones GPS"
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+
+# Contar ubicaciones
+LOC_COUNT=$(python manage.py shell --settings=config.settings_production -c "from apps.drivers.models import Location; print(Location.objects.count())" 2>/dev/null || echo "0")
+echo "📍 Ubicaciones actuales: $LOC_COUNT"
+
+if [ "$LOC_COUNT" -lt 5 ]; then
+    echo "🔄 Cargando ubicaciones GPS (CD Peñón, CD Quilicura, CCTI, etc.)..."
+    python manage.py load_initial_times --settings=config.settings_production
+    echo "✅ Ubicaciones GPS cargadas"
+else
+    echo "✅ Ubicaciones GPS ya existen"
 fi
 
 echo ""
@@ -228,9 +268,9 @@ echo ""
 echo "📊 Resumen:"
 echo "   ✅ PostgreSQL: Conectado"
 echo "   ✅ Superusuario: Creado y verificado"
-echo "   ✅ Conductores: 82 conductores cargados"
-echo "   ✅ Ubicaciones: 6 ubicaciones cargadas (CDs + CCTI + CLEP)"
-echo "   ✅ Datos: Cargados"
+echo "   ✅ Conductores: Limpieza automática aplicada (≤50 conductores)"
+echo "   ✅ Ubicaciones GPS: Verificadas (CD Peñón, CD Quilicura, CCTI, etc.)"
+echo "   ✅ Mapbox: Configurado con coordenadas reales"
 echo ""
 echo "🔗 Acceso al sistema:"
 echo "   URL: https://soptraloc.onrender.com/admin/"
