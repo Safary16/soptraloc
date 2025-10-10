@@ -1,7 +1,34 @@
 from django.contrib import admin
 from django.db.models import ProtectedError
 from django.contrib import messages
-from .models import Driver, Assignment, Alert, TrafficAlert
+from .models import Driver, Assignment, Alert, TrafficAlert, Location
+
+
+@admin.register(Location)
+class LocationAdmin(admin.ModelAdmin):
+    """Admin para Location - modelo central del sistema."""
+    list_display = ['name', 'code', 'city', 'region', 'country', 'is_active', 'created_at']
+    list_filter = ['is_active', 'city', 'region', 'country', 'created_at']
+    search_fields = ['name', 'code', 'city', 'address']
+    readonly_fields = ['id', 'created_at', 'updated_at']
+    ordering = ['name']
+    
+    fieldsets = (
+        ('Información Básica', {
+            'fields': ('name', 'code')
+        }),
+        ('Ubicación Geográfica', {
+            'fields': ('address', 'city', 'region', 'country', 'latitude', 'longitude')
+        }),
+        ('Estado', {
+            'fields': ('is_active',)
+        }),
+        ('Auditoría', {
+            'fields': ('id', 'created_at', 'updated_at'),
+            'classes': ('collapse',)
+        })
+    )
+
 
 @admin.register(Driver)
 class DriverAdmin(admin.ModelAdmin):

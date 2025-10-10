@@ -248,45 +248,46 @@ User.add_to_class('role', property(get_user_role))
 # Este modelo existe SOLO para que migraciones históricas (containers.0001,
 # routing.0001, warehouses.0001) puedan referenciar "core.Location".
 # 
-# En producción:
-# - La tabla 'core_location' existe y es gestionada por drivers.Location
-# - Este modelo NO se usa (drivers.Location es el modelo real)
-# - managed=True permite que tests (DB desde cero) funcionen
+# ⚠️ IMPORTANTE: Los campos DEBEN coincidir EXACTAMENTE con drivers.Location
+# La tabla 'core_location' es gestionada por drivers.Location (managed=True)
+# Este modelo es solo un proxy para migraciones antiguas (managed=False)
 #
 # Migration path:
-# core.0001 → crea location (UUID)
-# drivers.0014 → convierte a VARCHAR
+# core.0001 → crea location con UUID
+# drivers.0002 → convierte UUID → VARCHAR(32) sin guiones
+# drivers.0014 → ajusta metadata a CharField
 # core.0004 → elimina metadata (DeleteModel) PERO drivers sigue gestionando tabla
 class Location(models.Model):
     """
-    Modelo histórico de Location.
-    USAR drivers.Location en código nuevo.
+    Modelo histórico de Location para compatibilidad con migraciones antiguas.
+    
+    ⚠️ NO USAR ESTE MODELO - Importar desde drivers.models:
+        from apps.drivers.models import Location
+    
+    Este modelo es solo un proxy (managed=False) de la tabla real que
+    drivers.Location gestiona (managed=True).
     """
-    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    # CRÍTICO: Los campos deben coincidir con drivers.Location
+    id = models.CharField(
+        max_length=32,
+        primary_key=True,
+        editable=False,
+    )  # VARCHAR(32) sin guiones (UUID.hex)
+    
     name = models.CharField(max_length=200)
-    address = models.TextField()
+    code = models.CharField(max_length=20)  # Agregado en drivers
+    address = models.TextField(blank=True)
     latitude = models.DecimalField(max_digits=10, decimal_places=8, null=True, blank=True)
     longitude = models.DecimalField(max_digits=11, decimal_places=8, null=True, blank=True)
-    city = models.CharField(max_length=100)
-    region = models.CharField(max_length=100)
+    city = models.CharField(max_length=100, blank=True)
+    region = models.CharField(max_length=100, blank=True)
     country = models.CharField(max_length=100, default='Chile')
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
-    created_by = models.ForeignKey(
-        User,
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
-        related_name='%(class)s_created'
-    )
-    updated_by = models.ForeignKey(
-        User,
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
-        related_name='%(class)s_updated'
-    )
+    
+    # NOTA: created_by/updated_by NO existen en drivers.Location
+    # No los incluimos aquí para evitar inconsistencias
     
     class Meta:
         db_table = 'core_location'
