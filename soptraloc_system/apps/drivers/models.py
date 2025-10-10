@@ -37,7 +37,7 @@ class Location(models.Model):
     class Meta:
         # NOTA: Container FK apunta a 'core_location', usamos esa tabla
         db_table = 'core_location'
-        managed = False  # core.Location gestiona la tabla (managed=True allí)
+        managed = True  # Gestiona la tabla real en producción
         verbose_name = 'Ubicación'
         verbose_name_plural = 'Ubicaciones'
         ordering = ['name']

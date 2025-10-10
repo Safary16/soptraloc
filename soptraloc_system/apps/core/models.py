@@ -290,7 +290,7 @@ class Location(models.Model):
     
     class Meta:
         db_table = 'core_location'
-        managed = True  # Debe ser True para que tests funcionen (crean DB desde cero)
+        managed = False  # NO gestionar - drivers.Location gestiona la tabla real
         app_label = 'core'
         verbose_name = "Ubicación (Histórico)"
         verbose_name_plural = "Ubicaciones (Histórico)"
