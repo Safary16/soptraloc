@@ -48,7 +48,20 @@ class TimeMatrixSerializer(serializers.ModelSerializer):
     
     class Meta:
         model = TimeMatrix
-        fields = '__all__'
+        fields = [
+            'avg_travel_time',
+            'created_at',
+            'from_location',
+            'last_updated',
+            'loading_time',
+            'max_travel_time',
+            'min_travel_time',
+            'to_location',
+            'total_trips',
+            'travel_time',
+            'unloading_time',
+            'updated_at'
+        ]
         read_only_fields = ('created_at', 'updated_at', 'last_updated')
 
 
@@ -83,7 +96,18 @@ class AlertSerializer(serializers.ModelSerializer):
     
     class Meta:
         model = Alert
-        fields = '__all__'
+        fields = [
+            'container',
+            'driver',
+            'fecha_creacion',
+            'fecha_resolucion',
+            'is_active',
+            'mensaje',
+            'prioridad',
+            'resuelto_por',
+            'tipo',
+            'titulo'
+        ]
         read_only_fields = ('fecha_creacion',)
 
 
@@ -95,5 +119,27 @@ class TrafficAlertSerializer(serializers.ModelSerializer):
     
     class Meta:
         model = TrafficAlert
-        fields = '__all__'
+        fields = [
+            'acknowledged',
+            'acknowledged_at',
+            'actual_time_minutes',
+            'alert_type',
+            'alternative_routes',
+            'assignment',
+            'created_at',
+            'delay_minutes',
+            'departure_time',
+            'destination_name',
+            'driver',
+            'estimated_arrival',
+            'estimated_time_minutes',
+            'has_alternatives',
+            'is_active',
+            'message',
+            'origin_name',
+            'raw_data',
+            'traffic_level',
+            'updated_at',
+            'warnings'
+        ]
         read_only_fields = ('created_at', 'updated_at')
