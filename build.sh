@@ -31,8 +31,10 @@ cd soptraloc_system
 mkdir -p logs
 
 # 🔧 CRÍTICO: Reparar tipo de Location.id ANTES de migraciones
-echo "🔧 Ejecutando reparación de Location.id (UUID → VARCHAR)..."
-python fix_location_type_render.py || echo "⚠️  Fix script falló, continuando..."
+echo "🔧 CRÍTICO: Convirtiendo Location UUID → VARCHAR (SQL directo)..."
+python fix_location_db_direct.py
+
+echo "🗄️ Ejecutando migraciones..."
 
 # Aplicar migraciones de base de datos
 echo "🔄 Aplicando migraciones de base de datos..."
