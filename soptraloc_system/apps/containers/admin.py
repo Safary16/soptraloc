@@ -7,14 +7,15 @@ from .models import Container, ContainerMovement, ContainerDocument, ContainerIn
 class ContainerAdmin(admin.ModelAdmin):
     list_display = (
         'container_number', 'container_type', 'status_colored', 'position_status', 
-        'client', 'vessel', 'eta', 'conductor_asignado', 'is_active'
+        'client', 'vessel', 'eta', 'scheduled_date', 'conductor_asignado', 'is_active'
     )
     list_filter = (
         'container_type', 'status', 'position_status', 'client', 
-        'vessel', 'is_active', 'created_at'
+        'vessel', 'is_active', 'created_at', 'scheduled_date'
     )
     search_fields = ('container_number', 'seal_number', 'customs_document', 'client__name', 'vessel__name')
     readonly_fields = ('id', 'created_at', 'updated_at')
+    list_editable = ('scheduled_date',)  # Permite edición rápida desde lista
     list_per_page = 25
     date_hierarchy = 'eta'
     

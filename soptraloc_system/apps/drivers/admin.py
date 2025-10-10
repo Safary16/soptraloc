@@ -1,4 +1,6 @@
 from django.contrib import admin
+from django.db.models import ProtectedError
+from django.contrib import messages
 from .models import Driver, Assignment, Alert, TrafficAlert
 
 @admin.register(Driver)
@@ -7,6 +9,7 @@ class DriverAdmin(admin.ModelAdmin):
     list_filter = ['tipo_conductor', 'estado', 'ubicacion_actual', 'coordinador', 'is_active']
     search_fields = ['nombre', 'rut', 'ppu', 'telefono']
     list_editable = ['estado', 'ubicacion_actual']
+    actions = ['safe_delete_drivers']
     
     fieldsets = (
         ('Información Personal', {
@@ -30,6 +33,56 @@ class DriverAdmin(admin.ModelAdmin):
     )
     
     readonly_fields = ['tiempo_en_ubicacion', 'created_at', 'updated_at']
+    
+    def safe_delete_drivers(self, request, queryset):
+        """
+        Elimina conductores de forma segura, manejando relaciones.
+        """
+        deleted_count = 0
+        error_count = 0
+        errors = []
+        
+        for driver in queryset:
+            try:
+                # Limpiar asignaciones
+                if driver.contenedor_asignado:
+                    driver.contenedor_asignado.conductor_asignado = None
+                    driver.contenedor_asignado.save()
+                
+                # Limpiar asignaciones relacionadas
+                Assignment.objects.filter(driver=driver).delete()
+                
+                # Eliminar
+                driver_name = driver.nombre
+                driver.delete()
+                deleted_count += 1
+                
+            except ProtectedError as e:
+                error_count += 1
+                errors.append(f"{driver.nombre} (PPU: {driver.ppu}) - tiene relaciones protegidas")
+            except Exception as e:
+                error_count += 1
+                errors.append(f"{driver.nombre} - {str(e)}")
+        
+        # Mensajes al usuario
+        if deleted_count > 0:
+            self.message_user(
+                request, 
+                f"✓ {deleted_count} conductor(es) eliminado(s) exitosamente.",
+                level=messages.SUCCESS
+            )
+        
+        if error_count > 0:
+            error_msg = f"⚠ {error_count} conductor(es) con errores:\n" + "\n".join(errors[:5])
+            if len(errors) > 5:
+                error_msg += f"\n... y {len(errors) - 5} más"
+            self.message_user(request, error_msg, level=messages.WARNING)
+    
+    safe_delete_drivers.short_description = "🗑️ Eliminar conductores seleccionados (seguro)"
+    
+    def delete_queryset(self, request, queryset):
+        """Override del delete masivo para usar safe_delete"""
+        self.safe_delete_drivers(request, queryset)
 
 @admin.register(Assignment)
 class AssignmentAdmin(admin.ModelAdmin):

@@ -361,26 +361,28 @@ class ExcelColumnDetector:
     """Detecta columnas en archivos Excel de forma flexible"""
     
     # Mapeos de palabras clave a nombre de columna estándar
+    # ORDEN IMPORTA: más específicos primero para evitar falsos positivos
     COLUMN_KEYWORDS = {
-        'container': ['contenedor', 'container', 'cont'],
-        'client': ['cliente', 'client', 'customer'],
+        'container': ['contenedor', 'container', 'cont', 'equipo'],
+        'client': ['cliente', 'client', 'customer', 'consignatario'],
         'port': ['puerto', 'port'],
-        'eta': ['eta', 'arribo'],
-        'type': ['tipo', 'type', 'tamaño', 'size'],
-        'tare': ['tara', 'peso vacio', 'tare', 'empty weight'],
-        'cargo_weight': ['peso carga', 'cargo weight', 'carga'],
-        'total_weight': ['peso total', 'total weight', 'bruto'],
+        'eta': ['eta', 'arribo', 'llegada'],
+        'type': ['tipo', 'type', 'tamaño', 'size', 'teu'],
+        # PESOS - Múltiples variantes para capturar siempre
+        'tare': ['tara', 'peso vacio', 'tare', 'empty weight', 'pesovacio', 'weight empty'],
+        'cargo_weight': ['peso carga', 'cargo weight', 'pesocarga', 'neto', 'net weight', 'peso neto'],
+        'total_weight': ['peso total', 'total weight', 'pesototal', 'bruto', 'gross', 'peso bruto', 'gross weight', 'kg'],
         'seal': ['sello', 'seal', 'precinto'],
-        'cargo_description': ['descripcion', 'mercaderia', 'cargo', 'description'],
-        'terminal': ['terminal'],
-        'agency': ['agencia', 'agency'],
-        'shipping_line': ['linea', 'naviera', 'shipping', 'carrier'],
-        'release_date': ['fecha liberacion', 'fecha salida', 'release date'],
+        'cargo_description': ['descripcion', 'mercaderia', 'cargo', 'description', 'mercancia', 'commodity'],
+        'terminal': ['terminal', 'tps', 'sitio'],
+        'agency': ['agencia', 'agency', 'agent'],
+        'shipping_line': ['linea', 'naviera', 'shipping', 'carrier', 'armador'],
+        'release_date': ['fecha liberacion', 'fecha salida', 'release date', 'liberacion'],
         'release_time': ['hora liberacion', 'hora salida', 'release time'],
-        'scheduled_date': ['fecha programacion', 'fecha entrega', 'scheduled date'],
+        'scheduled_date': ['fecha programacion', 'fecha entrega', 'scheduled date', 'programacion'],
         'scheduled_time': ['hora programacion', 'hora entrega', 'scheduled time'],
-        'cd_location': ['cd', 'destino', 'destination'],
-        'demurrage_date': ['demurrage', 'devolucion', 'fecha devolucion'],
+        'cd_location': ['cd', 'destino', 'destination', 'bodega'],
+        'demurrage_date': ['demurrage', 'devolucion', 'fecha devolucion', 'almacenaje'],
     }
     
     @classmethod

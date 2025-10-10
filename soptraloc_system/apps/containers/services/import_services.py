@@ -120,15 +120,34 @@ class VesselImportService:
         if vessel_name:
             container.vessel = EntityFactory.get_or_create_vessel(vessel_name)
         
-        # Pesos
+        # Pesos - CRÍTICO: Siempre intentar extraer
+        peso_encontrado = False
+        
         if column_map.get('tare') and not pd.isna(row.get(column_map['tare'])):
-            container.weight_empty = float(row[column_map['tare']])
+            try:
+                container.weight_empty = float(row[column_map['tare']])
+                peso_encontrado = True
+            except (ValueError, TypeError) as e:
+                logger.warning(f"Error convirtiendo tara para {formatted_number}: {e}")
         
         if column_map.get('cargo_weight') and not pd.isna(row.get(column_map['cargo_weight'])):
-            container.cargo_weight = float(row[column_map['cargo_weight']])
+            try:
+                container.cargo_weight = float(row[column_map['cargo_weight']])
+                peso_encontrado = True
+            except (ValueError, TypeError) as e:
+                logger.warning(f"Error convirtiendo peso carga para {formatted_number}: {e}")
         
         if column_map.get('total_weight') and not pd.isna(row.get(column_map['total_weight'])):
-            container.total_weight = float(row[column_map['total_weight']])
+            try:
+                container.total_weight = float(row[column_map['total_weight']])
+                peso_encontrado = True
+            except (ValueError, TypeError) as e:
+                logger.warning(f"Error convirtiendo peso total para {formatted_number}: {e}")
+        
+        # Advertencia si NO se encontró ningún peso
+        if not peso_encontrado:
+            logger.warning(f"⚠️ CONTENEDOR {formatted_number}: Sin datos de peso en Excel")
+            self.results['messages'].append(f"⚠️ {formatted_number}: Sin datos de peso")
         
         # Sello
         if column_map.get('seal'):
