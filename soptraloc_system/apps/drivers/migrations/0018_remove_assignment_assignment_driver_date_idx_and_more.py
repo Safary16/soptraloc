@@ -3,6 +3,32 @@
 from django.db import migrations
 
 
+def safe_remove_indexes(apps, schema_editor):
+    """
+    Elimina índices solo si existen.
+    En SQLite dev, estos índices pueden no existir.
+    """
+    if schema_editor.connection.vendor != 'postgresql':
+        # En SQLite, skip - estos índices pueden no existir
+        return
+    
+    # En PostgreSQL, intentar eliminar (SQL condicional)
+    with schema_editor.connection.cursor() as cursor:
+        indexes_to_remove = [
+            ('drivers_assignment', 'assignment_driver_date_idx'),
+            ('drivers_assignment', 'assignment_container_estado_idx'),
+            ('drivers_assignment', 'assignment_estado_fecha_idx'),
+            ('drivers_driver', 'driver_rut_idx'),
+            ('drivers_driver', 'driver_estado_idx'),
+            ('drivers_driver', 'driver_ubicacion_idx'),
+            ('core_location', 'location_name_idx'),
+            ('core_location', 'location_code_idx'),
+        ]
+        
+        for table, index_name in indexes_to_remove:
+            cursor.execute(f"DROP INDEX IF EXISTS {index_name};")
+
+
 class Migration(migrations.Migration):
 
     dependencies = [
@@ -10,36 +36,8 @@ class Migration(migrations.Migration):
     ]
 
     operations = [
-        migrations.RemoveIndex(
-            model_name="assignment",
-            name="assignment_driver_date_idx",
-        ),
-        migrations.RemoveIndex(
-            model_name="assignment",
-            name="assignment_container_estado_idx",
-        ),
-        migrations.RemoveIndex(
-            model_name="assignment",
-            name="assignment_estado_fecha_idx",
-        ),
-        migrations.RemoveIndex(
-            model_name="driver",
-            name="driver_rut_idx",
-        ),
-        migrations.RemoveIndex(
-            model_name="driver",
-            name="driver_estado_idx",
-        ),
-        migrations.RemoveIndex(
-            model_name="driver",
-            name="driver_ubicacion_idx",
-        ),
-        migrations.RemoveIndex(
-            model_name="location",
-            name="location_name_idx",
-        ),
-        migrations.RemoveIndex(
-            model_name="location",
-            name="location_code_idx",
+        migrations.RunPython(
+            safe_remove_indexes,
+            reverse_code=migrations.RunPython.noop
         ),
     ]
