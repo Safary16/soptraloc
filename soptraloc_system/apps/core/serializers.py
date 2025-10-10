@@ -13,19 +13,18 @@ class CompanySerializer(serializers.ModelSerializer):
     class Meta:
         model = Company
         fields = [
-            'date_joined',
+            'id',
+            'name',
+            'code',
+            'rut',
             'email',
-            'first_name',
-            'groups',
+            'phone',
+            'address',
             'is_active',
-            'is_staff',
-            'is_superuser',
-            'last_login',
-            'last_name',
-            'user_permissions',
-            'username'
+            'created_at',
+            'updated_at',
         ]
-        read_only_fields = ('id', 'created_at', 'updated_at', 'created_by', 'updated_by')
+        read_only_fields = ('id', 'created_at', 'updated_at')
 
 
 class VehicleSerializer(serializers.ModelSerializer):
@@ -35,6 +34,8 @@ class VehicleSerializer(serializers.ModelSerializer):
     class Meta:
         model = Vehicle
         fields = [
+            'vehicle_type_display',
+            'status_display',
             'brand',
             'created_at',
             'created_by',
@@ -58,6 +59,7 @@ class MovementCodeSerializer(serializers.ModelSerializer):
     class Meta:
         model = MovementCode
         fields = [
+            'is_used',
             'code',
             'created_at',
             'created_by',

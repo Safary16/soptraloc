@@ -63,16 +63,22 @@ def get_or_create_location(
     if not code:
         code = _generate_unique_code(cleaned_name)
     
-    location = Location.objects.create(
-        name=cleaned_name,
-        code=code,
-        address=cleaned_name,  # Address por defecto = name
-        city=city,
-        region=region,
-        country=country,
-        created_by=user,
-        updated_by=user,
-    )
+    create_kwargs = {
+        "name": cleaned_name,
+        "code": code,
+        "address": cleaned_name,
+        "city": city,
+        "region": region,
+        "country": country,
+    }
+
+    # Solo incluir metadata si el modelo la expone (compatibilidad legacy).
+    if hasattr(Location, "created_by"):
+        create_kwargs["created_by"] = user
+    if hasattr(Location, "updated_by"):
+        create_kwargs["updated_by"] = user
+
+    location = Location.objects.create(**create_kwargs)
     
     logger.info(f"Ubicación creada: {cleaned_name} (código: {code})")
     return location

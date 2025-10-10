@@ -167,7 +167,7 @@ class LocationPair(BaseModel):
         )
         
         if is_peak:
-            return int(base_time * float(self.peak_hours_multiplier))
+            return int(base_time * float(self.peak_hour_multiplier))
         
         return base_time
 
@@ -283,15 +283,49 @@ class OperationTime(BaseModel):
     
     def get_estimated_time(self, container=None, current_time=None):
         """
-        Retorna tiempo estimado considerando variables.
+        Retorna tiempo estimado considerando variables contextuales.
+        Aplica ajustes basados en tamaño de contenedor, tipo de carga y hora del día.
         """
-        # Si tenemos ML reciente, usarlo
+        # Si tenemos ML reciente con alta confianza, priorizarlo
         if self.ml_predicted_time and self.ml_confidence and self.ml_confidence > 70:
             return self.ml_predicted_time
         
-        # Por ahora retornar promedio
-        # TODO: Ajustar según container.size, cargo_type, etc.
-        return self.avg_time
+        # Tiempo base
+        base_time = self.avg_time
+        
+        # Ajuste por tamaño de contenedor si aplica
+        if container and self.depends_on_container_size:
+            size_multipliers = {
+                '20ft': 0.85,
+                '40ft': 1.0,
+                '40hc': 1.15,
+                '40hr': 1.15,
+                '45ft': 1.20,
+            }
+            multiplier = size_multipliers.get(container.container_type, 1.0)
+            base_time = int(base_time * multiplier)
+        
+        # Ajuste por tipo de carga si aplica
+        if container and self.depends_on_cargo_type:
+            # Contenedores refrigerados requieren más tiempo
+            if container.container_type == 'reefer':
+                base_time = int(base_time * 1.25)
+            # Cargas peligrosas requieren inspecciones adicionales
+            elif container.cargo_description and 'PELIGROSA' in container.cargo_description.upper():
+                base_time = int(base_time * 1.30)
+        
+        # Ajuste por hora del día si aplica
+        if current_time and self.depends_on_time_of_day:
+            hour = current_time.hour if hasattr(current_time, 'hour') else timezone.now().hour
+            # Horas pico (8-10, 18-20) más lentas
+            if (8 <= hour <= 10) or (18 <= hour <= 20):
+                base_time = int(base_time * 1.20)
+            # Horas nocturnas más rápidas
+            elif hour < 6 or hour > 22:
+                base_time = int(base_time * 0.85)
+        
+        # Asegurar tiempo mínimo razonable
+        return max(base_time, self.min_time)
 
 
 class ActualTripRecord(BaseModel):
@@ -335,11 +369,13 @@ class ActualTripRecord(BaseModel):
     )
     
     # Tiempos
-    departure_time = models.DateTimeField(verbose_name="Hora de salida")
-    arrival_time = models.DateTimeField(verbose_name="Hora de llegada")
+    departure_time = models.DateTimeField(verbose_name="Hora de salida", null=True, blank=True)
+    arrival_time = models.DateTimeField(verbose_name="Hora de llegada", null=True, blank=True)
     duration_minutes = models.IntegerField(
         verbose_name="Duración en minutos",
-        help_text="Calculado automáticamente"
+        help_text="Calculado automáticamente",
+        null=True,
+        blank=True,
     )
     
     # Variables contextuales (para ML)

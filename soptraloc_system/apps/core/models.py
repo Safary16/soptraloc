@@ -1,7 +1,7 @@
 import uuid
 
 from django.contrib.auth.models import User
-from django.db import models
+from django.db import models, IntegrityError
 from django.utils import timezone
 from django.db.models.signals import post_save
 from django.dispatch import receiver
@@ -93,6 +93,7 @@ class MovementCode(BaseModel):
     code = models.CharField(max_length=50, unique=True)
     movement_type = models.CharField(max_length=20, choices=MOVEMENT_TYPES)
     description = models.TextField(blank=True)
+    used_at = models.DateTimeField(null=True, blank=True)
 
     class Meta:
         verbose_name = "Código de Movimiento"
@@ -102,14 +103,34 @@ class MovementCode(BaseModel):
         return f"{self.code} - {self.get_movement_type_display()}"
 
     @staticmethod
-    def generate_code(movement_type):
-        """Genera un código único basado en el tipo y timestamp."""
-        timestamp = timezone.now().strftime('%Y%m%d%H%M%S')
+    def generate_code(movement_type: str):
+        """Genera un código único; evita colisiones en alta concurrencia/tests."""
+        prefix = movement_type.upper()
+        description = f"Generated code for {movement_type}"
+        # Intentar algunas veces por si hay colisión
+        for _ in range(5):
+            timestamp = timezone.now().strftime('%Y%m%d%H%M%S%f')
+            suffix = uuid.uuid4().hex[:6].upper()
+            code = f"{prefix}_{timestamp}_{suffix}"
+            try:
+                return MovementCode.objects.create(
+                    code=code,
+                    movement_type=movement_type,
+                    description=description,
+                )
+            except IntegrityError:
+                continue
+        # Último intento directo (muy improbable llegar aquí)
         return MovementCode.objects.create(
-            code=f"{movement_type.upper()}_{timestamp}",
+            code=f"{prefix}_{uuid.uuid4().hex.upper()}",
             movement_type=movement_type,
-            description=f"Generated code for {movement_type}"
+            description=description,
         )
+
+    def use_code(self):
+        """Marca el código como usado registrando timestamp."""
+        if not self.used_at:
+            self.used_at = timezone.now()
 
 
 # FASE 6: RBAC - Perfil de usuario con roles
@@ -175,10 +196,19 @@ class UserProfile(models.Model):
     
     def is_operator(self):
         """Verifica si el usuario es operador."""
-        return self.is_admin() or self.role == 'operator'
+        # Operador si tiene rol operator o es admin/staff.
+        # Usamos consulta a BD para evitar problemas de caché cuando el rol se actualiza con .update().
+        if self.is_admin():
+            return True
+        try:
+            latest_role = type(self).objects.only('role').get(pk=self.pk).role
+            return latest_role == 'operator'
+        except type(self).DoesNotExist:
+            return self.role == 'operator'
     
     def can_modify_data(self):
         """Verifica si el usuario puede modificar datos."""
+        # En este sistema, operador y admin pueden modificar datos
         return self.is_operator()
 
 

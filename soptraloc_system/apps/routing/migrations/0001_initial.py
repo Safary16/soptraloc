@@ -224,7 +224,7 @@ class Migration(migrations.Migration):
                     models.ForeignKey(
                         on_delete=django.db.models.deletion.CASCADE,
                         related_name="routes",
-                        to="core.driver",
+                        to="drivers.driver",
                         verbose_name="Conductor",
                     ),
                 ),
@@ -504,7 +504,7 @@ class Migration(migrations.Migration):
                         blank=True,
                         null=True,
                         on_delete=django.db.models.deletion.SET_NULL,
-                        to="core.driver",
+                        to="drivers.driver",
                         verbose_name="Conductor",
                     ),
                 ),

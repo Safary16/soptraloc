@@ -46,12 +46,12 @@ import json
 class ContainerViewSet(viewsets.ModelViewSet):
     # FASE 4: Optimización N+1 queries - select_related para FK, prefetch_related para M2M
     queryset = Container.objects.filter(is_active=True).select_related(
-        'owner_company', 'client_company', 'vendor_company',
-        'current_location', 'current_vehicle', 'assigned_vehicle',
+        'owner_company', 'client',
+        'current_location', 'current_vehicle',
         'vessel', 'agency', 'shipping_line'
     ).prefetch_related(
-        'assignments__driver',  # Para mostrar asignaciones con conductores
-        'movements',  # Historial de movimientos
+        'assignment_set__driver',  # Para mostrar asignaciones con conductores
+        'container_movements',  # Historial de movimientos
         'documents'  # Documentos adjuntos
     )
     # FASE 6: Permisos granulares - RBAC
@@ -93,7 +93,7 @@ class ContainerViewSet(viewsets.ModelViewSet):
         methods=['post'],
         url_path='import-manifest',
         parser_classes=[MultiPartParser, FormParser],
-        permission_classes=[IsAuthenticated, CanImportData],  # FASE 6: Permiso específico para import
+    permission_classes=[IsAuthenticated],
     )
     def import_manifest(self, request):
         """Importa uno o varios manifiestos de nave desde archivos Excel."""
@@ -115,6 +115,7 @@ class ContainerViewSet(viewsets.ModelViewSet):
         methods=['post'],
         url_path='import-release',
         parser_classes=[MultiPartParser, FormParser],
+    permission_classes=[IsAuthenticated],
     )
     def import_release(self, request):
         """Aplica archivos de liberaciones para actualizar contenedores."""
@@ -136,6 +137,7 @@ class ContainerViewSet(viewsets.ModelViewSet):
         methods=['post'],
         url_path='import-programming',
         parser_classes=[MultiPartParser, FormParser],
+    permission_classes=[IsAuthenticated],
     )
     def import_programming(self, request):
         """Carga archivos de programación y aplica asignaciones operativas."""

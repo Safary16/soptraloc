@@ -264,7 +264,7 @@ class Container(BaseModel):
     
     # Máquina de estados: transiciones permitidas
     ALLOWED_TRANSITIONS = {
-        'available': ['loading', 'maintenance', 'POR_ARRIBAR'],
+        'available': ['loading', 'maintenance', 'POR_ARRIBAR', 'in_transit'],
         'in_transit': ['loading', 'unloading'],
         'loading': ['in_transit', 'available'],
         'unloading': ['available', 'warehouse'],
@@ -279,11 +279,11 @@ class Container(BaseModel):
         'SECUENCIADO': ['LIBERADO'],
         'LIBERADO': ['PROGRAMADO'],
         'PROGRAMADO': ['ASIGNADO'],
-        'ASIGNADO': ['EN_RUTA', 'PROGRAMADO'],  # Puede volver a PROGRAMADO si se cancela
+    'ASIGNADO': ['EN_RUTA', 'PROGRAMADO', 'EN_RUTA_DEVOLUCION'],  # Puede volver a PROGRAMADO si se cancela
         'EN_RUTA': ['ARRIBADO'],
         'ARRIBADO': ['DESCARGADO_CD'],
         'DESCARGADO_CD': ['DISPONIBLE_DEVOLUCION'],
-        'DISPONIBLE_DEVOLUCION': ['EN_RUTA_DEVOLUCION'],
+    'DISPONIBLE_DEVOLUCION': ['ASIGNADO', 'EN_RUTA_DEVOLUCION'],
         'EN_RUTA_DEVOLUCION': ['FINALIZADO'],
         'FINALIZADO': [],  # Estado terminal
     }
@@ -344,7 +344,7 @@ class Container(BaseModel):
     def __str__(self):
         if self.client:
             return f"{self.container_number} - {self.client.name}"
-        return f"{self.container_number} - {self.get_container_type_display()}"
+        return f"{self.container_number}"
     
     def get_current_position(self):
         """Retorna la posición actual del contenedor."""
@@ -446,6 +446,51 @@ class ContainerMovement(BaseModel):
     def __str__(self):
         return f"{self.container.container_number} - {self.get_movement_type_display()} - {self.movement_date.strftime('%d/%m/%Y %H:%M')}"
     
+    def __init__(self, *args, **kwargs):
+        # Compatibilidad con tests legacy que usan origin_location/destination_location
+        origin_legacy = kwargs.pop('origin_location', None)
+        destination_legacy = kwargs.pop('destination_location', None)
+        super().__init__(*args, **kwargs)
+        if origin_legacy is not None:
+            self.from_location = origin_legacy
+        if destination_legacy is not None:
+            self.to_location = destination_legacy
+
+    @property
+    def origin_location(self):
+        """Mantiene compatibilidad con código que usa origin_location."""
+        return self.from_location
+
+    @origin_location.setter
+    def origin_location(self, value):
+        self.from_location = value
+
+    @property
+    def destination_location(self):
+        """Mantiene compatibilidad con código que usa destination_location."""
+        return self.to_location
+
+    @destination_location.setter
+    def destination_location(self, value):
+        self.to_location = value
+
+    # Alias de compatibilidad para tests legacy
+    @property
+    def origin_location(self):
+        return self.from_location
+
+    @origin_location.setter
+    def origin_location(self, value):
+        self.from_location = value
+
+    @property
+    def destination_location(self):
+        return self.to_location
+
+    @destination_location.setter
+    def destination_location(self, value):
+        self.to_location = value
+
     def save(self, *args, **kwargs):
         """Actualiza la posición del contenedor al guardar el movimiento."""
         super().save(*args, **kwargs)
