@@ -329,28 +329,14 @@ class EntityFactory:
     def get_or_create_location(name: str, city: str = 'Santiago', 
                                region: str = 'Metropolitana', 
                                user: Optional[User] = None) -> Location:
-        """Obtiene o crea una ubicación"""
-        if not name or not name.strip():
-            name = "Sin Especificar"
+        """
+        Obtiene o crea una ubicación.
         
-        cleaned = name.strip().upper()
-        
-        location, created = Location.objects.get_or_create(
-            name=cleaned,
-            defaults={
-                'address': cleaned,
-                'city': city,
-                'region': region,
-                'country': 'Chile',
-                'created_by': user,
-                'updated_by': user,
-            }
-        )
-        
-        if created:
-            logger.info(f"Ubicación creada: {cleaned}")
-        
-        return location
+        DEPRECADO: Usa apps.drivers.utils.get_or_create_location() directamente.
+        Este método se mantiene por compatibilidad temporal.
+        """
+        from apps.drivers.utils import get_or_create_location as central_get_or_create
+        return central_get_or_create(name=name, city=city, region=region, user=user)
 
 
 # ============================================================================

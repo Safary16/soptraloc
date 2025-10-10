@@ -1,16 +1,8 @@
 """
 Servicios de negocio para la aplicación de contenedores.
-"""
-from .import_services import (
-    VesselImportService,
-    ReleaseScheduleImportService,
-    ProgrammingImportService,
-    ContainerNumberFormatter
-)
 
-__all__ = [
-    'VesselImportService',
-    'ReleaseScheduleImportService', 
-    'ProgrammingImportService',
-    'ContainerNumberFormatter'
-]
+NOTA: import_services.py fue eliminado por ser código huérfano.
+El sistema usa excel_importers.py para importaciones.
+"""
+
+__all__ = []

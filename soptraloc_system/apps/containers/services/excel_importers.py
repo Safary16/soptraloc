@@ -661,7 +661,12 @@ def assign_driver_by_location(container: Container, user: User) -> Optional[Driv
 
     for driver in available_drivers:
         origin, destination = _resolve_assignment_locations(driver, container)
-        duration = _estimate_duration(origin, destination)
+        
+        # Usar DurationPredictor para consistencia con ML
+        from apps.drivers.services.duration_predictor import DurationPredictor
+        predictor = DurationPredictor()
+        duration = predictor.predict(origin, destination, scheduled_datetime) if origin and destination else 120
+        
         if _has_schedule_conflict(driver, scheduled_datetime, duration):
             continue
         try:
@@ -687,17 +692,6 @@ def preferred_driver_types(container: Container) -> List[str]:
     if current == "CCTI" or cd_location.startswith("CD"):
         return ["LOCALERO", "LEASING"]
     return ["TRONCO", "TRONCO_PM", "LEASING", "LOCALERO"]
-
-
-def _estimate_duration(origin: Optional[Location], destination: Optional[Location]) -> int:
-    """Estima la duración de una ruta basada en la matriz de tiempos."""
-    if origin and destination:
-        try:
-            matrix = TimeMatrix.objects.get(from_location=origin, to_location=destination)
-            return matrix.get_total_time()
-        except TimeMatrix.DoesNotExist:
-            return 120
-    return 120
 
 
 def export_liberated_containers(reference_date: Optional[date] = None, include_future: bool = False) -> BytesIO:

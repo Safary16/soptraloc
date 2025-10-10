@@ -38,3 +38,19 @@ flower==2.0.1
 
 # Additional utilities for optimization and analysis
 unicodedata2==15.1.0
+
+# Monitoring and error tracking
+sentry-sdk==2.18.0
+
+# Security and rate limiting
+django-axes==6.5.1
+
+# Cache backend
+django-redis==5.4.0
+
+# Celery beat scheduler
+django-celery-beat==2.7.0
+
+# AWS S3 for media storage
+boto3==1.35.50
+django-storages==1.14.4

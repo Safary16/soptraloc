@@ -545,3 +545,163 @@ class ContainerInspection(BaseModel):
         
     def __str__(self):
         return f"{self.container.container_number} - {self.get_inspection_type_display()} - {self.inspection_date.strftime('%d/%m/%Y')}"
+
+
+# ===== NUEVOS MODELOS REFACTORIZADOS =====
+
+class ContainerSpec(BaseModel):
+    """
+    Especificaciones físicas del contenedor.
+    Separado para reducir complejidad de Container model.
+    """
+    container = models.OneToOneField(
+        Container,
+        on_delete=models.CASCADE,
+        related_name='spec',
+        verbose_name="Contenedor"
+    )
+    
+    # Pesos
+    weight_empty = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        help_text="Peso vacío en kg"
+    )
+    weight_loaded = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        help_text="Peso cargado en kg"
+    )
+    max_weight = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        help_text="Peso máximo permitido en kg"
+    )
+    
+    # Información adicional
+    seal_number = models.CharField(max_length=50, blank=True, verbose_name="Número de sello")
+    special_requirements = models.TextField(blank=True, verbose_name="Requerimientos especiales")
+    
+    class Meta:
+        verbose_name = "Especificación de Contenedor"
+        verbose_name_plural = "Especificaciones de Contenedores"
+    
+    def __str__(self):
+        return f"Specs: {self.container.container_number}"
+
+
+class ContainerImportInfo(BaseModel):
+    """
+    Información específica de contenedores de importación.
+    Separado para no contaminar Container con campos de importación.
+    """
+    container = models.OneToOneField(
+        Container,
+        on_delete=models.CASCADE,
+        related_name='import_info',
+        verbose_name="Contenedor"
+    )
+    
+    # Información de importación
+    sequence_id = models.IntegerField(null=True, blank=True, verbose_name="ID Secuencia")
+    port = models.CharField(max_length=50, blank=True, verbose_name="Puerto")
+    eta = models.DateField(null=True, blank=True, verbose_name="ETA (Estimated Time of Arrival)")
+    vessel = models.ForeignKey(
+        Vessel,
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        verbose_name="Nave"
+    )
+    cargo_description = models.TextField(blank=True, verbose_name="Descripción de carga")
+    
+    # Pesos específicos de importación
+    cargo_weight = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        verbose_name="Peso carga"
+    )
+    total_weight = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        verbose_name="Peso total"
+    )
+    
+    # Terminal
+    terminal = models.ForeignKey(
+        Location,
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name='import_containers',
+        verbose_name="Terminal"
+    )
+    
+    class Meta:
+        verbose_name = "Información de Importación"
+        verbose_name_plural = "Información de Importaciones"
+        indexes = [
+            models.Index(fields=['sequence_id'], name='containers_seq_idx'),
+            models.Index(fields=['eta'], name='containers_eta_idx'),
+        ]
+    
+    def __str__(self):
+        return f"Import Info: {self.container.container_number}"
+
+
+class ContainerSchedule(BaseModel):
+    """
+    Programación y tiempos del contenedor.
+    Separado para facilitar queries de programación.
+    """
+    container = models.OneToOneField(
+        Container,
+        on_delete=models.CASCADE,
+        related_name='schedule',
+        verbose_name="Contenedor"
+    )
+    
+    # Fechas de liberación
+    release_date = models.DateField(null=True, blank=True, verbose_name="Fecha liberación")
+    release_time = models.TimeField(null=True, blank=True, verbose_name="Hora liberación")
+    
+    # Fechas de programación
+    scheduled_date = models.DateField(null=True, blank=True, verbose_name="Fecha programación")
+    scheduled_time = models.TimeField(null=True, blank=True, verbose_name="Hora programación")
+    
+    class Meta:
+        verbose_name = "Programación de Contenedor"
+        verbose_name_plural = "Programaciones de Contenedores"
+        indexes = [
+            models.Index(fields=['release_date'], name='containers_rel_date_idx'),
+            models.Index(fields=['scheduled_date'], name='containers_sch_date_idx'),
+        ]
+    
+    def __str__(self):
+        return f"Schedule: {self.container.container_number}"
+    
+    def get_release_datetime(self):
+        """Retorna datetime combinando release_date + release_time"""
+        if self.release_date:
+            from datetime import datetime, time as dt_time
+            time_obj = self.release_time or dt_time(0, 0)
+            return datetime.combine(self.release_date, time_obj)
+        return None
+    
+    def get_scheduled_datetime(self):
+        """Retorna datetime combinando scheduled_date + scheduled_time"""
+        if self.scheduled_date:
+            from datetime import datetime, time as dt_time
+            time_obj = self.scheduled_time or dt_time(0, 0)
+            return datetime.combine(self.scheduled_date, time_obj)
+        return None

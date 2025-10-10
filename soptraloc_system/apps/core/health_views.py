@@ -80,8 +80,85 @@ def health_check_detailed(request):
         'local_apps': [app for app in settings.INSTALLED_APPS if app.startswith('apps.')]
     }
     
+    # 5. Verificar Redis connection
+    try:
+        from django.core.cache import cache
+        cache.set('health_check', 'ok', 30)
+        if cache.get('health_check') == 'ok':
+            health_status['checks']['redis'] = {
+                'status': 'ok',
+                'message': 'Redis connection successful'
+            }
+        else:
+            health_status['status'] = 'degraded'
+            health_status['checks']['redis'] = {
+                'status': 'warning',
+                'message': 'Redis cache not working correctly'
+            }
+    except Exception as e:
+        logger.warning(f"Health check: Redis warning - {e}")
+        health_status['status'] = 'degraded'
+        health_status['checks']['redis'] = {
+            'status': 'warning',
+            'message': str(e)
+        }
+    
+    # 6. Verificar Celery workers
+    try:
+        from config import celery_app
+        inspect = celery_app.control.inspect()
+        active_workers = inspect.active()
+        stats = inspect.stats()
+        
+        if active_workers and stats:
+            health_status['checks']['celery'] = {
+                'status': 'ok',
+                'workers': len(stats),
+                'active_tasks': sum(len(tasks) for tasks in active_workers.values()) if active_workers else 0
+            }
+        else:
+            health_status['status'] = 'degraded'
+            health_status['checks']['celery'] = {
+                'status': 'warning',
+                'message': 'No active Celery workers detected'
+            }
+    except Exception as e:
+        logger.warning(f"Health check: Celery warning - {e}")
+        health_status['status'] = 'degraded'
+        health_status['checks']['celery'] = {
+            'status': 'warning',
+            'message': str(e)
+        }
+    
+    # 7. Verificar disk space
+    try:
+        import shutil
+        total, used, free = shutil.disk_usage("/")
+        free_percent = (free / total) * 100
+        
+        if free_percent < 10:
+            health_status['status'] = 'degraded'
+            status = 'critical'
+        elif free_percent < 20:
+            status = 'warning'
+        else:
+            status = 'ok'
+        
+        health_status['checks']['disk'] = {
+            'status': status,
+            'free_percent': round(free_percent, 2),
+            'free_gb': round(free / (1024**3), 2)
+        }
+    except Exception as e:
+        logger.warning(f"Health check: Disk space check failed - {e}")
+    
     # Determinar código de estado HTTP
-    status_code = 200 if health_status['status'] == 'healthy' else 503
+    if health_status['status'] == 'healthy':
+        status_code = 200
+    elif health_status['status'] == 'degraded':
+        status_code = 200  # Still return 200 but with warnings
+    else:
+        status_code = 503
     
     return JsonResponse(health_status, status=status_code)
 

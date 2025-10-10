@@ -42,7 +42,7 @@ import json
 
 
 class ContainerViewSet(viewsets.ModelViewSet):
-    queryset = Container.objects.filter(is_active=True).select_related(
+    queryset = Container.objects.select_related('owner_company', 'client', 'current_location').filter(is_active=True).select_related(
         'owner_company', 'current_location', 'current_vehicle'
     )
     parser_classes = [JSONParser, MultiPartParser, FormParser]
@@ -242,15 +242,17 @@ class ContainerViewSet(viewsets.ModelViewSet):
         """
         Asigna un conductor a un contenedor PROGRAMADO.
         
+        REFACTORIZADO: Usa _assign_driver_to_container() para centralizar lógica.
+        
         Body esperado:
         {
             "driver_id": 123,
             "scheduled_datetime": "2025-10-08T10:00:00Z",  # Opcional
-            "origin_id": 5,  # Opcional si el contenedor ya tiene terminal
-            "destination_id": 12,  # Opcional si el contenedor ya tiene cd_location
             "tipo_asignacion": "ENTREGA"  # ENTREGA o DEVOLUCION
         }
         """
+        from apps.drivers.views import _assign_driver_to_container, _compute_scheduled_datetime
+        
         container = self.get_object()
         
         # Validar estado
@@ -277,103 +279,33 @@ class ContainerViewSet(viewsets.ModelViewSet):
                 'error': 'Conductor no encontrado o inactivo'
             }, status=status.HTTP_404_NOT_FOUND)
         
-        # Validar disponibilidad del conductor
-        if not driver.esta_disponible:
-            return Response({
-                'success': False,
-                'error': f'Conductor {driver.nombre} no está disponible. Estado: {driver.get_estado_display()}'
-            }, status=status.HTTP_400_BAD_REQUEST)
-        
-        # Obtener ubicaciones (origen y destino)
-        origin_id = request.data.get('origin_id')
-        destination_id = request.data.get('destination_id')
-        
-        # Usar ubicaciones del contenedor si no se proporcionan
-        from apps.drivers.models import Location
-        try:
-            if origin_id:
-                origin = Location.objects.get(id=origin_id)
-            elif container.terminal:
-                origin = container.terminal
-            elif container.current_location:
-                origin = container.current_location
-            else:
-                return Response({
-                    'success': False,
-                    'error': 'No se pudo determinar ubicación de origen. Proporcione origin_id.'
-                }, status=status.HTTP_400_BAD_REQUEST)
-            
-            if destination_id:
-                destination = Location.objects.get(id=destination_id)
-            elif container.cd_location:
-                # Si cd_location es CharField, buscar Location por nombre/código
-                cd_code = container.cd_location.upper().replace(' ', '_')
-                destination = Location.objects.filter(
-                    Q(code__icontains=cd_code) | 
-                    Q(name__icontains=container.cd_location)
-                ).first()
-                if not destination:
-                    return Response({
-                        'success': False,
-                        'error': f'No se encontró Location para CD: {container.cd_location}'
-                    }, status=status.HTTP_400_BAD_REQUEST)
-            else:
-                return Response({
-                    'success': False,
-                    'error': 'No se pudo determinar ubicación de destino. Proporcione destination_id.'
-                }, status=status.HTTP_400_BAD_REQUEST)
-                
-        except Location.DoesNotExist:
-            return Response({
-                'success': False,
-                'error': 'Ubicación origen o destino no encontrada'
-            }, status=status.HTTP_404_NOT_FOUND)
-        
-        # Fecha programada (usar la del contenedor si existe, o ahora + 1 hora)
+        # Fecha programada (usar la del contenedor si existe)
         scheduled_datetime = request.data.get('scheduled_datetime')
         if scheduled_datetime:
             from django.utils.dateparse import parse_datetime
             scheduled_datetime = parse_datetime(scheduled_datetime)
-        elif container.scheduled_date and container.scheduled_time:
-            from datetime import datetime
-            scheduled_datetime = timezone.make_aware(
-                datetime.combine(container.scheduled_date, container.scheduled_time)
-            )
         else:
-            scheduled_datetime = timezone.now() + timedelta(hours=1)
+            scheduled_datetime = _compute_scheduled_datetime(container)
         
         # Tipo de asignación
         tipo_asignacion = request.data.get('tipo_asignacion', 'ENTREGA')
         if tipo_asignacion not in ['ENTREGA', 'DEVOLUCION']:
             tipo_asignacion = 'ENTREGA'
         
-        # Crear asignación
-        assignment = Assignment.objects.create(
-            container=container,
-            driver=driver,
-            fecha_programada=scheduled_datetime,
-            origen=origin,
-            destino=destination,
-            tipo_asignacion=tipo_asignacion,
-            estado='PENDIENTE',
-            created_by=request.user
-        )
-        
-        # Calcular tiempo estimado usando la matriz de tiempos
-        assignment.calculate_estimated_time(refresh=True)
-        assignment.save()
-        
-        # Actualizar container
-        container.status = 'ASIGNADO'
-        container.conductor_asignado = driver
-        container.tiempo_asignacion = timezone.now()
-        if request.user and hasattr(container, 'updated_by'):
-            container.updated_by = request.user
-        container.save()
-        
-        # Actualizar driver
-        driver.contenedor_asignado = container
-        driver.save()
+        # Usar función central de asignación
+        try:
+            assignment = _assign_driver_to_container(
+                container=container,
+                driver=driver,
+                user=request.user,
+                scheduled_datetime=scheduled_datetime,
+                assignment_type=tipo_asignacion
+            )
+        except ValueError as e:
+            return Response({
+                'success': False,
+                'error': str(e)
+            }, status=status.HTTP_400_BAD_REQUEST)
         
         from apps.drivers.serializers import AssignmentSerializer
         assignment_data = AssignmentSerializer(assignment).data
@@ -1094,7 +1026,7 @@ def urgent_containers_api(request):
     from apps.containers.services.proximity_alerts import ProximityAlertSystem
     
     # Obtener contenedores programados y liberados
-    containers = Container.objects.filter(
+    containers = Container.objects.select_related('owner_company', 'client', 'current_location').filter(
         is_active=True,
         status__in=['PROGRAMADO', 'LIBERADO'],
         scheduled_date__isnull=False

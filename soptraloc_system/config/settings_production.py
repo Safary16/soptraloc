@@ -70,6 +70,8 @@ THIRD_PARTY_APPS = [
     'django_filters',
     'drf_yasg',
     'django_extensions',
+    'django_celery_beat',  # Celery Beat scheduler
+    'axes',  # Rate limiting and brute force protection
 ]
 
 LOCAL_APPS = [
@@ -94,6 +96,7 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
+    'axes.middleware.AxesMiddleware',  # Must be last
 ]
 
 ROOT_URLCONF = 'config.urls'
@@ -195,6 +198,14 @@ REST_FRAMEWORK = {
     'DEFAULT_PERMISSION_CLASSES': [
         'rest_framework.permissions.IsAuthenticated',
     ],
+    'DEFAULT_THROTTLE_CLASSES': [
+        'rest_framework.throttling.AnonRateThrottle',
+        'rest_framework.throttling.UserRateThrottle',
+    ],
+    'DEFAULT_THROTTLE_RATES': {
+        'anon': '100/hour',  # Anonymous users
+        'user': '1000/hour',  # Authenticated users
+    },
     'DEFAULT_FILTER_BACKENDS': [
         'django_filters.rest_framework.DjangoFilterBackend',
         'rest_framework.filters.SearchFilter',
@@ -224,11 +235,25 @@ CORS_ALLOWED_ORIGINS = [
 ]
 CORS_ALLOW_CREDENTIALS = True
 
-# Cache - Local memory (futuro: Redis)
+# Cache - Redis in production
+REDIS_URL = config('REDIS_URL', default='redis://localhost:6379/1')
 CACHES = {
     'default': {
-        'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
-        'LOCATION': 'soptraloc-cache',
+        'BACKEND': 'django_redis.cache.RedisCache',
+        'LOCATION': REDIS_URL,
+        'OPTIONS': {
+            'CLIENT_CLASS': 'django_redis.client.DefaultClient',
+            'SOCKET_CONNECT_TIMEOUT': 5,
+            'SOCKET_TIMEOUT': 5,
+            'RETRY_ON_TIMEOUT': True,
+            'MAX_CONNECTIONS': 50,
+            'CONNECTION_POOL_KWARGS': {
+                'max_connections': 50,
+                'retry_on_timeout': True,
+            }
+        },
+        'KEY_PREFIX': 'soptraloc',
+        'TIMEOUT': 300,  # 5 minutes default
     }
 }
 
@@ -277,14 +302,81 @@ LOGGING = {
 # Logging de configuración al cargar (usando logger)
 import logging
 logger = logging.getLogger(__name__)
+# Django Axes - Brute force protection
+AUTHENTICATION_BACKENDS = [
+    'axes.backends.AxesStandaloneBackend',  # AxesBackend should be first
+    'django.contrib.auth.backends.ModelBackend',
+]
+
+AXES_FAILURE_LIMIT = 5  # Lock after 5 failed attempts
+AXES_COOLOFF_TIME = 1  # Lock for 1 hour
+AXES_LOCK_OUT_BY_COMBINATION_USER_AND_IP = True
+AXES_RESET_ON_SUCCESS = True
+AXES_LOCKOUT_TEMPLATE = None  # Return 403
+AXES_LOCKOUT_PARAMETERS = ['username', 'ip_address']
+AXES_ONLY_ADMIN_SITE = False  # Protect all login forms
+AXES_ENABLE_ACCESS_FAILURE_LOG = True
+AXES_VERBOSE = True
+
+# Sentry Error Tracking
+SENTRY_DSN = config('SENTRY_DSN', default=None)
+if SENTRY_DSN:
+    import sentry_sdk
+    from sentry_sdk.integrations.django import DjangoIntegration
+    from sentry_sdk.integrations.celery import CeleryIntegration
+    from sentry_sdk.integrations.redis import RedisIntegration
+    
+    sentry_sdk.init(
+        dsn=SENTRY_DSN,
+        integrations=[
+            DjangoIntegration(),
+            CeleryIntegration(),
+            RedisIntegration(),
+        ],
+        traces_sample_rate=0.5,
+        send_default_pii=False,
+        environment='production',
+        release=config('RENDER_GIT_COMMIT', default='unknown'),
+        before_send=lambda event, hint: event if not DEBUG else None,
+    )
+    logger.info("✅ Sentry initialized for error tracking")
+
+# Mapbox API Key validation
+MAPBOX_API_KEY = config('MAPBOX_API_KEY', default=None)
+if not MAPBOX_API_KEY:
+    logger.warning("⚠️  MAPBOX_API_KEY not configured - routing features will be limited")
+
+# AWS S3 Storage for Media Files
+USE_S3 = config('USE_S3', default=False, cast=bool)
+if USE_S3:
+    AWS_ACCESS_KEY_ID = config('AWS_ACCESS_KEY_ID')
+    AWS_SECRET_ACCESS_KEY = config('AWS_SECRET_ACCESS_KEY')
+    AWS_STORAGE_BUCKET_NAME = config('AWS_STORAGE_BUCKET_NAME')
+    AWS_S3_REGION_NAME = config('AWS_S3_REGION_NAME', default='us-east-1')
+    AWS_S3_CUSTOM_DOMAIN = f'{AWS_STORAGE_BUCKET_NAME}.s3.amazonaws.com'
+    AWS_DEFAULT_ACL = 'public-read'
+    AWS_S3_OBJECT_PARAMETERS = {
+        'CacheControl': 'max-age=86400',
+    }
+    DEFAULT_FILE_STORAGE = 'storages.backends.s3boto3.S3Boto3Storage'
+    MEDIA_URL = f'https://{AWS_S3_CUSTOM_DOMAIN}/media/'
+    logger.info("✅ AWS S3 configured for media storage")
+else:
+    MEDIA_ROOT = BASE_DIR / 'media'
+    MEDIA_URL = '/media/'
+
 logger.info("=" * 60)
 logger.info("✅ CONFIGURACIÓN DE PRODUCCIÓN CARGADA - RENDER.COM")
 logger.info("=" * 60)
 logger.info(f"DEBUG: {DEBUG}")
 logger.info(f"ALLOWED_HOSTS: {ALLOWED_HOSTS}")
 logger.info(f"DATABASE: PostgreSQL (Render)")
+logger.info(f"CACHE: Redis ({REDIS_URL.split('@')[1] if '@' in REDIS_URL else 'localhost'})")
 logger.info(f"STATIC_ROOT: {STATIC_ROOT}")
 logger.info(f"SECURE_SSL_REDIRECT: {SECURE_SSL_REDIRECT}")
+logger.info(f"RATE LIMITING: Enabled (Axes + DRF Throttling)")
+logger.info(f"SENTRY: {'Enabled' if SENTRY_DSN else 'Disabled'}")
+logger.info(f"S3 STORAGE: {'Enabled' if USE_S3 else 'Local media'}")
 logger.info(f"APPS INSTALADAS: {len(INSTALLED_APPS)}")
 for app in LOCAL_APPS:
     logger.info(f"  - {app}")

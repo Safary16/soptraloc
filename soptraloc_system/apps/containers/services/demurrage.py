@@ -1,9 +1,12 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Optional
+from typing import Optional, TYPE_CHECKING
 
 from django.utils import timezone
+
+if TYPE_CHECKING:
+    from apps.drivers.models import Alert
 
 
 DEMURRAGE_ALERT_THRESHOLD_DAYS = 2
@@ -12,7 +15,7 @@ DEMURRAGE_ALERT_TYPES = ("DEMURRAGE_PROXIMO", "DEMURRAGE_VENCIDO")
 
 @dataclass
 class DemurrageAlertResult:
-    alert: "Alert"
+    alert: Alert
     was_created: bool
     alert_type: str
     days_until: int

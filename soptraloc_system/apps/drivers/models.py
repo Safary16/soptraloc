@@ -245,8 +245,43 @@ class Driver(models.Model):
     
     @property
     def esta_disponible(self):
-        """Verifica si el conductor está disponible para asignación"""
+        """Verifica si el conductor está disponible para asignación básica"""
         return self.estado == 'OPERATIVO' and self.contenedor_asignado is None
+    
+    def is_available_for_assignment(self, start_time, duration_minutes):
+        """
+        Valida disponibilidad completa del conductor para una nueva asignación.
+        
+        Verifica:
+        1. Estado OPERATIVO
+        2. Sin contenedor asignado actual
+        3. Sin conflictos de horario con otras asignaciones programadas
+        
+        Args:
+            start_time: datetime - Hora de inicio de la asignación
+            duration_minutes: int - Duración estimada en minutos
+            
+        Returns:
+            bool - True si está disponible, False si no
+        """
+        from datetime import timedelta
+        
+        # Validación básica de estado
+        if not self.esta_disponible:
+            return False
+        
+        # Calcular ventana de tiempo
+        end_time = start_time + timedelta(minutes=duration_minutes)
+        
+        # Buscar asignaciones que se solapen en el tiempo
+        overlapping = Assignment.objects.filter(
+            driver=self,
+            estado__in=['PENDIENTE', 'EN_CURSO'],
+            fecha_programada__lt=end_time,
+            fecha_programada__gte=start_time - timedelta(minutes=self.tiempo_estimado or duration_minutes)
+        )
+        
+        return not overlapping.exists()
     
     @property
     def tiempo_en_ubicacion_texto(self):

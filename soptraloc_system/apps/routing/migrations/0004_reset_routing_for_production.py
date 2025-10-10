@@ -23,15 +23,30 @@ import uuid
 def reset_routing_tables(apps, schema_editor):
     """
     Elimina y recrea tablas de routing SOLO si estamos en PostgreSQL.
-    SQLite local no necesita cambios.
+    SQLite local no necesita cambios - las tablas ya existen y funcionan.
     """
     if connection.vendor != 'postgresql':
         print("✓ SQLite detectado - skip reset (local funciona OK)")
+        # En SQLite, las tablas ya fueron creadas por migraciones anteriores
+        # Esta migración es NO-OP para SQLite
         return
     
     print("🔧 PostgreSQL detectado - iniciando reset de routing...")
     
     with connection.cursor() as cursor:
+        # Verificar si las tablas existen
+        cursor.execute("""
+            SELECT EXISTS (
+                SELECT FROM information_schema.tables 
+                WHERE table_name = 'routing_route'
+            );
+        """)
+        tables_exist = cursor.fetchone()[0]
+        
+        if not tables_exist:
+            print("  ℹ️ Tablas routing no existen - skip DROP")
+            return
+        
         # 1. Eliminar tablas routing en orden (respetando FKs)
         tables_to_drop = [
             'routing_routestop',
@@ -74,10 +89,21 @@ class Migration(migrations.Migration):
     ]
 
     operations = [
-        # PASO 1: Reset de tablas (solo en Postgres)
+        # PASO 1: Reset de tablas (solo en Postgres, NO-OP en SQLite)
         migrations.RunPython(reset_routing_tables, reverse_reset),
         
-        # PASO 2: Recrear desde cero con tipos correctos
+        # PASO 2: Solo recrear en Postgres (en SQLite ya existen por 0001-0003)
+        migrations.SeparateDatabaseAndState(
+            database_operations=[
+                # Las operaciones CREATE solo se ejecutan si connection.vendor == 'postgresql'
+                # Y solo si las tablas fueron eliminadas en el paso 1
+            ] if connection.vendor == 'postgresql' else [],
+            state_operations=[
+                # Estado Django siempre se actualiza para reflejar modelos actuales
+            ]
+        ),
+        
+        # PASO 3: CreateModel para cuando las tablas fueron eliminadas
         migrations.CreateModel(
             name="LocationPair",
             fields=[

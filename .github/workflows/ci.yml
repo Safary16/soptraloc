@@ -1,0 +1,202 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main]
+
+env:
+  PYTHON_VERSION: '3.12'
+
+jobs:
+  lint:
+    name: Code Quality Checks
+    runs-on: ubuntu-latest
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      
+      - name: Cache pip packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-lint-${{ hashFiles('requirements.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-lint-
+            ${{ runner.os }}-pip-
+      
+      - name: Install linting tools
+        run: |
+          pip install flake8 black isort
+      
+      - name: Run Black (code formatting)
+        run: |
+          black --check soptraloc_system/apps/ soptraloc_system/config/ --line-length=120 --exclude=migrations
+      
+      - name: Run isort (import sorting)
+        run: |
+          isort --check soptraloc_system/apps/ soptraloc_system/config/ --profile=black --skip=migrations
+      
+      - name: Run Flake8 (linting)
+        run: |
+          flake8 soptraloc_system/apps/ soptraloc_system/config/ \
+            --max-line-length=120 \
+            --exclude=migrations,__pycache__,.git,__init__.py \
+            --ignore=E203,W503,E501
+
+  test:
+    name: Tests and Coverage
+    runs-on: ubuntu-latest
+    needs: lint
+    
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_DB: test_soptraloc
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+      
+      redis:
+        image: redis:7-alpine
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 6379:6379
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      
+      - name: Cache pip packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-test-${{ hashFiles('requirements.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-test-
+            ${{ runner.os }}-pip-
+      
+      - name: Install dependencies
+        run: |
+          pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install coverage pytest pytest-django pytest-cov
+      
+      - name: Run migrations
+        working-directory: ./soptraloc_system
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/test_soptraloc
+          REDIS_URL: redis://localhost:6379/0
+          SECRET_KEY: test-secret-key-do-not-use-in-production
+          DEBUG: False
+          MAPBOX_API_KEY: ${{ secrets.MAPBOX_API_KEY }}
+        run: |
+          python manage.py migrate --noinput
+      
+      - name: Run tests with coverage
+        working-directory: ./soptraloc_system
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/test_soptraloc
+          REDIS_URL: redis://localhost:6379/0
+          SECRET_KEY: test-secret-key-do-not-use-in-production
+          DEBUG: False
+          MAPBOX_API_KEY: ${{ secrets.MAPBOX_API_KEY }}
+        run: |
+          coverage run --source='apps' manage.py test --verbosity=2
+          coverage report --fail-under=30
+          coverage xml
+          coverage html
+      
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v4
+        with:
+          file: ./soptraloc_system/coverage.xml
+          flags: unittests
+          name: codecov-soptraloc
+          fail_ci_if_error: false
+      
+      - name: Archive coverage results
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: soptraloc_system/htmlcov/
+          retention-days: 7
+
+  security:
+    name: Security Scan
+    runs-on: ubuntu-latest
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      
+      - name: Install safety
+        run: pip install safety
+      
+      - name: Run safety check
+        run: |
+          pip install -r requirements.txt
+          safety check --json || true
+
+  deploy:
+    name: Deploy to Render
+    runs-on: ubuntu-latest
+    needs: [lint, test, security]
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    
+    steps:
+      - name: Trigger Render Deploy
+        env:
+          RENDER_DEPLOY_HOOK: ${{ secrets.RENDER_DEPLOY_HOOK }}
+        run: |
+          if [ -n "$RENDER_DEPLOY_HOOK" ]; then
+            curl -X POST "$RENDER_DEPLOY_HOOK"
+            echo "✅ Deploy triggered on Render.com"
+          else
+            echo "⚠️  RENDER_DEPLOY_HOOK not configured in GitHub Secrets"
+            exit 1
+          fi
+      
+      - name: Wait for deployment
+        run: sleep 30
+      
+      - name: Health check
+        run: |
+          HEALTH_URL="${{ secrets.RENDER_APP_URL }}/health/"
+          if [ -n "$HEALTH_URL" ]; then
+            for i in {1..10}; do
+              echo "Checking health (attempt $i/10)..."
+              if curl -f -s "$HEALTH_URL" > /dev/null; then
+                echo "✅ Application is healthy"
+                exit 0
+              fi
+              sleep 10
+            done
+            echo "❌ Health check failed"
+            exit 1
+          fi

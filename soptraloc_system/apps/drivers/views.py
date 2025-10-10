@@ -2,11 +2,10 @@ from datetime import datetime, timedelta, time
 
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
+from django.db.models import Count, Q, Case, When, IntegerField
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
-from django.views.decorators.csrf import csrf_exempt
-
 from apps.containers.models import Container
 from apps.containers.services.status_utils import normalize_status
 
@@ -273,14 +272,23 @@ def drivers_view(request):
     
     drivers = drivers.order_by('nombre')
     
-    # Estadísticas
+    # Estadísticas optimizadas (una sola query en lugar de 6 separadas)
+    stats_result = Driver.objects.filter(is_active=True).aggregate(
+        total=Count('id'),
+        operativos=Count('id', filter=Q(estado='OPERATIVO')),
+        disponibles=Count('id', filter=Q(estado='OPERATIVO', contenedor_asignado__isnull=True)),
+        asignados=Count('id', filter=Q(contenedor_asignado__isnull=False)),
+        localeros=Count('id', filter=Q(tipo_conductor='LOCALERO')),
+        troncales=Count('id', filter=Q(tipo_conductor='TRONCO'))
+    )
+    
     stats = {
-        'total': Driver.objects.filter(is_active=True).count(),
-        'operativos': Driver.objects.filter(estado='OPERATIVO', is_active=True).count(),
-        'disponibles': Driver.objects.filter(estado='OPERATIVO', contenedor_asignado__isnull=True, is_active=True).count(),
-        'asignados': Driver.objects.filter(contenedor_asignado__isnull=False, is_active=True).count(),
-        'localeros': Driver.objects.filter(tipo_conductor='LOCALERO', is_active=True).count(),
-        'troncales': Driver.objects.filter(tipo_conductor='TRONCO', is_active=True).count(),
+        'total': stats_result['total'] or 0,
+        'operativos': stats_result['operativos'] or 0,
+        'disponibles': stats_result['disponibles'] or 0,
+        'asignados': stats_result['asignados'] or 0,
+        'localeros': stats_result['localeros'] or 0,
+        'troncales': stats_result['troncales'] or 0,
     }
     
     context = {
@@ -362,7 +370,6 @@ def assign_container(request):
     return JsonResponse({'success': False, 'message': 'Método no permitido'})
 
 
-@csrf_exempt
 @login_required
 def unassign_driver(request):
     """Desasignar un conductor de un contenedor"""
@@ -411,7 +418,6 @@ def unassign_driver(request):
     return JsonResponse({'success': False, 'message': 'Método no permitido'})
 
 
-@csrf_exempt
 @login_required
 def check_driver_availability(request):
     """Verificar disponibilidad de un conductor para una fecha/hora específica"""
@@ -477,7 +483,6 @@ def check_driver_availability(request):
     return JsonResponse({'available': False, 'message': 'Método no permitido'})
 
 
-@csrf_exempt
 @login_required 
 def resolve_alert(request):
     """Resolver una alerta manualmente"""
@@ -626,7 +631,7 @@ def attendance_view(request):
     }
     
     # Contenedores sin asignar
-    unassigned_containers = Container.objects.filter(
+    unassigned_containers = Container.objects.select_related('owner_company', 'client', 'current_location').filter(
         status='PROGRAMADO',
         conductor_asignado__isnull=True,
         scheduled_date__in=[today, today + timedelta(days=1)]
@@ -634,7 +639,7 @@ def attendance_view(request):
     
     # Próximas salidas (próxima hora)
     next_hour = timezone.now() + timedelta(hours=1)
-    next_hour_containers = Container.objects.filter(
+    next_hour_containers = Container.objects.select_related('owner_company', 'client', 'current_location').filter(
         status__in=['ASIGNADO', 'PROGRAMADO'],
         scheduled_date=today,
         scheduled_time__lte=next_hour.time()
@@ -732,7 +737,7 @@ def auto_assign_drivers(request):
             today = timezone.localdate()
             tomorrow = today + timedelta(days=1)
 
-            unassigned_containers = Container.objects.filter(
+            unassigned_containers = Container.objects.select_related('owner_company', 'client', 'current_location').filter(
                 conductor_asignado__isnull=True,
                 status__in=['PROGRAMADO', 'EN_PROCESO', 'EN_SECUENCIA', 'SECUENCIADO'],
                 scheduled_date__in=[today, tomorrow]
@@ -805,7 +810,6 @@ def auto_assign_drivers(request):
     return JsonResponse({'success': False, 'message': 'Método no permitido'})
 
 
-@csrf_exempt
 @login_required  
 def auto_assign_single(request):
     """Asignación automática para un contenedor específico"""
