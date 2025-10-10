@@ -221,12 +221,12 @@ echo "━━━━━━━━━━━━━━━━━━━━━━━━�
 DRIVER_COUNT=$(python manage.py shell --settings=config.settings_production -c "from apps.drivers.models import Driver; print(Driver.objects.count())" 2>/dev/null || echo "0")
 echo "📊 Conductores actuales: $DRIVER_COUNT"
 
-# Si hay más de 100 conductores, ejecutar limpieza automática
-if [ "$DRIVER_COUNT" -gt 100 ]; then
-    echo "⚠️  ALERTA: Más de 100 conductores detectados"
-    echo "🧹 Ejecutando limpieza automática (manteniendo los 50 mejores)..."
+# Si hay más de 50 conductores, ejecutar limpieza automática con el nuevo comando
+if [ "$DRIVER_COUNT" -gt 50 ]; then
+    echo "⚠️  ALERTA: Más de 50 conductores detectados"
+    echo "🧹 Ejecutando limpieza automática (manteniendo los 50 más recientes)..."
     
-    python manage.py aggressive_cleanup --force --keep=50 --settings=config.settings_production
+    python manage.py prune_drivers_to_50 --force --keep=50 --settings=config.settings_production
     
     # Verificar resultado
     NEW_COUNT=$(python manage.py shell --settings=config.settings_production -c "from apps.drivers.models import Driver; print(Driver.objects.count())" 2>/dev/null || echo "0")
