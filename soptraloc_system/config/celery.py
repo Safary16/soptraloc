@@ -17,7 +17,7 @@ app.config_from_object('django.conf:settings', namespace='CELERY')
 # Cargar módulos de tareas desde todas las apps registradas
 app.autodiscover_tasks()
 
-# Configuración de tareas periódicas (Celery Beat)
+# Configuración de tareas periódicas (Celery Beat) - FASE 7
 app.conf.beat_schedule = {
     # Generar alertas de demurrage cada hora
     'generate-demurrage-alerts-hourly': {
@@ -33,6 +33,21 @@ app.conf.beat_schedule = {
     'update-traffic-times': {
         'task': 'apps.drivers.tasks.update_traffic_based_times',
         'schedule': crontab(minute='*/15'),  # Cada 15 minutos
+    },
+    # FASE 7: Limpieza de conductores obsoletos (diario a las 2 AM)
+    'cleanup-old-drivers': {
+        'task': 'apps.drivers.tasks.cleanup_old_drivers',
+        'schedule': crontab(hour=2, minute=0),
+    },
+    # FASE 7: Backup diario de base de datos (3 AM)
+    'daily-database-backup': {
+        'task': 'apps.core.tasks.backup_database',
+        'schedule': crontab(hour=3, minute=0),
+    },
+    # FASE 7: Actualizar estadísticas de contenedores (cada 6 horas)
+    'update-container-statistics': {
+        'task': 'apps.containers.tasks.update_container_statistics',
+        'schedule': crontab(minute=0, hour='*/6'),
     },
 }
 
