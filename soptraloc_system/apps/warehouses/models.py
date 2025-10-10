@@ -1,7 +1,11 @@
+from typing import TYPE_CHECKING
+
 from django.db import models
 from apps.core.models import BaseModel, Company
 from apps.drivers.models import Location
-from apps.containers.models import Container
+
+if TYPE_CHECKING:
+    from apps.containers.models import Container
 
 
 class Warehouse(BaseModel):
@@ -104,7 +108,7 @@ class WarehouseStock(BaseModel):
     """Stock de contenedores en almacén."""
     warehouse = models.ForeignKey(Warehouse, on_delete=models.CASCADE, related_name='stock_items')
     zone = models.ForeignKey(WarehouseZone, on_delete=models.CASCADE, null=True, blank=True)
-    container = models.OneToOneField(Container, on_delete=models.CASCADE)
+    container = models.OneToOneField('containers.Container', on_delete=models.CASCADE)
     
     # Ubicación específica
     row = models.CharField(max_length=10, blank=True)
@@ -176,7 +180,7 @@ class WarehouseOperation(BaseModel):
     
     warehouse = models.ForeignKey(Warehouse, on_delete=models.CASCADE, related_name='operations')
     operation_type = models.CharField(max_length=20, choices=OPERATION_TYPES)
-    container = models.ForeignKey(Container, on_delete=models.CASCADE, related_name='warehouse_operations')
+    container = models.ForeignKey('containers.Container', on_delete=models.CASCADE, related_name='warehouse_operations')
     
     # Ubicaciones
     from_zone = models.ForeignKey(

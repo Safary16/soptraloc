@@ -9,7 +9,11 @@ class LocationSerializer(serializers.ModelSerializer):
     """Serializer para ubicaciones"""
     class Meta:
         model = Location
-        fields = '__all__'
+        # FASE 5: Campos explícitos (antes: fields='__all__')
+        fields = [
+            'id', 'name', 'code', 'address', 'latitude', 'longitude',
+            'location_type', 'is_active', 'created_at', 'updated_at'
+        ]
         read_only_fields = ('created_at', 'updated_at')
 
 
@@ -22,8 +26,19 @@ class DriverSerializer(serializers.ModelSerializer):
     
     class Meta:
         model = Driver
-        fields = '__all__'
-        read_only_fields = ('created_at', 'updated_at')
+        # FASE 5: Campos explícitos (antes: fields='__all__' - expone datos sensibles)
+        fields = [
+            'id', 'ppu', 'nombre', 'rut', 'telefono', 'email',
+            'tipo_conductor', 'tipo_conductor_display',
+            'estado', 'estado_display',
+            'ubicacion_actual', 'ubicacion_actual_display',
+            'esta_disponible',
+            'avg_travel_time', 'avg_loading_time', 'avg_unloading_time',
+            'learned_total_time',
+            'created_at', 'updated_at'
+        ]
+        # EXCLUIDOS: salary, internal_notes, emergency_contact (datos sensibles)
+        read_only_fields = ('created_at', 'updated_at', 'esta_disponible')
 
 
 class TimeMatrixSerializer(serializers.ModelSerializer):
@@ -47,8 +62,18 @@ class AssignmentSerializer(serializers.ModelSerializer):
     
     class Meta:
         model = Assignment
-        fields = '__all__'
-        read_only_fields = ('fecha_asignacion',)
+        # FASE 5: Campos explícitos (antes: fields='__all__')
+        fields = [
+            'id', 'driver', 'container', 'origen', 'destino',
+            'tipo_asignacion', 'tipo_asignacion_display',
+            'estado', 'estado_display',
+            'scheduled_datetime', 'estimated_time_minutes',
+            'actual_start_time', 'actual_end_time',
+            'actual_travel_time', 'actual_loading_time', 'actual_unloading_time',
+            'fecha_asignacion', 'created_by'
+        ]
+        # EXCLUIDOS: internal_notes, audit_trail (datos internos)
+        read_only_fields = ('fecha_asignacion', 'actual_start_time', 'actual_end_time')
 
 
 class AlertSerializer(serializers.ModelSerializer):

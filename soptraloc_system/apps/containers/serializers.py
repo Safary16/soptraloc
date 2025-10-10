@@ -15,7 +15,22 @@ class ContainerSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Container
-        fields = '__all__'
+        # FASE 5: Campos explícitos (antes: fields='__all__' - VULNERABILIDAD DE SEGURIDAD)
+        fields = [
+            'id', 'container_number', 'container_type', 'container_type_display',
+            'status', 'status_display', 'position_status', 'position_status_display',
+            'current_position', 'current_position_code',
+            'owner_company', 'client_company', 'vendor_company',
+            'current_location', 'current_vehicle',
+            'vessel', 'agency', 'shipping_line',
+            'booking_number', 'bl_number', 'manifest_number',
+            'liberation_date', 'programmed_date', 'scheduled_date', 'scheduled_hour',
+            'service_type', 'movement_type',
+            'origin_port', 'destination_port',
+            'seal_number', 'tare_weight', 'cargo_weight', 'total_weight',
+            'commodity_description',
+            'created_at', 'updated_at', 'created_by', 'updated_by'
+        ]
         read_only_fields = ('id', 'created_at', 'updated_at', 'created_by', 'updated_by')
 
 

@@ -42,8 +42,15 @@ import json
 
 
 class ContainerViewSet(viewsets.ModelViewSet):
-    queryset = Container.objects.select_related('owner_company', 'client', 'current_location').filter(is_active=True).select_related(
-        'owner_company', 'current_location', 'current_vehicle'
+    # FASE 4: Optimización N+1 queries - select_related para FK, prefetch_related para M2M
+    queryset = Container.objects.filter(is_active=True).select_related(
+        'owner_company', 'client_company', 'vendor_company',
+        'current_location', 'current_vehicle', 'assigned_vehicle',
+        'vessel', 'agency', 'shipping_line'
+    ).prefetch_related(
+        'assignments__driver',  # Para mostrar asignaciones con conductores
+        'movements',  # Historial de movimientos
+        'documents'  # Documentos adjuntos
     )
     parser_classes = [JSONParser, MultiPartParser, FormParser]
     filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]

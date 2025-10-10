@@ -2,14 +2,17 @@
 Modelos para gestión de tiempos y rutas
 Sistema híbrido: Tiempos manuales + Machine Learning predictivo
 """
+from typing import TYPE_CHECKING
 from datetime import timedelta
 
 from django.db import models
 from django.core.validators import MinValueValidator, MaxValueValidator
 from django.utils import timezone
 from apps.core.models import BaseModel, Vehicle
-from apps.drivers.models import Location, Driver
-from apps.containers.models import Container
+
+if TYPE_CHECKING:
+    from apps.drivers.models import Location, Driver
+    from apps.containers.models import Container
 
 
 class LocationPair(BaseModel):
@@ -18,13 +21,13 @@ class LocationPair(BaseModel):
     Permite definir manualmente tiempos entre puntos.
     """
     origin = models.ForeignKey(
-        Location, 
+        'drivers.Location', 
         on_delete=models.CASCADE,
         related_name='routes_from',
         verbose_name="Origen"
     )
     destination = models.ForeignKey(
-        Location,
+        'drivers.Location',
         on_delete=models.CASCADE,
         related_name='routes_to',
         verbose_name="Destino"
@@ -175,7 +178,7 @@ class OperationTime(BaseModel):
     Ej: Tiempo para bajar contenedor a piso, enganchar chasis, etc.
     """
     location = models.ForeignKey(
-        Location,
+        'drivers.Location',
         on_delete=models.CASCADE,
         related_name='operation_times',
         verbose_name="Ubicación"
@@ -297,13 +300,13 @@ class ActualTripRecord(BaseModel):
     Cada vez que un contenedor completa un trayecto, se guarda aquí.
     """
     container = models.ForeignKey(
-        Container,
+        'containers.Container',
         on_delete=models.CASCADE,
         related_name='trip_records',
         verbose_name="Contenedor"
     )
     driver = models.ForeignKey(
-        Driver,
+        'drivers.Driver',
         on_delete=models.SET_NULL,
         null=True,
         blank=True,
@@ -319,13 +322,13 @@ class ActualTripRecord(BaseModel):
     
     # Ubicaciones
     origin = models.ForeignKey(
-        Location,
+        'drivers.Location',
         on_delete=models.CASCADE,
         related_name='trips_from',
         verbose_name="Origen"
     )
     destination = models.ForeignKey(
-        Location,
+        'drivers.Location',
         on_delete=models.CASCADE,
         related_name='trips_to',
         verbose_name="Destino"
@@ -424,12 +427,12 @@ class ActualOperationRecord(BaseModel):
     Ej: Cuánto tardó realmente en bajar el contenedor a piso.
     """
     container = models.ForeignKey(
-        Container,
+        'containers.Container',
         on_delete=models.CASCADE,
         related_name='operation_records'
     )
     location = models.ForeignKey(
-        Location,
+        'drivers.Location',
         on_delete=models.CASCADE,
         related_name='operation_records'
     )
@@ -493,7 +496,7 @@ class Route(BaseModel):
         help_text="Nombre descriptivo de la ruta"
     )
     driver = models.ForeignKey(
-        Driver,
+        'drivers.Driver',
         on_delete=models.CASCADE,
         related_name='routes',
         verbose_name="Conductor"
@@ -609,7 +612,7 @@ class RouteStop(BaseModel):
         verbose_name="Ruta"
     )
     container = models.ForeignKey(
-        Container,
+        'containers.Container',
         on_delete=models.CASCADE,
         related_name='route_stops',
         verbose_name="Contenedor"
@@ -623,7 +626,7 @@ class RouteStop(BaseModel):
     
     # Ubicación y acción
     location = models.ForeignKey(
-        Location,
+        'drivers.Location',
         on_delete=models.CASCADE,
         verbose_name="Ubicación"
     )
