@@ -16,25 +16,25 @@ class Migration(migrations.Migration):
         ),
         migrations.AddIndex(
             model_name='driver',
-            index=models.Index(fields=['status'], name='driver_status_idx'),
+            index=models.Index(fields=['estado'], name='driver_estado_idx'),
         ),
         migrations.AddIndex(
             model_name='driver',
-            index=models.Index(fields=['current_location'], name='driver_location_idx'),
+            index=models.Index(fields=['ubicacion_actual'], name='driver_ubicacion_idx'),
         ),
         
         # Índices para Assignment
         migrations.AddIndex(
             model_name='assignment',
-            index=models.Index(fields=['driver', 'assignment_date'], name='assignment_driver_date_idx'),
+            index=models.Index(fields=['driver', 'fecha_asignacion'], name='assignment_driver_date_idx'),
         ),
         migrations.AddIndex(
             model_name='assignment',
-            index=models.Index(fields=['container', 'status'], name='assignment_container_status_idx'),
+            index=models.Index(fields=['container', 'estado'], name='assignment_container_estado_idx'),
         ),
         migrations.AddIndex(
             model_name='assignment',
-            index=models.Index(fields=['status', 'assignment_date'], name='assignment_status_date_idx'),
+            index=models.Index(fields=['estado', 'fecha_programada'], name='assignment_estado_fecha_idx'),
         ),
         
         # Índices para Location

@@ -34,11 +34,11 @@ class Migration(migrations.Migration):
         # Índices para ContainerMovement
         migrations.AddIndex(
             model_name='containermovement',
-            index=models.Index(fields=['container', 'movement_date'], name='movement_container_date_idx'),
+            index=models.Index(fields=['container', 'created_at'], name='movement_container_date_idx'),
         ),
         migrations.AddIndex(
             model_name='containermovement',
-            index=models.Index(fields=['origin_location', 'destination_location'], name='movement_locations_idx'),
+            index=models.Index(fields=['from_location', 'to_location'], name='movement_locations_idx'),
         ),
         
         # Índices para ContainerInspection

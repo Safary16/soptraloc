@@ -20,15 +20,41 @@ import django.db.models.deletion
 import uuid
 
 
+def check_if_tables_exist(apps, schema_editor):
+    """
+    Verifica si las tablas routing ya existen. Si existen, skip el reset.
+    """
+    with connection.cursor() as cursor:
+        if connection.vendor == 'sqlite':
+            cursor.execute("""
+                SELECT name FROM sqlite_master 
+                WHERE type='table' AND name='routing_locationpair';
+            """)
+        else:
+            cursor.execute("""
+                SELECT EXISTS (
+                    SELECT FROM information_schema.tables 
+                    WHERE table_name = 'routing_locationpair'
+                );
+            """)
+        result = cursor.fetchone()
+        
+        if result and (result[0] if connection.vendor == 'sqlite' else result[0] is True):
+            print("✓ Tablas routing ya existen - skip reset")
+            return True
+    return False
+
+
 def reset_routing_tables(apps, schema_editor):
     """
     Elimina y recrea tablas de routing SOLO si estamos en PostgreSQL.
     SQLite local no necesita cambios - las tablas ya existen y funcionan.
     """
+    if check_if_tables_exist(apps, schema_editor):
+        return
+    
     if connection.vendor != 'postgresql':
         print("✓ SQLite detectado - skip reset (local funciona OK)")
-        # En SQLite, las tablas ya fueron creadas por migraciones anteriores
-        # Esta migración es NO-OP para SQLite
         return
     
     print("🔧 PostgreSQL detectado - iniciando reset de routing...")
@@ -92,16 +118,7 @@ class Migration(migrations.Migration):
         # PASO 1: Reset de tablas (solo en Postgres, NO-OP en SQLite)
         migrations.RunPython(reset_routing_tables, reverse_reset),
         
-        # PASO 2: Solo recrear en Postgres (en SQLite ya existen por 0001-0003)
-        migrations.SeparateDatabaseAndState(
-            database_operations=[
-                # Las operaciones CREATE solo se ejecutan si connection.vendor == 'postgresql'
-                # Y solo si las tablas fueron eliminadas en el paso 1
-            ] if connection.vendor == 'postgresql' else [],
-            state_operations=[
-                # Estado Django siempre se actualiza para reflejar modelos actuales
-            ]
-        ),
+        # PASO 2: Skip - Las tablas ya existen en SQLite, serán recreadas en Postgres
         
         # PASO 3: CreateModel para cuando las tablas fueron eliminadas
         migrations.CreateModel(
