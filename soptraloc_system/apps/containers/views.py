@@ -762,144 +762,35 @@ def assign_driver_quick(request):
 
 @login_required
 def update_container_status_view(request, container_id):
-    """Vista para actualizar el estado de un contenedor"""
-    if request.method == 'POST':
-        try:
-            container = get_object_or_404(Container, id=container_id)
-            data = json.loads(request.body)
-            new_status = data.get('status')
-            
-            if not new_status:
-                return JsonResponse({'success': False, 'message': 'Estado requerido'})
-            
-            # Validar estados permitidos
-            valid_statuses = [choice[0] for choice in Container.CONTAINER_STATUS]
-            if new_status not in valid_statuses:
-                return JsonResponse({'success': False, 'message': 'Estado no válido'})
-            
-            # Actualizar estado con tiempos
-            old_status = container.status
-            container.status = new_status
-            now = timezone.now()
-            
-            # Registrar tiempo según el nuevo estado
-            if new_status == 'ASIGNADO' and not container.tiempo_asignacion:
-                container.tiempo_asignacion = now
-            elif new_status == 'EN_RUTA':
-                if not container.tiempo_inicio_ruta:
-                    container.tiempo_inicio_ruta = now
-                    # Calcular duración desde asignación
-                    if container.tiempo_asignacion:
-                        delta = now - container.tiempo_asignacion
-                        container.duracion_ruta = int(delta.total_seconds() / 60)
-            elif new_status == 'ARRIBADO':
-                if not container.tiempo_llegada:
-                    container.tiempo_llegada = now
-                    # Calcular duración de ruta
-                    if container.tiempo_inicio_ruta:
-                        delta = now - container.tiempo_inicio_ruta
-                        container.duracion_ruta = int(delta.total_seconds() / 60)
-            elif new_status == 'FINALIZADO':
-                if not container.tiempo_finalizacion:
-                    container.tiempo_finalizacion = now
-                    # Calcular duración de descarga
-                    if container.tiempo_llegada:
-                        delta = now - container.tiempo_llegada
-                        container.duracion_descarga = int(delta.total_seconds() / 60)
-                    # Calcular duración total
-                    if container.tiempo_asignacion:
-                        delta_total = now - container.tiempo_asignacion
-                        container.duracion_total = int(delta_total.total_seconds() / 60)
-            
-            container.save()
-
-            if new_status in ['ARRIBADO', 'DESCARGADO_CD']:
-                assignment = Assignment.objects.filter(
-                    container=container,
-                    driver=container.conductor_asignado,
-                    estado__in=['PENDIENTE', 'EN_CURSO']
-                ).first()
-
-                if assignment and assignment.fecha_inicio:
-                    route_minutes = container.duracion_ruta or int((now - assignment.fecha_inicio).total_seconds() / 60)
-                    assignment.record_actual_times(
-                        total_minutes=route_minutes,
-                        route_minutes=route_minutes,
-                    )
-                elif assignment:
-                    # Completar asignación aun sin fechas para evitar duplicados
-                    assignment.record_actual_times(total_minutes=container.duracion_ruta or 0)
-
-                if container.conductor_asignado:
-                    driver = container.conductor_asignado
-                    driver.contenedor_asignado = None
-                    if driver.estado != 'OPERATIVO':
-                        driver.estado = 'OPERATIVO'
-                    driver.save(update_fields=['contenedor_asignado', 'estado', 'updated_at'])
-                    container.conductor_asignado = None
-                    container.save(update_fields=['conductor_asignado'])
-
-            if new_status == 'FINALIZADO':
-                assignment = Assignment.objects.filter(
-                    container=container,
-                    driver=container.conductor_asignado,
-                    estado__in=['PENDIENTE', 'EN_CURSO']
-                ).first()
-
-                unloading_minutes = container.duracion_descarga if container.duracion_descarga is not None else None
-                route_recorded = container.duracion_ruta
-
-                if assignment and assignment.estado != 'COMPLETADA':
-                    if assignment.fecha_inicio:
-                        total_minutes = int((now - assignment.fecha_inicio).total_seconds() / 60)
-                    else:
-                        total_minutes = container.duracion_total or container.duracion_ruta or 0
-
-                    assignment.record_actual_times(
-                        total_minutes=total_minutes,
-                        route_minutes=route_recorded,
-                        unloading_minutes=unloading_minutes,
-                    )
-
-                if container.conductor_asignado:
-                    driver = container.conductor_asignado
-                    driver.contenedor_asignado = None
-                    driver.save(update_fields=['contenedor_asignado', 'updated_at'])
-                    container.conductor_asignado = None
-                    container.save(update_fields=['conductor_asignado'])
-            
-            movement_code = MovementCode.generate_code('transfer')
-            movement_code.created_by = request.user
-            movement_code.save(update_fields=['created_by'])
-
-            ContainerMovement.objects.create(
-                container=container,
-                movement_type='TRANSFER',
-                movement_code=movement_code,
-                from_location=container.current_location,
-                to_location=container.current_location,
-                movement_date=timezone.now(),
-                notes=f'Estado cambiado de {old_status} a {new_status}',
-                created_by=request.user
-            )
-
-            if new_status in {'ARRIBADO', 'DESCARGADO_CD', 'DISPONIBLE_DEVOLUCION', 'EN_RUTA_DEVOLUCION'}:
-                create_demurrage_alert_if_needed(container, resolved_by=request.user)
-            elif new_status == 'FINALIZADO':
-                resolve_demurrage_alerts(container, resolved_by=request.user)
-            
-            return JsonResponse({
-                'success': True,
-                'message': f'Estado actualizado a {container.get_status_display()}'
-            })
-            
-        except Exception as e:
-            return JsonResponse({
-                'success': False,
-                'message': f'Error al actualizar estado: {str(e)}'
-            })
+    """Vista para actualizar el estado de un contenedor."""
+    if request.method != 'POST':
+        return JsonResponse({'success': False, 'message': 'Método no permitido'})
     
-    return JsonResponse({'success': False, 'message': 'Método no permitido'})
+    try:
+        container = get_object_or_404(Container, id=container_id)
+        data = json.loads(request.body)
+        new_status = data.get('status')
+        
+        if not new_status:
+            return JsonResponse({'success': False, 'message': 'Estado requerido'})
+        
+        # Usar servicio de actualización de estado
+        from apps.containers.services.status_updater import update_container_status
+        result = update_container_status(container, new_status, request.user)
+        
+        return JsonResponse({
+            'success': True,
+            'message': f'Estado actualizado a {container.get_status_display()}'
+        })
+        
+    except ValueError as e:
+        return JsonResponse({'success': False, 'message': str(e)})
+    except Exception as e:
+        return JsonResponse({
+            'success': False,
+            'message': f'Error al actualizar estado: {str(e)}'
+        })
+
 
 
 @login_required

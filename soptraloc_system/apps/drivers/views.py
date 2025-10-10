@@ -731,83 +731,19 @@ def mass_entry(request):
 
 @login_required
 def auto_assign_drivers(request):
-    """Asignación automática de conductores"""
-    if request.method == 'POST':
-        try:
-            today = timezone.localdate()
-            tomorrow = today + timedelta(days=1)
-
-            unassigned_containers = Container.objects.select_related('owner_company', 'client', 'current_location').filter(
-                conductor_asignado__isnull=True,
-                status__in=['PROGRAMADO', 'EN_PROCESO', 'EN_SECUENCIA', 'SECUENCIADO'],
-                scheduled_date__in=[today, tomorrow]
-            ).order_by('scheduled_date', 'scheduled_time', 'container_number')
-
-            available_drivers = list(
-                Driver.objects.filter(
-                    is_active=True,
-                    estado='OPERATIVO',
-                    contenedor_asignado__isnull=True,
-                    ultimo_registro_asistencia=today,
-                    hora_ingreso_hoy__isnull=False
-                ).order_by('tiempo_en_ubicacion')
-            )
-
-            assigned_count = 0
-            pending_containers = []
-
-            for container in unassigned_containers:
-                attempted_ids = set()
-                assignment_error = None
-
-                while available_drivers:
-                    driver = _pick_driver_for_container(container, available_drivers, attempted_ids)
-                    if not driver:
-                        break
-
-                    attempted_ids.add(driver.id)
-
-                    try:
-                        _assign_driver_to_container(container, driver, request.user)
-                        assigned_count += 1
-                        break
-                    except ValueError as exc:
-                        assignment_error = str(exc)
-                        available_drivers.append(driver)
-                        continue
-
-                else:
-                    driver = None
-
-                if not driver or driver.id not in attempted_ids:
-                    pending_containers.append({
-                        'number': container.container_number,
-                        'reason': assignment_error or 'Sin conductores con horario disponible'
-                    })
-
-            message = f'{assigned_count} contenedores asignados automáticamente'
-            if pending_containers:
-                detalles = ', '.join(
-                    f"{item['number']} ({item['reason']})" for item in pending_containers[:5]
-                )
-                message += f". Sin conductor disponible para: {detalles}" + (
-                    '...' if len(pending_containers) > 5 else ''
-                )
-
-            return JsonResponse({
-                'success': True,
-                'message': message,
-                'assigned_count': assigned_count,
-                'pending_containers': [item['number'] for item in pending_containers]
-            })
-            
-        except Exception as e:
-            return JsonResponse({
-                'success': False,
-                'message': f'Error en asignación automática: {str(e)}'
-            })
+    """Asignación automática de conductores."""
+    if request.method != 'POST':
+        return JsonResponse({'success': False, 'message': 'Método no permitido'})
     
-    return JsonResponse({'success': False, 'message': 'Método no permitido'})
+    try:
+        from apps.drivers.services.auto_assignment import auto_assign_all_drivers
+        result = auto_assign_all_drivers(request.user)
+        return JsonResponse(result)
+    except Exception as e:
+        return JsonResponse({
+            'success': False,
+            'message': f'Error en asignación automática: {str(e)}'
+        })
 
 
 @login_required  
