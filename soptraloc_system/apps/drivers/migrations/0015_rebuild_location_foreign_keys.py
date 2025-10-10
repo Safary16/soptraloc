@@ -46,6 +46,22 @@ def _list_fk_constraints(cursor, table_name, column_name):
 
 def _postgres_adjust(schema_editor):
     connection = schema_editor.connection
+    
+    # Verificar si core_location existe (en DB nuevas no existe porque core.Location tiene managed=False)
+    with connection.cursor() as cursor:
+        cursor.execute("""
+            SELECT EXISTS (
+                SELECT FROM information_schema.tables 
+                WHERE table_name = 'core_location'
+            );
+        """)
+        table_exists = cursor.fetchone()[0]
+    
+    if not table_exists:
+        # DB nueva: core_location aún no existe (drivers.0001 la creará después)
+        # Skip esta migración - las FKs ya estarán correctas cuando se creen
+        return
+    
     tables = {
         "assignments": ["origen_id", "destino_id"],
         "drivers_time_matrix": ["from_location_id", "to_location_id"],
