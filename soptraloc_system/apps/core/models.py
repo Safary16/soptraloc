@@ -240,4 +240,61 @@ def get_user_company(self):
 User.add_to_class('get_role', get_user_role)
 User.add_to_class('get_company', get_user_company)
 User.add_to_class('role', property(get_user_role))
+
+
+# ============================================================================
+# Location - Modelo histórico necesario para migraciones antiguas
+# ============================================================================
+# Este modelo existe SOLO para que migraciones históricas (containers.0001,
+# routing.0001, warehouses.0001) puedan referenciar "core.Location".
+# 
+# En producción:
+# - La tabla 'core_location' existe y es gestionada por drivers.Location
+# - Este modelo NO se usa (drivers.Location es el modelo real)
+# - managed=True permite que tests (DB desde cero) funcionen
+#
+# Migration path:
+# core.0001 → crea location (UUID)
+# drivers.0014 → convierte a VARCHAR
+# core.0004 → elimina metadata (DeleteModel) PERO drivers sigue gestionando tabla
+class Location(models.Model):
+    """
+    Modelo histórico de Location.
+    USAR drivers.Location en código nuevo.
+    """
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    name = models.CharField(max_length=200)
+    address = models.TextField()
+    latitude = models.DecimalField(max_digits=10, decimal_places=8, null=True, blank=True)
+    longitude = models.DecimalField(max_digits=11, decimal_places=8, null=True, blank=True)
+    city = models.CharField(max_length=100)
+    region = models.CharField(max_length=100)
+    country = models.CharField(max_length=100, default='Chile')
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    created_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='%(class)s_created'
+    )
+    updated_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='%(class)s_updated'
+    )
+    
+    class Meta:
+        db_table = 'core_location'
+        managed = True  # Debe ser True para que tests funcionen (crean DB desde cero)
+        app_label = 'core'
+        verbose_name = "Ubicación (Histórico)"
+        verbose_name_plural = "Ubicaciones (Histórico)"
+        
+    def __str__(self):
+        return self.name
 User.add_to_class('company', property(get_user_company))

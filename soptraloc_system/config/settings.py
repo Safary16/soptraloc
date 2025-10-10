@@ -55,10 +55,10 @@ THIRD_PARTY_APPS = [
 
 LOCAL_APPS = [
     'apps.core',
+    'apps.drivers',  # ← IMPORTANTE: drivers ANTES que routing/containers (Location está aquí)
     'apps.containers',
     'apps.warehouses',
     'apps.routing',  # Sistema de tiempos y ML
-    'apps.drivers',
     # Apps vacías eliminadas: scheduling, alerts, optimization
     # Las alertas están en apps.drivers.models.Alert
 ]

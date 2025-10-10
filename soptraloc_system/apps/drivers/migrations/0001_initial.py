@@ -10,6 +10,7 @@ class Migration(migrations.Migration):
     initial = True
 
     dependencies = [
+        ("core", "0001_initial"),
         ("containers", "0002_alter_container_direct_service"),
         migrations.swappable_dependency(settings.AUTH_USER_MODEL),
     ]
