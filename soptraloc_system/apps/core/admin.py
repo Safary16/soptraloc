@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import Company, Vehicle, MovementCode
+from .models import Company, Vehicle, MovementCode, UserProfile
 
 
 @admin.register(Company)
@@ -52,23 +52,41 @@ class VehicleAdmin(admin.ModelAdmin):
 
 @admin.register(MovementCode)
 class MovementCodeAdmin(admin.ModelAdmin):
-    list_display = ('code', 'movement_type', 'used_at', 'is_active', 'created_at')
-    list_filter = ('movement_type', 'used_at', 'is_active', 'created_at')
-    search_fields = ('code', 'movement_type')
-    readonly_fields = ('id', 'created_at', 'updated_at', 'used_at')
+    list_display = ('code', 'movement_type', 'is_active', 'created_at')
+    list_filter = ('movement_type', 'is_active', 'created_at')
+    search_fields = ('code', 'description')
+    readonly_fields = ('id', 'created_at', 'updated_at')
     
     fieldsets = (
-        ('Código de Movimiento', {
+        ('Código', {
             'fields': ('code', 'movement_type', 'description')
-        }),
-        ('Uso', {
-            'fields': ('used_at',)
         }),
         ('Estado', {
             'fields': ('is_active',)
         }),
         ('Auditoría', {
             'fields': ('id', 'created_at', 'updated_at'),
+            'classes': ('collapse',)
+        })
+    )
+
+
+@admin.register(UserProfile)
+class UserProfileAdmin(admin.ModelAdmin):
+    list_display = ('user', 'role', 'company', 'can_import_data', 'can_assign_drivers')
+    list_filter = ('role', 'company', 'can_import_data', 'can_assign_drivers')
+    search_fields = ('user__username', 'user__email', 'company__name')
+    readonly_fields = ('created_at', 'updated_at')
+    
+    fieldsets = (
+        ('Usuario', {
+            'fields': ('user', 'role', 'company')
+        }),
+        ('Permisos', {
+            'fields': ('can_import_data', 'can_assign_drivers', 'can_manage_warehouses')
+        }),
+        ('Auditoría', {
+            'fields': ('created_at', 'updated_at'),
             'classes': ('collapse',)
         })
     )

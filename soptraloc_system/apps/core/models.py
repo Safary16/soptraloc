@@ -3,6 +3,8 @@ import uuid
 from django.contrib.auth.models import User
 from django.db import models
 from django.utils import timezone
+from django.db.models.signals import post_save
+from django.dispatch import receiver
 
 
 class BaseModel(models.Model):
@@ -79,41 +81,133 @@ class Vehicle(BaseModel):
 
 
 class MovementCode(BaseModel):
-    """Modelo para códigos únicos de movimiento."""
+    """Códigos de movimiento predefinidos para movimientos de contenedores."""
+    
+    MOVEMENT_TYPES = [
+        ('transfer', 'Transferencia'),
+        ('load', 'Carga'),
+        ('unload', 'Descarga'),
+        ('return', 'Devolución'),
+    ]
+    
     code = models.CharField(max_length=50, unique=True)
-    movement_type = models.CharField(max_length=50)  # 'load', 'unload', 'transfer'
+    movement_type = models.CharField(max_length=20, choices=MOVEMENT_TYPES)
     description = models.TextField(blank=True)
-    used_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        verbose_name = "Código de Movimiento"
+        verbose_name_plural = "Códigos de Movimiento"
+
+    def __str__(self):
+        return f"{self.code} - {self.get_movement_type_display()}"
+
+    @staticmethod
+    def generate_code(movement_type):
+        """Genera un código único basado en el tipo y timestamp."""
+        timestamp = timezone.now().strftime('%Y%m%d%H%M%S')
+        return MovementCode.objects.create(
+            code=f"{movement_type.upper()}_{timestamp}",
+            movement_type=movement_type,
+            description=f"Generated code for {movement_type}"
+        )
+
+
+# FASE 6: RBAC - Perfil de usuario con roles
+class UserProfile(models.Model):
+    """
+    Perfil extendido de usuario con información de roles y permisos.
+    FASE 6: Sistema de roles y permisos granulares.
+    """
+    
+    ROLE_CHOICES = [
+        ('admin', 'Administrador'),
+        ('operator', 'Operador'),
+        ('viewer', 'Solo Lectura'),
+    ]
+    
+    user = models.OneToOneField(
+        User,
+        on_delete=models.CASCADE,
+        related_name='profile'
+    )
+    role = models.CharField(
+        max_length=20,
+        choices=ROLE_CHOICES,
+        default='viewer',
+        verbose_name='Rol'
+    )
+    company = models.ForeignKey(
+        Company,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='users',
+        verbose_name='Empresa'
+    )
+    can_import_data = models.BooleanField(
+        default=False,
+        verbose_name='Puede importar datos'
+    )
+    can_assign_drivers = models.BooleanField(
+        default=False,
+        verbose_name='Puede asignar conductores'
+    )
+    can_manage_warehouses = models.BooleanField(
+        default=False,
+        verbose_name='Puede gestionar almacenes'
+    )
+    
+    # Metadata
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
     
     class Meta:
-        verbose_name = 'Código de Movimiento'
-        verbose_name_plural = 'Códigos de Movimiento'
-        
-    def __str__(self):
-        return f"{self.code} - {self.movement_type}"
+        db_table = 'core_user_profile'
+        verbose_name = 'Perfil de Usuario'
+        verbose_name_plural = 'Perfiles de Usuario'
     
-    def use_code(self):
-        """Marca el código como usado."""
-        self.used_at = timezone.now()
-        self.save()
-        
-    @classmethod
-    def generate_code(cls, movement_type):
-        """Genera un nuevo código único para un tipo de movimiento."""
-        import random
-        import string
-        
-        timestamp = timezone.now().strftime('%Y%m%d%H%M%S')
-        random_suffix = ''.join(random.choices(string.ascii_uppercase + string.digits, k=4))
-        type_prefix = {
-            'load': 'LD',
-            'unload': 'UL', 
-            'transfer': 'TR'
-        }.get(movement_type, 'MV')
-        
-        code = f"{type_prefix}-{timestamp}-{random_suffix}"
-        
-        return cls.objects.create(
-            code=code,
-            movement_type=movement_type
-        )
+    def __str__(self):
+        return f"{self.user.username} - {self.get_role_display()}"
+    
+    def is_admin(self):
+        """Verifica si el usuario es administrador."""
+        return self.user.is_superuser or self.user.is_staff or self.role == 'admin'
+    
+    def is_operator(self):
+        """Verifica si el usuario es operador."""
+        return self.is_admin() or self.role == 'operator'
+    
+    def can_modify_data(self):
+        """Verifica si el usuario puede modificar datos."""
+        return self.is_operator()
+
+
+@receiver(post_save, sender=User)
+def create_or_update_user_profile(sender, instance, created, **kwargs):
+    """Signal para crear perfil automáticamente cuando se crea un usuario."""
+    if created:
+        UserProfile.objects.create(user=instance)
+    elif hasattr(instance, 'profile'):
+        instance.profile.save()
+
+
+# Monkey-patch User para acceder a role directamente
+def get_user_role(self):
+    """Helper para acceder al rol del usuario directamente desde User."""
+    if hasattr(self, 'profile'):
+        return self.profile.role
+    return 'viewer'
+
+
+def get_user_company(self):
+    """Helper para acceder a la empresa del usuario."""
+    if hasattr(self, 'profile'):
+        return self.profile.company
+    return None
+
+
+# Agregar métodos al modelo User
+User.add_to_class('get_role', get_user_role)
+User.add_to_class('get_company', get_user_company)
+User.add_to_class('role', property(get_user_role))
+User.add_to_class('company', property(get_user_company))

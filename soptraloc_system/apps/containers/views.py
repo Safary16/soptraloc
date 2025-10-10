@@ -7,6 +7,7 @@ from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
 from rest_framework.decorators import action
 from rest_framework.filters import OrderingFilter, SearchFilter
 from rest_framework.response import Response
+from rest_framework.permissions import IsAuthenticated
 from django.shortcuts import render, get_object_or_404
 from django.http import HttpResponse, JsonResponse
 from django.contrib.auth.decorators import login_required
@@ -14,6 +15,7 @@ from django.utils import timezone
 from django.contrib import messages
 
 from apps.core.models import MovementCode
+from apps.core.permissions import CanManageContainers, CanImportData
 from .models import Container, ContainerDocument, ContainerInspection, ContainerMovement
 from .serializers import (
     ContainerCreateUpdateSerializer,
@@ -52,6 +54,8 @@ class ContainerViewSet(viewsets.ModelViewSet):
         'movements',  # Historial de movimientos
         'documents'  # Documentos adjuntos
     )
+    # FASE 6: Permisos granulares - RBAC
+    permission_classes = [IsAuthenticated, CanManageContainers]
     parser_classes = [JSONParser, MultiPartParser, FormParser]
     filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]
     filterset_fields = [
@@ -89,6 +93,7 @@ class ContainerViewSet(viewsets.ModelViewSet):
         methods=['post'],
         url_path='import-manifest',
         parser_classes=[MultiPartParser, FormParser],
+        permission_classes=[IsAuthenticated, CanImportData],  # FASE 6: Permiso específico para import
     )
     def import_manifest(self, request):
         """Importa uno o varios manifiestos de nave desde archivos Excel."""
