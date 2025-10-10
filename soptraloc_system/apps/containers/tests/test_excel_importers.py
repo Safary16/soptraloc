@@ -33,7 +33,7 @@ def dataframe_to_excel(dataframe: pd.DataFrame, filename: str) -> BytesIO:
 
 
 def build_manifest_file(container_number: str = "MSCU1234567") -> BytesIO:
-    today = timezone.now().date().strftime("%d/%m/%Y")
+    today = timezone.localdate().strftime("%d/%m/%Y")
     df = pd.DataFrame(
         [
             {
@@ -55,7 +55,7 @@ def build_manifest_file(container_number: str = "MSCU1234567") -> BytesIO:
 
 
 def build_release_file(container_number: str = "MSCU1234567") -> BytesIO:
-    today = timezone.now().date().strftime("%d/%m/%Y")
+    today = timezone.localdate().strftime("%d/%m/%Y")
     df = pd.DataFrame(
         [
             {
@@ -71,7 +71,7 @@ def build_release_file(container_number: str = "MSCU1234567") -> BytesIO:
 
 
 def build_program_file(container_number: str = "MSCU1234567") -> BytesIO:
-    today = timezone.now().date()
+    today = timezone.localdate()
     tomorrow = today + timedelta(days=1)
     df = pd.DataFrame(
         [
@@ -122,7 +122,7 @@ class ExcelImporterServiceTests(TestCase):
         self.assertEqual(container.status, "LIBERADO")
         self.assertIsNotNone(container.release_date, "La fecha de liberación debería estar guardada")
         self.assertIsNotNone(container.release_time, "La hora de liberación debería estar guardada")
-        self.assertEqual(container.release_date, timezone.now().date(), "La fecha debe ser hoy")
+        self.assertEqual(container.release_date, timezone.localdate(), "La fecha debe ser hoy")
         self.assertEqual(str(container.release_time), "08:30:00", "La hora debe ser 08:30")
         self.assertEqual(container.deposit_return, "DEP TEST")
         self.assertEqual(container.storage_location, "ALM 1")
@@ -139,7 +139,7 @@ class ExcelImporterServiceTests(TestCase):
         self.assertEqual(container.cd_location, "CD QUILICURA")
         self.assertIsNotNone(container.scheduled_date, "La fecha de programación debería estar guardada")
         self.assertIsNotNone(container.scheduled_time, "La hora de programación debería estar guardada")
-        tomorrow = timezone.now().date() + timedelta(days=1)
+        tomorrow = timezone.localdate() + timedelta(days=1)
         self.assertEqual(container.scheduled_date, tomorrow, "La fecha debe ser mañana")
         self.assertEqual(str(container.scheduled_time), "09:45:00", "La hora debe ser 09:45")
 

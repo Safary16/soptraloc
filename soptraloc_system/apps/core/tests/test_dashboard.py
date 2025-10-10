@@ -52,7 +52,7 @@ class DashboardViewTests(TestCase):
             owner_company=company,
             service_type="INDIRECTO_DEPOSITO",
             cd_location="CD Quilicura",
-            scheduled_date=timezone.now().date(),
+            scheduled_date=timezone.localdate(),
             scheduled_time=(timezone.now() + timedelta(hours=1)).time(),
             terminal=location,
         )

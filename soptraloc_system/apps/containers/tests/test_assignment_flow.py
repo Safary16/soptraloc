@@ -51,7 +51,7 @@ class ContainerAssignmentFlowTests(APITestCase):
             service_type="INDIRECTO_DEPOSITO",
             terminal=self.origin,
             cd_location="CD El Peñón",
-            scheduled_date=timezone.now().date(),
+            scheduled_date=timezone.localdate(),
             scheduled_time=(timezone.now() + timedelta(hours=1)).time(),
         )
 
@@ -144,7 +144,7 @@ class ContainerAssignmentFlowTests(APITestCase):
         self.assertEqual(payload_codes.get("CD_PENON"), 1)
 
     def test_demurrage_alert_triggers_and_resolves_through_return_flow(self):
-        self.container.demurrage_date = timezone.now().date() + timedelta(days=1)
+        self.container.demurrage_date = timezone.localdate() + timedelta(days=1)
         self.container.save(update_fields=["demurrage_date"])
 
         # Asignar conductor y preparar ruta de entrega

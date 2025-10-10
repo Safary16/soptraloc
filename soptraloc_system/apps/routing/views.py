@@ -116,7 +116,7 @@ class RouteViewSet(viewsets.ViewSet):
         
         GET /api/routing/routes/today/
         """
-        today = timezone.now().date()
+        today = timezone.localdate()
         routes = Route.objects.filter(
             route_date=today,
             is_active=True
