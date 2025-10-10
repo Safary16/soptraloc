@@ -594,11 +594,30 @@ class ContainerInspection(BaseModel):
 
 # ===== NUEVOS MODELOS REFACTORIZADOS =====
 
-class ContainerSpec(BaseModel):
+class ContainerSpec(models.Model):
     """
     Especificaciones físicas del contenedor.
     Separado para reducir complejidad de Container model.
+    NOTA: No hereda de BaseModel porque fue creado con BigAutoField en migración 0002.
     """
+    id = models.BigAutoField(primary_key=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    created_by = models.ForeignKey(
+        'auth.User',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='containerspec_created'
+    )
+    updated_by = models.ForeignKey(
+        'auth.User',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='containerspec_updated'
+    )
+    
     container = models.OneToOneField(
         Container,
         on_delete=models.CASCADE,
@@ -641,11 +660,30 @@ class ContainerSpec(BaseModel):
         return f"Specs: {self.container.container_number}"
 
 
-class ContainerImportInfo(BaseModel):
+class ContainerImportInfo(models.Model):
     """
     Información específica de contenedores de importación.
     Separado para no contaminar Container con campos de importación.
+    NOTA: No hereda de BaseModel porque fue creado con BigAutoField en migración 0002.
     """
+    id = models.BigAutoField(primary_key=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    created_by = models.ForeignKey(
+        'auth.User',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='containerimportinfo_created'
+    )
+    updated_by = models.ForeignKey(
+        'auth.User',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='containerimportinfo_updated'
+    )
+    
     container = models.OneToOneField(
         Container,
         on_delete=models.CASCADE,
@@ -704,11 +742,30 @@ class ContainerImportInfo(BaseModel):
         return f"Import Info: {self.container.container_number}"
 
 
-class ContainerSchedule(BaseModel):
+class ContainerSchedule(models.Model):
     """
     Programación y tiempos del contenedor.
     Separado para facilitar queries de programación.
+    NOTA: No hereda de BaseModel porque fue creado con BigAutoField en migración 0002.
     """
+    id = models.BigAutoField(primary_key=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    created_by = models.ForeignKey(
+        'auth.User',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='containerschedule_created'
+    )
+    updated_by = models.ForeignKey(
+        'auth.User',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='containerschedule_updated'
+    )
+    
     container = models.OneToOneField(
         Container,
         on_delete=models.CASCADE,
