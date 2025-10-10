@@ -4,6 +4,11 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
+    """
+    Limpieza de metadata obsoleta en core:
+    - Location: Cambiar a managed=False (drivers.Location gestiona la tabla)
+    - Driver: Eliminar solo metadata (tabla nunca existió en core, siempre estuvo en drivers)
+    """
 
     dependencies = [
         ("core", "0003_userprofile"),
@@ -31,7 +36,12 @@ class Migration(migrations.Migration):
                 max_length=20,
             ),
         ),
-        migrations.DeleteModel(
-            name="Driver",
+        # DeleteModel solo en estado, NO en base de datos
+        # (core_driver nunca existió, Driver siempre estuvo en app drivers)
+        migrations.SeparateDatabaseAndState(
+            state_operations=[
+                migrations.DeleteModel(name="Driver"),
+            ],
+            database_operations=[],  # No hacer nada en DB
         ),
     ]
