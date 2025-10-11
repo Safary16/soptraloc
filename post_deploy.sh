@@ -144,14 +144,14 @@ if User.objects.filter(username='admin').exists():
     print(f"   - Staff: {admin.is_staff}")
     print(f"   - Activo: {admin.is_active}")
     
-    # NO verificar autenticación - django-axes requiere request object
-    print(f"\n⚠️  Autenticación no verificada (requiere request)")
-    auth_user = None
+    # Verificar password directamente (django-axes requiere request para authenticate())
+    password_ok = admin.check_password('1234')
     
-    if auth_user:
-        print(f"✅ AUTENTICACIÓN EXITOSA")
+    if password_ok:
+        print(f"\n✅ PASSWORD VERIFICADO CORRECTAMENTE")
+        print(f"   Usuario listo para login en /admin")
     else:
-        print(f"❌ ERROR: AUTENTICACIÓN FALLÓ")
+        print(f"\n❌ ERROR: PASSWORD INCORRECTO")
         import sys
         sys.exit(1)
 else:
