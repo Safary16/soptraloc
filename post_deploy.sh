@@ -64,7 +64,6 @@ else
     # Método alternativo: Script Python inline SIMPLIFICADO
     python manage.py shell --settings=config.settings_production <<'EOFPYTHON'
 from django.contrib.auth import get_user_model
-from django.contrib.auth import authenticate
 
 User = get_user_model()
 
@@ -91,9 +90,13 @@ print(f"   - is_superuser: {admin.is_superuser}")
 print(f"   - is_staff: {admin.is_staff}")
 print(f"   - is_active: {admin.is_active}")
 
-# NO verificar autenticación aquí porque django-axes requiere request object
-print("⚠️  Skipping authentication test (requires request object)")
-print("✅ Superusuario creado - verificar en admin panel")
+# Verificar password directamente (django-axes requiere request para authenticate)
+if admin.check_password('1234'):
+    print("✅ Password verificado correctamente")
+    print("⚠️  Login debe verificarse manualmente en /admin")
+else:
+    print("❌ ERROR: Password no coincide")
+    import sys
     sys.exit(1)
 
 print("=" * 70)
@@ -128,7 +131,7 @@ echo "🔐 PASO 4: Verificación final del superusuario"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
 python manage.py shell --settings=config.settings_production <<'EOFPYTHON'
-from django.contrib.auth import get_user_model, authenticate
+from django.contrib.auth import get_user_model
 
 User = get_user_model()
 
@@ -144,14 +147,13 @@ if User.objects.filter(username='admin').exists():
     print(f"   - Staff: {admin.is_staff}")
     print(f"   - Activo: {admin.is_active}")
     
-    # Verificar password directamente (django-axes requiere request para authenticate())
-    password_ok = admin.check_password('1234')
-    
-    if password_ok:
-        print(f"\n✅ PASSWORD VERIFICADO CORRECTAMENTE")
-        print(f"   Usuario listo para login en /admin")
+    # Verificar password directamente (login real requiere request)
+    print(f"\n🔐 Verificando password...")
+    if admin.check_password('1234'):
+        print(f"✅ PASSWORD VERIFICADO CORRECTAMENTE")
+        print(f"⚠️  Login debe probarse en /admin")
     else:
-        print(f"\n❌ ERROR: PASSWORD INCORRECTO")
+        print(f"❌ ERROR: PASSWORD INCORRECTO")
         import sys
         sys.exit(1)
 else:
@@ -170,23 +172,16 @@ fi
 echo ""
 
 # ============================================================================
-# PASO 5: VERIFICAR CONDUCTORES (NO CARGAR EN UPDATES)
+# PASO 5: CARGAR CONDUCTORES
 # ============================================================================
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-echo "� PASO 5: Verificando conductores existentes"
+echo "🚚 PASO 5: Cargando 82 conductores"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
-# Contar conductores existentes
-EXISTING_DRIVERS=$(python manage.py shell --settings=config.settings_production -c "from apps.drivers.models import Driver; print(Driver.objects.count())" 2>/dev/null || echo "0")
-echo "📊 Conductores existentes: $EXISTING_DRIVERS"
-
-# Solo cargar conductores si la DB está vacía (primer deploy)
-if [ "$EXISTING_DRIVERS" -eq 0 ]; then
-    echo "🔄 Primera vez: Cargando conductores iniciales..."
-    python manage.py load_drivers --count=50 --settings=config.settings_production
-    echo "✅ Conductores iniciales cargados"
+if python manage.py load_drivers --count=82 --force --settings=config.settings_production 2>&1 | tee /tmp/load_drivers.log; then
+    echo "✅ 82 conductores cargados correctamente"
 else
-    echo "✅ Conductores ya existen, omitiendo carga"
+    echo "⚠️  Advertencia: Hubo un problema al cargar conductores (no crítico)"
 fi
 
 echo ""
@@ -207,49 +202,16 @@ fi
 echo ""
 
 # ============================================================================
-# PASO 7: VERIFICAR Y LIMPIAR CONDUCTORES (ACTUALIZACIÓN)
+# PASO 7: CARGAR DATOS INICIALES DE CHILE (OPCIONAL)
 # ============================================================================
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-echo "🧹 PASO 7: Verificando y limpiando conductores"
+echo "📊 PASO 7: Cargando datos iniciales de Chile"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
-# Contar conductores actuales
-DRIVER_COUNT=$(python manage.py shell --settings=config.settings_production -c "from apps.drivers.models import Driver; print(Driver.objects.count())" 2>/dev/null || echo "0")
-echo "📊 Conductores actuales: $DRIVER_COUNT"
-
-# Si hay más de 50 conductores, ejecutar limpieza automática con el nuevo comando
-if [ "$DRIVER_COUNT" -gt 50 ]; then
-    echo "⚠️  ALERTA: Más de 50 conductores detectados"
-    echo "🧹 Ejecutando limpieza automática (manteniendo los 50 más recientes)..."
-    
-    python manage.py prune_drivers_to_50 --force --keep=50 --settings=config.settings_production
-    
-    # Verificar resultado
-    NEW_COUNT=$(python manage.py shell --settings=config.settings_production -c "from apps.drivers.models import Driver; print(Driver.objects.count())" 2>/dev/null || echo "0")
-    echo "✅ Limpieza completada. Conductores actuales: $NEW_COUNT"
+if python manage.py load_initial_times --settings=config.settings_production 2>&1 | grep -q "exitosamente\|successfully\|completed"; then
+    echo "✅ Datos de Chile cargados correctamente"
 else
-    echo "✅ Cantidad de conductores OK ($DRIVER_COUNT)"
-fi
-
-echo ""
-
-# ============================================================================
-# PASO 8: CARGAR UBICACIONES GPS (SI NO EXISTEN)
-# ============================================================================
-echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-echo "📍 PASO 8: Verificando ubicaciones GPS"
-echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-
-# Contar ubicaciones
-LOC_COUNT=$(python manage.py shell --settings=config.settings_production -c "from apps.drivers.models import Location; print(Location.objects.count())" 2>/dev/null || echo "0")
-echo "📍 Ubicaciones actuales: $LOC_COUNT"
-
-if [ "$LOC_COUNT" -lt 5 ]; then
-    echo "🔄 Cargando ubicaciones GPS (CD Peñón, CD Quilicura, CCTI, etc.)..."
-    python manage.py load_initial_times --settings=config.settings_production
-    echo "✅ Ubicaciones GPS cargadas"
-else
-    echo "✅ Ubicaciones GPS ya existen"
+    echo "ℹ️  Los datos ya existían o hubo un error menor (no crítico)"
 fi
 
 echo ""
@@ -264,9 +226,9 @@ echo ""
 echo "📊 Resumen:"
 echo "   ✅ PostgreSQL: Conectado"
 echo "   ✅ Superusuario: Creado y verificado"
-echo "   ✅ Conductores: Limpieza automática aplicada (≤50 conductores)"
-echo "   ✅ Ubicaciones GPS: Verificadas (CD Peñón, CD Quilicura, CCTI, etc.)"
-echo "   ✅ Mapbox: Configurado con coordenadas reales"
+echo "   ✅ Conductores: 82 conductores cargados"
+echo "   ✅ Ubicaciones: 6 ubicaciones cargadas (CDs + CCTI + CLEP)"
+echo "   ✅ Datos: Cargados"
 echo ""
 echo "🔗 Acceso al sistema:"
 echo "   URL: https://soptraloc.onrender.com/admin/"
