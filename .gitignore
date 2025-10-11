@@ -1,4 +1,4 @@
-# ============================================# ============================================*.pyc# ============================================
+# ============================================# ============================================# ============================================# ============================================*.pyc# ============================================
 
 # SOPTRALOC TMS - .gitignore
 
@@ -6,7 +6,7 @@
 
 
 
-# Python# ============================================__pycache__/# SOPTRALOC TMS - .gitignore
+# Python# ============================================# SOPTRALOC TMS - .gitignore
 
 __pycache__/
 
@@ -14,7 +14,7 @@ __pycache__/
 
 *$py.class
 
-*.so# Python*.py[cod]# ============================================
+*.so# Python# ============================================# SOPTRALOC TMS - .gitignore
 
 *.egg
 
@@ -22,7 +22,7 @@ __pycache__/
 
 dist/
 
-build/*.py[cod]*$py.class
+build/*.py[cod]
 
 .eggs/
 
@@ -30,7 +30,7 @@ build/*.py[cod]*$py.class
 
 
 
-# Virtual Environments*.so# Python
+# Virtual Environments*.so# Python# ============================================__pycache__/# SOPTRALOC TMS - .gitignore
 
 venv/
 
@@ -38,41 +38,245 @@ env/*.egg
 
 ENV/
 
-.venv/*.egg-info/# Django__pycache__/
+.venv/*.egg-info/__pycache__/
 
 env.bak/
 
-venv.bak/.eggs/
+venv.bak/dist/
 
 
 
-# Django.installed.cfg*.log*.py[cod]
+# Djangobuild/*.py[cod]
 
 *.log
 
+*.pot.eggs/
+
+*.pyc
+
+db.sqlite3.Python*$py.class
+
+db.sqlite3-journal
+
+media/
+
+staticfiles/
+
+/static/# Virtual Environments*.so# Python*.py[cod]# ============================================
+
 local_settings.py
 
-db.sqlite3
-
-db.sqlite3-journal# Virtual Environmentslocal_settings.py*$py.class
-
-/media
-
-/staticfilesvenv/
-
-/static
-
-env/db.sqlite3*.so
+venv/
 
 # IDEs
 
-.vscode/ENV/
+.vscode/env/*.egg
 
 .idea/
 
-*.swp.venvdb.sqlite3-journal.Python
+*.swpENV/
 
 *.swo
+
+*~.venv/*.egg-info/__pycache__/
+
+.DS_Store
+
+env.bak/
+
+# Environment variables
+
+.envvenv.bak/dist/
+
+.env.local
+
+.env.production
+
+!.env.example
+
+# Djangobuild/*.py[cod]*$py.class
+
+# Testing & Coverage
+
+.coverage*.log
+
+.coverage.*
+
+htmlcov/*.pot.eggs/
+
+.pytest_cache/
+
+.tox/*.pyc
+
+nosetests.xml
+
+coverage.xmldb.sqlite3.Python*$py.class
+
+*.cover
+
+.hypothesis/db.sqlite3-journal
+
+.mypy_cache/
+
+media/
+
+# Celery
+
+celerybeat-schedulestaticfiles/
+
+celerybeat-schedule.db
+
+celerybeat.pid/static/# Virtual Environments*.so# Python
+
+
+
+# Logs
+
+logs/
+
+*.log# IDEsvenv/
+
+
+
+# Backup files.vscode/
+
+*.bak
+
+*.backup.idea/env/*.egg
+
+*.old
+
+*.tmp*.swp
+
+*.temp
+
+*.corrupted*.swoENV/
+
+
+
+# OS files*~
+
+Thumbs.db
+
+.DS_Store.DS_Store.venv/*.egg-info/# Django__pycache__/
+
+.DS_Store?
+
+._*
+
+.Spotlight-V100
+
+.Trashes# Environment variablesenv.bak/
+
+ehthumbs.db
+
+.env
+
+# Jupyter Notebook
+
+.ipynb_checkpoints/.env.localvenv.bak/.eggs/
+
+
+
+# pyenv.env.production
+
+.python-version
+
+
+
+# pipenv
+
+Pipfile.lock# Coverage
+
+
+
+# PEP 582htmlcov/# Django.installed.cfg*.log*.py[cod]
+
+__pypackages__/
+
+.tox/
+
+# mypy
+
+.mypy_cache/.coverage*.log
+
+.dmypy.json
+
+dmypy.json.coverage.*
+
+
+
+# Pyre.cachelocal_settings.py
+
+.pyre/
+
+nosetests.xml
+
+# Render
+
+.render/coverage.xmldb.sqlite3
+
+
+
+# Node.js (if needed)*.cover
+
+node_modules/
+
+npm-debug.log*.hypothesis/db.sqlite3-journal# Virtual Environmentslocal_settings.py*$py.class
+
+yarn-debug.log*
+
+yarn-error.log*.pytest_cache/
+
+
+
+# Project specific/media
+
+/logs/
+
+*.xlsx.lock# Jupyter Notebook
+
+~$*.xlsx
+
+.ipynb_checkpoints/staticfilesvenv/
+
+# Excel files (except fixtures)
+
+# Uncomment if you don't want to track Excel files
+
+# *.xlsx
+
+# *.xls# Backup files/static
+
+# *.csv
+
+!**/fixtures/*.xlsx*.bak
+
+!apps/*.xlsx
+
+*.backupenv/db.sqlite3*.so
+
+*.corrupted
+
+*.old# IDEs
+
+
+
+# OS.vscode/ENV/
+
+Thumbs.db
+
+.DS_Store.idea/
+
+
+
+# Project specific*.swp.venvdb.sqlite3-journal.Python
+
+/logs/
+
+*.xlsx.lock*.swo
+
+~$*.xlsx
 
 *~env.bak/
 

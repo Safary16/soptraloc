@@ -1,8 +1,8 @@
-#!/usr/bin/env bash#!/usr/bin/env bash#!/usr/bin/env bash#!/usr/bin/env bash#!/usr/bin/env bash
+#!/usr/bin/env bash#!/usr/bin/env bash#!/usr/bin/env bash#!/usr/bin/env bash#!/usr/bin/env bash#!/usr/bin/env bash
 
-# Build script automático para Render.com - SoptraLoc TMS
+# Build script para Render.com - SoptraLoc TMS
 
-# Este script se ejecuta automáticamente en cada deploy# Build script automático para Render.com - SoptraLoc TMS
+# Versión: 3.0 - Octubre 2024# Build script automático para Render.com - SoptraLoc TMS
 
 
 
@@ -14,21 +14,52 @@ echo "=========================================="
 
 echo "🚀 SOPTRALOC TMS - BUILD AUTOMÁTICO"
 
-echo "=========================================="set -o errexit  # Exit en caso de error# Se ejecuta automáticamente en cada deploy# Script de build automático para Render# Build script optimizado para Render.com - SoptraLoc TMS v3.0
+echo "=========================================="set -o errexit  # Exit en caso de error# Este script se ejecuta automáticamente en cada deploy# Build script automático para Render.com - SoptraLoc TMS
 
 echo ""
 
 
 
-echo "📦 [1/5] Instalando dependencias..."
+# 1. Actualizar pip
 
-pip install --upgrade pipecho "🔧 Instalando dependencias..."
+echo "📦 Actualizando pip..."echo "=========================================="
+
+pip install --upgrade pip
+
+echo "🚀 SOPTRALOC TMS - BUILD AUTOMÁTICO"
+
+# 2. Instalar dependencias
+
+echo "📦 Instalando dependencias..."echo "=========================================="set -o errexit  # Exit en caso de error# Se ejecuta automáticamente en cada deploy# Script de build automático para Render# Build script optimizado para Render.com - SoptraLoc TMS v3.0
 
 pip install -r requirements.txt
 
-echo "✅ Dependencias instaladas"pip install -r requirements.txt
+echo ""
+
+# 3. Colectar archivos estáticos
+
+echo "📦 Colectando archivos estáticos..."
+
+python manage.py collectstatic --no-input
+
+echo "📦 [1/5] Instalando dependencias..."
+
+# 4. Ejecutar migraciones
+
+echo "📦 Ejecutando migraciones..."pip install --upgrade pipecho "🔧 Instalando dependencias..."
+
+python manage.py migrate --no-input
+
+pip install -r requirements.txt
 
 echo ""
+
+echo "=========================================="echo "✅ Dependencias instaladas"pip install -r requirements.txt
+
+echo "✅ BUILD COMPLETADO EXITOSAMENTE"
+
+echo "=========================================="echo ""
+
 
 set -o errexit  # Exit en caso de error# Este script se ejecuta automáticamente en cada deploy# Deploy desde CERO
 

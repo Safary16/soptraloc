@@ -1,12 +1,13 @@
 """
 Servicio de asignación automática de conductores
-Implementa algoritmo con scores ponderados
+Implementa algoritmo con scores ponderados + Machine Learning
 """
 from decimal import Decimal
 from django.conf import settings
 from apps.drivers.models import Driver
 from apps.programaciones.models import Programacion
 from apps.core.services.mapbox import MapboxService
+from apps.core.services.ml_predictor import MLTimePredictor
 import logging
 
 logger = logging.getLogger(__name__)
@@ -41,12 +42,31 @@ class AssignmentService:
         return Decimal('0.0')
     
     @classmethod
-    def calcular_score_ocupacion(cls, driver):
+    def calcular_score_ocupacion(cls, driver, programacion=None):
         """
         Score inversamente proporcional a la ocupación
         100 = Sin entregas (0% ocupado)
         0 = Completamente ocupado (100%)
+        
+        Si se proporciona programacion, usa ML para calcular ocupación futura
         """
+        if programacion:
+            # Usar ML para predicción más precisa
+            try:
+                ocupacion_data = MLTimePredictor.calcular_ocupacion_conductor(driver, programacion)
+                porcentaje_ocupacion = Decimal(str(ocupacion_data['porcentaje_jornada']))
+                
+                # Limitar a 100%
+                if porcentaje_ocupacion > 100:
+                    porcentaje_ocupacion = Decimal('100.0')
+                
+                logger.debug(f"Ocupación ML para {driver.nombre}: {porcentaje_ocupacion}%")
+                return Decimal('100.0') - porcentaje_ocupacion
+            
+            except Exception as e:
+                logger.warning(f"Error calculando ocupación ML: {str(e)}. Usando fallback.")
+        
+        # Fallback a método original
         ocupacion = driver.ocupacion_porcentaje
         return Decimal('100.0') - ocupacion
     
@@ -87,6 +107,8 @@ class AssignmentService:
         """
         Calcula el score total ponderado para un conductor
         
+        Usa Machine Learning para ocupación más precisa
+        
         Returns:
             dict: {
                 'score_total': Decimal,
@@ -96,12 +118,13 @@ class AssignmentService:
                     'cumplimiento': Decimal,
                     'proximidad': Decimal
                 },
+                'tiempo_estimado_min': int (opcional, con ML),
                 'distancia_km': float (opcional)
             }
         """
-        # Calcular scores individuales
+        # Calcular scores individuales (ocupación ahora usa ML)
         score_disponibilidad = cls.calcular_score_disponibilidad(driver)
-        score_ocupacion = cls.calcular_score_ocupacion(driver)
+        score_ocupacion = cls.calcular_score_ocupacion(driver, programacion)  # ← Con ML
         score_cumplimiento = cls.calcular_score_cumplimiento(driver)
         score_proximidad = cls.calcular_score_proximidad(driver, programacion.cd)
         

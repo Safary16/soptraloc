@@ -1,155 +1,30 @@
-services:services:services:services:services:
-
+services:
+  # Web Service
   - type: web
-
-    name: soptraloc  - type: web
-
+    name: soptraloc-backend
+    runtime: python
     env: python
-
-    region: oregon    name: soptraloc  - type: web
-
     plan: free
-
-    branch: main    env: python
-
-    buildCommand: bash build.sh
-
-    startCommand: gunicorn config.wsgi:application --bind 0.0.0.0:$PORT --workers 2 --threads 4 --worker-class gthread --timeout 120 --log-level info    region: oregon    name: soptraloc  - type: web  - type: web
-
+    buildCommand: "./build.sh"
+    startCommand: "gunicorn config.wsgi:application"
     envVars:
-
-      - key: PYTHON_VERSION    plan: free
-
-        value: 3.12.6
-
-      - key: SECRET_KEY    branch: main    env: python
-
-        generateValue: true
-
-      - key: DEBUG    buildCommand: bash build.sh
-
-        value: False
-
-      - key: DATABASE_URL    startCommand: gunicorn config.wsgi:application --bind 0.0.0.0:$PORT --workers 2 --threads 4 --worker-class gthread --timeout 120 --log-level info    region: oregon    name: soptraloc    name: soptraloc
-
+      - key: PYTHON_VERSION
+        value: 3.12.0
+      - key: DATABASE_URL
         fromDatabase:
-
-          name: soptraloc-db    envVars:
-
-          property: connectionString
-
-      - key: DJANGO_SETTINGS_MODULE      - key: PYTHON_VERSION    plan: free
-
-        value: config.settings
-
-      - key: MAPBOX_API_KEY        value: 3.12.6
-
-        value: pk.eyJ1Ijoic2FmYXJ5MTYiLCJhIjoiY21naHlvYTQ5MDNlbDJrbjJjcXRtZGg1YSJ9.WCiyTSY_CCfB02N_Nfx7kg
-
-      - key: RENDER_EXTERNAL_HOSTNAME      - key: SECRET_KEY    branch: main    env: python    env: python
-
-        sync: false
-
-        generateValue: true
-
-databases:
-
-  - name: soptraloc-db      - key: DATABASE_URL    buildCommand: bash build.sh
-
-    databaseName: soptraloc
-
-    user: soptraloc        fromDatabase:
-
-    region: oregon
-
-    plan: free          name: soptraloc-db    startCommand: gunicorn config.wsgi:application --bind 0.0.0.0:$PORT --workers 2 --threads 4 --worker-class gthread --timeout 120 --log-level info    region: oregon    region: oregon
-
-
-          property: connectionString
-
-      - key: DJANGO_SETTINGS_MODULE    envVars:
-
-        value: config.settings
-
-      - key: MAPBOX_API_KEY      - key: PYTHON_VERSION    plan: free    plan: free
-
-        value: pk.eyJ1Ijoic2FmYXJ5MTYiLCJhIjoiY21naHlvYTQ5MDNlbDJrbjJjcXRtZGg1YSJ9.WCiyTSY_CCfB02N_Nfx7kg
-
-        value: 3.12.6
-
-databases:
-
-  - name: soptraloc-db      - key: SECRET_KEY    branch: main    branch: main
-
-    databaseName: soptraloc
-
-    user: soptraloc        generateValue: true
-
-    region: oregon
-
-    plan: free      - key: DATABASE_URL    buildCommand: |    buildCommand: bash build.sh
-
-
-        fromDatabase:
-
-          name: soptraloc-db      pip install --upgrade pip    startCommand: cd soptraloc_system && gunicorn config.wsgi:application --bind 0.0.0.0:$PORT --workers 2 --threads 4 --worker-class gthread --timeout 120 --log-level info
-
-          property: connectionString
-
-      - key: DJANGO_SETTINGS_MODULE      pip install -r requirements.txt    envVars:
-
-        value: config.settings
-
-      - key: MAPBOX_API_KEY      python manage.py collectstatic --no-input      - key: PYTHON_VERSION
-
-        value: pk.eyJ1Ijoic2FmYXJ5MTYiLCJhIjoiY21naHlvYTQ5MDNlbDJrbjJjcXRtZGg1YSJ9.WCiyTSY_CCfB02N_Nfx7kg
-
-      python manage.py migrate --no-input        value: 3.12.6
-
-databases:
-
-  - name: soptraloc-db    startCommand: gunicorn config.wsgi:application --bind 0.0.0.0:$PORT --workers 2 --threads 4 --worker-class gthread --timeout 120      - key: SECRET_KEY
-
-    databaseName: soptraloc
-
-    user: soptraloc    envVars:        generateValue: true
-
-    region: oregon
-
-    plan: free      - key: PYTHON_VERSION      - key: DATABASE_URL
-
-
-        value: 3.12.6        fromDatabase:
-
-      - key: SECRET_KEY          name: soptraloc-db
-
-        generateValue: true          property: connectionString
-
-      - key: DEBUG      - key: DJANGO_SETTINGS_MODULE
-
-        value: False        value: config.settings_production
-
-      - key: DATABASE_URL      - key: MAPBOX_API_KEY
-
-        fromDatabase:        value: pk.eyJ1Ijoic2FmYXJ5MTYiLCJhIjoiY21naHlvYTQ5MDNlbDJrbjJjcXRtZGg1YSJ9.WCiyTSY_CCfB02N_Nfx7kg
-
           name: soptraloc-db
-
-          property: connectionStringdatabases:
-
-      - key: DJANGO_SETTINGS_MODULE  - name: soptraloc-db
-
-        value: config.settings    databaseName: soptraloc
-
-      - key: MAPBOX_API_KEY    user: soptraloc
-
-        value: pk.eyJ1Ijoic2FmYXJ5MTYiLCJhIjoiY21naHlvYTQ5MDNlbDJrbjJjcXRtZGg1YSJ9.WCiyTSY_CCfB02N_Nfx7kg    region: oregon
-
-    plan: free
+          property: connectionString
+      - key: SECRET_KEY
+        generateValue: true
+      - key: DEBUG
+        value: false
+      - key: ALLOWED_HOSTS
+        value: .onrender.com
+      - key: MAPBOX_ACCESS_TOKEN
+        sync: false
 
 databases:
   - name: soptraloc-db
     databaseName: soptraloc
     user: soptraloc
-    region: oregon
     plan: free

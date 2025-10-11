@@ -249,9 +249,13 @@ class ContainerViewSet(viewsets.ModelViewSet):
           conductor espera descarga sobre camión, luego retorna a CCTI/depot con vacío
         - Si cd.permite_soltar_contenedor=True (El Peñón):
           drop & hook, conductor libre inmediatamente, puede recoger otro vacío
+        
+        Automáticamente crea registro TiempoOperacion para ML
         """
         from django.utils import timezone
         from apps.cds.models import CD
+        from apps.programaciones.models import TiempoOperacion
+        from datetime import timedelta
         
         container = self.get_object()
         
@@ -262,7 +266,8 @@ class ContainerViewSet(viewsets.ModelViewSet):
             )
         
         # Registrar hora de descarga
-        container.hora_descarga = timezone.now()
+        hora_fin = timezone.now()
+        container.hora_descarga = hora_fin
         usuario = request.user.username if request.user.is_authenticated else None
         container.cambiar_estado('descargado', usuario)
         
@@ -275,6 +280,40 @@ class ContainerViewSet(viewsets.ModelViewSet):
                 mensaje_adicional = f" (Conductor debe esperar descarga sobre camión en {cd.nombre})"
             elif cd.permite_soltar_contenedor:
                 mensaje_adicional = f" (Drop & hook en {cd.nombre}, conductor libre inmediatamente)"
+            
+            # 🆕 Crear registro ML de TiempoOperacion
+            try:
+                # Obtener programación y conductor
+                programacion = getattr(container, 'programacion', None)
+                conductor = programacion.driver if programacion else None
+                
+                # Calcular hora de inicio (usar fecha_entrega como aproximación)
+                hora_inicio = container.fecha_entrega if container.fecha_entrega else (hora_fin - timedelta(hours=1))
+                
+                # Calcular tiempos
+                tiempo_real_min = int((hora_fin - hora_inicio).total_seconds() / 60)
+                tiempo_estimado = cd.tiempo_promedio_descarga_min or 60
+                
+                # Crear registro
+                TiempoOperacion.objects.create(
+                    cd=cd,
+                    conductor=conductor,
+                    container=container,
+                    tipo_operacion='descarga_cd',
+                    tiempo_estimado_min=tiempo_estimado,
+                    tiempo_real_min=tiempo_real_min,
+                    hora_inicio=hora_inicio,
+                    hora_fin=hora_fin,
+                    observaciones=f"Auto-generado desde registrar_descarga por {usuario or 'sistema'}"
+                )
+                
+                mensaje_adicional += f" [ML: {tiempo_real_min}min registrados]"
+            
+            except Exception as e:
+                # No fallar si el registro ML falla
+                import logging
+                logger = logging.getLogger(__name__)
+                logger.warning(f"Error creando registro TiempoOperacion: {str(e)}")
         
         serializer = self.get_serializer(container)
         return Response({
