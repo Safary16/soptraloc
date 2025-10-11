@@ -19,3 +19,14 @@ def home(request):
 def asignacion(request):
     """Vista de asignación de conductores"""
     return render(request, 'asignacion.html')
+
+
+def importar(request):
+    """Vista de importación de archivos Excel"""
+    stats = {
+        'contenedores': Container.objects.count(),
+        'conductores': Driver.objects.count(),
+        'cds': CD.objects.count(),
+        'programaciones': Programacion.objects.count(),
+    }
+    return render(request, 'importar.html', {'stats': stats})

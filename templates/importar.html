@@ -1,0 +1,301 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Importar Datos - SoptraLoc TMS{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card card-ubuntu">
+                <div class="card-header card-header-ubuntu">
+                    <i class="fas fa-file-upload"></i> Importación de Archivos Excel
+                </div>
+                <div class="card-body">
+                    <p class="lead">
+                        Sistema de importación de datos desde archivos Excel
+                    </p>
+                    
+                    <div class="alert alert-ubuntu">
+                        <i class="fas fa-info-circle"></i>
+                        <strong>Importante:</strong> Los archivos deben estar en formato Excel (.xlsx o .xls) con las columnas correctas.
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Formularios de Importación -->
+    <div class="row">
+        <!-- Embarque/Manifiesto -->
+        <div class="col-md-6 mb-4">
+            <div class="card card-ubuntu h-100">
+                <div class="card-header bg-primary text-white">
+                    <i class="fas fa-ship"></i> 1. Embarque / Manifiesto de Nave
+                </div>
+                <div class="card-body">
+                    <h6>📋 Columnas Requeridas:</h6>
+                    <ul class="small">
+                        <li><code>CONTAINER ID</code> o <code>Nº CONTENEDOR</code></li>
+                        <li><code>BOOKING</code></li>
+                        <li><code>TAMAÑO</code> (20, 40, 40HC)</li>
+                        <li><code>TIPO</code> (Dry, Reefer, etc)</li>
+                        <li><code>PESO</code> (kg)</li>
+                        <li><code>NAVIERA</code></li>
+                        <li><code>NAVE</code></li>
+                        <li><code>VIAJE</code></li>
+                        <li><code>FECHA ARRIBO</code></li>
+                    </ul>
+                    
+                    <form method="post" enctype="multipart/form-data" action="/api/containers/import-embarque/" class="mt-3">
+                        {% csrf_token %}
+                        <div class="mb-3">
+                            <label class="form-label fw-bold">
+                                <i class="fas fa-file-excel"></i> Archivo Excel
+                            </label>
+                            <input type="file" class="form-control" name="file" accept=".xlsx,.xls" required>
+                        </div>
+                        <button type="submit" class="btn btn-ubuntu w-100">
+                            <i class="fas fa-upload"></i> Importar Embarque
+                        </button>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <!-- Liberación -->
+        <div class="col-md-6 mb-4">
+            <div class="card card-ubuntu h-100">
+                <div class="card-header bg-success text-white">
+                    <i class="fas fa-unlock"></i> 2. Liberación de Contenedores
+                </div>
+                <div class="card-body">
+                    <h6>📋 Columnas Requeridas:</h6>
+                    <ul class="small">
+                        <li><code>CONTAINER ID</code> o <code>Nº CONTENEDOR</code></li>
+                        <li><code>BOOKING</code></li>
+                        <li><code>FECHA LIBERACION</code></li>
+                        <li><code>CCTI</code> (opcional)</li>
+                        <li><code>CLIENTE</code> (opcional)</li>
+                        <li><code>OBSERVACIONES</code> (opcional)</li>
+                    </ul>
+                    
+                    <form method="post" enctype="multipart/form-data" action="/api/containers/import-liberacion/" class="mt-3">
+                        {% csrf_token %}
+                        <div class="mb-3">
+                            <label class="form-label fw-bold">
+                                <i class="fas fa-file-excel"></i> Archivo Excel
+                            </label>
+                            <input type="file" class="form-control" name="file" accept=".xlsx,.xls" required>
+                        </div>
+                        <button type="submit" class="btn btn-ubuntu w-100">
+                            <i class="fas fa-upload"></i> Importar Liberación
+                        </button>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <!-- Programaciones -->
+        <div class="col-md-6 mb-4">
+            <div class="card card-ubuntu h-100">
+                <div class="card-header bg-warning text-dark">
+                    <i class="fas fa-calendar"></i> 3. Programaciones
+                </div>
+                <div class="card-body">
+                    <h6>📋 Columnas Requeridas:</h6>
+                    <ul class="small">
+                        <li><code>CONTAINER ID</code> o <code>Nº CONTENEDOR</code></li>
+                        <li><code>FECHA PROGRAMADA</code></li>
+                        <li><code>CD</code> o <code>CLIENTE</code></li>
+                        <li><code>DIRECCION</code> (opcional)</li>
+                        <li><code>CONDUCTOR</code> (opcional)</li>
+                        <li><code>PATENTE</code> (opcional)</li>
+                    </ul>
+                    
+                    <form method="post" enctype="multipart/form-data" action="/api/programaciones/import-excel/" class="mt-3">
+                        {% csrf_token %}
+                        <div class="mb-3">
+                            <label class="form-label fw-bold">
+                                <i class="fas fa-file-excel"></i> Archivo Excel
+                            </label>
+                            <input type="file" class="form-control" name="file" accept=".xlsx,.xls" required>
+                        </div>
+                        <button type="submit" class="btn btn-ubuntu w-100">
+                            <i class="fas fa-upload"></i> Importar Programaciones
+                        </button>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <!-- Conductores -->
+        <div class="col-md-6 mb-4">
+            <div class="card card-ubuntu h-100">
+                <div class="card-header bg-info text-white">
+                    <i class="fas fa-user-tie"></i> 4. Conductores
+                </div>
+                <div class="card-body">
+                    <h6>📋 Columnas Requeridas:</h6>
+                    <ul class="small">
+                        <li><code>NOMBRE</code> o <code>CONDUCTOR</code></li>
+                        <li><code>RUT</code></li>
+                        <li><code>TELEFONO</code></li>
+                        <li><code>PATENTE</code></li>
+                        <li><code>TIPO CAMION</code> (opcional)</li>
+                        <li><code>EMAIL</code> (opcional)</li>
+                    </ul>
+                    
+                    <form method="post" enctype="multipart/form-data" action="/api/drivers/import-excel/" class="mt-3">
+                        {% csrf_token %}
+                        <div class="mb-3">
+                            <label class="form-label fw-bold">
+                                <i class="fas fa-file-excel"></i> Archivo Excel
+                            </label>
+                            <input type="file" class="form-control" name="file" accept=".xlsx,.xls" required>
+                        </div>
+                        <button type="submit" class="btn btn-ubuntu w-100">
+                            <i class="fas fa-upload"></i> Importar Conductores
+                        </button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Instrucciones -->
+    <div class="row mt-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header bg-dark text-white">
+                    <i class="fas fa-question-circle"></i> Instrucciones de Uso
+                </div>
+                <div class="card-body">
+                    <h5>📖 Orden Recomendado de Importación:</h5>
+                    <ol>
+                        <li><strong>Embarque:</strong> Primero importa el manifiesto de la nave con todos los contenedores</li>
+                        <li><strong>Liberación:</strong> Luego importa las liberaciones para actualizar el estado</li>
+                        <li><strong>Conductores:</strong> Importa la base de conductores disponibles</li>
+                        <li><strong>Programaciones:</strong> Finalmente importa las programaciones de entrega</li>
+                    </ol>
+
+                    <h5 class="mt-4">🔍 Validaciones:</h5>
+                    <ul>
+                        <li>El sistema valida que los contenedores existan antes de crear programaciones</li>
+                        <li>Las fechas se parsean automáticamente en múltiples formatos</li>
+                        <li>Los RUTs se validan automáticamente</li>
+                        <li>Se crean CDs automáticamente si no existen</li>
+                        <li>Los errores se reportan línea por línea</li>
+                    </ul>
+
+                    <h5 class="mt-4">💡 Tips:</h5>
+                    <ul>
+                        <li>Usa plantillas con encabezados en la primera fila</li>
+                        <li>Las columnas pueden tener espacios o guiones bajos</li>
+                        <li>Los nombres de columnas no son case-sensitive</li>
+                        <li>Puedes usar "N/A" o dejar vacío campos opcionales</li>
+                    </ul>
+
+                    <div class="text-center mt-4">
+                        <a href="/admin/" class="btn btn-ubuntu-outline">
+                            <i class="fas fa-cog"></i> Ir al Admin para Ver Datos Importados
+                        </a>
+                        <a href="/api/" class="btn btn-ubuntu-outline ms-2" target="_blank">
+                            <i class="fas fa-code"></i> Ver Documentación API
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Estado de Importaciones -->
+    <div class="row mt-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header bg-secondary text-white">
+                    <i class="fas fa-chart-bar"></i> Estado Actual del Sistema
+                </div>
+                <div class="card-body">
+                    <div class="row text-center">
+                        <div class="col-md-3">
+                            <div class="stat-card orange">
+                                <div class="stat-icon"><i class="fas fa-box"></i></div>
+                                <div class="stat-number">{{ stats.contenedores }}</div>
+                                <div class="stat-label">Contenedores</div>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="stat-card purple">
+                                <div class="stat-icon"><i class="fas fa-user-tie"></i></div>
+                                <div class="stat-number">{{ stats.conductores }}</div>
+                                <div class="stat-label">Conductores</div>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="stat-card dark">
+                                <div class="stat-icon"><i class="fas fa-calendar"></i></div>
+                                <div class="stat-number">{{ stats.programaciones }}</div>
+                                <div class="stat-label">Programaciones</div>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="stat-card orange">
+                                <div class="stat-icon"><i class="fas fa-warehouse"></i></div>
+                                <div class="stat-number">{{ stats.cds }}</div>
+                                <div class="stat-label">CDs</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+// Manejo de formularios con AJAX
+document.querySelectorAll('form').forEach(form => {
+    form.addEventListener('submit', async function(e) {
+        e.preventDefault();
+        
+        const formData = new FormData(this);
+        const button = this.querySelector('button[type="submit"]');
+        const originalText = button.innerHTML;
+        
+        // Mostrar loading
+        button.disabled = true;
+        button.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Importando...';
+        
+        try {
+            const response = await fetch(this.action, {
+                method: 'POST',
+                body: formData,
+                headers: {
+                    'X-CSRFToken': formData.get('csrfmiddlewaretoken')
+                }
+            });
+            
+            const data = await response.json();
+            
+            if (data.success) {
+                alert('✅ Importación exitosa!\n\n' + 
+                      'Procesados: ' + (data.procesados || data.total || data.importados || 0) + '\n' +
+                      (data.errores ? 'Errores: ' + data.errores.length : ''));
+                
+                // Recargar página para actualizar stats
+                location.reload();
+            } else {
+                alert('❌ Error en la importación:\n\n' + 
+                      (data.error || data.mensaje || 'Error desconocido'));
+            }
+        } catch (error) {
+            alert('❌ Error de conexión:\n\n' + error.message);
+        } finally {
+            button.disabled = false;
+            button.innerHTML = originalText;
+        }
+    });
+});
+</script>
+{% endblock %}
