@@ -34,12 +34,12 @@ MAPBOX_API_KEY: pk.eyJ1Ijoi...    ✅ CONFIGURADO
 
 ### ✅ Servicios que se Crearán
 
-1. **soptraloc-backend** (Web Service)
+1. **soptraloc** (Web Service)
    - Runtime: Python 3.12
    - Plan: Free (512 MB RAM)
    - Build: `./build.sh`
    - Start: `gunicorn config.wsgi:application`
-   - URL: `https://soptraloc-backend.onrender.com`
+   - URL: `https://soptraloc.onrender.com`
 
 2. **soptraloc-db** (PostgreSQL)
    - Database: soptraloc
@@ -69,7 +69,7 @@ MAPBOX_API_KEY: pk.eyJ1Ijoi...    ✅ CONFIGURADO
 ### 3. Esperar Deploy Automático
 Render detectará `render.yaml` y creará:
 - ✅ PostgreSQL database: `soptraloc-db`
-- ✅ Web service: `soptraloc-backend`
+- ✅ Web service: `soptraloc`
 - ✅ Variables de entorno (incluido Mapbox)
 - ✅ Build automático con `build.sh`
 
@@ -78,7 +78,7 @@ Render detectará `render.yaml` y creará:
 ### 4. Verificar Logs
 ```
 En Render Dashboard:
-1. Click en "soptraloc-backend"
+1. Click en "soptraloc"
 2. Tab "Logs"
 3. Ver proceso de build en tiempo real:
 
@@ -102,13 +102,13 @@ Expected output:
 ### 5. Verificar Deploy Exitoso
 ```bash
 # Health check
-curl https://soptraloc-backend.onrender.com/health/
+curl https://soptraloc.onrender.com/health/
 
 # API root
-curl https://soptraloc-backend.onrender.com/api/
+curl https://soptraloc.onrender.com/api/
 
 # Admin
-open https://soptraloc-backend.onrender.com/admin/
+open https://soptraloc.onrender.com/admin/
 ```
 
 ---
@@ -162,7 +162,7 @@ config: Agregar token Mapbox para deploy en Render
 
 ### 1. Crear Superusuario (REQUERIDO)
 ```bash
-# En Render Dashboard > soptraloc-backend > Shell
+# En Render Dashboard > soptraloc > Shell
 python manage.py createsuperuser
 
 # Ingresar:
@@ -174,19 +174,19 @@ Password: [contraseña segura]
 ### 2. Verificar Endpoints
 ```bash
 # Admin Django
-https://soptraloc-backend.onrender.com/admin/
+https://soptraloc.onrender.com/admin/
 
 # API Documentation (Swagger)
-https://soptraloc-backend.onrender.com/swagger/
+https://soptraloc.onrender.com/swagger/
 
 # API Root
-https://soptraloc-backend.onrender.com/api/
+https://soptraloc.onrender.com/api/
 
 # Endpoints principales
-https://soptraloc-backend.onrender.com/api/containers/
-https://soptraloc-backend.onrender.com/api/drivers/
-https://soptraloc-backend.onrender.com/api/cds/
-https://soptraloc-backend.onrender.com/api/programaciones/
+https://soptraloc.onrender.com/api/containers/
+https://soptraloc.onrender.com/api/drivers/
+https://soptraloc.onrender.com/api/cds/
+https://soptraloc.onrender.com/api/programaciones/
 ```
 
 ### 3. Importar Datos (OPCIONAL)
@@ -298,7 +298,7 @@ python manage.py shell
 ```bash
 # En Render Dashboard > Logs
 # O usar CLI:
-render logs -s soptraloc-backend
+render logs -s soptraloc
 ```
 
 ---
@@ -325,10 +325,10 @@ render logs -s soptraloc-backend
 Después del deploy exitoso:
 
 ```
-✅ URL Backend: https://soptraloc-backend.onrender.com
-✅ URL Admin: https://soptraloc-backend.onrender.com/admin/
-✅ URL API: https://soptraloc-backend.onrender.com/api/
-✅ URL Swagger: https://soptraloc-backend.onrender.com/swagger/
+✅ URL Backend: https://soptraloc.onrender.com
+✅ URL Admin: https://soptraloc.onrender.com/admin/
+✅ URL API: https://soptraloc.onrender.com/api/
+✅ URL Swagger: https://soptraloc.onrender.com/swagger/
 
 🔒 SSL: Automático (HTTPS)
 🗄️ Database: PostgreSQL conectada

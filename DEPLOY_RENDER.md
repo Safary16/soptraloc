@@ -35,12 +35,12 @@
 
 ### 3. **Servicios que se Crearán Automáticamente**
 
-#### 🌐 Web Service: `soptraloc-backend`
+#### 🌐 Web Service: `soptraloc`
 - **Runtime**: Python 3.12
 - **Build Command**: `./build.sh`
 - **Start Command**: `gunicorn config.wsgi:application`
 - **Plan**: Free
-- **URL**: `https://soptraloc-backend.onrender.com`
+- **URL**: `https://soptraloc.onrender.com`
 
 #### 🗄️ PostgreSQL Database: `soptraloc-db`
 - **Database Name**: `soptraloc`
@@ -52,7 +52,7 @@
 
 Render crea algunas automáticamente, pero necesitas configurar **MAPBOX_ACCESS_TOKEN**:
 
-1. Ir al servicio `soptraloc-backend`
+1. Ir al servicio `soptraloc`
 2. Click en **"Environment"** (menú izquierdo)
 3. Agregar/Verificar variables:
 
@@ -80,7 +80,7 @@ Render crea algunas automáticamente, pero necesitas configurar **MAPBOX_ACCESS_
 Una vez que hagas "Apply" en Blueprint:
 
 1. **Ver logs en tiempo real**:
-   - Click en `soptraloc-backend`
+   - Click en `soptraloc`
    - Tab **"Logs"**
    - Verás el proceso de build:
      ```
@@ -105,7 +105,7 @@ Una vez que hagas "Apply" en Blueprint:
 
 #### A. **Verificar API**
 ```bash
-curl https://soptraloc-backend.onrender.com/api/
+curl https://soptraloc.onrender.com/api/
 ```
 
 Deberías ver:
@@ -119,16 +119,16 @@ Deberías ver:
 
 #### B. **Verificar Admin Django**
 ```
-https://soptraloc-backend.onrender.com/admin/
+https://soptraloc.onrender.com/admin/
 ```
 Deberías ver el login de Django admin
 
 #### C. **Verificar Endpoints**
-- Health: `https://soptraloc-backend.onrender.com/health/`
-- API Root: `https://soptraloc-backend.onrender.com/api/`
-- Containers: `https://soptraloc-backend.onrender.com/api/containers/`
-- Drivers: `https://soptraloc-backend.onrender.com/api/drivers/`
-- CDs: `https://soptraloc-backend.onrender.com/api/cds/`
+- Health: `https://soptraloc.onrender.com/health/`
+- API Root: `https://soptraloc.onrender.com/api/`
+- Containers: `https://soptraloc.onrender.com/api/containers/`
+- Drivers: `https://soptraloc.onrender.com/api/drivers/`
+- CDs: `https://soptraloc.onrender.com/api/cds/`
 
 ---
 
@@ -138,7 +138,7 @@ Deberías ver el login de Django admin
 
 Una vez deployed, necesitas crear un superusuario:
 
-1. En Render Dashboard > `soptraloc-backend`
+1. En Render Dashboard > `soptraloc`
 2. Click en **"Shell"** (menú izquierdo)
 3. Ejecutar:
 ```bash
@@ -248,10 +248,10 @@ startCommand: "gunicorn config.wsgi:application"
 ### 1. **Testing Inicial**
 ```bash
 # Health check
-curl https://soptraloc-backend.onrender.com/health/
+curl https://soptraloc.onrender.com/health/
 
 # Test API
-curl https://soptraloc-backend.onrender.com/api/containers/
+curl https://soptraloc.onrender.com/api/containers/
 ```
 
 ### 2. **Importar Datos de Excel**
@@ -268,7 +268,7 @@ curl https://soptraloc-backend.onrender.com/api/containers/
 - Verificar predicciones ML después de 5+ operaciones
 
 ### 4. **Configurar Frontend (Opcional)**
-- Apuntar frontend a: `https://soptraloc-backend.onrender.com/api/`
+- Apuntar frontend a: `https://soptraloc.onrender.com/api/`
 - Usar CORS configurado en settings
 
 ---
@@ -283,7 +283,7 @@ curl https://soptraloc-backend.onrender.com/api/containers/
 ### Logs en Tiempo Real
 ```bash
 # En Render Dashboard
-1. Click en soptraloc-backend
+1. Click en soptraloc
 2. Tab "Logs"
 3. Ver logs en vivo
 ```

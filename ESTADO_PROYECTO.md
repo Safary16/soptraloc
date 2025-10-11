@@ -81,7 +81,7 @@ El sistema TMS (Transportation Management System) está completamente implementa
 ```yaml
 services:
   - type: web
-    name: soptraloc-backend
+    name: soptraloc
     runtime: python
     env: python
     plan: free
