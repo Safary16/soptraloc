@@ -21,7 +21,7 @@ services:
       - key: ALLOWED_HOSTS
         value: .onrender.com
       - key: MAPBOX_API_KEY
-        sync: false
+        value: pk.eyJ1Ijoic2FmYXJ5MTYiLCJhIjoiY21naHlvYTQ5MDNlbDJrbjJjcXRtZGg1YSJ9.WCiyTSY_CCfB02N_Nfx7kg
 
 databases:
   - name: soptraloc-db
