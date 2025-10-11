@@ -30,10 +30,6 @@ cd soptraloc_system
 # Crear directorio de logs si no existe
 mkdir -p logs
 
-# 🔧 CRÍTICO: Reparar tipo de Location.id ANTES de migraciones
-echo "🔧 CRÍTICO: Convirtiendo Location UUID → VARCHAR (SQL directo)..."
-python fix_location_db_direct.py
-
 echo "🗄️ Ejecutando migraciones..."
 
 # Aplicar migraciones de base de datos
