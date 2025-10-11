@@ -8,6 +8,7 @@ from datetime import timedelta
 from .models import Programacion
 from .serializers import (
     ProgramacionSerializer,
+    RutaManualSerializer,
     ProgramacionListSerializer,
     ProgramacionCreateSerializer
 )
@@ -199,3 +200,157 @@ class ProgramacionViewSet(viewsets.ModelViewSet):
             'fallidas': resultados['fallidas'],
             'detalles': resultados['detalles']
         })
+    
+    @action(detail=False, methods=['get'])
+    def dashboard(self, request):
+        """
+        Dashboard con priorización inteligente
+        Score = 50% días_hasta_programacion + 50% días_hasta_demurrage
+        Ordena por urgencia (score más bajo = más urgente)
+        """
+        ahora = timezone.now()
+        programaciones = self.queryset.filter(
+            driver__isnull=False  # Solo programaciones con conductor asignado
+        ).select_related('container', 'driver', 'cd')
+        
+        resultados = []
+        for prog in programaciones:
+            # Calcular días hasta programación
+            dias_hasta_prog = (prog.fecha_programada - ahora).total_seconds() / 86400
+            
+            # Calcular días hasta demurrage (si existe)
+            dias_hasta_demurrage = None
+            if prog.container.fecha_demurrage:
+                dias_hasta_demurrage = (prog.container.fecha_demurrage - ahora).total_seconds() / 86400
+            
+            # Score de prioridad (más bajo = más urgente)
+            if dias_hasta_demurrage is not None:
+                score_prioridad = (dias_hasta_prog * 0.5) + (dias_hasta_demurrage * 0.5)
+            else:
+                score_prioridad = dias_hasta_prog  # Solo considerar programación si no hay demurrage
+            
+            # Determinar nivel de urgencia
+            if score_prioridad < 1:
+                urgencia = 'CRÍTICA'
+            elif score_prioridad < 2:
+                urgencia = 'ALTA'
+            elif score_prioridad < 3:
+                urgencia = 'MEDIA'
+            else:
+                urgencia = 'BAJA'
+            
+            resultados.append({
+                'id': prog.id,
+                'container_id': prog.container.container_id,
+                'fecha_programada': prog.fecha_programada,
+                'fecha_demurrage': prog.container.fecha_demurrage,
+                'conductor': prog.driver.nombre if prog.driver else None,
+                'cd': prog.cd.nombre,
+                'dias_hasta_programacion': round(dias_hasta_prog, 1),
+                'dias_hasta_demurrage': round(dias_hasta_demurrage, 1) if dias_hasta_demurrage else None,
+                'score_prioridad': round(score_prioridad, 2),
+                'urgencia': urgencia,
+                'estado_container': prog.container.estado
+            })
+        
+        # Ordenar por score (más urgente primero)
+        resultados.sort(key=lambda x: x['score_prioridad'])
+        
+        return Response({
+            'success': True,
+            'total': len(resultados),
+            'programaciones': resultados,
+            'leyenda': {
+                'CRÍTICA': 'Menos de 1 día',
+                'ALTA': '1-2 días',
+                'MEDIA': '2-3 días',
+                'BAJA': 'Más de 3 días'
+            }
+        })
+    
+    @action(detail=False, methods=['post'])
+    def crear_ruta_manual(self, request):
+        """
+        Crea una ruta manual para retiro desde puerto
+        
+        Casos de uso:
+        1. retiro_ccti: CCTI va a buscar contenedor al puerto y lo lleva a CCTI
+        2. retiro_directo: CCTI va a buscar al puerto y entrega directo a cliente
+        
+        Payload:
+        {
+            "container_id": "ABCD1234567",
+            "tipo_movimiento": "retiro_ccti" | "retiro_directo",
+            "cd_destino_id": 1,  // Solo para retiro_directo
+            "fecha_programacion": "2025-10-15T10:00:00",
+            "cliente": "Cliente XYZ",
+            "observaciones": "..."
+        }
+        """
+        serializer = RutaManualSerializer(data=request.data)
+        
+        if not serializer.is_valid():
+            return Response(
+                {'error': 'Datos inválidos', 'detalles': serializer.errors},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        data = serializer.validated_data
+        container = data['_container']
+        tipo_movimiento = data['tipo_movimiento']
+        
+        # Actualizar tipo de movimiento en el contenedor
+        container.tipo_movimiento = tipo_movimiento
+        container.save(update_fields=['tipo_movimiento'])
+        
+        # Determinar CD destino
+        if tipo_movimiento == 'retiro_ccti':
+            # Buscar el primer CCTI
+            from apps.cds.models import CD
+            cd_destino = CD.objects.filter(tipo='CCTI').first()
+            if not cd_destino:
+                return Response(
+                    {'error': 'No se encontró ningún CCTI en el sistema'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+        else:  # retiro_directo
+            cd_destino = data['_cd_destino']
+        
+        # Crear la programación
+        programacion = Programacion.objects.create(
+            container=container,
+            cd=cd_destino,
+            fecha_programada=data['fecha_programacion'],
+            cliente=data.get('cliente', ''),
+            direccion_entrega=cd_destino.direccion,
+            observaciones=data.get('observaciones', f'Retiro manual desde {container.posicion_fisica}')
+        )
+        
+        # Cambiar estado del contenedor a programado
+        container.estado = 'programado'
+        container.save(update_fields=['estado'])
+        
+        # Crear evento de auditoría
+        from apps.events.models import Event
+        Event.objects.create(
+            container=container,
+            tipo_evento='ruta_manual_creada',
+            descripcion=f'Ruta manual creada: {tipo_movimiento}',
+            usuario=request.user.username if request.user.is_authenticated else None,
+            detalles={
+                'tipo_movimiento': tipo_movimiento,
+                'origen': container.posicion_fisica,
+                'destino': cd_destino.nombre,
+                'programacion_id': programacion.id,
+                'fecha_programacion': data['fecha_programacion'].isoformat()
+            }
+        )
+        
+        return Response({
+            'success': True,
+            'mensaje': f'Ruta manual creada exitosamente',
+            'programacion': ProgramacionSerializer(programacion).data,
+            'tipo_movimiento': tipo_movimiento,
+            'origen': container.posicion_fisica,
+            'destino': cd_destino.nombre
+        }, status=status.HTTP_201_CREATED)

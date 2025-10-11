@@ -135,3 +135,64 @@ class DriverViewSet(viewsets.ModelViewSet):
             'mensaje': f'{driver.nombre} marcado como ausente',
             'driver': serializer.data
         })
+    
+    @action(detail=False, methods=['post'])
+    def import_conductores(self, request):
+        """
+        Importa conductores desde archivo Excel
+        
+        El archivo debe tener:
+        - Header en fila 1
+        - Columnas: N°, Conductor, PPU, RUT, Teléfono, ASISTENCIA, etc.
+        
+        Upload: multipart/form-data con campo 'file'
+        """
+        if 'file' not in request.FILES:
+            return Response(
+                {'error': 'No se proporcionó archivo. Use campo "file" en form-data'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        archivo = request.FILES['file']
+        usuario = request.user.username if request.user.is_authenticated else None
+        
+        # Guardar temporalmente
+        import tempfile
+        import os
+        
+        try:
+            # Crear archivo temporal
+            with tempfile.NamedTemporaryFile(delete=False, suffix='.xlsx') as tmp:
+                for chunk in archivo.chunks():
+                    tmp.write(chunk)
+                temp_path = tmp.name
+            
+            # Importar
+            from apps.drivers.importers import ConductorImporter
+            importer = ConductorImporter(temp_path, usuario)
+            resultados = importer.procesar()
+            
+            # Limpiar archivo temporal
+            os.unlink(temp_path)
+            
+            return Response({
+                'success': True,
+                'mensaje': f'Importación completada',
+                'creados': resultados['creados'],
+                'actualizados': resultados['actualizados'],
+                'errores': resultados['errores'],
+                'detalles': resultados['detalles']
+            })
+        
+        except Exception as e:
+            # Limpiar archivo temporal si existe
+            if 'temp_path' in locals():
+                try:
+                    os.unlink(temp_path)
+                except:
+                    pass
+            
+            return Response(
+                {'error': f'Error al importar: {str(e)}'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
