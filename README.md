@@ -1,212 +1,421 @@
-# 🚀 SoptraLoc - Sistema TMS Inteligente con Machine Learning
+# SoptraLoc - Sistema de Gestión de Contenedores TMS# 🚀 SoptraLoc - Sistema TMS Inteligente con Machine Learning
 
-[![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/Safary16/soptraloc)
+
+
+Sistema profesional de gestión de contenedores para CCTi con integración de Mapbox, asignación inteligente de conductores y seguimiento en tiempo real.[![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/Safary16/soptraloc)
+
 [![Django 5.2.6](https://img.shields.io/badge/Django-5.2.6-green.svg)](https://www.djangoproject.com/)
-[![Python 3.12+](https://img.shields.io/badge/Python-3.12+-blue.svg)](https://www.python.org/)
+
+## 🚀 Características principales[![Python 3.12+](https://img.shields.io/badge/Python-3.12+-blue.svg)](https://www.python.org/)
+
 [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-Ready-blue.svg)](https://www.postgresql.org/)
 
-## ✨ **Sistema Completo de Gestión de Transporte (TMS)**
+- **Importación de Excel**: Embarque, Liberación, Programación
 
-Sistema profesional de gestión logística con **Machine Learning**, **alertas en tiempo real** y **dashboard estilo torre de control aéreo**.
+- **Gestión de estados**: 11 estados de contenedores con transiciones automáticas## ✨ **Sistema Completo de Gestión de Transporte (TMS)**
 
-### **🎯 Lo que incluye:**
-- ⏰ **Reloj en tiempo real** estilo torre de control aéreo
-- 🚨 **Sistema de alertas urgentes** con verificación automática cada 30 segundos
+- **Asignación inteligente**: Algoritmo automático de asignación de conductores
+
+- **Mapbox Integration**: Rutas reales, tiempos estimados, tráfico en vivoSistema profesional de gestión logística con **Machine Learning**, **alertas en tiempo real** y **dashboard estilo torre de control aéreo**.
+
+- **Alertas**: Demurrage cercano, programación sin conductor
+
+- **Exportación**: Stock liberado/por arribar con flag de secuenciado### **🎯 Lo que incluye:**
+
+- **Historial completo**: Auditoría de todas las operaciones- ⏰ **Reloj en tiempo real** estilo torre de control aéreo
+
+- **API REST**: Endpoints completos para integración- 🚨 **Sistema de alertas urgentes** con verificación automática cada 30 segundos
+
 - 🗺️ **35 rutas Chile pre-configuradas** (puertos, CDs, bodegas)
-- 🤖 **Machine Learning** para predicción de tiempos (60% reciente / 40% histórico)
+
+## 📋 Flujo del sistema- 🤖 **Machine Learning** para predicción de tiempos (60% reciente / 40% histórico)
+
 - 📊 **Dashboard inteligente** con ordenamiento por urgencia
-- 🚛 **Sistema de conductores** con asignación inteligente
-- 📦 **Gestión completa de contenedores** con estados y movimientos
-- 🔔 **Sistema de proximidad** con alertas automáticas
-- 🔌 **API REST completa** con endpoints documentados
-- 👨‍💼 **Panel de administración** profesional con badges ML
 
----
+```- 🚛 **Sistema de conductores** con asignación inteligente
 
-## 🚀 Características Principales
+1. EMBARQUE (Excel) → Contenedores creados con estado "por_arribar"- 📦 **Gestión completa de contenedores** con estados y movimientos
 
-### ⏰ Reloj en Tiempo Real - Estilo Torre de Control
-- **Diseño profesional**: Colores verde fosforescente sobre azul gradiente
-- **Actualización**: Cada 1 segundo con precisión milimétrica
-- **Formato**: HH:MM:SS + DÍA DD MES YYYY
-- **Badge urgente**: Contador animado de contenedores críticos
-- **Modal detallado**: Lista completa de contenedores urgentes con niveles
+   ├─ Campos: container_id, nave, ETA, tipo, peso, puerto, vendor, sello- 🔔 **Sistema de proximidad** con alertas automáticas
 
-### 🗺️ Sistema de Routing con Machine Learning
-- **35 rutas Chile**: Puertos (San Antonio, Valparaíso, San Vicente, Lirquén, Coronel)
-- **70 operaciones**: Tiempos estándar para cada tipo de operación
-- **Algoritmo ML**: Promedio ponderado (60% datos recientes + 40% históricos)
-- **Predicción inteligente**: Tiempos estimados basados en datos reales
-- **Sistema de confianza**: Badges visuales (Alta/Media/Baja)
-- **Aprendizaje continuo**: Actualización diaria con datos reales
+   - 🔌 **API REST completa** con endpoints documentados
 
-### � Gestión Avanzada de Contenedores
+2. LIBERACIÓN (Excel) → Contenedores pasan a "liberado"- 👨‍💼 **Panel de administración** profesional con badges ML
+
+   ├─ Reglas de posición física:
+
+   │  ├─ TPS Valparaíso → ZEAL---
+
+   │  ├─ STI/PCE San Antonio → CLEP SAI
+
+   │  └─ Retiro CCTi → en_transito_a_ccti## 🚀 Características Principales
+
+   
+
+3. EXPORTACIÓN → Stock para cliente### ⏰ Reloj en Tiempo Real - Estilo Torre de Control
+
+   ├─ Liberados + Por arribar- **Diseño profesional**: Colores verde fosforescente sobre azul gradiente
+
+   └─ Flag "secuenciado" si liberación futura- **Actualización**: Cada 1 segundo con precisión milimétrica
+
+   - **Formato**: HH:MM:SS + DÍA DD MES YYYY
+
+4. PROGRAMACIÓN (Excel) → Contenedores pasan a "programado"- **Badge urgente**: Contador animado de contenedores críticos
+
+   ├─ Asigna fecha, demurrage, centro entrega- **Modal detallado**: Lista completa de contenedores urgentes con niveles
+
+   
+
+5. ASIGNACIÓN → Conductor asignado (manual/automático)### 🗺️ Sistema de Routing con Machine Learning
+
+   ├─ Alerta si falta conductor 48h antes- **35 rutas Chile**: Puertos (San Antonio, Valparaíso, San Vicente, Lirquén, Coronel)
+
+   - **70 operaciones**: Tiempos estándar para cada tipo de operación
+
+6. RUTA → Operador inicia, calcula ETA con Mapbox- **Algoritmo ML**: Promedio ponderado (60% datos recientes + 40% históricos)
+
+   - **Predicción inteligente**: Tiempos estimados basados en datos reales
+
+7. ENTREGA → Registro de llegada y descarga- **Sistema de confianza**: Badges visuales (Alta/Media/Baja)
+
+   - **Aprendizaje continuo**: Actualización diaria con datos reales
+
+8. VACÍO → Control de retorno y ubicación
+
+```### � Gestión Avanzada de Contenedores
+
 - **Múltiples estados**: PROGRAMADO, EN_PROCESO, EN_TRANSITO, LIBERADO, DESCARGADO, EN_SECUENCIA
-- **Trazabilidad completa**: Histórico de todos los movimientos
+
+## 🗂️ Estados del contenedor- **Trazabilidad completa**: Histórico de todos los movimientos
+
 - **Alertas de proximidad**: Contenedores urgentes < 2 horas
-- **Asignación rápida**: Integración con sistema de conductores
-- **Importación Excel**: Carga masiva de manifiestos y liberaciones
 
-### � Sistema de Alertas Inteligentes
-- **Verificación automática**: Cada 30 segundos verifica contenedores urgentes
-- **3 niveles de urgencia**: CRÍTICO (< 1h), ALTO (< 2h), MEDIO (< 4h)
-- **Notificaciones visuales**: Badge pulsante en navbar
-- **Modal detallado**: Click para ver lista completa con información
-- **API endpoint**: `/api/v1/containers/urgent/` para integraciones
+- `por_arribar` - Nave aún no atracada- **Asignación rápida**: Integración con sistema de conductores
 
-### 📊 Dashboard Ejecutivo
+- `liberado` - Contenedor liberado por aduana- **Importación Excel**: Carga masiva de manifiestos y liberaciones
+
+- `secuenciado` - Liberación futura programada
+
+- `programado` - Entrega programada con fecha### � Sistema de Alertas Inteligentes
+
+- `asignado` - Conductor asignado- **Verificación automática**: Cada 30 segundos verifica contenedores urgentes
+
+- `en_ruta` - Ruta iniciada- **3 niveles de urgencia**: CRÍTICO (< 1h), ALTO (< 2h), MEDIO (< 4h)
+
+- `entregado` - Entregado a cliente- **Notificaciones visuales**: Badge pulsante en navbar
+
+- `descargado` - Descargado en CD- **Modal detallado**: Click para ver lista completa con información
+
+- `en_almacen_ccti` - En bodega CCTi- **API endpoint**: `/api/v1/containers/urgent/` para integraciones
+
+- `vacio_en_ruta` - Retorno con vacío
+
+- `vacio_en_ccti` - Vacío en CCTi### 📊 Dashboard Ejecutivo
+
 - **Estadísticas en tiempo real**: Total activos, por estado, disponibilidad
-- **Vista prioritaria**: Contenedores urgentes destacados y ordenados
+
+## 🛠️ Stack tecnológico- **Vista prioritaria**: Contenedores urgentes destacados y ordenados
+
 - **Integración ML**: Predicciones de tiempos en ruta
-- **Alertas pendientes**: Asignaciones sin completar
-- **Responsive design**: Adaptable a móviles y tablets
 
-## 🛠️ Tecnologías Utilizadas
+- **Backend**: Django 5.1.4 + Django REST Framework- **Alertas pendientes**: Asignaciones sin completar
 
-- **Backend**: Django 5.2.6 + Django REST Framework
+- **Base de datos**: PostgreSQL 15- **Responsive design**: Adaptable a móviles y tablets
+
+- **Cache/Queue**: Redis (Celery opcional)
+
+- **Mapas**: Mapbox API (GitHub Student Pack)## 🛠️ Tecnologías Utilizadas
+
+- **Deploy**: Render.com
+
+- **Python**: 3.12- **Backend**: Django 5.2.6 + Django REST Framework
+
 - **Base de Datos**: SQLite (desarrollo) / PostgreSQL (producción)
-- **API Documentation**: DRF-YASG (Swagger/OpenAPI)
+
+## 🏗️ Estructura del proyecto- **API Documentation**: DRF-YASG (Swagger/OpenAPI)
+
 - **Autenticación**: JWT (Simple JWT)
-- **Frontend**: API REST (listo para integración con cualquier frontend)
 
-## 📋 Instalación y Configuración
+```- **Frontend**: API REST (listo para integración con cualquier frontend)
 
-### Prerrequisitos
-- Python 3.12+
-- Git
-- Entorno virtual (recomendado)
+soptraloc/
 
-### 1. Clonar el Repositorio
+├── apps/## 📋 Instalación y Configuración
+
+│   ├── containers/      # Gestión de contenedores
+
+│   ├── drivers/         # Conductores y asignaciones### Prerrequisitos
+
+│   ├── programaciones/  # Programación de entregas- Python 3.12+
+
+│   ├── events/          # Historial y auditoría- Git
+
+│   └── cds/            # Centros de distribución- Entorno virtual (recomendado)
+
+├── config/             # Configuración Django
+
+├── importers/          # Procesadores de Excel### 1. Clonar el Repositorio
+
+├── exporters/          # Generadores de reportes```bash
+
+├── services/           # Lógica de negociogit clone https://github.com/Safary16/soptraloc.git
+
+└── utils/              # Utilidades compartidascd soptraloc
+
+``````
+
+
+
+## 📦 Instalación local### 2. Crear Entorno Virtual
+
 ```bash
-git clone https://github.com/Safary16/soptraloc.git
-cd soptraloc
+
+```bashpython3 -m venv venv
+
+# Clonar repositoriosource venv/bin/activate  # En Linux/Mac
+
+git clone https://github.com/Safary16/soptraloc.git# venv\\Scripts\\activate     # En Windows
+
+cd soptraloc```
+
+
+
+# Crear entorno virtual### 3. Instalar Dependencias
+
+python3.12 -m venv venv```bash
+
+source venv/bin/activate  # En Windows: venv\Scripts\activatepip install -r requirements.txt
+
 ```
 
-### 2. Crear Entorno Virtual
-```bash
-python3 -m venv venv
-source venv/bin/activate  # En Linux/Mac
-# venv\\Scripts\\activate     # En Windows
-```
+# Instalar dependencias> 💡 Este paso instala bibliotecas de machine learning como `scikit-learn` y `scipy`. El proceso puede tardar unos minutos en la primera ejecución.
 
-### 3. Instalar Dependencias
-```bash
 pip install -r requirements.txt
-```
-> 💡 Este paso instala bibliotecas de machine learning como `scikit-learn` y `scipy`. El proceso puede tardar unos minutos en la primera ejecución.
 
 ### 4. Configurar Variables de Entorno
-```bash
-cp .env.example .env
-# Editar .env con tus configuraciones
+
+# Configurar variables de entorno```bash
+
+cp .env.example .envcp .env.example .env
+
+# Editar .env con tus credenciales# Editar .env con tus configuraciones
+
 ```
 
-### 5. Ejecutar Migraciones
+# Aplicar migraciones
+
+python manage.py migrate### 5. Ejecutar Migraciones
+
 ```bash
-cd soptraloc_system
-python manage.py migrate
+
+# Crear superusuariocd soptraloc_system
+
+python manage.py createsuperuserpython manage.py migrate
+
 ```
 
-### 6. Cargar Datos Iniciales (Chile)
+# Cargar datos iniciales (conductores, CDs)
+
+python manage.py loaddata initial_data### 6. Cargar Datos Iniciales (Chile)
+
 ```bash
-# Cargar 35 rutas y 70 operaciones para Chile
-python manage.py load_initial_times
+
+# Ejecutar servidor# Cargar 35 rutas y 70 operaciones para Chile
+
+python manage.py runserverpython manage.py load_initial_times
+
+``````
+
+
+
+## 🌐 Deploy en Render### 7. Crear Superusuario
+
+```bash
+
+El proyecto está configurado para deploy automático en Render.com:python manage.py createsuperuser
+
 ```
 
-### 7. Crear Superusuario
-```bash
-python manage.py createsuperuser
-```
+1. Conectar repositorio en Render
 
-### 8. Iniciar Servidor
-```bash
+2. Configurar variables de entorno (ver `.env.example`)### 8. Iniciar Servidor
+
+3. Deploy automático al hacer push a `main````bash
+
 python manage.py runserver
-```
 
-El sistema estará disponible en:
-- **Home**: http://localhost:8000/
+Variables requeridas:```
+
+- `SECRET_KEY`
+
+- `DATABASE_URL` (PostgreSQL)El sistema estará disponible en:
+
+- `MAPBOX_API_KEY`- **Home**: http://localhost:8000/
+
 - **Dashboard**: http://localhost:8000/dashboard/
-- **Panel Admin**: http://localhost:8000/admin/
+
+## 📊 API Endpoints- **Panel Admin**: http://localhost:8000/admin/
+
 - **API Containers**: http://localhost:8000/api/v1/containers/
-- **API Routing**: http://localhost:8000/api/v1/routing/
 
----
+### Containers- **API Routing**: http://localhost:8000/api/v1/routing/
 
-## 🚀 Despliegue en Producción
+- `POST /api/containers/import-embarque/` - Importar Excel embarque
 
-### Deploy en Render.com (Recomendado)
+- `POST /api/containers/import-liberacion/` - Importar Excel liberación---
+
+- `POST /api/containers/import-programacion/` - Importar Excel programación
+
+- `GET /api/containers/export-stock/` - Exportar stock (XLSX)## 🚀 Despliegue en Producción
+
+- `GET /api/containers/` - Lista de contenedores
+
+- `GET /api/containers/{id}/` - Detalle de contenedor### Deploy en Render.com (Recomendado)
+
+- `GET /api/containers/{id}/historial/` - Historial de eventos
 
 **Auto-deploy configurado desde GitHub main branch**
 
-1. Crear cuenta en [Render.com](https://render.com)
-2. Conectar repositorio GitHub
-3. Configurar variables de entorno:
+### Drivers
+
+- `GET /api/drivers/` - Lista de conductores1. Crear cuenta en [Render.com](https://render.com)
+
+- `POST /api/drivers/{id}/marcar-presente/` - Pasar lista2. Conectar repositorio GitHub
+
+- `GET /api/drivers/{id}/metricas/` - Métricas de rendimiento3. Configurar variables de entorno:
+
    ```
-   SECRET_KEY=tu-secret-key-segura
-   DEBUG=False
-   ALLOWED_HOSTS=tu-app.onrender.com
-   DATABASE_URL=postgres://... (auto-generado)
-   ```
-4. Deploy automático al hacer push a main
+
+### Asignaciones   SECRET_KEY=tu-secret-key-segura
+
+- `POST /api/asignaciones/manual/` - Asignar conductor manualmente   DEBUG=False
+
+- `POST /api/asignaciones/automatica/` - Asignación automática   ALLOWED_HOSTS=tu-app.onrender.com
+
+- `POST /api/asignaciones/{id}/iniciar-ruta/` - Iniciar ruta   DATABASE_URL=postgres://... (auto-generado)
+
+- `POST /api/asignaciones/{id}/finalizar/` - Finalizar entrega   ```
+
+- `GET /api/asignaciones/{id}/eta/` - Calcular ETA con Mapbox4. Deploy automático al hacer push a main
+
 5. Render ejecuta automáticamente:
-   - `pip install -r requirements.txt`
-   - `python manage.py collectstatic --noinput`
-   - `python manage.py migrate`
+
+### Dashboard   - `pip install -r requirements.txt`
+
+- `GET /api/dashboard/stats/` - Estadísticas generales   - `python manage.py collectstatic --noinput`
+
+- `GET /api/dashboard/alertas/` - Alertas activas   - `python manage.py migrate`
+
    - `gunicorn config.wsgi:application`
+
+## 📝 Importación de Excel
 
 **Archivo `render.yaml` incluido con configuración completa**
 
-### 🚀 Despliegue guiado desde local (`deploy_render.sh`)
+### Formato embarque
 
-Para automatizar el ciclo "verificar → probar → desplegar" ejecuta:
+| container_id | nave | eta_estimada | tipo_contenedor | peso_kg | puerto_destino | comuna | vendor | sello |### 🚀 Despliegue guiado desde local (`deploy_render.sh`)
 
-```bash
-chmod +x deploy_render.sh
-./deploy_render.sh
-```
+|--------------|------|--------------|-----------------|---------|----------------|--------|--------|-------|
 
-El script realiza, en orden:
+| TLLU337965-6 | MSC AURORA | 2025-10-15 14:00 | 40HC | 28500 | TPS | Quilicura | ACME Inc | ABC123 |Para automatizar el ciclo "verificar → probar → desplegar" ejecuta:
 
-1. Instalación/actualización de dependencias.
-2. Verificación de migraciones pendientes (`makemigrations --check`).
+
+
+### Formato liberación```bash
+
+| container_id | fecha_liberacion | deposito_devolucion | demurrage_inicio | peso_actualizado_kg |chmod +x deploy_render.sh
+
+|--------------|------------------|---------------------|------------------|---------------------|./deploy_render.sh
+
+| TLLU337965-6 | 2025-10-16 09:00 | ZEAL | 2025-10-23 | 28800 |```
+
+
+
+### Formato programaciónEl script realiza, en orden:
+
+| container_id | fecha_programada | centro_entrega | cliente_final | tipo_servicio |
+
+|--------------|------------------|----------------|---------------|---------------|1. Instalación/actualización de dependencias.
+
+| TLLU337965-6 | 2025-10-18 10:00 | CD Quilicura | Walmart Chile | directo |2. Verificación de migraciones pendientes (`makemigrations --check`).
+
 3. Ejecución de pruebas críticas (`drivers` ML + importadores Excel).
-4. `manage.py check --deploy` con settings de producción.
+
+## 🔔 Alertas automáticas4. `manage.py check --deploy` con settings de producción.
+
 5. Migraciones y `collectstatic` en tu entorno local.
-6. Validación de árbol Git limpio y, si encuentra un remoto válido, hace push automático a `origin` y a `render`.
 
-> 💡 El script configura por defecto el remoto `render` apuntando a `https://git.render.com/soptraloc/soptraloc.git`.
-> - Si tu servicio usa otra URL, sobreescríbela con `export RENDER_REMOTE_URL="https://git.render.com/tu-servicio.git"` antes de ejecutar el script.
+- **Programación cercana**: Contenedores programados en ≤48h sin conductor6. Validación de árbol Git limpio y, si encuentra un remoto válido, hace push automático a `origin` y a `render`.
+
+- **Demurrage próximo**: Demurrage vence en ≤2 días
+
+- **Conductor ocupado**: Asignación solapada detectada> 💡 El script configura por defecto el remoto `render` apuntando a `https://git.render.com/soptraloc/soptraloc.git`.
+
+- **Retraso en ruta**: ETA superado por >30min> - Si tu servicio usa otra URL, sobreescríbela con `export RENDER_REMOTE_URL="https://git.render.com/tu-servicio.git"` antes de ejecutar el script.
+
 > - (Opcional) cambia el nombre del remoto con `RENDER_REMOTE_NAME=my-render`.
-> - Siempre que detecte el remoto (o lo cree automáticamente) hará push a `origin` y a Render.
 
-### Comandos Post-Deploy
-```bash
-# Cargar datos iniciales de Chile en producción
-python manage.py load_initial_times
+## 🎯 Asignación automática de conductores> - Siempre que detecte el remoto (o lo cree automáticamente) hará push a `origin` y a Render.
+
+
+
+Algoritmo de scoring considera:### Comandos Post-Deploy
+
+- **Disponibilidad** (30%): Conductor presente```bash
+
+- **Ocupación** (25%): Tiempo libre vs comprometido# Cargar datos iniciales de Chile en producción
+
+- **Cumplimiento** (30%): Histórico de entregas a tiempopython manage.py load_initial_times
+
+- **Proximidad** (15%): Distancia al punto de inicio
 
 # Actualizar predicciones ML diariamente (configurar en cron)
-python manage.py update_time_predictions --verbose
-```
 
----
-
-## 📁 Estructura del Proyecto
+## 📈 Aprendizaje del sistemapython manage.py update_time_predictions --verbose
 
 ```
-soptraloc/
+
+El sistema registra y aprende:
+
+- Tiempos reales de viaje (vs estimados Mapbox)---
+
+- Tiempos de carga/descarga por CD
+
+- Patrones de tráfico por hora/día## 📁 Estructura del Proyecto
+
+- Rendimiento por conductor
+
+```
+
+## 🔒 Seguridadsoptraloc/
+
 ├── soptraloc_system/           # Proyecto Django principal
-│   ├── apps/                   # Aplicaciones modulares
-│   │   ├── core/              # Auth, dashboard, funciones base
-│   │   ├── containers/        # Gestión completa de contenedores
-│   │   ├── drivers/           # Conductores y asignaciones
+
+- Autenticación JWT│   ├── apps/                   # Aplicaciones modulares
+
+- Roles: Admin, Planificador, Operador│   │   ├── core/              # Auth, dashboard, funciones base
+
+- Auditoría completa de operaciones│   │   ├── containers/        # Gestión completa de contenedores
+
+- Validación de Excel con reportes de errores│   │   ├── drivers/           # Conductores y asignaciones
+
 │   │   ├── vehicles/          # Vehículos y chasis
-│   │   ├── routing/           # 🆕 Sistema ML de tiempos
+
+## 📞 Soporte│   │   ├── routing/           # 🆕 Sistema ML de tiempos
+
 │   │   └── warehouses/        # Almacenes y ubicaciones
-│   ├── config/                # Configuración Django
+
+Para consultas: [Tu contacto aquí]│   ├── config/                # Configuración Django
+
 │   │   ├── settings.py        # Settings principal
-│   │   └── urls.py            # URL routing
+
+## 📄 Licencia│   │   └── urls.py            # URL routing
+
 │   ├── templates/             # Templates HTML
-│   │   └── base.html          # 🆕 Con reloj ATC
+
+[Definir licencia]│   │   └── base.html          # 🆕 Con reloj ATC
+
 │   ├── static/                # Archivos estáticos
 │   │   └── js/
 │   │       └── realtime-clock.js  # 🆕 Reloj torre de control

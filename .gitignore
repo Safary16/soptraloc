@@ -1,56 +1,109 @@
-# ============================================
-# SOPTRALOC TMS - .gitignore
-# ============================================
+*.pyc# ============================================
+
+__pycache__/# SOPTRALOC TMS - .gitignore
+
+*.py[cod]# ============================================
+
+*$py.class
 
 # Python
-__pycache__/
-*.py[cod]
-*$py.class
-*.so
-.Python
-*.egg
-*.egg-info/
-.eggs/
+
+# Django__pycache__/
+
+*.log*.py[cod]
+
+local_settings.py*$py.class
+
+db.sqlite3*.so
+
+db.sqlite3-journal.Python
+
+/media*.egg
+
+/staticfiles*.egg-info/
+
+/static.eggs/
+
 .installed.cfg
 
-# Virtual Environments
-venv/
-env/
-ENV/
-.venv
+# Environment
+
+.env# Virtual Environments
+
+.venvvenv/
+
+venv/env/
+
+ENV/ENV/
+
+env/.venv
+
 env.bak/
-venv.bak/
 
-# Django
-*.log
-db.sqlite3
-db.sqlite3-journal
-staticfiles/
+# IDEsvenv.bak/
+
+.vscode/
+
+.idea/# Django
+
+*.swp*.log
+
+*.swodb.sqlite3
+
+*~db.sqlite3-journal
+
+.DS_Storestaticfiles/
+
 media/
-local_settings.py
 
-# Celery
-celerybeat-schedule
-celerybeat-schedule.db
+# Testinglocal_settings.py
+
+.tox/
+
+.coverage# Celery
+
+.coverage.*celerybeat-schedule
+
+.cachecelerybeat-schedule.db
+
+nosetests.xmlcelerybeat.pid
+
+coverage.xml
+
+*.cover# Testing & Coverage
+
+.hypothesis/.pytest_cache/
+
+.pytest_cache/.tox/
+
+.coverage
+
+# Celeryhtmlcov/
+
+celerybeat-schedule.mypy_cache/
+
 celerybeat.pid
 
-# Testing & Coverage
-.pytest_cache/
-.tox/
-.coverage
-htmlcov/
-.mypy_cache/
-
 # Development
-build/
-develop-eggs/
+
+# Logsbuild/
+
+*.logdevelop-eggs/
+
 dist/
-downloads/
-sdist/
-wheels/
+
+# Backup filesdownloads/
+
+*.baksdist/
+
+*.backupwheels/
+
 parts/
-var/
-lib/
+
+# Uploads temporalesvar/
+
+/uploads/temp/lib/
+
 lib64/
 
 # IDE
