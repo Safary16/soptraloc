@@ -44,7 +44,7 @@ class RouteModelTests(TestCase):
         route = Route.objects.create(
             name="Ruta Hoy",
             driver=self.driver,
-            route_date=timezone.localdate(),
+            route_date=timezone.now().date(),
             status="PLANNED",
         )
 

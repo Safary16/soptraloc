@@ -6,8 +6,6 @@ from django.utils import timezone
 from datetime import timedelta
 from django.db.models import Q
 
-from apps.containers.services.demurrage import create_demurrage_alert_if_needed
-
 
 @shared_task
 def generate_demurrage_alerts():
@@ -19,47 +17,70 @@ def generate_demurrage_alerts():
         dict: Estadísticas de alertas generadas
     """
     from apps.containers.models import Container
+    from apps.drivers.models import Alert
     
     now = timezone.now().date()
     
     # Contenedores cerca de demurrage (3 días antes)
     warning_date = now + timedelta(days=3)
     
-    monitored_statuses = [
-        'LIBERADO',
-        'PROGRAMADO',
-        'ASIGNADO',
-        'EN_RUTA',
-        'ARRIBADO',
-        'DESCARGADO_CD',
-        'DISPONIBLE_DEVOLUCION',
-        'EN_RUTA_DEVOLUCION',
-    ]
-
     containers_at_risk = Container.objects.filter(
         demurrage_date__lte=warning_date,
         demurrage_date__gt=now,
-        status__in=monitored_statuses,
+        status__in=['LIBERADO', 'PROGRAMADO', 'ASIGNADO', 'EN_RUTA', 'ARRIBADO', 'DESCARGADO_CD']
     ).select_related('client', 'conductor_asignado')
     
     warnings_created = 0
     
     for container in containers_at_risk:
-        result = create_demurrage_alert_if_needed(container)
-        if result and result.alert_type == 'DEMURRAGE_PROXIMO' and result.was_created:
+        days_remaining = (container.demurrage_date - now).days
+        
+        # Verificar si ya existe alerta activa
+        existing_alert = Alert.objects.filter(
+            container=container,
+            tipo='DEMURRAGE_PROXIMO',
+            is_active=True
+        ).exists()
+        
+        if not existing_alert:
+            Alert.objects.create(
+                container=container,
+                driver=container.conductor_asignado,
+                tipo='DEMURRAGE_PROXIMO',
+                prioridad='ALTA' if days_remaining <= 1 else 'MEDIA',
+                titulo=f'Demurrage próximo: {container.container_number}',
+                mensaje=f'Contenedor {container.container_number} tiene {days_remaining} día(s) hasta demurrage'
+            )
             warnings_created += 1
     
     # Contenedores ya en demurrage (CRÍTICO)
     containers_overdue = Container.objects.filter(
         demurrage_date__lt=now,
-        status__in=monitored_statuses,
+        status__in=['LIBERADO', 'PROGRAMADO', 'ASIGNADO', 'EN_RUTA', 'ARRIBADO', 'DESCARGADO_CD']
     ).select_related('client', 'conductor_asignado')
     
     overdue_created = 0
     
     for container in containers_overdue:
-        result = create_demurrage_alert_if_needed(container)
-        if result and result.alert_type == 'DEMURRAGE_VENCIDO' and result.was_created:
+        days_overdue = (now - container.demurrage_date).days
+        
+        existing_alert = Alert.objects.filter(
+            container=container,
+            tipo='DEMURRAGE_VENCIDO',
+            is_active=True
+        ).exists()
+        
+        if not existing_alert:
+            Alert.objects.create(
+                container=container,
+                driver=container.conductor_asignado,
+                tipo='DEMURRAGE_VENCIDO',
+                prioridad='CRITICA',
+                titulo=f'URGENTE: Demurrage vencido - {container.container_number}',
+                mensaje=f'⚠️ CRÍTICO: Contenedor {container.container_number} lleva {days_overdue} día(s) en demurrage. '
+                        f'Cliente: {container.client.name if container.client else "N/A"}. '
+                        f'Estado: {container.get_status_display()}'
+            )
             overdue_created += 1
     
     return {

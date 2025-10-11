@@ -5,9 +5,8 @@ from django.db import migrations, models
 
 def safe_alter_location_table(apps, schema_editor):
     """
-    Intenta renombrar drivers_location a core_location de forma segura.
-    Si core_location ya existe, no hace nada.
-    Compatible con PostgreSQL y SQLite.
+    Renombra drivers_location a core_location de forma segura.
+    Si core_location ya existe (de core.0001), NO hace nada.
     """
     db_vendor = schema_editor.connection.vendor
     
@@ -32,25 +31,9 @@ def safe_alter_location_table(apps, schema_editor):
             print("✅ core_location ya existe, omitiendo renombrado")
             return
         
-        # Verificar si drivers_location existe
-        if db_vendor == 'postgresql':
-            cursor.execute("""
-                SELECT EXISTS (
-                    SELECT FROM information_schema.tables 
-                    WHERE table_schema = 'public' 
-                    AND table_name = 'drivers_location'
-                );
-            """)
-        else:  # SQLite
-            cursor.execute("""
-                SELECT COUNT(*) FROM sqlite_master 
-                WHERE type='table' AND name='drivers_location';
-            """)
-        
-        drivers_exists = cursor.fetchone()[0]
-        if drivers_exists:
-            print("✅ Renombrando drivers_location → core_location")
-            cursor.execute("ALTER TABLE drivers_location RENAME TO core_location;")
+        # Si no existe, renombrar drivers_location
+        print("✅ Renombrando drivers_location → core_location")
+        cursor.execute("ALTER TABLE drivers_location RENAME TO core_location;")
 
 
 class Migration(migrations.Migration):

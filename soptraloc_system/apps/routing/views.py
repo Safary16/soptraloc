@@ -116,7 +116,7 @@ class RouteViewSet(viewsets.ViewSet):
         
         GET /api/routing/routes/today/
         """
-        today = timezone.localdate()
+        today = timezone.now().date()
         routes = Route.objects.filter(
             route_date=today,
             is_active=True
@@ -126,7 +126,11 @@ class RouteViewSet(viewsets.ViewSet):
         for route in routes:
             driver_payload = None
             if route.driver:
-                driver_name = getattr(route.driver, "display_name", None) or str(route.driver)
+                driver_name = None
+                if hasattr(route.driver, "user") and route.driver.user:
+                    driver_name = route.driver.user.get_full_name() or route.driver.user.username
+                else:
+                    driver_name = str(route.driver)
 
                 driver_payload = {
                     'id': str(route.driver.id),

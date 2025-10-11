@@ -329,14 +329,28 @@ class EntityFactory:
     def get_or_create_location(name: str, city: str = 'Santiago', 
                                region: str = 'Metropolitana', 
                                user: Optional[User] = None) -> Location:
-        """
-        Obtiene o crea una ubicación.
+        """Obtiene o crea una ubicación"""
+        if not name or not name.strip():
+            name = "Sin Especificar"
         
-        DEPRECADO: Usa apps.drivers.utils.get_or_create_location() directamente.
-        Este método se mantiene por compatibilidad temporal.
-        """
-        from apps.drivers.utils import get_or_create_location as central_get_or_create
-        return central_get_or_create(name=name, city=city, region=region, user=user)
+        cleaned = name.strip().upper()
+        
+        location, created = Location.objects.get_or_create(
+            name=cleaned,
+            defaults={
+                'address': cleaned,
+                'city': city,
+                'region': region,
+                'country': 'Chile',
+                'created_by': user,
+                'updated_by': user,
+            }
+        )
+        
+        if created:
+            logger.info(f"Ubicación creada: {cleaned}")
+        
+        return location
 
 
 # ============================================================================
@@ -347,28 +361,26 @@ class ExcelColumnDetector:
     """Detecta columnas en archivos Excel de forma flexible"""
     
     # Mapeos de palabras clave a nombre de columna estándar
-    # ORDEN IMPORTA: más específicos primero para evitar falsos positivos
     COLUMN_KEYWORDS = {
-        'container': ['contenedor', 'container', 'cont', 'equipo'],
-        'client': ['cliente', 'client', 'customer', 'consignatario'],
+        'container': ['contenedor', 'container', 'cont'],
+        'client': ['cliente', 'client', 'customer'],
         'port': ['puerto', 'port'],
-        'eta': ['eta', 'arribo', 'llegada'],
-        'type': ['tipo', 'type', 'tamaño', 'size', 'teu'],
-        # PESOS - Múltiples variantes para capturar siempre
-        'tare': ['tara', 'peso vacio', 'tare', 'empty weight', 'pesovacio', 'weight empty'],
-        'cargo_weight': ['peso carga', 'cargo weight', 'pesocarga', 'neto', 'net weight', 'peso neto'],
-        'total_weight': ['peso total', 'total weight', 'pesototal', 'bruto', 'gross', 'peso bruto', 'gross weight', 'kg'],
+        'eta': ['eta', 'arribo'],
+        'type': ['tipo', 'type', 'tamaño', 'size'],
+        'tare': ['tara', 'peso vacio', 'tare', 'empty weight'],
+        'cargo_weight': ['peso carga', 'cargo weight', 'carga'],
+        'total_weight': ['peso total', 'total weight', 'bruto'],
         'seal': ['sello', 'seal', 'precinto'],
-        'cargo_description': ['descripcion', 'mercaderia', 'cargo', 'description', 'mercancia', 'commodity'],
-        'terminal': ['terminal', 'tps', 'sitio'],
-        'agency': ['agencia', 'agency', 'agent'],
-        'shipping_line': ['linea', 'naviera', 'shipping', 'carrier', 'armador'],
-        'release_date': ['fecha liberacion', 'fecha salida', 'release date', 'liberacion'],
+        'cargo_description': ['descripcion', 'mercaderia', 'cargo', 'description'],
+        'terminal': ['terminal'],
+        'agency': ['agencia', 'agency'],
+        'shipping_line': ['linea', 'naviera', 'shipping', 'carrier'],
+        'release_date': ['fecha liberacion', 'fecha salida', 'release date'],
         'release_time': ['hora liberacion', 'hora salida', 'release time'],
-        'scheduled_date': ['fecha programacion', 'fecha entrega', 'scheduled date', 'programacion'],
+        'scheduled_date': ['fecha programacion', 'fecha entrega', 'scheduled date'],
         'scheduled_time': ['hora programacion', 'hora entrega', 'scheduled time'],
-        'cd_location': ['cd', 'destino', 'destination', 'bodega'],
-        'demurrage_date': ['demurrage', 'devolucion', 'fecha devolucion', 'almacenaje'],
+        'cd_location': ['cd', 'destino', 'destination'],
+        'demurrage_date': ['demurrage', 'devolucion', 'fecha devolucion'],
     }
     
     @classmethod

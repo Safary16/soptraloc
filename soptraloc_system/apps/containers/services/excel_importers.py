@@ -15,10 +15,9 @@ from django.db import transaction
 from django.utils import timezone
 
 from apps.containers.models import Agency, Container, ShippingLine, Vessel
-from apps.containers.services.demurrage import create_demurrage_alert_if_needed
 from apps.containers.services.status_utils import normalize_status
 from apps.core.models import Company
-from apps.drivers.models import Assignment, Driver, Location, TimeMatrix
+from apps.drivers.models import Alert, Assignment, Driver, Location, TimeMatrix
 
 logger = logging.getLogger(__name__)
 
@@ -97,6 +96,9 @@ PORT_LOCATION_MAP = {
         "driver_code": "ZEAL_VAP",
     },
 }
+
+DEMURRAGE_ALERT_THRESHOLD_DAYS = 2
+
 
 # ---------------------------------------------------------------------------
 # Structured responses
@@ -661,12 +663,7 @@ def assign_driver_by_location(container: Container, user: User) -> Optional[Driv
 
     for driver in available_drivers:
         origin, destination = _resolve_assignment_locations(driver, container)
-        
-        # Usar DurationPredictor para consistencia con ML
-        from apps.drivers.services.duration_predictor import DurationPredictor
-        predictor = DurationPredictor()
-        duration = predictor.predict(origin, destination, scheduled_datetime) if origin and destination else 120
-        
+        duration = _estimate_duration(origin, destination)
         if _has_schedule_conflict(driver, scheduled_datetime, duration):
             continue
         try:
@@ -692,6 +689,42 @@ def preferred_driver_types(container: Container) -> List[str]:
     if current == "CCTI" or cd_location.startswith("CD"):
         return ["LOCALERO", "LEASING"]
     return ["TRONCO", "TRONCO_PM", "LEASING", "LOCALERO"]
+
+
+def _estimate_duration(origin: Optional[Location], destination: Optional[Location]) -> int:
+    """Estima la duración de una ruta basada en la matriz de tiempos."""
+    if origin and destination:
+        try:
+            matrix = TimeMatrix.objects.get(from_location=origin, to_location=destination)
+            return matrix.get_total_time()
+        except TimeMatrix.DoesNotExist:
+            return 120
+    return 120
+
+
+def create_demurrage_alert_if_needed(container: Container) -> Optional[Alert]:
+    if not container.demurrage_date:
+        return None
+    today = timezone.localdate()
+    days_until = (container.demurrage_date - today).days
+    if days_until > DEMURRAGE_ALERT_THRESHOLD_DAYS:
+        return None
+
+    alert, created = Alert.objects.get_or_create(
+        tipo="DEMURRAGE_PROXIMO",
+        container=container,
+        defaults={
+            "prioridad": "ALTA" if days_until >= 0 else "CRITICA",
+            "titulo": f"Demurrage próximo para {container.container_number}",
+            "mensaje": f"El contenedor debe devolverse antes de {container.demurrage_date.strftime('%d/%m/%Y')}",
+        },
+    )
+    if not created:
+        alert.is_active = True
+        alert.prioridad = "ALTA" if days_until >= 0 else "CRITICA"
+        alert.mensaje = f"El contenedor debe devolverse antes de {container.demurrage_date.strftime('%d/%m/%Y')}"
+        alert.save(update_fields=["is_active", "prioridad", "mensaje", "updated_at"])
+    return alert
 
 
 def export_liberated_containers(reference_date: Optional[date] = None, include_future: bool = False) -> BytesIO:

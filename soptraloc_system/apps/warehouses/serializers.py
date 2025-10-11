@@ -14,31 +14,7 @@ class WarehouseSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Warehouse
-        fields = [
-            'area_m2',
-            'code',
-            'contact_email',
-            'contact_phone',
-            'created_at',
-            'created_by',
-            'current_occupancy',
-            'has_crane',
-            'has_power',
-            'has_security',
-            'id',
-            'is_active',
-            'location',
-            'manager_company',
-            'max_height_m',
-            'name',
-            'operates_weekends',
-            'operating_hours_end',
-            'operating_hours_start',
-            'total_capacity',
-            'updated_at',
-            'updated_by',
-            'warehouse_type'
-        ]
+        fields = '__all__'
         read_only_fields = ('id', 'created_at', 'updated_at', 'created_by', 'updated_by', 'current_occupancy')
 
 
@@ -47,31 +23,7 @@ class WarehouseCreateUpdateSerializer(serializers.ModelSerializer):
     
     class Meta:
         model = Warehouse
-        fields = [
-            'area_m2',
-            'code',
-            'contact_email',
-            'contact_phone',
-            'created_at',
-            'created_by',
-            'current_occupancy',
-            'has_crane',
-            'has_power',
-            'has_security',
-            'id',
-            'is_active',
-            'location',
-            'manager_company',
-            'max_height_m',
-            'name',
-            'operates_weekends',
-            'operating_hours_end',
-            'operating_hours_start',
-            'total_capacity',
-            'updated_at',
-            'updated_by',
-            'warehouse_type'
-        ]
+        fields = '__all__'
         read_only_fields = ('id', 'created_at', 'updated_at', 'created_by', 'updated_by', 'current_occupancy')
 
 
@@ -81,23 +33,7 @@ class WarehouseZoneSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = WarehouseZone
-        fields = [
-            'capacity',
-            'created_at',
-            'created_by',
-            'current_occupancy',
-            'id',
-            'is_active',
-            'is_covered',
-            'is_hazardous_allowed',
-            'is_refrigerated',
-            'updated_at',
-            'updated_by',
-            'warehouse',
-            'zone_code',
-            'zone_name',
-            'zone_type'
-        ]
+        fields = '__all__'
         read_only_fields = ('id', 'created_at', 'updated_at', 'created_by', 'updated_by', 'current_occupancy')
 
 
@@ -106,23 +42,7 @@ class WarehouseZoneCreateUpdateSerializer(serializers.ModelSerializer):
     
     class Meta:
         model = WarehouseZone
-        fields = [
-            'capacity',
-            'created_at',
-            'created_by',
-            'current_occupancy',
-            'id',
-            'is_active',
-            'is_covered',
-            'is_hazardous_allowed',
-            'is_refrigerated',
-            'updated_at',
-            'updated_by',
-            'warehouse',
-            'zone_code',
-            'zone_name',
-            'zone_type'
-        ]
+        fields = '__all__'
         read_only_fields = ('id', 'created_at', 'updated_at', 'created_by', 'updated_by', 'current_occupancy')
 
 
@@ -133,27 +53,7 @@ class WarehouseStockSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = WarehouseStock
-        fields = [
-            'actual_exit_date',
-            'blocked_reason',
-            'column',
-            'container',
-            'created_at',
-            'created_by',
-            'entry_date',
-            'expected_exit_date',
-            'id',
-            'is_active',
-            'is_blocked',
-            'notes',
-            'row',
-            'special_handling',
-            'stack_position',
-            'updated_at',
-            'updated_by',
-            'warehouse',
-            'zone'
-        ]
+        fields = '__all__'
         read_only_fields = ('id', 'created_at', 'updated_at', 'created_by', 'updated_by')
 
 
@@ -162,27 +62,7 @@ class WarehouseStockCreateUpdateSerializer(serializers.ModelSerializer):
     
     class Meta:
         model = WarehouseStock
-        fields = [
-            'actual_exit_date',
-            'blocked_reason',
-            'column',
-            'container',
-            'created_at',
-            'created_by',
-            'entry_date',
-            'expected_exit_date',
-            'id',
-            'is_active',
-            'is_blocked',
-            'notes',
-            'row',
-            'special_handling',
-            'stack_position',
-            'updated_at',
-            'updated_by',
-            'warehouse',
-            'zone'
-        ]
+        fields = '__all__'
         read_only_fields = ('id', 'created_at', 'updated_at', 'created_by', 'updated_by')
 
 
@@ -196,26 +76,7 @@ class WarehouseOperationSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = WarehouseOperation
-        fields = [
-            'container',
-            'created_at',
-            'created_by',
-            'end_time',
-            'equipment_used',
-            'from_zone',
-            'id',
-            'is_active',
-            'issues_found',
-            'notes',
-            'operation_date',
-            'operation_type',
-            'operator_name',
-            'start_time',
-            'to_zone',
-            'updated_at',
-            'updated_by',
-            'warehouse'
-        ]
+        fields = '__all__'
         read_only_fields = ('id', 'created_at', 'updated_at', 'created_by', 'updated_by')
 
 
@@ -224,26 +85,7 @@ class WarehouseOperationCreateUpdateSerializer(serializers.ModelSerializer):
     
     class Meta:
         model = WarehouseOperation
-        fields = [
-            'container',
-            'created_at',
-            'created_by',
-            'end_time',
-            'equipment_used',
-            'from_zone',
-            'id',
-            'is_active',
-            'issues_found',
-            'notes',
-            'operation_date',
-            'operation_type',
-            'operator_name',
-            'start_time',
-            'to_zone',
-            'updated_at',
-            'updated_by',
-            'warehouse'
-        ]
+        fields = '__all__'
         read_only_fields = ('id', 'created_at', 'updated_at', 'created_by', 'updated_by')
 
 
@@ -255,26 +97,7 @@ class WarehouseReservationSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = WarehouseReservation
-        fields = [
-            'client_company',
-            'container_count',
-            'container_types',
-            'created_at',
-            'created_by',
-            'end_date',
-            'id',
-            'is_active',
-            'notes',
-            'reservation_code',
-            'reservation_date',
-            'special_requirements',
-            'start_date',
-            'status',
-            'updated_at',
-            'updated_by',
-            'warehouse',
-            'zone'
-        ]
+        fields = '__all__'
         read_only_fields = ('id', 'created_at', 'updated_at', 'created_by', 'updated_by')
 
 
@@ -283,26 +106,7 @@ class WarehouseReservationCreateUpdateSerializer(serializers.ModelSerializer):
     
     class Meta:
         model = WarehouseReservation
-        fields = [
-            'client_company',
-            'container_count',
-            'container_types',
-            'created_at',
-            'created_by',
-            'end_date',
-            'id',
-            'is_active',
-            'notes',
-            'reservation_code',
-            'reservation_date',
-            'special_requirements',
-            'start_date',
-            'status',
-            'updated_at',
-            'updated_by',
-            'warehouse',
-            'zone'
-        ]
+        fields = '__all__'
         read_only_fields = ('id', 'created_at', 'updated_at', 'created_by', 'updated_by')
 
 

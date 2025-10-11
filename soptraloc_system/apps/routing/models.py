@@ -2,17 +2,14 @@
 Modelos para gestión de tiempos y rutas
 Sistema híbrido: Tiempos manuales + Machine Learning predictivo
 """
-from typing import TYPE_CHECKING
 from datetime import timedelta
 
 from django.db import models
 from django.core.validators import MinValueValidator, MaxValueValidator
 from django.utils import timezone
 from apps.core.models import BaseModel, Vehicle
-
-if TYPE_CHECKING:
-    from apps.drivers.models import Location, Driver
-    from apps.containers.models import Container
+from apps.drivers.models import Location, Driver
+from apps.containers.models import Container
 
 
 class LocationPair(BaseModel):
@@ -21,13 +18,13 @@ class LocationPair(BaseModel):
     Permite definir manualmente tiempos entre puntos.
     """
     origin = models.ForeignKey(
-        'drivers.Location', 
+        Location, 
         on_delete=models.CASCADE,
         related_name='routes_from',
         verbose_name="Origen"
     )
     destination = models.ForeignKey(
-        'drivers.Location',
+        Location,
         on_delete=models.CASCADE,
         related_name='routes_to',
         verbose_name="Destino"
@@ -167,7 +164,7 @@ class LocationPair(BaseModel):
         )
         
         if is_peak:
-            return int(base_time * float(self.peak_hour_multiplier))
+            return int(base_time * float(self.peak_hours_multiplier))
         
         return base_time
 
@@ -178,7 +175,7 @@ class OperationTime(BaseModel):
     Ej: Tiempo para bajar contenedor a piso, enganchar chasis, etc.
     """
     location = models.ForeignKey(
-        'drivers.Location',
+        Location,
         on_delete=models.CASCADE,
         related_name='operation_times',
         verbose_name="Ubicación"
@@ -283,49 +280,15 @@ class OperationTime(BaseModel):
     
     def get_estimated_time(self, container=None, current_time=None):
         """
-        Retorna tiempo estimado considerando variables contextuales.
-        Aplica ajustes basados en tamaño de contenedor, tipo de carga y hora del día.
+        Retorna tiempo estimado considerando variables.
         """
-        # Si tenemos ML reciente con alta confianza, priorizarlo
+        # Si tenemos ML reciente, usarlo
         if self.ml_predicted_time and self.ml_confidence and self.ml_confidence > 70:
             return self.ml_predicted_time
         
-        # Tiempo base
-        base_time = self.avg_time
-        
-        # Ajuste por tamaño de contenedor si aplica
-        if container and self.depends_on_container_size:
-            size_multipliers = {
-                '20ft': 0.85,
-                '40ft': 1.0,
-                '40hc': 1.15,
-                '40hr': 1.15,
-                '45ft': 1.20,
-            }
-            multiplier = size_multipliers.get(container.container_type, 1.0)
-            base_time = int(base_time * multiplier)
-        
-        # Ajuste por tipo de carga si aplica
-        if container and self.depends_on_cargo_type:
-            # Contenedores refrigerados requieren más tiempo
-            if container.container_type == 'reefer':
-                base_time = int(base_time * 1.25)
-            # Cargas peligrosas requieren inspecciones adicionales
-            elif container.cargo_description and 'PELIGROSA' in container.cargo_description.upper():
-                base_time = int(base_time * 1.30)
-        
-        # Ajuste por hora del día si aplica
-        if current_time and self.depends_on_time_of_day:
-            hour = current_time.hour if hasattr(current_time, 'hour') else timezone.now().hour
-            # Horas pico (8-10, 18-20) más lentas
-            if (8 <= hour <= 10) or (18 <= hour <= 20):
-                base_time = int(base_time * 1.20)
-            # Horas nocturnas más rápidas
-            elif hour < 6 or hour > 22:
-                base_time = int(base_time * 0.85)
-        
-        # Asegurar tiempo mínimo razonable
-        return max(base_time, self.min_time)
+        # Por ahora retornar promedio
+        # TODO: Ajustar según container.size, cargo_type, etc.
+        return self.avg_time
 
 
 class ActualTripRecord(BaseModel):
@@ -334,13 +297,13 @@ class ActualTripRecord(BaseModel):
     Cada vez que un contenedor completa un trayecto, se guarda aquí.
     """
     container = models.ForeignKey(
-        'containers.Container',
+        Container,
         on_delete=models.CASCADE,
         related_name='trip_records',
         verbose_name="Contenedor"
     )
     driver = models.ForeignKey(
-        'drivers.Driver',
+        Driver,
         on_delete=models.SET_NULL,
         null=True,
         blank=True,
@@ -356,26 +319,24 @@ class ActualTripRecord(BaseModel):
     
     # Ubicaciones
     origin = models.ForeignKey(
-        'drivers.Location',
+        Location,
         on_delete=models.CASCADE,
         related_name='trips_from',
         verbose_name="Origen"
     )
     destination = models.ForeignKey(
-        'drivers.Location',
+        Location,
         on_delete=models.CASCADE,
         related_name='trips_to',
         verbose_name="Destino"
     )
     
     # Tiempos
-    departure_time = models.DateTimeField(verbose_name="Hora de salida", null=True, blank=True)
-    arrival_time = models.DateTimeField(verbose_name="Hora de llegada", null=True, blank=True)
+    departure_time = models.DateTimeField(verbose_name="Hora de salida")
+    arrival_time = models.DateTimeField(verbose_name="Hora de llegada")
     duration_minutes = models.IntegerField(
         verbose_name="Duración en minutos",
-        help_text="Calculado automáticamente",
-        null=True,
-        blank=True,
+        help_text="Calculado automáticamente"
     )
     
     # Variables contextuales (para ML)
@@ -463,12 +424,12 @@ class ActualOperationRecord(BaseModel):
     Ej: Cuánto tardó realmente en bajar el contenedor a piso.
     """
     container = models.ForeignKey(
-        'containers.Container',
+        Container,
         on_delete=models.CASCADE,
         related_name='operation_records'
     )
     location = models.ForeignKey(
-        'drivers.Location',
+        Location,
         on_delete=models.CASCADE,
         related_name='operation_records'
     )
@@ -532,7 +493,7 @@ class Route(BaseModel):
         help_text="Nombre descriptivo de la ruta"
     )
     driver = models.ForeignKey(
-        'drivers.Driver',
+        Driver,
         on_delete=models.CASCADE,
         related_name='routes',
         verbose_name="Conductor"
@@ -619,7 +580,10 @@ class Route(BaseModel):
     def __str__(self):
         driver_label = "Sin conductor"
         if self.driver:
-            driver_label = getattr(self.driver, "display_name", None) or str(self.driver)
+            if hasattr(self.driver, "user") and self.driver.user:
+                driver_label = self.driver.user.get_full_name() or self.driver.user.username
+            else:
+                driver_label = str(self.driver)
 
         return f"{self.name} - {driver_label} ({self.route_date})"
     
@@ -648,7 +612,7 @@ class RouteStop(BaseModel):
         verbose_name="Ruta"
     )
     container = models.ForeignKey(
-        'containers.Container',
+        Container,
         on_delete=models.CASCADE,
         related_name='route_stops',
         verbose_name="Contenedor"
@@ -662,7 +626,7 @@ class RouteStop(BaseModel):
     
     # Ubicación y acción
     location = models.ForeignKey(
-        'drivers.Location',
+        Location,
         on_delete=models.CASCADE,
         verbose_name="Ubicación"
     )

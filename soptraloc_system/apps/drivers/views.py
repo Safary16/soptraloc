@@ -2,10 +2,11 @@ from datetime import datetime, timedelta, time
 
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
-from django.db.models import Count, Q, Case, When, IntegerField
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
+from django.views.decorators.csrf import csrf_exempt
+
 from apps.containers.models import Container
 from apps.containers.services.status_utils import normalize_status
 
@@ -175,13 +176,9 @@ def _assign_driver_to_container(container, driver, user, scheduled_datetime=None
     scheduled_datetime = scheduled_datetime or _compute_scheduled_datetime(container)
     origin_location, destination_location = _resolve_assignment_locations(driver, container)
 
-    # En tests y escenarios controlados, permitimos asignar aunque no haya check-in de asistencia
-    # En producción, esta validación puede reactivarse mediante un flag de configuración.
     today = timezone.localdate()
-    attendance_required = False
-    if attendance_required:
-        if driver.ultimo_registro_asistencia != today or not driver.hora_ingreso_hoy:
-            raise ValueError(f'El conductor {driver.nombre} no ha registrado asistencia hoy')
+    if driver.ultimo_registro_asistencia != today or not driver.hora_ingreso_hoy:
+        raise ValueError(f'El conductor {driver.nombre} no ha registrado asistencia hoy')
 
     duration_minutes = _estimate_assignment_duration_minutes(
         origin_location,
@@ -276,23 +273,14 @@ def drivers_view(request):
     
     drivers = drivers.order_by('nombre')
     
-    # Estadísticas optimizadas (una sola query en lugar de 6 separadas)
-    stats_result = Driver.objects.filter(is_active=True).aggregate(
-        total=Count('id'),
-        operativos=Count('id', filter=Q(estado='OPERATIVO')),
-        disponibles=Count('id', filter=Q(estado='OPERATIVO', contenedor_asignado__isnull=True)),
-        asignados=Count('id', filter=Q(contenedor_asignado__isnull=False)),
-        localeros=Count('id', filter=Q(tipo_conductor='LOCALERO')),
-        troncales=Count('id', filter=Q(tipo_conductor='TRONCO'))
-    )
-    
+    # Estadísticas
     stats = {
-        'total': stats_result['total'] or 0,
-        'operativos': stats_result['operativos'] or 0,
-        'disponibles': stats_result['disponibles'] or 0,
-        'asignados': stats_result['asignados'] or 0,
-        'localeros': stats_result['localeros'] or 0,
-        'troncales': stats_result['troncales'] or 0,
+        'total': Driver.objects.filter(is_active=True).count(),
+        'operativos': Driver.objects.filter(estado='OPERATIVO', is_active=True).count(),
+        'disponibles': Driver.objects.filter(estado='OPERATIVO', contenedor_asignado__isnull=True, is_active=True).count(),
+        'asignados': Driver.objects.filter(contenedor_asignado__isnull=False, is_active=True).count(),
+        'localeros': Driver.objects.filter(tipo_conductor='LOCALERO', is_active=True).count(),
+        'troncales': Driver.objects.filter(tipo_conductor='TRONCO', is_active=True).count(),
     }
     
     context = {
@@ -374,6 +362,7 @@ def assign_container(request):
     return JsonResponse({'success': False, 'message': 'Método no permitido'})
 
 
+@csrf_exempt
 @login_required
 def unassign_driver(request):
     """Desasignar un conductor de un contenedor"""
@@ -422,6 +411,7 @@ def unassign_driver(request):
     return JsonResponse({'success': False, 'message': 'Método no permitido'})
 
 
+@csrf_exempt
 @login_required
 def check_driver_availability(request):
     """Verificar disponibilidad de un conductor para una fecha/hora específica"""
@@ -487,6 +477,7 @@ def check_driver_availability(request):
     return JsonResponse({'available': False, 'message': 'Método no permitido'})
 
 
+@csrf_exempt
 @login_required 
 def resolve_alert(request):
     """Resolver una alerta manualmente"""
@@ -635,7 +626,7 @@ def attendance_view(request):
     }
     
     # Contenedores sin asignar
-    unassigned_containers = Container.objects.select_related('owner_company', 'client', 'current_location').filter(
+    unassigned_containers = Container.objects.filter(
         status='PROGRAMADO',
         conductor_asignado__isnull=True,
         scheduled_date__in=[today, today + timedelta(days=1)]
@@ -643,7 +634,7 @@ def attendance_view(request):
     
     # Próximas salidas (próxima hora)
     next_hour = timezone.now() + timedelta(hours=1)
-    next_hour_containers = Container.objects.select_related('owner_company', 'client', 'current_location').filter(
+    next_hour_containers = Container.objects.filter(
         status__in=['ASIGNADO', 'PROGRAMADO'],
         scheduled_date=today,
         scheduled_time__lte=next_hour.time()
@@ -735,21 +726,86 @@ def mass_entry(request):
 
 @login_required
 def auto_assign_drivers(request):
-    """Asignación automática de conductores."""
-    if request.method != 'POST':
-        return JsonResponse({'success': False, 'message': 'Método no permitido'})
+    """Asignación automática de conductores"""
+    if request.method == 'POST':
+        try:
+            today = timezone.localdate()
+            tomorrow = today + timedelta(days=1)
+
+            unassigned_containers = Container.objects.filter(
+                conductor_asignado__isnull=True,
+                status__in=['PROGRAMADO', 'EN_PROCESO', 'EN_SECUENCIA', 'SECUENCIADO'],
+                scheduled_date__in=[today, tomorrow]
+            ).order_by('scheduled_date', 'scheduled_time', 'container_number')
+
+            available_drivers = list(
+                Driver.objects.filter(
+                    is_active=True,
+                    estado='OPERATIVO',
+                    contenedor_asignado__isnull=True,
+                    ultimo_registro_asistencia=today,
+                    hora_ingreso_hoy__isnull=False
+                ).order_by('tiempo_en_ubicacion')
+            )
+
+            assigned_count = 0
+            pending_containers = []
+
+            for container in unassigned_containers:
+                attempted_ids = set()
+                assignment_error = None
+
+                while available_drivers:
+                    driver = _pick_driver_for_container(container, available_drivers, attempted_ids)
+                    if not driver:
+                        break
+
+                    attempted_ids.add(driver.id)
+
+                    try:
+                        _assign_driver_to_container(container, driver, request.user)
+                        assigned_count += 1
+                        break
+                    except ValueError as exc:
+                        assignment_error = str(exc)
+                        available_drivers.append(driver)
+                        continue
+
+                else:
+                    driver = None
+
+                if not driver or driver.id not in attempted_ids:
+                    pending_containers.append({
+                        'number': container.container_number,
+                        'reason': assignment_error or 'Sin conductores con horario disponible'
+                    })
+
+            message = f'{assigned_count} contenedores asignados automáticamente'
+            if pending_containers:
+                detalles = ', '.join(
+                    f"{item['number']} ({item['reason']})" for item in pending_containers[:5]
+                )
+                message += f". Sin conductor disponible para: {detalles}" + (
+                    '...' if len(pending_containers) > 5 else ''
+                )
+
+            return JsonResponse({
+                'success': True,
+                'message': message,
+                'assigned_count': assigned_count,
+                'pending_containers': [item['number'] for item in pending_containers]
+            })
+            
+        except Exception as e:
+            return JsonResponse({
+                'success': False,
+                'message': f'Error en asignación automática: {str(e)}'
+            })
     
-    try:
-        from apps.drivers.services.auto_assignment import auto_assign_all_drivers
-        result = auto_assign_all_drivers(request.user)
-        return JsonResponse(result)
-    except Exception as e:
-        return JsonResponse({
-            'success': False,
-            'message': f'Error en asignación automática: {str(e)}'
-        })
+    return JsonResponse({'success': False, 'message': 'Método no permitido'})
 
 
+@csrf_exempt
 @login_required  
 def auto_assign_single(request):
     """Asignación automática para un contenedor específico"""

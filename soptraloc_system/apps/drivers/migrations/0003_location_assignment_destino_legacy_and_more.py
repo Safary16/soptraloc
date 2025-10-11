@@ -7,7 +7,7 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ("drivers", "0001_initial"),
+        ("drivers", "0002_auto_20250928_1723"),
     ]
 
     operations = [

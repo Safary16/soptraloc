@@ -12,19 +12,8 @@ class UserSerializer(serializers.ModelSerializer):
 class CompanySerializer(serializers.ModelSerializer):
     class Meta:
         model = Company
-        fields = [
-            'id',
-            'name',
-            'code',
-            'rut',
-            'email',
-            'phone',
-            'address',
-            'is_active',
-            'created_at',
-            'updated_at',
-        ]
-        read_only_fields = ('id', 'created_at', 'updated_at')
+        fields = '__all__'
+        read_only_fields = ('id', 'created_at', 'updated_at', 'created_by', 'updated_by')
 
 
 class VehicleSerializer(serializers.ModelSerializer):
@@ -33,23 +22,7 @@ class VehicleSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Vehicle
-        fields = [
-            'vehicle_type_display',
-            'status_display',
-            'brand',
-            'created_at',
-            'created_by',
-            'id',
-            'is_active',
-            'max_capacity',
-            'model',
-            'plate',
-            'status',
-            'updated_at',
-            'updated_by',
-            'vehicle_type',
-            'year'
-        ]
+        fields = '__all__'
         read_only_fields = ('id', 'created_at', 'updated_at', 'created_by', 'updated_by')
 
 
@@ -58,19 +31,7 @@ class MovementCodeSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = MovementCode
-        fields = [
-            'is_used',
-            'code',
-            'created_at',
-            'created_by',
-            'description',
-            'id',
-            'is_active',
-            'movement_type',
-            'updated_at',
-            'updated_by',
-            'used_at'
-        ]
+        fields = '__all__'
         read_only_fields = ('id', 'created_at', 'updated_at', 'created_by', 'updated_by', 'used_at')
     
     def get_is_used(self, obj):

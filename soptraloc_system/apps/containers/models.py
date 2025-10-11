@@ -264,7 +264,7 @@ class Container(BaseModel):
     
     # Máquina de estados: transiciones permitidas
     ALLOWED_TRANSITIONS = {
-        'available': ['loading', 'maintenance', 'POR_ARRIBAR', 'in_transit'],
+        'available': ['loading', 'maintenance', 'POR_ARRIBAR'],
         'in_transit': ['loading', 'unloading'],
         'loading': ['in_transit', 'available'],
         'unloading': ['available', 'warehouse'],
@@ -272,42 +272,37 @@ class Container(BaseModel):
         'damaged': ['maintenance', 'out_of_service'],
         'out_of_service': ['maintenance'],
         # Flujo de importación
-    'POR_ARRIBAR': ['EN_SECUENCIA', 'DESCARGADO', 'LIBERADO', 'PROGRAMADO'],
+        'POR_ARRIBAR': ['EN_SECUENCIA', 'DESCARGADO'],
         'EN_SECUENCIA': ['DESCARGADO'],
         'DESCARGADO': ['LIBERADO', 'TRG'],
         'TRG': ['LIBERADO', 'SECUENCIADO'],
         'SECUENCIADO': ['LIBERADO'],
         'LIBERADO': ['PROGRAMADO'],
         'PROGRAMADO': ['ASIGNADO'],
-    'ASIGNADO': ['EN_RUTA', 'PROGRAMADO', 'EN_RUTA_DEVOLUCION'],  # Puede volver a PROGRAMADO si se cancela
+        'ASIGNADO': ['EN_RUTA', 'PROGRAMADO'],  # Puede volver a PROGRAMADO si se cancela
         'EN_RUTA': ['ARRIBADO'],
         'ARRIBADO': ['DESCARGADO_CD'],
         'DESCARGADO_CD': ['DISPONIBLE_DEVOLUCION'],
-    'DISPONIBLE_DEVOLUCION': ['ASIGNADO', 'EN_RUTA_DEVOLUCION'],
+        'DISPONIBLE_DEVOLUCION': ['EN_RUTA_DEVOLUCION'],
         'EN_RUTA_DEVOLUCION': ['FINALIZADO'],
         'FINALIZADO': [],  # Estado terminal
     }
     
-    def can_transition_to(self, current_status, new_status):
+    def can_transition_to(self, new_status):
         """Verifica si la transición de estado es válida."""
-        if not current_status:  # Si es nuevo, cualquier estado inicial es válido
-            return True
-
-        if current_status == new_status:
+        if not self.status:  # Si es nuevo, cualquier estado inicial es válido
             return True
         
-        allowed = self.ALLOWED_TRANSITIONS.get(current_status, [])
+        allowed = self.ALLOWED_TRANSITIONS.get(self.status, [])
         return new_status in allowed
     
-    def validate_status_transition(self, new_status, *, from_status=None):
+    def validate_status_transition(self, new_status):
         """Valida y retorna error si la transición no es permitida."""
-        origin_status = from_status if from_status is not None else self.status
-
-        if not self.can_transition_to(origin_status, new_status):
+        if not self.can_transition_to(new_status):
             from django.core.exceptions import ValidationError
             raise ValidationError(
-                f"Transición no permitida: {origin_status or 'SIN_ESTADO'} → {new_status}. "
-                f"Estados permitidos desde {origin_status or 'SIN_ESTADO'}: {', '.join(self.ALLOWED_TRANSITIONS.get(origin_status, []))}"
+                f"Transición no permitida: {self.status} → {new_status}. "
+                f"Estados permitidos desde {self.status}: {', '.join(self.ALLOWED_TRANSITIONS.get(self.status, []))}"
             )
     
     def save(self, *args, **kwargs):
@@ -317,7 +312,7 @@ class Container(BaseModel):
                 old_instance = Container.objects.get(pk=self.pk)
                 if old_instance.status != self.status:
                     # Validar transición
-                    self.validate_status_transition(self.status, from_status=old_instance.status)
+                    self.validate_status_transition(self.status)
             except Container.DoesNotExist:
                 pass  # Objeto nuevo, no validar
         
@@ -344,7 +339,7 @@ class Container(BaseModel):
     def __str__(self):
         if self.client:
             return f"{self.container_number} - {self.client.name}"
-        return f"{self.container_number}"
+        return f"{self.container_number} - {self.get_container_type_display()}"
     
     def get_current_position(self):
         """Retorna la posición actual del contenedor."""
@@ -446,51 +441,6 @@ class ContainerMovement(BaseModel):
     def __str__(self):
         return f"{self.container.container_number} - {self.get_movement_type_display()} - {self.movement_date.strftime('%d/%m/%Y %H:%M')}"
     
-    def __init__(self, *args, **kwargs):
-        # Compatibilidad con tests legacy que usan origin_location/destination_location
-        origin_legacy = kwargs.pop('origin_location', None)
-        destination_legacy = kwargs.pop('destination_location', None)
-        super().__init__(*args, **kwargs)
-        if origin_legacy is not None:
-            self.from_location = origin_legacy
-        if destination_legacy is not None:
-            self.to_location = destination_legacy
-
-    @property
-    def origin_location(self):
-        """Mantiene compatibilidad con código que usa origin_location."""
-        return self.from_location
-
-    @origin_location.setter
-    def origin_location(self, value):
-        self.from_location = value
-
-    @property
-    def destination_location(self):
-        """Mantiene compatibilidad con código que usa destination_location."""
-        return self.to_location
-
-    @destination_location.setter
-    def destination_location(self, value):
-        self.to_location = value
-
-    # Alias de compatibilidad para tests legacy
-    @property
-    def origin_location(self):
-        return self.from_location
-
-    @origin_location.setter
-    def origin_location(self, value):
-        self.from_location = value
-
-    @property
-    def destination_location(self):
-        return self.to_location
-
-    @destination_location.setter
-    def destination_location(self, value):
-        self.to_location = value
-
     def save(self, *args, **kwargs):
         """Actualiza la posición del contenedor al guardar el movimiento."""
         super().save(*args, **kwargs)
@@ -590,220 +540,3 @@ class ContainerInspection(BaseModel):
         
     def __str__(self):
         return f"{self.container.container_number} - {self.get_inspection_type_display()} - {self.inspection_date.strftime('%d/%m/%Y')}"
-
-
-# ===== NUEVOS MODELOS REFACTORIZADOS =====
-
-class ContainerSpec(models.Model):
-    """
-    Especificaciones físicas del contenedor.
-    Separado para reducir complejidad de Container model.
-    NOTA: No hereda de BaseModel porque fue creado con BigAutoField en migración 0002.
-    """
-    id = models.BigAutoField(primary_key=True)
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
-    created_by = models.ForeignKey(
-        'auth.User',
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
-        related_name='containerspec_created'
-    )
-    updated_by = models.ForeignKey(
-        'auth.User',
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
-        related_name='containerspec_updated'
-    )
-    
-    container = models.OneToOneField(
-        Container,
-        on_delete=models.CASCADE,
-        related_name='spec',
-        verbose_name="Contenedor"
-    )
-    
-    # Pesos
-    weight_empty = models.DecimalField(
-        max_digits=10,
-        decimal_places=2,
-        null=True,
-        blank=True,
-        help_text="Peso vacío en kg"
-    )
-    weight_loaded = models.DecimalField(
-        max_digits=10,
-        decimal_places=2,
-        null=True,
-        blank=True,
-        help_text="Peso cargado en kg"
-    )
-    max_weight = models.DecimalField(
-        max_digits=10,
-        decimal_places=2,
-        null=True,
-        blank=True,
-        help_text="Peso máximo permitido en kg"
-    )
-    
-    # Información adicional
-    seal_number = models.CharField(max_length=50, blank=True, verbose_name="Número de sello")
-    special_requirements = models.TextField(blank=True, verbose_name="Requerimientos especiales")
-    
-    class Meta:
-        verbose_name = "Especificación de Contenedor"
-        verbose_name_plural = "Especificaciones de Contenedores"
-    
-    def __str__(self):
-        return f"Specs: {self.container.container_number}"
-
-
-class ContainerImportInfo(models.Model):
-    """
-    Información específica de contenedores de importación.
-    Separado para no contaminar Container con campos de importación.
-    NOTA: No hereda de BaseModel porque fue creado con BigAutoField en migración 0002.
-    """
-    id = models.BigAutoField(primary_key=True)
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
-    created_by = models.ForeignKey(
-        'auth.User',
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
-        related_name='containerimportinfo_created'
-    )
-    updated_by = models.ForeignKey(
-        'auth.User',
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
-        related_name='containerimportinfo_updated'
-    )
-    
-    container = models.OneToOneField(
-        Container,
-        on_delete=models.CASCADE,
-        related_name='import_info',
-        verbose_name="Contenedor"
-    )
-    
-    # Información de importación
-    sequence_id = models.IntegerField(null=True, blank=True, verbose_name="ID Secuencia")
-    port = models.CharField(max_length=50, blank=True, verbose_name="Puerto")
-    eta = models.DateField(null=True, blank=True, verbose_name="ETA (Estimated Time of Arrival)")
-    vessel = models.ForeignKey(
-        Vessel,
-        on_delete=models.CASCADE,
-        null=True,
-        blank=True,
-        verbose_name="Nave"
-    )
-    cargo_description = models.TextField(blank=True, verbose_name="Descripción de carga")
-    
-    # Pesos específicos de importación
-    cargo_weight = models.DecimalField(
-        max_digits=10,
-        decimal_places=2,
-        null=True,
-        blank=True,
-        verbose_name="Peso carga"
-    )
-    total_weight = models.DecimalField(
-        max_digits=10,
-        decimal_places=2,
-        null=True,
-        blank=True,
-        verbose_name="Peso total"
-    )
-    
-    # Terminal
-    terminal = models.ForeignKey(
-        Location,
-        on_delete=models.CASCADE,
-        null=True,
-        blank=True,
-        related_name='import_containers',
-        verbose_name="Terminal"
-    )
-    
-    class Meta:
-        verbose_name = "Información de Importación"
-        verbose_name_plural = "Información de Importaciones"
-        indexes = [
-            models.Index(fields=['sequence_id'], name='containers_seq_idx'),
-            models.Index(fields=['eta'], name='containers_eta_idx'),
-        ]
-    
-    def __str__(self):
-        return f"Import Info: {self.container.container_number}"
-
-
-class ContainerSchedule(models.Model):
-    """
-    Programación y tiempos del contenedor.
-    Separado para facilitar queries de programación.
-    NOTA: No hereda de BaseModel porque fue creado con BigAutoField en migración 0002.
-    """
-    id = models.BigAutoField(primary_key=True)
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
-    created_by = models.ForeignKey(
-        'auth.User',
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
-        related_name='containerschedule_created'
-    )
-    updated_by = models.ForeignKey(
-        'auth.User',
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
-        related_name='containerschedule_updated'
-    )
-    
-    container = models.OneToOneField(
-        Container,
-        on_delete=models.CASCADE,
-        related_name='schedule',
-        verbose_name="Contenedor"
-    )
-    
-    # Fechas de liberación
-    release_date = models.DateField(null=True, blank=True, verbose_name="Fecha liberación")
-    release_time = models.TimeField(null=True, blank=True, verbose_name="Hora liberación")
-    
-    # Fechas de programación
-    scheduled_date = models.DateField(null=True, blank=True, verbose_name="Fecha programación")
-    scheduled_time = models.TimeField(null=True, blank=True, verbose_name="Hora programación")
-    
-    class Meta:
-        verbose_name = "Programación de Contenedor"
-        verbose_name_plural = "Programaciones de Contenedores"
-        indexes = [
-            models.Index(fields=['release_date'], name='containers_rel_date_idx'),
-            models.Index(fields=['scheduled_date'], name='containers_sch_date_idx'),
-        ]
-    
-    def __str__(self):
-        return f"Schedule: {self.container.container_number}"
-    
-    def get_release_datetime(self):
-        """Retorna datetime combinando release_date + release_time"""
-        if self.release_date:
-            from datetime import datetime, time as dt_time
-            time_obj = self.release_time or dt_time(0, 0)
-            return datetime.combine(self.release_date, time_obj)
-        return None
-    
-    def get_scheduled_datetime(self):
-        """Retorna datetime combinando scheduled_date + scheduled_time"""
-        if self.scheduled_date:
-            from datetime import datetime, time as dt_time
-            time_obj = self.scheduled_time or dt_time(0, 0)
-            return datetime.combine(self.scheduled_date, time_obj)
-        return None

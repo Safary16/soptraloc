@@ -8,13 +8,9 @@ from django.shortcuts import get_object_or_404
 from django.utils import timezone
 
 from apps.containers.models import Container, ContainerMovement
-from apps.containers.services.demurrage import (
-    create_demurrage_alert_if_needed,
-    resolve_demurrage_alerts,
-)
 from apps.core.models import MovementCode
 from apps.drivers.models import Driver, Assignment, Location
-from apps.drivers.utils import fetch_or_create_location_simple
+from apps.drivers.views import _has_schedule_conflict, _estimate_assignment_duration_minutes
 
 logger = logging.getLogger(__name__)
 
@@ -33,19 +29,48 @@ def _extract_payload(request):
     return {}
 
 
+def _fetch_or_create_location(value: str | None) -> Location | None:
+    """Busca una Location por código/nombre y la crea si es necesario."""
+    if not value:
+        return None
+
+    normalized = value.strip()
+    if not normalized:
+        return None
+
+    code_candidate = normalized.upper().replace(' ', '_')[:20]
+
+    location = Location.objects.filter(code=code_candidate).first()
+    if location:
+        return location
+
+    location = Location.objects.filter(name__iexact=normalized).first()
+    if location:
+        return location
+
+    # Crear una nueva ubicación si no existe (evita duplicados con sufijo incremental)
+    base_code = code_candidate or 'RETORNO'
+    final_code = base_code
+    suffix = 1
+    while Location.objects.filter(code=final_code).exists():
+        suffix += 1
+        final_code = f"{base_code[:17]}_{suffix}"[:20]
+
+    return Location.objects.create(
+        name=normalized[:100],
+        code=final_code,
+        address=''
+    )
+
+
 def _resolve_return_locations(container: Container, return_location_label: str) -> tuple[Location | None, Location | None]:
-    """
-    Resuelve ubicaciones de origen y destino para devolución.
-    
-    Usa utilidades centralizadas para evitar duplicación.
-    """
     origin = None
     if container.current_position:
-        origin = fetch_or_create_location_simple(container.current_position)
+        origin = _fetch_or_create_location(container.current_position)
     if origin is None and container.cd_location:
-        origin = fetch_or_create_location_simple(container.cd_location)
+        origin = _fetch_or_create_location(container.cd_location)
 
-    destination = fetch_or_create_location_simple(return_location_label)
+    destination = _fetch_or_create_location(return_location_label)
     return origin, destination
 
 
@@ -87,8 +112,6 @@ def mark_ready_for_return(request):
                 notes=f'Marcado como disponible para devolución (de {old_status})',
                 created_by=request.user
             )
-
-            create_demurrage_alert_if_needed(container, resolved_by=request.user)
             
             logger.info(
                 "Contenedor %s marcado como disponible para devolución por usuario %s",
@@ -115,15 +138,10 @@ def mark_ready_for_return(request):
 def assign_return_driver(request):
     """
     Asigna conductor para devolución de contenedor.
-    
-    REFACTORIZADO: Ahora usa _assign_driver_to_container() para centralizar lógica.
-    Solo maneja validaciones específicas de devolución.
+    Similar a asignación normal pero para devolución.
     """
     if request.method == 'POST':
         try:
-            # Importar función central de asignación
-            from apps.drivers.views import _assign_driver_to_container
-            
             data = _extract_payload(request)
             container_id = data.get('container_id')
             driver_id = data.get('driver_id')
@@ -132,40 +150,58 @@ def assign_return_driver(request):
             container = get_object_or_404(Container, id=container_id)
             driver = get_object_or_404(Driver, id=driver_id)
             
-            # ===== VALIDACIONES ESPECÍFICAS DE DEVOLUCIÓN =====
+            # Validar estado
             if container.status != 'DISPONIBLE_DEVOLUCION':
                 return JsonResponse({
                     'success': False,
                     'message': 'El contenedor debe estar en estado DISPONIBLE_DEVOLUCION'
                 })
             
-            # Resolver ubicaciones de devolución
-            origin_location, destination_location = _resolve_return_locations(container, return_location)
-            
-            if not destination_location:
+            # Validar que conductor esté disponible
+            if driver.contenedor_asignado:
                 return JsonResponse({
                     'success': False,
-                    'message': f'No se pudo determinar ubicación de destino para {return_location}'
+                    'message': f'El conductor ya tiene asignado el contenedor {driver.contenedor_asignado.container_number}'
                 })
             
-            # ===== USAR FUNCIÓN CENTRAL DE ASIGNACIÓN =====
             scheduled_datetime = timezone.now()
-            
-            try:
-                assignment = _assign_driver_to_container(
-                    container=container,
-                    driver=driver,
-                    user=request.user,
-                    scheduled_datetime=scheduled_datetime,
-                    assignment_type='DEVOLUCION'
-                )
-            except ValueError as e:
+            origin_location, destination_location = _resolve_return_locations(container, return_location)
+
+            duration_minutes = _estimate_assignment_duration_minutes(
+                origin_location,
+                destination_location,
+                'DEVOLUCION',
+                scheduled_datetime,
+            )
+
+            if _has_schedule_conflict(driver, scheduled_datetime, duration_minutes):
                 return JsonResponse({
                     'success': False,
-                    'message': str(e)
+                    'message': f'El conductor {driver.nombre} tiene otra asignación en curso en ese horario'
                 })
+
+            assignment = Assignment.objects.create(
+                container=container,
+                driver=driver,
+                fecha_programada=scheduled_datetime,
+                estado='PENDIENTE',
+                origen=origin_location,
+                destino=destination_location,
+                origen_legacy=(origin_location.name if origin_location else container.current_position or 'Origen no definido'),
+                destino_legacy=destination_location.name if destination_location else return_location,
+                tipo_asignacion='DEVOLUCION',
+                created_by=request.user,
+                tiempo_estimado=duration_minutes,
+            )
+
+            assignment.calculate_estimated_time(refresh=False)
+            assignment.save(update_fields=['tiempo_estimado'])
+
+            container.conductor_asignado = driver
+            container.save(update_fields=['conductor_asignado', 'updated_at'])
             
-            # ===== POST-ASIGNACIÓN: Registros específicos de devolución =====
+            driver.contenedor_asignado = container
+            driver.save(update_fields=['contenedor_asignado', 'updated_at'])
             
             # Registrar movimiento
             movement_code = MovementCode.generate_code('load')
@@ -180,9 +216,6 @@ def assign_return_driver(request):
                 notes=f'Asignado a {driver.nombre} para devolución a {return_location}',
                 created_by=request.user
             )
-            
-            # Resolver alerta de demurrage si existe
-            create_demurrage_alert_if_needed(container, resolved_by=request.user)
             
             logger.info(
                 "Conductor %s asignado para devolver contenedor %s a %s",
@@ -259,8 +292,6 @@ def start_return_route(request):
                 notes='Inicio de ruta de devolución',
                 created_by=request.user
             )
-
-            create_demurrage_alert_if_needed(container, resolved_by=request.user)
             
             logger.info(
                 "Contenedor %s inició ruta de devolución con conductor %s",
@@ -380,8 +411,6 @@ def finalize_container(request):
                 notes=f'Contenedor devuelto y finalizado. EIR: {has_eir}',
                 created_by=request.user
             )
-
-            resolve_demurrage_alerts(container, resolved_by=request.user)
             
             logger.info(
                 "Contenedor %s finalizado. Ciclo completo. EIR: %s",

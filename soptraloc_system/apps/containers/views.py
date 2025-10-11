@@ -7,7 +7,6 @@ from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
 from rest_framework.decorators import action
 from rest_framework.filters import OrderingFilter, SearchFilter
 from rest_framework.response import Response
-from rest_framework.permissions import IsAuthenticated
 from django.shortcuts import render, get_object_or_404
 from django.http import HttpResponse, JsonResponse
 from django.contrib.auth.decorators import login_required
@@ -15,7 +14,6 @@ from django.utils import timezone
 from django.contrib import messages
 
 from apps.core.models import MovementCode
-from apps.core.permissions import CanManageContainers, CanImportData
 from .models import Container, ContainerDocument, ContainerInspection, ContainerMovement
 from .serializers import (
     ContainerCreateUpdateSerializer,
@@ -29,33 +27,19 @@ from .serializers import (
     ContainerSummarySerializer,
 )
 from apps.drivers.models import Driver, Assignment
-from apps.containers.services.demurrage import (
-    create_demurrage_alert_if_needed,
-    resolve_demurrage_alerts,
-)
 from apps.containers.services.excel_importers import (
     apply_programming,
     apply_release_schedule,
     export_liberated_containers,
     import_vessel_manifest,
 )
-from apps.containers.services.empty_inventory import get_empty_inventory_by_cd
 import json
 
 
 class ContainerViewSet(viewsets.ModelViewSet):
-    # FASE 4: Optimización N+1 queries - select_related para FK, prefetch_related para M2M
     queryset = Container.objects.filter(is_active=True).select_related(
-        'owner_company', 'client',
-        'current_location', 'current_vehicle',
-        'vessel', 'agency', 'shipping_line'
-    ).prefetch_related(
-        'assignment_set__driver',  # Para mostrar asignaciones con conductores
-        'container_movements',  # Historial de movimientos
-        'documents'  # Documentos adjuntos
+        'owner_company', 'current_location', 'current_vehicle'
     )
-    # FASE 6: Permisos granulares - RBAC
-    permission_classes = [IsAuthenticated, CanManageContainers]
     parser_classes = [JSONParser, MultiPartParser, FormParser]
     filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]
     filterset_fields = [
@@ -93,7 +77,6 @@ class ContainerViewSet(viewsets.ModelViewSet):
         methods=['post'],
         url_path='import-manifest',
         parser_classes=[MultiPartParser, FormParser],
-    permission_classes=[IsAuthenticated],
     )
     def import_manifest(self, request):
         """Importa uno o varios manifiestos de nave desde archivos Excel."""
@@ -115,7 +98,6 @@ class ContainerViewSet(viewsets.ModelViewSet):
         methods=['post'],
         url_path='import-release',
         parser_classes=[MultiPartParser, FormParser],
-    permission_classes=[IsAuthenticated],
     )
     def import_release(self, request):
         """Aplica archivos de liberaciones para actualizar contenedores."""
@@ -137,7 +119,6 @@ class ContainerViewSet(viewsets.ModelViewSet):
         methods=['post'],
         url_path='import-programming',
         parser_classes=[MultiPartParser, FormParser],
-    permission_classes=[IsAuthenticated],
     )
     def import_programming(self, request):
         """Carga archivos de programación y aplica asignaciones operativas."""
@@ -202,12 +183,6 @@ class ContainerViewSet(viewsets.ModelViewSet):
         serializer = self.get_serializer(on_floor, many=True)
         return Response(serializer.data)
 
-    @action(detail=False, methods=['get'], url_path='empty-inventory')
-    def empty_inventory(self, request):
-        """Resumen de contenedores vacíos disponibles por CD."""
-        inventory = [row.as_dict() for row in get_empty_inventory_by_cd()]
-        return Response({'items': inventory})
-
     @action(detail=True, methods=['get'])
     def movements(self, request, pk=None):
         """Obtiene el historial de movimientos de un contenedor."""
@@ -256,17 +231,15 @@ class ContainerViewSet(viewsets.ModelViewSet):
         """
         Asigna un conductor a un contenedor PROGRAMADO.
         
-        REFACTORIZADO: Usa _assign_driver_to_container() para centralizar lógica.
-        
         Body esperado:
         {
             "driver_id": 123,
             "scheduled_datetime": "2025-10-08T10:00:00Z",  # Opcional
+            "origin_id": 5,  # Opcional si el contenedor ya tiene terminal
+            "destination_id": 12,  # Opcional si el contenedor ya tiene cd_location
             "tipo_asignacion": "ENTREGA"  # ENTREGA o DEVOLUCION
         }
         """
-        from apps.drivers.views import _assign_driver_to_container, _compute_scheduled_datetime
-        
         container = self.get_object()
         
         # Validar estado
@@ -293,33 +266,103 @@ class ContainerViewSet(viewsets.ModelViewSet):
                 'error': 'Conductor no encontrado o inactivo'
             }, status=status.HTTP_404_NOT_FOUND)
         
-        # Fecha programada (usar la del contenedor si existe)
+        # Validar disponibilidad del conductor
+        if not driver.esta_disponible:
+            return Response({
+                'success': False,
+                'error': f'Conductor {driver.nombre} no está disponible. Estado: {driver.get_estado_display()}'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Obtener ubicaciones (origen y destino)
+        origin_id = request.data.get('origin_id')
+        destination_id = request.data.get('destination_id')
+        
+        # Usar ubicaciones del contenedor si no se proporcionan
+        from apps.drivers.models import Location
+        try:
+            if origin_id:
+                origin = Location.objects.get(id=origin_id)
+            elif container.terminal:
+                origin = container.terminal
+            elif container.current_location:
+                origin = container.current_location
+            else:
+                return Response({
+                    'success': False,
+                    'error': 'No se pudo determinar ubicación de origen. Proporcione origin_id.'
+                }, status=status.HTTP_400_BAD_REQUEST)
+            
+            if destination_id:
+                destination = Location.objects.get(id=destination_id)
+            elif container.cd_location:
+                # Si cd_location es CharField, buscar Location por nombre/código
+                cd_code = container.cd_location.upper().replace(' ', '_')
+                destination = Location.objects.filter(
+                    Q(code__icontains=cd_code) | 
+                    Q(name__icontains=container.cd_location)
+                ).first()
+                if not destination:
+                    return Response({
+                        'success': False,
+                        'error': f'No se encontró Location para CD: {container.cd_location}'
+                    }, status=status.HTTP_400_BAD_REQUEST)
+            else:
+                return Response({
+                    'success': False,
+                    'error': 'No se pudo determinar ubicación de destino. Proporcione destination_id.'
+                }, status=status.HTTP_400_BAD_REQUEST)
+                
+        except Location.DoesNotExist:
+            return Response({
+                'success': False,
+                'error': 'Ubicación origen o destino no encontrada'
+            }, status=status.HTTP_404_NOT_FOUND)
+        
+        # Fecha programada (usar la del contenedor si existe, o ahora + 1 hora)
         scheduled_datetime = request.data.get('scheduled_datetime')
         if scheduled_datetime:
             from django.utils.dateparse import parse_datetime
             scheduled_datetime = parse_datetime(scheduled_datetime)
+        elif container.scheduled_date and container.scheduled_time:
+            from datetime import datetime
+            scheduled_datetime = timezone.make_aware(
+                datetime.combine(container.scheduled_date, container.scheduled_time)
+            )
         else:
-            scheduled_datetime = _compute_scheduled_datetime(container)
+            scheduled_datetime = timezone.now() + timedelta(hours=1)
         
         # Tipo de asignación
         tipo_asignacion = request.data.get('tipo_asignacion', 'ENTREGA')
         if tipo_asignacion not in ['ENTREGA', 'DEVOLUCION']:
             tipo_asignacion = 'ENTREGA'
         
-        # Usar función central de asignación
-        try:
-            assignment = _assign_driver_to_container(
-                container=container,
-                driver=driver,
-                user=request.user,
-                scheduled_datetime=scheduled_datetime,
-                assignment_type=tipo_asignacion
-            )
-        except ValueError as e:
-            return Response({
-                'success': False,
-                'error': str(e)
-            }, status=status.HTTP_400_BAD_REQUEST)
+        # Crear asignación
+        assignment = Assignment.objects.create(
+            container=container,
+            driver=driver,
+            fecha_programada=scheduled_datetime,
+            origen=origin,
+            destino=destination,
+            tipo_asignacion=tipo_asignacion,
+            estado='PENDIENTE',
+            created_by=request.user
+        )
+        
+        # Calcular tiempo estimado usando la matriz de tiempos
+        assignment.calculate_estimated_time(refresh=True)
+        assignment.save()
+        
+        # Actualizar container
+        container.status = 'ASIGNADO'
+        container.conductor_asignado = driver
+        container.tiempo_asignacion = timezone.now()
+        if request.user and hasattr(container, 'updated_by'):
+            container.updated_by = request.user
+        container.save()
+        
+        # Actualizar driver
+        driver.contenedor_asignado = container
+        driver.save()
         
         from apps.drivers.serializers import AssignmentSerializer
         assignment_data = AssignmentSerializer(assignment).data
@@ -685,28 +728,12 @@ def update_status(request):
                     if assignment:
                         if assignment.estado != 'EN_CURSO':
                             assignment.estado = 'EN_CURSO'
-
                         if assignment.fecha_inicio:
                             elapsed = now - assignment.fecha_inicio
-                            route_minutes = max(int(elapsed.total_seconds() / 60), 0)
+                            assignment.ruta_minutos_real = int(elapsed.total_seconds() / 60)
+                            assignment.save(update_fields=['estado', 'ruta_minutos_real'])
                         else:
-                            route_minutes = container.duracion_ruta or 0
-
-                        assignment.record_actual_times(
-                            total_minutes=route_minutes,
-                            route_minutes=route_minutes,
-                        )
-
-                    if container.conductor_asignado:
-                        driver = container.conductor_asignado
-                        driver.contenedor_asignado = None
-                        if driver.estado != 'OPERATIVO':
-                            driver.estado = 'OPERATIVO'
-                        driver.save(update_fields=['contenedor_asignado', 'estado', 'updated_at'])
-                        container.conductor_asignado = None
-                        container.save(update_fields=['conductor_asignado'])
-
-                    create_demurrage_alert_if_needed(container, resolved_by=request.user)
+                            assignment.save(update_fields=['estado'])
                     
                     return JsonResponse({
                         'success': True,
@@ -769,35 +796,126 @@ def assign_driver_quick(request):
 
 @login_required
 def update_container_status_view(request, container_id):
-    """Vista para actualizar el estado de un contenedor."""
-    if request.method != 'POST':
-        return JsonResponse({'success': False, 'message': 'Método no permitido'})
-    
-    try:
-        container = get_object_or_404(Container, id=container_id)
-        data = json.loads(request.body)
-        new_status = data.get('status')
-        
-        if not new_status:
-            return JsonResponse({'success': False, 'message': 'Estado requerido'})
-        
-        # Usar servicio de actualización de estado
-        from apps.containers.services.status_updater import update_container_status
-        result = update_container_status(container, new_status, request.user)
-        
-        return JsonResponse({
-            'success': True,
-            'message': f'Estado actualizado a {container.get_status_display()}'
-        })
-        
-    except ValueError as e:
-        return JsonResponse({'success': False, 'message': str(e)})
-    except Exception as e:
-        return JsonResponse({
-            'success': False,
-            'message': f'Error al actualizar estado: {str(e)}'
-        })
+    """Vista para actualizar el estado de un contenedor"""
+    if request.method == 'POST':
+        try:
+            container = get_object_or_404(Container, id=container_id)
+            data = json.loads(request.body)
+            new_status = data.get('status')
+            
+            if not new_status:
+                return JsonResponse({'success': False, 'message': 'Estado requerido'})
+            
+            # Validar estados permitidos
+            valid_statuses = [choice[0] for choice in Container.CONTAINER_STATUS]
+            if new_status not in valid_statuses:
+                return JsonResponse({'success': False, 'message': 'Estado no válido'})
+            
+            # Actualizar estado con tiempos
+            old_status = container.status
+            container.status = new_status
+            now = timezone.now()
+            
+            # Registrar tiempo según el nuevo estado
+            if new_status == 'ASIGNADO' and not container.tiempo_asignacion:
+                container.tiempo_asignacion = now
+            elif new_status == 'EN_RUTA':
+                if not container.tiempo_inicio_ruta:
+                    container.tiempo_inicio_ruta = now
+                    # Calcular duración desde asignación
+                    if container.tiempo_asignacion:
+                        delta = now - container.tiempo_asignacion
+                        container.duracion_ruta = int(delta.total_seconds() / 60)
+            elif new_status == 'ARRIBADO':
+                if not container.tiempo_llegada:
+                    container.tiempo_llegada = now
+                    # Calcular duración de ruta
+                    if container.tiempo_inicio_ruta:
+                        delta = now - container.tiempo_inicio_ruta
+                        container.duracion_ruta = int(delta.total_seconds() / 60)
+            elif new_status == 'FINALIZADO':
+                if not container.tiempo_finalizacion:
+                    container.tiempo_finalizacion = now
+                    # Calcular duración de descarga
+                    if container.tiempo_llegada:
+                        delta = now - container.tiempo_llegada
+                        container.duracion_descarga = int(delta.total_seconds() / 60)
+                    # Calcular duración total
+                    if container.tiempo_asignacion:
+                        delta_total = now - container.tiempo_asignacion
+                        container.duracion_total = int(delta_total.total_seconds() / 60)
+            
+            container.save()
 
+            if new_status == 'ARRIBADO':
+                assignment = Assignment.objects.filter(
+                    container=container,
+                    driver=container.conductor_asignado,
+                    estado__in=['PENDIENTE', 'EN_CURSO']
+                ).first()
+                if assignment and assignment.fecha_inicio:
+                    route_minutes = container.duracion_ruta or int((now - assignment.fecha_inicio).total_seconds() / 60)
+                    assignment.ruta_minutos_real = max(route_minutes, 0)
+                    if assignment.estado != 'EN_CURSO':
+                        assignment.estado = 'EN_CURSO'
+                    assignment.save(update_fields=['ruta_minutos_real', 'estado'])
+
+            if new_status == 'FINALIZADO':
+                assignment = Assignment.objects.filter(
+                    container=container,
+                    driver=container.conductor_asignado,
+                    estado__in=['PENDIENTE', 'EN_CURSO']
+                ).first()
+
+                unloading_minutes = container.duracion_descarga if container.duracion_descarga is not None else None
+                route_recorded = container.duracion_ruta
+
+                if assignment:
+                    if assignment.fecha_inicio:
+                        total_minutes = int((now - assignment.fecha_inicio).total_seconds() / 60)
+                    else:
+                        total_minutes = container.duracion_total or container.duracion_ruta or 0
+
+                    assignment.record_actual_times(
+                        total_minutes=total_minutes,
+                        route_minutes=route_recorded,
+                        unloading_minutes=unloading_minutes,
+                    )
+
+                if container.conductor_asignado:
+                    driver = container.conductor_asignado
+                    driver.contenedor_asignado = None
+                    driver.save(update_fields=['contenedor_asignado', 'updated_at'])
+                    container.conductor_asignado = None
+                    container.save(update_fields=['conductor_asignado'])
+            
+            movement_code = MovementCode.generate_code('transfer')
+            movement_code.created_by = request.user
+            movement_code.save(update_fields=['created_by'])
+
+            ContainerMovement.objects.create(
+                container=container,
+                movement_type='TRANSFER',
+                movement_code=movement_code,
+                from_location=container.current_location,
+                to_location=container.current_location,
+                movement_date=timezone.now(),
+                notes=f'Estado cambiado de {old_status} a {new_status}',
+                created_by=request.user
+            )
+            
+            return JsonResponse({
+                'success': True,
+                'message': f'Estado actualizado a {container.get_status_display()}'
+            })
+            
+        except Exception as e:
+            return JsonResponse({
+                'success': False,
+                'message': f'Error al actualizar estado: {str(e)}'
+            })
+    
+    return JsonResponse({'success': False, 'message': 'Método no permitido'})
 
 
 @login_required
@@ -931,7 +1049,7 @@ def urgent_containers_api(request):
     from apps.containers.services.proximity_alerts import ProximityAlertSystem
     
     # Obtener contenedores programados y liberados
-    containers = Container.objects.select_related('owner_company', 'client', 'current_location').filter(
+    containers = Container.objects.filter(
         is_active=True,
         status__in=['PROGRAMADO', 'LIBERADO'],
         scheduled_date__isnull=False

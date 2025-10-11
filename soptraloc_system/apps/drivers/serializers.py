@@ -9,11 +9,7 @@ class LocationSerializer(serializers.ModelSerializer):
     """Serializer para ubicaciones"""
     class Meta:
         model = Location
-        # FASE 5: Campos explícitos (antes: fields='__all__')
-        fields = [
-            'id', 'name', 'code', 'address', 'latitude', 'longitude',
-            'city', 'region', 'country', 'is_active', 'created_at', 'updated_at'
-        ]
+        fields = '__all__'
         read_only_fields = ('created_at', 'updated_at')
 
 
@@ -26,17 +22,8 @@ class DriverSerializer(serializers.ModelSerializer):
     
     class Meta:
         model = Driver
-        # FASE 5: Campos explícitos (antes: fields='__all__' - expone datos sensibles)
-        fields = [
-            'id', 'ppu', 'nombre', 'rut', 'telefono',
-            'tipo_conductor', 'tipo_conductor_display',
-            'estado', 'estado_display',
-            'ubicacion_actual', 'ubicacion_actual_display',
-            'esta_disponible',
-            'created_at', 'updated_at'
-        ]
-        # EXCLUIDOS: salary, internal_notes, emergency_contact (datos sensibles)
-        read_only_fields = ('created_at', 'updated_at', 'esta_disponible')
+        fields = '__all__'
+        read_only_fields = ('created_at', 'updated_at')
 
 
 class TimeMatrixSerializer(serializers.ModelSerializer):
@@ -46,20 +33,7 @@ class TimeMatrixSerializer(serializers.ModelSerializer):
     
     class Meta:
         model = TimeMatrix
-        fields = [
-            'avg_travel_time',
-            'created_at',
-            'from_location',
-            'last_updated',
-            'loading_time',
-            'max_travel_time',
-            'min_travel_time',
-            'to_location',
-            'total_trips',
-            'travel_time',
-            'unloading_time',
-            'updated_at'
-        ]
+        fields = '__all__'
         read_only_fields = ('created_at', 'updated_at', 'last_updated')
 
 
@@ -73,18 +47,8 @@ class AssignmentSerializer(serializers.ModelSerializer):
     
     class Meta:
         model = Assignment
-        # FASE 5: Campos explícitos (antes: fields='__all__')
-        fields = [
-            'id', 'driver', 'container', 'origen', 'destino',
-            'tipo_asignacion', 'tipo_asignacion_display',
-            'estado', 'estado_display',
-            'fecha_programada', 'tiempo_estimado',
-            'fecha_inicio', 'fecha_completada',
-            'tiempo_real', 'ruta_minutos_real', 'descarga_minutos_real',
-            'fecha_asignacion'
-        ]
-        # EXCLUIDOS: internal_notes, audit_trail (datos internos)
-        read_only_fields = ('fecha_asignacion', 'fecha_inicio', 'fecha_completada')
+        fields = '__all__'
+        read_only_fields = ('fecha_asignacion',)
 
 
 class AlertSerializer(serializers.ModelSerializer):
@@ -94,18 +58,7 @@ class AlertSerializer(serializers.ModelSerializer):
     
     class Meta:
         model = Alert
-        fields = [
-            'container',
-            'driver',
-            'fecha_creacion',
-            'fecha_resolucion',
-            'is_active',
-            'mensaje',
-            'prioridad',
-            'resuelto_por',
-            'tipo',
-            'titulo'
-        ]
+        fields = '__all__'
         read_only_fields = ('fecha_creacion',)
 
 
@@ -117,27 +70,5 @@ class TrafficAlertSerializer(serializers.ModelSerializer):
     
     class Meta:
         model = TrafficAlert
-        fields = [
-            'acknowledged',
-            'acknowledged_at',
-            'actual_time_minutes',
-            'alert_type',
-            'alternative_routes',
-            'assignment',
-            'created_at',
-            'delay_minutes',
-            'departure_time',
-            'destination_name',
-            'driver',
-            'estimated_arrival',
-            'estimated_time_minutes',
-            'has_alternatives',
-            'is_active',
-            'message',
-            'origin_name',
-            'raw_data',
-            'traffic_level',
-            'updated_at',
-            'warnings'
-        ]
+        fields = '__all__'
         read_only_fields = ('created_at', 'updated_at')
