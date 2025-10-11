@@ -4,7 +4,7 @@ Este comando SIEMPRE crea el usuario admin/1234, eliminando el anterior si exist
 """
 
 from django.core.management.base import BaseCommand
-from django.contrib.auth import get_user_model, authenticate
+from django.contrib.auth import get_user_model
 from django.db import transaction
 
 User = get_user_model()
@@ -58,17 +58,17 @@ class Command(BaseCommand):
             
             self.stdout.write("")
             
-            # Paso 3: Verificar autenticación
-            self.stdout.write("3️⃣  Verificando autenticación...")
+            # Paso 3: Verificar password sin authenticate (django-axes requiere request)
+            self.stdout.write("3️⃣  Verificando password...")
             
-            auth_user = authenticate(username=USERNAME, password=PASSWORD)
+            password_ok = user.check_password(PASSWORD)
             
-            if auth_user is not None:
-                self.stdout.write(self.style.SUCCESS("   ✅ AUTENTICACIÓN EXITOSA"))
-                self.stdout.write(f"   Usuario: {auth_user.username}")
+            if password_ok:
+                self.stdout.write(self.style.SUCCESS("   ✅ PASSWORD VERIFICADO CORRECTAMENTE"))
+                self.stdout.write(self.style.WARNING("   ⚠️  Login debe verificarse en /admin (requiere request)"))
             else:
-                self.stdout.write(self.style.ERROR("   ❌ AUTENTICACIÓN FALLÓ"))
-                raise Exception("La autenticación no funciona")
+                self.stdout.write(self.style.ERROR("   ❌ PASSWORD INCORRECTO"))
+                raise Exception("El password no se guardó correctamente")
             
             self.stdout.write("")
             

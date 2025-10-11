@@ -64,7 +64,6 @@ else
     # Método alternativo: Script Python inline SIMPLIFICADO
     python manage.py shell --settings=config.settings_production <<'EOFPYTHON'
 from django.contrib.auth import get_user_model
-from django.contrib.auth import authenticate
 
 User = get_user_model()
 
@@ -91,12 +90,12 @@ print(f"   - is_superuser: {admin.is_superuser}")
 print(f"   - is_staff: {admin.is_staff}")
 print(f"   - is_active: {admin.is_active}")
 
-# Verificar autenticación
-auth_user = authenticate(username='admin', password='1234')
-if auth_user:
-    print("✅ Autenticación verificada exitosamente")
+# Verificar password directamente (django-axes requiere request para authenticate)
+if admin.check_password('1234'):
+    print("✅ Password verificado correctamente")
+    print("⚠️  Login debe verificarse manualmente en /admin")
 else:
-    print("❌ ERROR: Autenticación falló")
+    print("❌ ERROR: Password no coincide")
     import sys
     sys.exit(1)
 
@@ -132,7 +131,7 @@ echo "🔐 PASO 4: Verificación final del superusuario"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
 python manage.py shell --settings=config.settings_production <<'EOFPYTHON'
-from django.contrib.auth import get_user_model, authenticate
+from django.contrib.auth import get_user_model
 
 User = get_user_model()
 
@@ -148,14 +147,13 @@ if User.objects.filter(username='admin').exists():
     print(f"   - Staff: {admin.is_staff}")
     print(f"   - Activo: {admin.is_active}")
     
-    # Verificar autenticación
-    print(f"\n🔐 Verificando autenticación...")
-    auth_user = authenticate(username='admin', password='1234')
-    
-    if auth_user:
-        print(f"✅ AUTENTICACIÓN EXITOSA")
+    # Verificar password directamente (login real requiere request)
+    print(f"\n🔐 Verificando password...")
+    if admin.check_password('1234'):
+        print(f"✅ PASSWORD VERIFICADO CORRECTAMENTE")
+        print(f"⚠️  Login debe probarse en /admin")
     else:
-        print(f"❌ ERROR: AUTENTICACIÓN FALLÓ")
+        print(f"❌ ERROR: PASSWORD INCORRECTO")
         import sys
         sys.exit(1)
 else:
