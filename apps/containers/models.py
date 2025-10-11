@@ -26,12 +26,19 @@ class Container(models.Model):
         ('45', "45'"),
     ]
     
+    TIPOS_MOVIMIENTO = [
+        ('automatico', 'Automático (Puerto)'),
+        ('retiro_ccti', 'Retiro a CCTI'),
+        ('retiro_directo', 'Retiro Directo a Cliente'),
+    ]
+    
     # Identificación
     container_id = models.CharField('ID Contenedor', max_length=50, unique=True, db_index=True)
     tipo = models.CharField('Tipo', max_length=10, choices=TIPOS)
     
     # Información del embarque
     nave = models.CharField('Nave', max_length=100)
+    fecha_eta = models.DateTimeField('ETA (Estimated Time of Arrival)', null=True, blank=True, help_text='Fecha estimada de arribo')
     peso = models.DecimalField('Peso (kg)', max_digits=10, decimal_places=2, null=True, blank=True)
     vendor = models.CharField('Vendor', max_length=200, null=True, blank=True)
     sello = models.CharField('Sello', max_length=100, null=True, blank=True)
@@ -40,10 +47,16 @@ class Container(models.Model):
     # Estado y ubicación
     estado = models.CharField('Estado', max_length=20, choices=ESTADOS, default='por_arribar', db_index=True)
     posicion_fisica = models.CharField('Posición Física', max_length=100, null=True, blank=True, help_text='TPS, STI, PCE, ZEAL, CLEP, etc.')
+    tipo_movimiento = models.CharField('Tipo de Movimiento', max_length=20, choices=TIPOS_MOVIMIENTO, default='automatico')
     
     # Información de entrega
     comuna = models.CharField('Comuna Destino', max_length=100, null=True, blank=True)
     secuenciado = models.BooleanField('Secuenciado', default=False, help_text='Marcado para próxima liberación')
+    cd_entrega = models.ForeignKey('cds.CD', on_delete=models.SET_NULL, null=True, blank=True, related_name='contenedores_entregados', verbose_name='CD de Entrega')
+    
+    # Información de liberación y logística
+    deposito_devolucion = models.CharField('Depósito Devolución', max_length=200, null=True, blank=True, help_text='Dónde devolver contenedor vacío')
+    fecha_demurrage = models.DateTimeField('Fecha Demurrage', null=True, blank=True, db_index=True, help_text='Fecha de vencimiento de demurrage (después se paga)')
     
     # Timestamps de cada transición de estado
     fecha_arribo = models.DateTimeField('Fecha Arribo', null=True, blank=True)
@@ -52,6 +65,7 @@ class Container(models.Model):
     fecha_asignacion = models.DateTimeField('Fecha Asignación', null=True, blank=True)
     fecha_inicio_ruta = models.DateTimeField('Fecha Inicio Ruta', null=True, blank=True)
     fecha_entrega = models.DateTimeField('Fecha Entrega', null=True, blank=True)
+    hora_descarga = models.DateTimeField('Hora Descarga', null=True, blank=True, help_text='Hora en que cliente descargó el contenedor')
     
     # Auditoría
     created_at = models.DateTimeField('Creado', auto_now_add=True)

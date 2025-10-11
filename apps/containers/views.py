@@ -213,3 +213,119 @@ class ContainerViewSet(viewsets.ModelViewSet):
             'mensaje': f'Estado cambiado a {container.get_estado_display()}',
             'container': serializer.data
         })
+    
+    @action(detail=True, methods=['post'])
+    def registrar_arribo(self, request, pk=None):
+        """
+        Registra el arribo manual de un contenedor al CD
+        Cambia estado a 'entregado'
+        """
+        container = self.get_object()
+        
+        if container.estado != 'en_ruta':
+            return Response(
+                {'error': f'Contenedor debe estar en_ruta. Estado actual: {container.get_estado_display()}'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        usuario = request.user.username if request.user.is_authenticated else None
+        container.cambiar_estado('entregado', usuario)
+        
+        serializer = self.get_serializer(container)
+        return Response({
+            'success': True,
+            'mensaje': f'Arribo registrado para {container.container_id}',
+            'container': serializer.data
+        })
+    
+    @action(detail=True, methods=['post'])
+    def registrar_descarga(self, request, pk=None):
+        """
+        Registra la descarga del contenedor en el CD
+        Cambia estado a 'descargado'
+        
+        Lógica de negocio:
+        - Si cd.requiere_espera_carga=True (Puerto Madero, Campos, Quilicura):
+          conductor espera descarga sobre camión, luego retorna a CCTI/depot con vacío
+        - Si cd.permite_soltar_contenedor=True (El Peñón):
+          drop & hook, conductor libre inmediatamente, puede recoger otro vacío
+        """
+        from django.utils import timezone
+        from apps.cds.models import CD
+        
+        container = self.get_object()
+        
+        if container.estado != 'entregado':
+            return Response(
+                {'error': f'Contenedor debe estar entregado. Estado actual: {container.get_estado_display()}'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Registrar hora de descarga
+        container.hora_descarga = timezone.now()
+        usuario = request.user.username if request.user.is_authenticated else None
+        container.cambiar_estado('descargado', usuario)
+        
+        # Verificar configuración del CD
+        cd = container.cd_entrega
+        mensaje_adicional = ""
+        
+        if cd:
+            if cd.requiere_espera_carga:
+                mensaje_adicional = f" (Conductor debe esperar descarga sobre camión en {cd.nombre})"
+            elif cd.permite_soltar_contenedor:
+                mensaje_adicional = f" (Drop & hook en {cd.nombre}, conductor libre inmediatamente)"
+        
+        serializer = self.get_serializer(container)
+        return Response({
+            'success': True,
+            'mensaje': f'Descarga registrada para {container.container_id}{mensaje_adicional}',
+            'container': serializer.data,
+            'hora_descarga': container.hora_descarga.isoformat() if container.hora_descarga else None
+        })
+    
+    @action(detail=True, methods=['post'])
+    def soltar_contenedor(self, request, pk=None):
+        """
+        Permite soltar un contenedor en El Peñón (drop & hook)
+        Solo funciona si cd.permite_soltar_contenedor=True
+        Cambia estado a 'descargado' y libera al conductor inmediatamente
+        """
+        from django.utils import timezone
+        
+        container = self.get_object()
+        
+        if container.estado != 'entregado':
+            return Response(
+                {'error': f'Contenedor debe estar entregado. Estado actual: {container.get_estado_display()}'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        cd = container.cd_entrega
+        if not cd:
+            return Response(
+                {'error': 'Contenedor no tiene CD de entrega asignado'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        if not cd.permite_soltar_contenedor:
+            return Response(
+                {'error': f'CD {cd.nombre} no permite drop & hook. Solo El Peñón tiene esta opción.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Soltar contenedor
+        container.hora_descarga = timezone.now()
+        usuario = request.user.username if request.user.is_authenticated else None
+        container.cambiar_estado('descargado', usuario)
+        
+        # El CD recibe el vacío automáticamente (esto se maneja con signals más tarde)
+        # Por ahora solo registramos el evento
+        
+        serializer = self.get_serializer(container)
+        return Response({
+            'success': True,
+            'mensaje': f'Contenedor soltado en {cd.nombre}. Conductor liberado inmediatamente.',
+            'container': serializer.data,
+            'conductor_libre': True
+        })

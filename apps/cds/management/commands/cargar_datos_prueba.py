@@ -49,41 +49,70 @@ class Command(BaseCommand):
             }
         )
         
-        # Crear algunos clientes
+        # Crear CDs de clientes REALES con configuración específica
         self.stdout.write('Creando clientes...')
-        cd_quilicura, _ = CD.objects.get_or_create(
-            codigo='CLI_QUILICURA',
+        
+        # Puerto Madero - Requiere espera para carga
+        cd_puerto_madero, _ = CD.objects.get_or_create(
+            codigo='PUERTO_MADERO',
             defaults={
-                'nombre': 'Cliente Quilicura',
+                'nombre': 'Puerto Madero',
+                'direccion': 'Puerto Madero, Buenos Aires',
+                'comuna': 'Puerto Madero',
+                'tipo': 'cliente',
+                'lat': Decimal('-34.6118'),
+                'lng': Decimal('-58.3638'),
+                'requiere_espera_carga': True,  # Conductor espera descarga sobre camión
+                'permite_soltar_contenedor': False,  # No es drop & hook
+                'tiempo_promedio_descarga_min': 90,  # 1.5 horas promedio
+            }
+        )
+        
+        # Campos de Chile - Requiere espera para carga
+        cd_campos_chile, _ = CD.objects.get_or_create(
+            codigo='CAMPOS_CHILE',
+            defaults={
+                'nombre': 'Campos de Chile',
+                'direccion': 'Parque Industrial, Santiago',
+                'comuna': 'Santiago',
+                'tipo': 'cliente',
+                'lat': Decimal('-33.4489'),
+                'lng': Decimal('-70.6693'),
+                'requiere_espera_carga': True,  # Conductor espera descarga sobre camión
+                'permite_soltar_contenedor': False,  # No es drop & hook
+                'tiempo_promedio_descarga_min': 120,  # 2 horas promedio
+            }
+        )
+        
+        # Quilicura - Requiere espera para carga
+        cd_quilicura, _ = CD.objects.get_or_create(
+            codigo='QUILICURA',
+            defaults={
+                'nombre': 'Quilicura',
                 'direccion': 'Parque Industrial Quilicura',
                 'comuna': 'Quilicura',
                 'tipo': 'cliente',
                 'lat': Decimal('-33.3600'),
                 'lng': Decimal('-70.7267'),
+                'requiere_espera_carga': True,  # Conductor espera descarga sobre camión
+                'permite_soltar_contenedor': False,  # No es drop & hook
+                'tiempo_promedio_descarga_min': 80,  # 1h 20min promedio
             }
         )
         
-        cd_maipu, _ = CD.objects.get_or_create(
-            codigo='CLI_MAIPU',
+        # El Peñón (6020) - Drop & Hook único
+        cd_el_penon, _ = CD.objects.get_or_create(
+            codigo='6020',
             defaults={
-                'nombre': 'Cliente Maipú',
-                'direccion': 'Zona Industrial Maipú',
-                'comuna': 'Maipú',
+                'nombre': 'El Peñón',
+                'direccion': 'El Peñón, Coquimbo',
+                'comuna': 'Coquimbo',
                 'tipo': 'cliente',
-                'lat': Decimal('-33.5115'),
-                'lng': Decimal('-70.7592'),
-            }
-        )
-        
-        cd_colina, _ = CD.objects.get_or_create(
-            codigo='CLI_COLINA',
-            defaults={
-                'nombre': 'Cliente Colina',
-                'direccion': 'Ruta 57, Colina',
-                'comuna': 'Colina',
-                'tipo': 'cliente',
-                'lat': Decimal('-33.1878'),
-                'lng': Decimal('-70.6751'),
+                'lat': Decimal('-29.9549'),
+                'lng': Decimal('-71.3389'),
+                'requiere_espera_carga': False,  # NO espera, es drop & hook
+                'permite_soltar_contenedor': True,  # SÍ permite drop & hook
+                'tiempo_promedio_descarga_min': 30,  # Solo tiempo de soltar (30 min)
             }
         )
         
@@ -201,26 +230,26 @@ class Command(BaseCommand):
         if created:
             prog1.verificar_alerta()
         
-        # Programación con conductor
+        # Programación con conductor (a Puerto Madero)
         cont007 = Container.objects.get(container_id='CONT007')
         driver1 = Driver.objects.get(nombre='Juan Pérez')
         Programacion.objects.get_or_create(
             container=cont007,
             defaults={
-                'cd': cd_maipu,
+                'cd': cd_puerto_madero,
                 'fecha_programada': now + timedelta(days=3),
                 'cliente': 'Empresa XYZ',
                 'driver': driver1,
             }
         )
         
-        # Programación sin conductor (pero con tiempo)
+        # Programación sin conductor (pero con tiempo) a El Peñón (drop & hook)
         cont008 = Container.objects.get(container_id='CONT008')
         driver2 = Driver.objects.get(nombre='María González')
         Programacion.objects.get_or_create(
             container=cont008,
             defaults={
-                'cd': cd_colina,
+                'cd': cd_el_penon,
                 'fecha_programada': now + timedelta(days=5),
                 'cliente': 'Empresa DEF',
                 'driver': driver2,

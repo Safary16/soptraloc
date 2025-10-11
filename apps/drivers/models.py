@@ -72,7 +72,17 @@ class Driver(models.Model):
     
     @property
     def ocupacion_porcentaje(self):
-        """Calcula el porcentaje de ocupación del día"""
+        """
+        Calcula el porcentaje de ocupación del día
+        
+        Versión básica: num_entregas / max_entregas
+        
+        TODO: Versión avanzada calculará ocupación por tiempo:
+        - Tiempo = viaje_mapbox + cd.tiempo_promedio_descarga_min + 
+                   (espera_carga si cd.requiere_espera_carga) +
+                   (viaje_retorno si not cd.permite_soltar_contenedor)
+        - Ocupación = tiempo_acumulado / tiempo_jornada_laboral (8h)
+        """
         if self.max_entregas_dia == 0:
             return Decimal('100.00')
         return Decimal((self.num_entregas_dia / self.max_entregas_dia) * 100)

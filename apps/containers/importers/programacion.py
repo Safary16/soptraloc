@@ -16,13 +16,18 @@ class ProgramacionImporter:
     """
     Importa datos de programación desde Excel
     
-    Columnas esperadas:
-    - Container ID / Contenedor
-    - Fecha Programada
+    Columnas esperadas (se normalizan automáticamente):
+    - Contenedor / Container ID
+    - Fecha de Programacion / Fecha Programada
     - Cliente
-    - CD / Centro Distribución (nombre o código)
+    - Bodega / CD / Centro Distribución (puede venir en formato "6020 - PEÑÓN")
+    - Fecha Demurrage (opcional, fecha de vencimiento)
+    - WK Demurrage (opcional, días desde liberación, ej: "45 días")
     - Dirección (opcional)
     - Observaciones (opcional)
+    
+    Nota: Si existe Fecha Demurrage, se usa directamente. 
+    Si existe WK Demurrage, se calcula desde fecha_liberacion.
     """
     
     COLUMNAS_REQUERIDAS = ['container_id', 'fecha_programada', 'cliente', 'cd']
@@ -48,11 +53,15 @@ class ProgramacionImporter:
             'fecha': 'fecha_programada',
             'fecha programacion': 'fecha_programada',
             'fecha_programacion': 'fecha_programada',
+            'fecha de programacion': 'fecha_programada',
             'centro distribucion': 'cd',
             'centro_distribucion': 'cd',
             'destino': 'cd',
+            'bodega': 'cd',
             'direccion': 'direccion_entrega',
             'dirección': 'direccion_entrega',
+            'fecha demurrage': 'fecha_demurrage',
+            'wk demurrage': 'dias_demurrage',
         }
         
         df.columns = df.columns.str.lower().str.strip()
@@ -90,11 +99,27 @@ class ProgramacionImporter:
         raise ValueError(f"Formato de fecha no reconocido: {fecha_str}")
     
     def buscar_cd(self, cd_str):
-        """Busca un CD por nombre o código"""
+        """Busca un CD por nombre o código, extrayendo nombre de formato 'codigo - nombre'"""
         if pd.isna(cd_str):
             return None
         
         cd_str = str(cd_str).strip()
+        
+        # Si viene en formato "6020 - PEÑÓN", extraer la parte del nombre
+        if ' - ' in cd_str:
+            partes = cd_str.split(' - ')
+            codigo_parte = partes[0].strip()
+            nombre_parte = partes[1].strip()
+            
+            # Buscar primero por código
+            cd = CD.objects.filter(codigo__iexact=codigo_parte, activo=True).first()
+            if cd:
+                return cd
+            
+            # Si no, buscar por nombre
+            cd = CD.objects.filter(nombre__icontains=nombre_parte, activo=True).first()
+            if cd:
+                return cd
         
         # Buscar por código exacto
         cd = CD.objects.filter(codigo__iexact=cd_str, activo=True).first()
@@ -185,6 +210,26 @@ class ProgramacionImporter:
                     # Actualizar estado del contenedor
                     if container.estado in ['por_arribar', 'liberado', 'secuenciado']:
                         container.cambiar_estado('programado', self.usuario)
+                    
+                    # Actualizar fecha_demurrage si está disponible en el Excel
+                    if 'fecha_demurrage' in df.columns and pd.notna(row.get('fecha_demurrage')):
+                        try:
+                            fecha_demurrage = self.parsear_fecha(row['fecha_demurrage'])
+                            if fecha_demurrage:
+                                container.fecha_demurrage = fecha_demurrage
+                                container.save()
+                        except Exception:
+                            pass  # Si falla el parseo, continuar sin fecha_demurrage
+                    
+                    # Alternativamente, calcular desde WK DEMURRAGE (días)
+                    elif 'dias_demurrage' in df.columns and pd.notna(row.get('dias_demurrage')):
+                        try:
+                            dias = int(str(row['dias_demurrage']).replace(' días', '').replace('días', '').strip())
+                            if container.fecha_liberacion:
+                                container.fecha_demurrage = container.fecha_liberacion + timedelta(days=dias)
+                                container.save()
+                        except (ValueError, TypeError):
+                            pass  # Si falla la conversión, continuar sin fecha_demurrage
                     
                     # Verificar si requiere alerta 48h
                     if programacion.verificar_alerta():

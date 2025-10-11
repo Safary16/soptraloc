@@ -12,13 +12,14 @@ class EmbarqueImporter:
     """
     Importa datos de embarque desde Excel
     
-    Columnas esperadas:
-    - Container ID / Contenedor
-    - Tipo (20', 40', 40HC, etc.)
-    - Nave
-    - Peso (opcional)
+    Columnas esperadas (se normalizan automáticamente):
+    - Container Numbers / Contenedor / Container ID
+    - Container Size / Tipo (20', 40', 40HC, etc.)
+    - Nave Confirmado / Nave / Buque
+    - ETA Confirmada (opcional, fecha estimada de arribo)
+    - Weight Kgs / Peso (opcional)
     - Vendor (opcional)
-    - Sello (opcional)
+    - Container Seal / Sello (opcional)
     - Puerto (opcional, default: Valparaíso)
     """
     
@@ -39,13 +40,19 @@ class EmbarqueImporter:
         mapeo = {
             'contenedor': 'container_id',
             'container': 'container_id',
+            'container numbers': 'container_id',
             'id': 'container_id',
             'tipo contenedor': 'tipo',
             'tipo_contenedor': 'tipo',
+            'container size': 'tipo',
             'buque': 'nave',
             'naviera': 'nave',
+            'nave confirmado': 'nave',
             'peso_kg': 'peso',
             'peso (kg)': 'peso',
+            'weight kgs': 'peso',
+            'container seal': 'sello',
+            'eta confirmada': 'fecha_eta',
         }
         
         df.columns = df.columns.str.lower().str.strip()
@@ -104,6 +111,18 @@ class EmbarqueImporter:
                         'estado': 'por_arribar',
                         'fecha_arribo': timezone.now(),
                     }
+                    
+                    # Agregar fecha_eta si está disponible
+                    if 'fecha_eta' in row.index and pd.notna(row['fecha_eta']):
+                        try:
+                            # Convertir a datetime si no lo es ya
+                            if isinstance(row['fecha_eta'], str):
+                                fecha_eta = pd.to_datetime(row['fecha_eta'])
+                            else:
+                                fecha_eta = row['fecha_eta']
+                            datos['fecha_eta'] = fecha_eta
+                        except Exception:
+                            pass  # Si falla la conversión, omitir fecha_eta
                     
                     # Crear o actualizar
                     container, created = Container.objects.update_or_create(

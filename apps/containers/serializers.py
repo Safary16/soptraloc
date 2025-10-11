@@ -15,22 +15,37 @@ class ContainerSerializer(serializers.ModelSerializer):
 class ContainerListSerializer(serializers.ModelSerializer):
     """Serializer simplificado para listas"""
     estado_display = serializers.CharField(source='get_estado_display', read_only=True)
+    tipo_movimiento_display = serializers.CharField(source='get_tipo_movimiento_display', read_only=True)
+    cd_entrega_nombre = serializers.CharField(source='cd_entrega.nombre', read_only=True)
     
     class Meta:
         model = Container
         fields = [
             'id', 'container_id', 'tipo', 'estado', 'estado_display',
-            'posicion_fisica', 'comuna', 'secuenciado', 'fecha_programacion'
+            'posicion_fisica', 'comuna', 'secuenciado', 'fecha_programacion',
+            'fecha_eta', 'fecha_demurrage', 'deposito_devolucion',
+            'tipo_movimiento', 'tipo_movimiento_display',
+            'cd_entrega', 'cd_entrega_nombre', 'hora_descarga'
         ]
 
 
 class ContainerStockExportSerializer(serializers.ModelSerializer):
     """Serializer para exportación de stock"""
     tipo_display = serializers.CharField(source='get_tipo_display', read_only=True)
+    dias_hasta_demurrage = serializers.SerializerMethodField()
     
     class Meta:
         model = Container
         fields = [
             'container_id', 'tipo', 'tipo_display', 'nave', 'vendor',
-            'posicion_fisica', 'comuna', 'secuenciado', 'fecha_liberacion'
+            'posicion_fisica', 'comuna', 'secuenciado', 'fecha_liberacion',
+            'fecha_eta', 'fecha_demurrage', 'dias_hasta_demurrage', 'deposito_devolucion'
         ]
+    
+    def get_dias_hasta_demurrage(self, obj):
+        """Calcula días hasta demurrage, negativo si ya venció"""
+        if not obj.fecha_demurrage:
+            return None
+        from django.utils import timezone
+        delta = obj.fecha_demurrage - timezone.now()
+        return delta.days

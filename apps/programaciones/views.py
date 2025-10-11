@@ -50,6 +50,44 @@ class ProgramacionViewSet(viewsets.ModelViewSet):
             'alertas': serializer.data
         })
     
+    @action(detail=False, methods=['get'])
+    def alertas_demurrage(self, request):
+        """
+        Lista contenedores con fecha_demurrage crítica (< 2 días para vencer)
+        
+        Lógica: Demurrage vence el día indicado, día siguiente ya se paga.
+        Alertamos si quedan menos de 2 días para el vencimiento.
+        """
+        from apps.containers.models import Container
+        from apps.containers.serializers import ContainerListSerializer
+        
+        # Fecha límite: hoy + 2 días
+        fecha_limite = timezone.now() + timedelta(days=2)
+        
+        # Contenedores con fecha_demurrage próxima a vencer
+        # Estados relevantes: liberado, programado, asignado (no entregados ni descargados)
+        containers_riesgo = Container.objects.filter(
+            fecha_demurrage__isnull=False,
+            fecha_demurrage__lte=fecha_limite,
+            estado__in=['liberado', 'programado', 'asignado']
+        ).select_related('cd_entrega').order_by('fecha_demurrage')
+        
+        # Calcular días restantes para cada contenedor
+        resultados = []
+        for container in containers_riesgo:
+            dias_restantes = (container.fecha_demurrage - timezone.now()).days
+            container_data = ContainerListSerializer(container).data
+            container_data['dias_hasta_demurrage'] = dias_restantes
+            container_data['vencido'] = dias_restantes < 0
+            resultados.append(container_data)
+        
+        return Response({
+            'success': True,
+            'total': len(resultados),
+            'containers_en_riesgo': resultados,
+            'mensaje': f'{len(resultados)} contenedores con demurrage próximo a vencer o vencido'
+        })
+    
     @action(detail=True, methods=['post'])
     def asignar_conductor(self, request, pk=None):
         """

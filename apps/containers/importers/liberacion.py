@@ -15,10 +15,17 @@ class LiberacionImporter:
     """
     Importa datos de liberación desde Excel
     
-    Columnas esperadas:
-    - Container ID / Contenedor
-    - Posición Física (TPS, STI, PCE, etc.)
+    Columnas esperadas (se normalizan automáticamente):
+    - Contenedor / Container ID
+    - Almacen / Posición Física (TPS, STI, PCE, etc.) - Se mapea según reglas
+    - Devolucion Vacio / Depot (nombre del depósito para devolución)
+    - Peso Unidades (opcional, actualiza peso si es más preciso)
     - Comuna (opcional)
+    - Fecha Salida (opcional, puede usarse para cálculos)
+    
+    Mapeo automático de posiciones:
+    - TPS → ZEAL
+    - STI / PCE → CLEP
     """
     
     COLUMNAS_REQUERIDAS = ['container_id', 'posicion_fisica']
@@ -43,6 +50,7 @@ class LiberacionImporter:
         """Normaliza los nombres de columnas a los esperados"""
         mapeo = {
             'contenedor': 'container_id',
+            'contenedor ': 'container_id',  # Con espacio al final
             'container': 'container_id',
             'id': 'container_id',
             'posicion': 'posicion_fisica',
@@ -50,6 +58,15 @@ class LiberacionImporter:
             'ubicacion': 'posicion_fisica',
             'ubicación': 'posicion_fisica',
             'terminal': 'posicion_fisica',
+            'almacen': 'posicion_fisica',
+            'almacén': 'posicion_fisica',
+            'devolucion vacio': 'deposito_devolucion',
+            'devolución vacio': 'deposito_devolucion',
+            'devolucion vacío': 'deposito_devolucion',
+            'devolución vacío': 'deposito_devolucion',
+            'depot': 'deposito_devolucion',
+            'peso unidades': 'peso',
+            'fecha salida': 'fecha_salida',
         }
         
         df.columns = df.columns.str.lower().str.strip()
@@ -120,6 +137,30 @@ class LiberacionImporter:
                     # Comuna si viene en el Excel
                     if 'comuna' in df.columns and pd.notna(row.get('comuna')):
                         container.comuna = str(row['comuna']).strip()
+                    
+                    # Depósito de devolución si viene en el Excel
+                    if 'deposito_devolucion' in df.columns and pd.notna(row.get('deposito_devolucion')):
+                        container.deposito_devolucion = str(row['deposito_devolucion']).strip()
+                    
+                    # Actualizar peso si viene en el Excel (puede ser más preciso que el inicial)
+                    if 'peso' in df.columns and pd.notna(row.get('peso')):
+                        try:
+                            container.peso = float(row['peso'])
+                        except (ValueError, TypeError):
+                            pass
+                    
+                    # Fecha salida puede usarse para calcular fecha_demurrage
+                    # Nota: La fecha_demurrage real vendrá del Excel de programación
+                    # Aquí solo la guardamos si está disponible en este Excel
+                    if 'fecha_salida' in df.columns and pd.notna(row.get('fecha_salida')):
+                        try:
+                            if isinstance(row['fecha_salida'], str):
+                                fecha_salida = pd.to_datetime(row['fecha_salida'])
+                            else:
+                                fecha_salida = row['fecha_salida']
+                            # Por ahora no calculamos demurrage aquí, esperamos el Excel de programación
+                        except Exception:
+                            pass
                     
                     container.save()
                     

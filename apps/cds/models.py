@@ -24,6 +24,23 @@ class CD(models.Model):
     capacidad_vacios = models.IntegerField('Capacidad Vacíos', default=0)
     vacios_actuales = models.IntegerField('Vacíos Actuales', default=0)
     
+    # Configuración logística (para CDs clientes)
+    requiere_espera_carga = models.BooleanField(
+        'Requiere Espera para Carga', 
+        default=False,
+        help_text='Si True: conductor espera descarga sobre camión (Puerto Madero, Campos, Quilicura). Si False: drop & hook (El Peñón)'
+    )
+    permite_soltar_contenedor = models.BooleanField(
+        'Permite Drop & Hook', 
+        default=False,
+        help_text='Si True: conductor puede soltar contenedor y quedar libre inmediatamente (solo El Peñón)'
+    )
+    tiempo_promedio_descarga_min = models.IntegerField(
+        'Tiempo Promedio Descarga (minutos)', 
+        default=60,
+        help_text='Tiempo estimado que toma descargar el contenedor en este CD'
+    )
+    
     # Configuración
     activo = models.BooleanField('Activo', default=True)
     
