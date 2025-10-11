@@ -1,4 +1,4 @@
-services:services:services:services:
+services:services:services:services:services:
 
   - type: web
 
@@ -6,7 +6,7 @@ services:services:services:services:
 
     env: python
 
-    region: oregon    name: soptraloc  - type: web  - type: web
+    region: oregon    name: soptraloc  - type: web
 
     plan: free
 
@@ -14,7 +14,7 @@ services:services:services:services:
 
     buildCommand: bash build.sh
 
-    startCommand: gunicorn config.wsgi:application --bind 0.0.0.0:$PORT --workers 2 --threads 4 --worker-class gthread --timeout 120 --log-level info    region: oregon    name: soptraloc    name: soptraloc
+    startCommand: gunicorn config.wsgi:application --bind 0.0.0.0:$PORT --workers 2 --threads 4 --worker-class gthread --timeout 120 --log-level info    region: oregon    name: soptraloc  - type: web  - type: web
 
     envVars:
 
@@ -22,15 +22,48 @@ services:services:services:services:
 
         value: 3.12.6
 
-      - key: SECRET_KEY    branch: main    env: python    env: python
+      - key: SECRET_KEY    branch: main    env: python
 
         generateValue: true
 
-      - key: DATABASE_URL    buildCommand: bash build.sh
+      - key: DEBUG    buildCommand: bash build.sh
+
+        value: False
+
+      - key: DATABASE_URL    startCommand: gunicorn config.wsgi:application --bind 0.0.0.0:$PORT --workers 2 --threads 4 --worker-class gthread --timeout 120 --log-level info    region: oregon    name: soptraloc    name: soptraloc
 
         fromDatabase:
 
-          name: soptraloc-db    startCommand: gunicorn config.wsgi:application --bind 0.0.0.0:$PORT --workers 2 --threads 4 --worker-class gthread --timeout 120 --log-level info    region: oregon    region: oregon
+          name: soptraloc-db    envVars:
+
+          property: connectionString
+
+      - key: DJANGO_SETTINGS_MODULE      - key: PYTHON_VERSION    plan: free
+
+        value: config.settings
+
+      - key: MAPBOX_API_KEY        value: 3.12.6
+
+        value: pk.eyJ1Ijoic2FmYXJ5MTYiLCJhIjoiY21naHlvYTQ5MDNlbDJrbjJjcXRtZGg1YSJ9.WCiyTSY_CCfB02N_Nfx7kg
+
+      - key: RENDER_EXTERNAL_HOSTNAME      - key: SECRET_KEY    branch: main    env: python    env: python
+
+        sync: false
+
+        generateValue: true
+
+databases:
+
+  - name: soptraloc-db      - key: DATABASE_URL    buildCommand: bash build.sh
+
+    databaseName: soptraloc
+
+    user: soptraloc        fromDatabase:
+
+    region: oregon
+
+    plan: free          name: soptraloc-db    startCommand: gunicorn config.wsgi:application --bind 0.0.0.0:$PORT --workers 2 --threads 4 --worker-class gthread --timeout 120 --log-level info    region: oregon    region: oregon
+
 
           property: connectionString
 

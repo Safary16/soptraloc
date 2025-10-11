@@ -1,476 +1,949 @@
-# SoptraLoc TMS - Sistema de Gestión de Contenedores# SoptraLoc - Sistema de Gestión de Contenedores TMS# 🚀 SoptraLoc - Sistema TMS Inteligente con Machine Learning
+# 🚀 SoptraLoc TMS - Sistema de Gestión de Transporte# SoptraLoc TMS - Sistema de Gestión de Contenedores# SoptraLoc - Sistema de Gestión de Contenedores TMS# 🚀 SoptraLoc - Sistema TMS Inteligente con Machine Learning
 
 
 
-Sistema profesional de gestión de contenedores para CCTi con integración de Mapbox, asignación inteligente de conductores y seguimiento en tiempo real.
+[![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/Safary16/soptraloc)
+
+[![Django 5.1.4](https://img.shields.io/badge/Django-5.1.4-green.svg)](https://www.djangoproject.com/)
+
+[![Python 3.12+](https://img.shields.io/badge/Python-3.12+-blue.svg)](https://www.python.org/)Sistema profesional de gestión de contenedores para CCTi con integración de Mapbox, asignación inteligente de conductores y seguimiento en tiempo real.
+
+[![PostgreSQL](https://img.shields.io/badge/PostgreSQL-Ready-blue.svg)](https://www.postgresql.org/)
 
 
+
+Sistema profesional de gestión de contenedores para CCTi con **integración Mapbox**, **asignación inteligente de conductores** y **seguimiento en tiempo real**.
 
 [![Django 5.1.4](https://img.shields.io/badge/Django-5.1.4-green.svg)](https://www.djangoproject.com/)Sistema profesional de gestión de contenedores para CCTi con integración de Mapbox, asignación inteligente de conductores y seguimiento en tiempo real.[![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/Safary16/soptraloc)
 
+---
+
 [![Python 3.12+](https://img.shields.io/badge/Python-3.12+-blue.svg)](https://www.python.org/)
+
+## ✨ Características Principales
 
 [![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/Safary16/soptraloc)[![Django 5.2.6](https://img.shields.io/badge/Django-5.2.6-green.svg)](https://www.djangoproject.com/)
 
-
-
----## 🚀 Características principales[![Python 3.12+](https://img.shields.io/badge/Python-3.12+-blue.svg)](https://www.python.org/)
-
-
-
-## 🚀 Características Principales[![PostgreSQL](https://img.shields.io/badge/PostgreSQL-Ready-blue.svg)](https://www.postgresql.org/)
+### 📦 Gestión Completa de Contenedores
 
 
 
-### 📦 Gestión Completa de Contenedores- **Importación de Excel**: Embarque, Liberación, Programación
+- **11 Estados del ciclo de vida**:
 
-- **11 Estados**: `por_arribar`, `liberado`, `secuenciado`, `programado`, `asignado`, `en_ruta`, `entregado`, `descargado`, `en_almacen_ccti`, `vacio_en_ruta`, `vacio_en_ccti`
+  - `por_arribar` → `liberado` → `secuenciado` → `programado` → `asignado` → `en_ruta` → `entregado` → `descargado` → `en_almacen_ccti` → `vacio_en_ruta` → `vacio_en_ccti`---## 🚀 Características principales[![Python 3.12+](https://img.shields.io/badge/Python-3.12+-blue.svg)](https://www.python.org/)
 
-- **Importación Excel**: Embarque, Liberación, Programación- **Gestión de estados**: 11 estados de contenedores con transiciones automáticas## ✨ **Sistema Completo de Gestión de Transporte (TMS)**
+  
 
-- **Exportación**: Stock con flag de secuenciado
+- **Importación Excel** (3 tipos):
 
-- **Trazabilidad**: Historial completo de eventos- **Asignación inteligente**: Algoritmo automático de asignación de conductores
+  - 📥 **Embarque**: Crea contenedores con estado `por_arribar`
+
+  - 📥 **Liberación**: Actualiza a `liberado` con mapeo de posiciones (TPS→ZEAL, STI/PCE→CLEP)## 🚀 Características Principales[![PostgreSQL](https://img.shields.io/badge/PostgreSQL-Ready-blue.svg)](https://www.postgresql.org/)
+
+  - 📥 **Programación**: Crea programaciones y verifica alertas 48h
 
 
 
-### 🚛 Sistema Inteligente de Conductores- **Mapbox Integration**: Rutas reales, tiempos estimados, tráfico en vivoSistema profesional de gestión logística con **Machine Learning**, **alertas en tiempo real** y **dashboard estilo torre de control aéreo**.
+- **Exportación Excel**:
 
-- **Asignación Automática**: Algoritmo con 4 factores ponderados
+  - 📤 Stock liberado/por arribar con flag de secuenciado### 📦 Gestión Completa de Contenedores- **Importación de Excel**: Embarque, Liberación, Programación
 
-  - Disponibilidad (30%)- **Alertas**: Demurrage cercano, programación sin conductor
 
-  - Ocupación (25%)
 
-  - Cumplimiento (30%)- **Exportación**: Stock liberado/por arribar con flag de secuenciado### **🎯 Lo que incluye:**
+- **Transiciones automáticas** con timestamps y eventos de auditoría- **11 Estados**: `por_arribar`, `liberado`, `secuenciado`, `programado`, `asignado`, `en_ruta`, `entregado`, `descargado`, `en_almacen_ccti`, `vacio_en_ruta`, `vacio_en_ccti`
 
-  - Proximidad (15%)
 
-- **Métricas**: Cumplimiento, ocupación, total entregas- **Historial completo**: Auditoría de todas las operaciones- ⏰ **Reloj en tiempo real** estilo torre de control aéreo
+
+### 🚛 Gestión de Conductores- **Importación Excel**: Embarque, Liberación, Programación- **Gestión de estados**: 11 estados de contenedores con transiciones automáticas## ✨ **Sistema Completo de Gestión de Transporte (TMS)**
+
+
+
+- **Métricas en tiempo real**:- **Exportación**: Stock con flag de secuenciado
+
+  - Disponibilidad (presente/ausente)
+
+  - Ocupación (entregas asignadas vs capacidad)- **Trazabilidad**: Historial completo de eventos- **Asignación inteligente**: Algoritmo automático de asignación de conductores
+
+  - Cumplimiento (entregas completadas vs programadas)
+
+  - Posición GPS actualizable
+
+
+
+- **Capacidad configurable**: Entregas diarias máximas por conductor### 🚛 Sistema Inteligente de Conductores- **Mapbox Integration**: Rutas reales, tiempos estimados, tráfico en vivoSistema profesional de gestión logística con **Machine Learning**, **alertas en tiempo real** y **dashboard estilo torre de control aéreo**.
+
+
+
+- **Reset automático**: Entregas del día se resetean automáticamente- **Asignación Automática**: Algoritmo con 4 factores ponderados
+
+
+
+### 🤖 Asignación Inteligente  - Disponibilidad (30%)- **Alertas**: Demurrage cercano, programación sin conductor
+
+
+
+**Algoritmo con pesos configurables**:  - Ocupación (25%)
+
+
+
+```python  - Cumplimiento (30%)- **Exportación**: Stock liberado/por arribar con flag de secuenciado### **🎯 Lo que incluye:**
+
+Score Total = (Disponibilidad × 30%) + 
+
+              (Ocupación × 25%) +   - Proximidad (15%)
+
+              (Cumplimiento × 30%) + 
+
+              (Proximidad × 15%)- **Métricas**: Cumplimiento, ocupación, total entregas- **Historial completo**: Auditoría de todas las operaciones- ⏰ **Reloj en tiempo real** estilo torre de control aéreo
+
+```
 
 - **GPS**: Actualización de posición en tiempo real
 
-- **API REST**: Endpoints completos para integración- 🚨 **Sistema de alertas urgentes** con verificación automática cada 30 segundos
+- **Asignación individual**: Selecciona mejor conductor para una programación
+
+- **Asignación múltiple**: Procesa varias programaciones en batch- **API REST**: Endpoints completos para integración- 🚨 **Sistema de alertas urgentes** con verificación automática cada 30 segundos
+
+- **Integración Mapbox**: Calcula distancias y ETAs reales
+
+### 🗺️ Integración Mapbox
 
 ### 🗺️ Integración Mapbox
 
 - **Rutas Reales**: Cálculo con tráfico en tiempo real- 🗺️ **35 rutas Chile pre-configuradas** (puertos, CDs, bodegas)
 
-- **ETAs Precisos**: Tiempo estimado de llegada
+- **Rutas reales** con tráfico en tiempo real
 
-- **Matriz de Distancias**: Cálculos masivos## 📋 Flujo del sistema- 🤖 **Machine Learning** para predicción de tiempos (60% reciente / 40% histórico)
+- **Cálculo de distancias** entre origen y destino- **ETAs Precisos**: Tiempo estimado de llegada
 
-- **Scores de Proximidad**: Para asignación inteligente
+- **ETAs precisos** considerando tráfico
 
-- 📊 **Dashboard inteligente** con ordenamiento por urgencia
-
-### 🚨 Sistema de Alertas
-
-- **48 Horas**: Alerta automática si programación sin conductor```- 🚛 **Sistema de conductores** con asignación inteligente
-
-- **Demurrage**: Seguimiento de tiempos límite
-
-- **Verificación**: Checks automáticos cada hora1. EMBARQUE (Excel) → Contenedores creados con estado "por_arribar"- 📦 **Gestión completa de contenedores** con estados y movimientos
+- **Score de proximidad** para asignación- **Matriz de Distancias**: Cálculos masivos## 📋 Flujo del sistema- 🤖 **Machine Learning** para predicción de tiempos (60% reciente / 40% histórico)
 
 
 
-### 🏢 Gestión de Centros de Distribución   ├─ Campos: container_id, nave, ETA, tipo, peso, puerto, vendor, sello- 🔔 **Sistema de proximidad** con alertas automáticas
-
-- **CCTIs**: Control de contenedores vacíos
-
-- **Clientes**: Centros de entrega final   - 🔌 **API REST completa** con endpoints documentados
-
-- **Capacidad**: Monitoreo de espacios disponibles
-
-- **Geocodificación**: Coordenadas para cálculo de rutas2. LIBERACIÓN (Excel) → Contenedores pasan a "liberado"- 👨‍💼 **Panel de administración** profesional con badges ML
+### 🚨 Sistema de Alertas- **Scores de Proximidad**: Para asignación inteligente
 
 
+
+- **Alerta 48h**: Programaciones sin conductor asignado a menos de 48h de la fecha programada- 📊 **Dashboard inteligente** con ordenamiento por urgencia
+
+- **Consulta de alertas**: Endpoint dedicado para visualizar programaciones urgentes
+
+- **Verificación automática** al importar programaciones### 🚨 Sistema de Alertas
+
+
+
+### 🏢 Gestión de CDs- **48 Horas**: Alerta automática si programación sin conductor```- 🚛 **Sistema de conductores** con asignación inteligente
+
+
+
+- **CCTIs** (Centros de Consolidación):- **Demurrage**: Seguimiento de tiempos límite
+
+  - Capacidad de contenedores vacíos
+
+  - Gestión de recepción y retiro de vacíos- **Verificación**: Checks automáticos cada hora1. EMBARQUE (Excel) → Contenedores creados con estado "por_arribar"- 📦 **Gestión completa de contenedores** con estados y movimientos
+
+  - Tracking de espacios disponibles
+
+
+
+- **Clientes**:
+
+  - Direcciones de entrega### 🏢 Gestión de Centros de Distribución   ├─ Campos: container_id, nave, ETA, tipo, peso, puerto, vendor, sello- 🔔 **Sistema de proximidad** con alertas automáticas
+
+  - Coordenadas GPS
+
+  - Relación con programaciones- **CCTIs**: Control de contenedores vacíos
+
+
+
+### 📊 Auditoría Completa- **Clientes**: Centros de entrega final   - 🔌 **API REST completa** con endpoints documentados
+
+
+
+- **Sistema de eventos**: Registra todas las acciones- **Capacidad**: Monitoreo de espacios disponibles
+
+- **11 tipos de eventos**: Creación, cambio de estado, asignación, importación, etc.
+
+- **Detalles JSON**: Información completa de cada evento- **Geocodificación**: Coordenadas para cálculo de rutas2. LIBERACIÓN (Excel) → Contenedores pasan a "liberado"- 👨‍💼 **Panel de administración** profesional con badges ML
+
+- **Usuario tracking**: Quién realizó cada acción
+
+
+
+---
 
 ---   ├─ Reglas de posición física:
 
+## 🎯 Flujo del Sistema
 
 
-## 📋 Flujo del Sistema   │  ├─ TPS Valparaíso → ZEAL---
-
-
-
-```   │  ├─ STI/PCE San Antonio → CLEP SAI
-
-1. EMBARQUE (Excel)
-
-   └─> Contenedores creados con estado "por_arribar"   │  └─ Retiro CCTi → en_transito_a_ccti## 🚀 Características Principales
-
-       • Campos: container_id, nave, ETA, tipo, peso, puerto, vendor, sello
-
-   
-
-2. LIBERACIÓN (Excel)
-
-   └─> Contenedores actualizados a "liberado"3. EXPORTACIÓN → Stock para cliente### ⏰ Reloj en Tiempo Real - Estilo Torre de Control
-
-       • Mapeo automático de posiciones:
-
-         - TPS Valparaíso → ZEAL   ├─ Liberados + Por arribar- **Diseño profesional**: Colores verde fosforescente sobre azul gradiente
-
-         - STI/PCE San Antonio → CLEP
-
-   └─ Flag "secuenciado" si liberación futura- **Actualización**: Cada 1 segundo con precisión milimétrica
-
-3. EXPORTACIÓN
-
-   └─> Stock para cliente (Liberados + Por arribar)   - **Formato**: HH:MM:SS + DÍA DD MES YYYY
-
-       • Flag "secuenciado" si liberación futura
-
-4. PROGRAMACIÓN (Excel) → Contenedores pasan a "programado"- **Badge urgente**: Contador animado de contenedores críticos
-
-4. PROGRAMACIÓN (Excel)
-
-   └─> Contenedores pasan a "programado"   ├─ Asigna fecha, demurrage, centro entrega- **Modal detallado**: Lista completa de contenedores urgentes con niveles
-
-       • Asigna fecha, demurrage, centro entrega
-
-       • Alerta si falta conductor 48h antes   
-
-
-
-5. ASIGNACIÓN (Manual/Automática)5. ASIGNACIÓN → Conductor asignado (manual/automático)### 🗺️ Sistema de Routing con Machine Learning
-
-   └─> Conductor asignado según algoritmo
-
-       • Evalúa disponibilidad, ocupación, cumplimiento, proximidad   ├─ Alerta si falta conductor 48h antes- **35 rutas Chile**: Puertos (San Antonio, Valparaíso, San Vicente, Lirquén, Coronel)
-
-
-
-6. EN RUTA   - **70 operaciones**: Tiempos estándar para cada tipo de operación
-
-   └─> Operador inicia ruta
-
-       • Calcula ETA con Mapbox6. RUTA → Operador inicia, calcula ETA con Mapbox- **Algoritmo ML**: Promedio ponderado (60% datos recientes + 40% históricos)
-
-       • Tracking en tiempo real
-
-   - **Predicción inteligente**: Tiempos estimados basados en datos reales
-
-7. ENTREGA
-
-   └─> Registro de llegada y descarga7. ENTREGA → Registro de llegada y descarga- **Sistema de confianza**: Badges visuales (Alta/Media/Baja)
-
-       • Actualiza métricas del conductor
-
-   - **Aprendizaje continuo**: Actualización diaria con datos reales
-
-8. VACÍO
-
-   └─> Control de retorno a CCTi8. VACÍO → Control de retorno y ubicación
-
-       • Gestión de espacios disponibles
-
-``````### � Gestión Avanzada de Contenedores
-
-
-
----- **Múltiples estados**: PROGRAMADO, EN_PROCESO, EN_TRANSITO, LIBERADO, DESCARGADO, EN_SECUENCIA
-
-
-
-## 🏗️ Arquitectura## 🗂️ Estados del contenedor- **Trazabilidad completa**: Histórico de todos los movimientos
-
-
-
-### Apps Django- **Alertas de proximidad**: Contenedores urgentes < 2 horas
-
-
-
-```- `por_arribar` - Nave aún no atracada- **Asignación rápida**: Integración con sistema de conductores
-
-apps/
-
-├── containers/       # Modelo Container, importadores, exportación- `liberado` - Contenedor liberado por aduana- **Importación Excel**: Carga masiva de manifiestos y liberaciones
-
-├── drivers/          # Modelo Driver, métricas, posiciones
-
-├── programaciones/   # Modelo Programacion, alertas, asignación- `secuenciado` - Liberación futura programada
-
-├── cds/              # Modelo CD (CCTIs y Clientes)
-
-└── events/           # Modelo Event (auditoría)- `programado` - Entrega programada con fecha### � Sistema de Alertas Inteligentes
-
-
-
-config/- `asignado` - Conductor asignado- **Verificación automática**: Cada 30 segundos verifica contenedores urgentes
-
-├── settings.py       # Configuración Django
-
-└── urls.py          # Routing API- `en_ruta` - Ruta iniciada- **3 niveles de urgencia**: CRÍTICO (< 1h), ALTO (< 2h), MEDIO (< 4h)
-
-
-
-apps/core/- `entregado` - Entregado a cliente- **Notificaciones visuales**: Badge pulsante en navbar
-
-└── services/
-
-    ├── mapbox.py     # Integración Mapbox Directions API- `descargado` - Descargado en CD- **Modal detallado**: Click para ver lista completa con información
-
-    └── assignment.py # Algoritmo de asignación
-
-```- `en_almacen_ccti` - En bodega CCTi- **API endpoint**: `/api/v1/containers/urgent/` para integraciones
-
-
-
-### Modelos de Datos- `vacio_en_ruta` - Retorno con vacío
-
-
-
-**Container**- `vacio_en_ccti` - Vacío en CCTi### 📊 Dashboard Ejecutivo
-
-- `container_id`, `nave`, `eta`, `tipo`, `peso`
-
-- `estado`, `posicion_fisica`, `puerto`, `vendor`, `sello`- **Estadísticas en tiempo real**: Total activos, por estado, disponibilidad
-
-- `fecha_liberacion`, `fecha_programada`, `fecha_asignacion`
-
-- `metodo cambiar_estado(nuevo_estado)`## 🛠️ Stack tecnológico- **Vista prioritaria**: Contenedores urgentes destacados y ordenados
-
-
-
-**Driver**- **Integración ML**: Predicciones de tiempos en ruta
-
-- `nombre`, `rut`, `disponible`, `presente`
-
-- `total_entregas_dia`, `entregas_cumplidas`, `entregas_totales`- **Backend**: Django 5.1.4 + Django REST Framework- **Alertas pendientes**: Asignaciones sin completar
-
-- `posicion_lat`, `posicion_lng`
-
-- `@property ocupacion_porcentaje`, `esta_disponible`- **Base de datos**: PostgreSQL 15- **Responsive design**: Adaptable a móviles y tablets
-
-- `metodo actualizar_posicion()`, `registrar_entrega()`
-
-- **Cache/Queue**: Redis (Celery opcional)
-
-**Programacion**
-
-- `container`, `conductor`, `cd`- **Mapas**: Mapbox API (GitHub Student Pack)## 🛠️ Tecnologías Utilizadas
-
-- `fecha_programada`, `hora_programada`, `demurrage_hasta`
-
-- `alerta_conductor`, `asignacion_automatica`- **Deploy**: Render.com
-
-- `@property requiere_conductor_urgente`
-
-- `metodo verificar_alerta()`, `asignar_conductor()`- **Python**: 3.12- **Backend**: Django 5.2.6 + Django REST Framework
-
-
-
-**CD (Centro de Distribución)**- **Base de Datos**: SQLite (desarrollo) / PostgreSQL (producción)
-
-- `nombre`, `tipo` (CCTI/CLIENTE), `direccion`
-
-- `latitud`, `longitud`## 🏗️ Estructura del proyecto- **API Documentation**: DRF-YASG (Swagger/OpenAPI)
-
-- `puede_recibir_vacios`, `capacidad_vacios`, `vacios_actuales`
-
-- `metodo recibir_vacio()`, `retirar_vacio()`- **Autenticación**: JWT (Simple JWT)
-
-
-
-**Event**```- **Frontend**: API REST (listo para integración con cualquier frontend)
-
-- `container`, `tipo_evento`, `timestamp`, `detalles` (JSON)
-
-- Tipos: embarque, liberacion, programacion, asignacion, en_ruta, etc.soptraloc/
-
-
-
----├── apps/## 📋 Instalación y Configuración
-
-
-
-## 🔌 API REST Completa│   ├── containers/      # Gestión de contenedores
-
-
-
-### Contenedores│   ├── drivers/         # Conductores y asignaciones### Prerrequisitos
-
-
-
-```bash│   ├── programaciones/  # Programación de entregas- Python 3.12+
-
-# Listar contenedores
-
-GET /api/containers/│   ├── events/          # Historial y auditoría- Git
-
-
-
-# Importar embarque│   └── cds/            # Centros de distribución- Entorno virtual (recomendado)
-
-POST /api/containers/import_embarque/
-
-Content-Type: multipart/form-data├── config/             # Configuración Django
-
-file: embarque.xlsx
-
-├── importers/          # Procesadores de Excel### 1. Clonar el Repositorio
-
-# Importar liberación
-
-POST /api/containers/import_liberacion/├── exporters/          # Generadores de reportes```bash
-
-file: liberacion.xlsx
-
-├── services/           # Lógica de negociogit clone https://github.com/Safary16/soptraloc.git
-
-# Importar programación
-
-POST /api/containers/import_programacion/└── utils/              # Utilidades compartidascd soptraloc
-
-file: programacion.xlsx
-
-``````
-
-# Exportar stock
-
-GET /api/containers/export_stock/
-
-
-
-# Cambiar estado## 📦 Instalación local### 2. Crear Entorno Virtual
-
-POST /api/containers/{id}/cambiar_estado/
-
-{"nuevo_estado": "en_ruta", "usuario": "operador1"}```bash
 
 ```
 
-```bashpython3 -m venv venv
+1. EMBARQUE (Excel)## 📋 Flujo del Sistema   │  ├─ TPS Valparaíso → ZEAL---
 
-### Conductores
+   └─→ Contenedores creados con estado "por_arribar"
 
-# Clonar repositoriosource venv/bin/activate  # En Linux/Mac
+        ├─ container_id, nave, ETA, tipo, peso, puerto, vendor, sello
+
+        └─ Evento: "container_creado"
+
+```   │  ├─ STI/PCE San Antonio → CLEP SAI
+
+2. LIBERACIÓN (Excel)
+
+   └─→ Contenedores pasan a "liberado"1. EMBARQUE (Excel)
+
+        ├─ Mapeo de posiciones:
+
+        │   ├─ TPS Valparaíso → ZEAL   └─> Contenedores creados con estado "por_arribar"   │  └─ Retiro CCTi → en_transito_a_ccti## 🚀 Características Principales
+
+        │   └─ STI/PCE San Antonio → CLEP SAI
+
+        └─ Evento: "cambio_estado"       • Campos: container_id, nave, ETA, tipo, peso, puerto, vendor, sello
+
+
+
+3. EXPORTACIÓN STOCK   
+
+   └─→ Excel con contenedores liberados/por arribar
+
+        └─ Flag "secuenciado" marca como procesados2. LIBERACIÓN (Excel)
+
+
+
+4. PROGRAMACIÓN (Excel)   └─> Contenedores actualizados a "liberado"3. EXPORTACIÓN → Stock para cliente### ⏰ Reloj en Tiempo Real - Estilo Torre de Control
+
+   └─→ Crea programaciones en estado "programado"
+
+        ├─ Verifica alerta si fecha_programacion < 48h       • Mapeo automático de posiciones:
+
+        └─ Evento: "programacion_creada"
+
+         - TPS Valparaíso → ZEAL   ├─ Liberados + Por arribar- **Diseño profesional**: Colores verde fosforescente sobre azul gradiente
+
+5. ASIGNACIÓN CONDUCTOR
+
+   └─→ Asigna conductor óptimo         - STI/PCE San Antonio → CLEP
+
+        ├─ Calcula scores (disponibilidad, ocupación, cumplimiento, proximidad)
+
+        ├─ Contenedor pasa a "asignado"   └─ Flag "secuenciado" si liberación futura- **Actualización**: Cada 1 segundo con precisión milimétrica
+
+        └─ Evento: "conductor_asignado"
+
+3. EXPORTACIÓN
+
+6. EN RUTA
+
+   └─→ Conductor inicia viaje   └─> Stock para cliente (Liberados + Por arribar)   - **Formato**: HH:MM:SS + DÍA DD MES YYYY
+
+        ├─ Actualiza posición GPS
+
+        └─ Evento: "cambio_estado"       • Flag "secuenciado" si liberación futura
+
+
+
+7. ENTREGADO4. PROGRAMACIÓN (Excel) → Contenedores pasan a "programado"- **Badge urgente**: Contador animado de contenedores críticos
+
+   └─→ Contenedor entregado en CD Cliente
+
+        ├─ Registra entrega en conductor4. PROGRAMACIÓN (Excel)
+
+        └─ Evento: "cambio_estado"
+
+   └─> Contenedores pasan a "programado"   ├─ Asigna fecha, demurrage, centro entrega- **Modal detallado**: Lista completa de contenedores urgentes con niveles
+
+8. DESCARGADO
+
+   └─→ Contenedor descargado por cliente       • Asigna fecha, demurrage, centro entrega
+
+        └─ Evento: "cambio_estado"
+
+       • Alerta si falta conductor 48h antes   
+
+9. ALMACÉN CCTI
+
+   └─→ Contenedor vacío en CCTI
+
+        ├─ Verifica capacidad CCTI
+
+        └─ Evento: "cambio_estado"5. ASIGNACIÓN (Manual/Automática)5. ASIGNACIÓN → Conductor asignado (manual/automático)### 🗺️ Sistema de Routing con Machine Learning
+
+
+
+10. VACÍO EN RUTA   └─> Conductor asignado según algoritmo
+
+    └─→ Retorno de vacío a puerto
+
+         └─ Evento: "cambio_estado"       • Evalúa disponibilidad, ocupación, cumplimiento, proximidad   ├─ Alerta si falta conductor 48h antes- **35 rutas Chile**: Puertos (San Antonio, Valparaíso, San Vicente, Lirquén, Coronel)
+
+
+
+11. VACÍO EN CCTI
+
+    └─→ Vacío disponible para reutilización
+
+         ├─ Puede recibirse en CCTI si hay espacio6. EN RUTA   - **70 operaciones**: Tiempos estándar para cada tipo de operación
+
+         └─ Puede retirarse de CCTI
+
+```   └─> Operador inicia ruta
+
+
+
+---       • Calcula ETA con Mapbox6. RUTA → Operador inicia, calcula ETA con Mapbox- **Algoritmo ML**: Promedio ponderado (60% datos recientes + 40% históricos)
+
+
+
+## 🛠️ Stack Tecnológico       • Tracking en tiempo real
+
+
+
+- **Backend**: Django 5.1.4 + Django REST Framework 3.16.1   - **Predicción inteligente**: Tiempos estimados basados en datos reales
+
+- **Database**: PostgreSQL (producción) / SQLite (desarrollo)
+
+- **API Docs**: drf-yasg (Swagger/OpenAPI)7. ENTREGA
+
+- **Excel**: pandas 2.2.2 + openpyxl 3.1.2
+
+- **Mapbox**: requests 2.32.3   └─> Registro de llegada y descarga7. ENTREGA → Registro de llegada y descarga- **Sistema de confianza**: Badges visuales (Alta/Media/Baja)
+
+- **Deploy**: Render.com con build automático
+
+- **Web Server**: Gunicorn + WhiteNoise       • Actualiza métricas del conductor
+
+
+
+---   - **Aprendizaje continuo**: Actualización diaria con datos reales
+
+
+
+## 📁 Estructura del Proyecto8. VACÍO
+
+
+
+```   └─> Control de retorno a CCTi8. VACÍO → Control de retorno y ubicación
+
+soptraloc/
+
+├── apps/       • Gestión de espacios disponibles
+
+│   ├── containers/         # Modelos y lógica de contenedores
+
+│   │   ├── models.py       # Container con 11 estados``````### � Gestión Avanzada de Contenedores
+
+│   │   ├── views.py        # ContainerViewSet con 6 custom actions
+
+│   │   ├── serializers.py  # 3 serializers (full, list, export)
+
+│   │   ├── admin.py        # Admin con acciones batch
+
+│   │   └── importers/      # 3 importadores Excel---- **Múltiples estados**: PROGRAMADO, EN_PROCESO, EN_TRANSITO, LIBERADO, DESCARGADO, EN_SECUENCIA
+
+│   │       ├── embarque.py
+
+│   │       ├── liberacion.py
+
+│   │       └── programacion.py
+
+│   │## 🏗️ Arquitectura## 🗂️ Estados del contenedor- **Trazabilidad completa**: Histórico de todos los movimientos
+
+│   ├── drivers/            # Gestión de conductores
+
+│   │   ├── models.py       # Driver con métricas
+
+│   │   ├── views.py        # DriverViewSet con 6 custom actions
+
+│   │   └── serializers.py  # 3 serializers (full, list, disponible)### Apps Django- **Alertas de proximidad**: Contenedores urgentes < 2 horas
+
+│   │
+
+│   ├── programaciones/     # Sistema de programación
+
+│   │   ├── models.py       # Programacion con alertas 48h
+
+│   │   ├── views.py        # ProgramacionViewSet con 5 custom actions```- `por_arribar` - Nave aún no atracada- **Asignación rápida**: Integración con sistema de conductores
+
+│   │   └── serializers.py  # 3 serializers (full, list, create)
+
+│   │apps/
+
+│   ├── cds/                # Centros de distribución
+
+│   │   ├── models.py       # CD con gestión de vacíos├── containers/       # Modelo Container, importadores, exportación- `liberado` - Contenedor liberado por aduana- **Importación Excel**: Carga masiva de manifiestos y liberaciones
+
+│   │   ├── views.py        # CDViewSet con 4 custom actions
+
+│   │   └── management/commands/├── drivers/          # Modelo Driver, métricas, posiciones
+
+│   │       └── cargar_datos_prueba.py  # Comando para test data
+
+│   │├── programaciones/   # Modelo Programacion, alertas, asignación- `secuenciado` - Liberación futura programada
+
+│   ├── events/             # Sistema de auditoría
+
+│   │   ├── models.py       # Event con 11 tipos├── cds/              # Modelo CD (CCTIs y Clientes)
+
+│   │   └── serializers.py
+
+│   │└── events/           # Modelo Event (auditoría)- `programado` - Entrega programada con fecha### � Sistema de Alertas Inteligentes
+
+│   └── core/               # Servicios compartidos
+
+│       └── services/
+
+│           ├── mapbox.py       # Integración Mapbox
+
+│           └── assignment.py   # Algoritmo de asignaciónconfig/- `asignado` - Conductor asignado- **Verificación automática**: Cada 30 segundos verifica contenedores urgentes
+
+│
+
+├── config/├── settings.py       # Configuración Django
+
+│   ├── settings.py         # Configuración con decouple
+
+│   ├── urls.py             # Routing con DefaultRouter└── urls.py          # Routing API- `en_ruta` - Ruta iniciada- **3 niveles de urgencia**: CRÍTICO (< 1h), ALTO (< 2h), MEDIO (< 4h)
+
+│   └── wsgi.py
+
+│
+
+├── build.sh                # Build automático para Render
+
+├── render.yaml             # Configuración de deployapps/core/- `entregado` - Entregado a cliente- **Notificaciones visuales**: Badge pulsante en navbar
+
+├── requirements.txt        # Dependencias Python
+
+├── manage.py└── services/
+
+├── .env.example            # Plantilla de variables de entorno
+
+├── DEPLOY.md               # Guía completa de deploy    ├── mapbox.py     # Integración Mapbox Directions API- `descargado` - Descargado en CD- **Modal detallado**: Click para ver lista completa con información
+
+└── API_DOCS.md             # Documentación de API
+
+```    └── assignment.py # Algoritmo de asignación
+
+
+
+---```- `en_almacen_ccti` - En bodega CCTi- **API endpoint**: `/api/v1/containers/urgent/` para integraciones
+
+
+
+## 🚀 Instalación y Deploy
+
+
+
+### Opción 1: Deploy Automático en Render (Recomendado)### Modelos de Datos- `vacio_en_ruta` - Retorno con vacío
+
+
+
+1. **Clic en el botón Deploy to Render** (arriba)
+
+2. **Render detecta `render.yaml`** automáticamente
+
+3. **Espera 5-7 minutos** mientras:**Container**- `vacio_en_ccti` - Vacío en CCTi### 📊 Dashboard Ejecutivo
+
+   - Instala dependencias
+
+   - Crea base de datos PostgreSQL- `container_id`, `nave`, `eta`, `tipo`, `peso`
+
+   - Aplica migraciones
+
+   - Crea superusuario (admin/admin)- `estado`, `posicion_fisica`, `puerto`, `vendor`, `sello`- **Estadísticas en tiempo real**: Total activos, por estado, disponibilidad
+
+   - Carga datos de prueba
+
+4. **¡Listo!** Accede a tu app- `fecha_liberacion`, `fecha_programada`, `fecha_asignacion`
+
+
+
+Ver guía detallada en [`DEPLOY.md`](DEPLOY.md)- `metodo cambiar_estado(nuevo_estado)`## 🛠️ Stack tecnológico- **Vista prioritaria**: Contenedores urgentes destacados y ordenados
+
+
+
+### Opción 2: Desarrollo Local
+
+
+
+```bash**Driver**- **Integración ML**: Predicciones de tiempos en ruta
+
+# 1. Clonar repositorio
+
+git clone https://github.com/Safary16/soptraloc.git- `nombre`, `rut`, `disponible`, `presente`
+
+cd soptraloc
+
+- `total_entregas_dia`, `entregas_cumplidas`, `entregas_totales`- **Backend**: Django 5.1.4 + Django REST Framework- **Alertas pendientes**: Asignaciones sin completar
+
+# 2. Crear entorno virtual
+
+python -m venv venv- `posicion_lat`, `posicion_lng`
+
+source venv/bin/activate  # Windows: venv\Scripts\activate
+
+- `@property ocupacion_porcentaje`, `esta_disponible`- **Base de datos**: PostgreSQL 15- **Responsive design**: Adaptable a móviles y tablets
+
+# 3. Instalar dependencias
+
+pip install -r requirements.txt- `metodo actualizar_posicion()`, `registrar_entrega()`
+
+
+
+# 4. Configurar variables de entorno- **Cache/Queue**: Redis (Celery opcional)
+
+cp .env.example .env
+
+# Editar .env con tus valores**Programacion**
+
+
+
+# 5. Migrar base de datos- `container`, `conductor`, `cd`- **Mapas**: Mapbox API (GitHub Student Pack)## 🛠️ Tecnologías Utilizadas
+
+python manage.py migrate
+
+- `fecha_programada`, `hora_programada`, `demurrage_hasta`
+
+# 6. Crear superusuario
+
+python manage.py createsuperuser- `alerta_conductor`, `asignacion_automatica`- **Deploy**: Render.com
+
+
+
+# 7. Cargar datos de prueba (opcional)- `@property requiere_conductor_urgente`
+
+python manage.py cargar_datos_prueba
+
+- `metodo verificar_alerta()`, `asignar_conductor()`- **Python**: 3.12- **Backend**: Django 5.2.6 + Django REST Framework
+
+# 8. Ejecutar servidor
+
+python manage.py runserver
+
+```
+
+**CD (Centro de Distribución)**- **Base de Datos**: SQLite (desarrollo) / PostgreSQL (producción)
+
+Accede a:
+
+- 🌐 Admin: http://127.0.0.1:8000/admin/- `nombre`, `tipo` (CCTI/CLIENTE), `direccion`
+
+- 📡 API: http://127.0.0.1:8000/api/
+
+- `latitud`, `longitud`## 🏗️ Estructura del proyecto- **API Documentation**: DRF-YASG (Swagger/OpenAPI)
+
+---
+
+- `puede_recibir_vacios`, `capacidad_vacios`, `vacios_actuales`
+
+## 📡 API REST
+
+- `metodo recibir_vacio()`, `retirar_vacio()`- **Autenticación**: JWT (Simple JWT)
+
+### Endpoints Principales
+
+
+
+#### **Contenedores** (`/api/containers/`)
+
+**Event**```- **Frontend**: API REST (listo para integración con cualquier frontend)
 
 ```bash
 
-# Listar conductoresgit clone https://github.com/Safary16/soptraloc.git# venv\\Scripts\\activate     # En Windows
+# Listar contenedores- `container`, `tipo_evento`, `timestamp`, `detalles` (JSON)
 
-GET /api/drivers/
+GET /api/containers/
 
-cd soptraloc```
+- Tipos: embarque, liberacion, programacion, asignacion, en_ruta, etc.soptraloc/
 
-# Conductores disponibles con scores
+# Crear contenedor
 
-GET /api/drivers/disponibles/
+POST /api/containers/
 
 
 
-# Actualizar posición GPS# Crear entorno virtual### 3. Instalar Dependencias
+# Importar embarque---├── apps/## 📋 Instalación y Configuración
+
+POST /api/containers/import_embarque/
+
+  -F "file=@embarque.xlsx"
+
+
+
+# Importar liberación## 🔌 API REST Completa│   ├── containers/      # Gestión de contenedores
+
+POST /api/containers/import_liberacion/
+
+  -F "file=@liberacion.xlsx"
+
+
+
+# Importar programación### Contenedores│   ├── drivers/         # Conductores y asignaciones### Prerrequisitos
+
+POST /api/containers/import_programacion/
+
+  -F "file=@programacion.xlsx"
+
+
+
+# Exportar stock```bash│   ├── programaciones/  # Programación de entregas- Python 3.12+
+
+GET /api/containers/export_stock/
+
+# Listar contenedores
+
+# Cambiar estado
+
+POST /api/containers/{id}/cambiar_estado/GET /api/containers/│   ├── events/          # Historial y auditoría- Git
+
+  {"nuevo_estado": "en_ruta"}
+
+```
+
+
+
+#### **Conductores** (`/api/drivers/`)# Importar embarque│   └── cds/            # Centros de distribución- Entorno virtual (recomendado)
+
+
+
+```bashPOST /api/containers/import_embarque/
+
+# Listar conductores disponibles
+
+GET /api/drivers/disponibles/Content-Type: multipart/form-data├── config/             # Configuración Django
+
+
+
+# Actualizar posiciónfile: embarque.xlsx
 
 POST /api/drivers/{id}/actualizar_posicion/
 
-{"latitud": -33.4489, "longitud": -70.6693}python3.12 -m venv venv```bash
+  {"latitud": -33.4372, "longitud": -70.6506}├── importers/          # Procesadores de Excel### 1. Clonar el Repositorio
 
 
 
-# Registrar entregasource venv/bin/activate  # En Windows: venv\Scripts\activatepip install -r requirements.txt
+# Registrar entrega# Importar liberación
 
 POST /api/drivers/{id}/registrar_entrega/
 
-{"cumplida": true}```
+  {"exitosa": true}POST /api/containers/import_liberacion/├── exporters/          # Generadores de reportes```bash
 
 
 
-# Marcar presente/ausente# Instalar dependencias> 💡 Este paso instala bibliotecas de machine learning como `scikit-learn` y `scipy`. El proceso puede tardar unos minutos en la primera ejecución.
+# Marcar presentefile: liberacion.xlsx
 
 POST /api/drivers/{id}/marcar_presente/
 
-POST /api/drivers/{id}/marcar_ausente/pip install -r requirements.txt
+├── services/           # Lógica de negociogit clone https://github.com/Safary16/soptraloc.git
 
+# Reset entregas del día
 
+POST /api/drivers/{id}/resetear_entregas_dia/# Importar programación
 
-# Resetear entregas del día### 4. Configurar Variables de Entorno
+```
 
-POST /api/drivers/resetear_entregas_dia/
+POST /api/containers/import_programacion/└── utils/              # Utilidades compartidascd soptraloc
 
-```# Configurar variables de entorno```bash
+#### **Programaciones** (`/api/programaciones/`)
 
+file: programacion.xlsx
 
+```bash
 
-### Programacionescp .env.example .envcp .env.example .env
-
-
-
-```bash# Editar .env con tus credenciales# Editar .env con tus configuraciones
-
-# Listar programaciones
-
-GET /api/programaciones/```
-
-
-
-# Ver alertas (programaciones urgentes <48h)# Aplicar migraciones
+# Ver alertas (<48h sin conductor)``````
 
 GET /api/programaciones/alertas/
 
-python manage.py migrate### 5. Ejecutar Migraciones
+# Exportar stock
 
 # Asignar conductor manualmente
 
-POST /api/programaciones/{id}/asignar_conductor/```bash
+POST /api/programaciones/{id}/asignar_conductor/GET /api/containers/export_stock/
 
-{"conductor_id": 1}
-
-# Crear superusuariocd soptraloc_system
-
-# Asignar conductor automáticamente
-
-POST /api/programaciones/{id}/asignar_automatico/python manage.py createsuperuserpython manage.py migrate
+  {"conductor_id": 1}
 
 
 
-# Ver conductores disponibles con scores```
+# Asignación automática (inteligente)
+
+POST /api/programaciones/{id}/asignar_automatico/# Cambiar estado## 📦 Instalación local### 2. Crear Entorno Virtual
+
+
+
+# Conductores disponibles con scoresPOST /api/containers/{id}/cambiar_estado/
 
 GET /api/programaciones/{id}/conductores_disponibles/
 
-# Cargar datos iniciales (conductores, CDs)
+{"nuevo_estado": "en_ruta", "usuario": "operador1"}```bash
 
-# Asignar múltiples programaciones
+# Asignar múltiples
 
-POST /api/programaciones/asignar_multiples/python manage.py loaddata initial_data### 6. Cargar Datos Iniciales (Chile)
+POST /api/programaciones/asignar_multiples/```
 
-{"programacion_ids": [1, 2, 3]}
+  {"programacion_ids": [1, 2, 3]}
 
-``````bash
-
-
-
-### Centros de Distribución# Ejecutar servidor# Cargar 35 rutas y 70 operaciones para Chile
+``````bashpython3 -m venv venv
 
 
 
-```bashpython manage.py runserverpython manage.py load_initial_times
-
-# Listar CDs
-
-GET /api/cds/``````
+#### **CDs** (`/api/cds/`)### Conductores
 
 
+
+```bash# Clonar repositoriosource venv/bin/activate  # En Linux/Mac
 
 # Listar CCTIs
 
-GET /api/cds/cctis/
-
-## 🌐 Deploy en Render### 7. Crear Superusuario
-
-# Listar Clientes
-
-GET /api/cds/clientes/```bash
+GET /api/cds/cctis/```bash
 
 
 
-# Recibir contenedor vacíoEl proyecto está configurado para deploy automático en Render.com:python manage.py createsuperuser
+# Listar Clientes# Listar conductoresgit clone https://github.com/Safary16/soptraloc.git# venv\\Scripts\\activate     # En Windows
 
-POST /api/cds/{id}/recibir_vacio/
+GET /api/cds/clientes/
 
-{"container_id": "ABCD1234567"}```
+GET /api/drivers/
+
+# Recibir contenedor vacío
+
+POST /api/cds/{id}/recibir_vacio/cd soptraloc```
+
+  {"container_id": 1}
+
+# Conductores disponibles con scores
+
+# Retirar contenedor vacío
+
+POST /api/cds/{id}/retirar_vacio/GET /api/drivers/disponibles/
+
+  {"container_id": 1}
+
+```
+
+
+
+Ver documentación completa en [`API_DOCS.md`](API_DOCS.md)# Actualizar posición GPS# Crear entorno virtual### 3. Instalar Dependencias
+
+
+
+---POST /api/drivers/{id}/actualizar_posicion/
+
+
+
+## 🧪 Datos de Prueba{"latitud": -33.4489, "longitud": -70.6693}python3.12 -m venv venv```bash
+
+
+
+El comando `cargar_datos_prueba` crea:
+
+
+
+- **2 CCTIs**: ZEAL (Valparaíso), CLEP (San Antonio)# Registrar entregasource venv/bin/activate  # En Windows: venv\Scripts\activatepip install -r requirements.txt
+
+- **3 Clientes**: Walmart, Falabella, Ripley
+
+- **4 Conductores**: 3 disponibles, 1 ocupadoPOST /api/drivers/{id}/registrar_entrega/
+
+- **8 Contenedores**: En diferentes estados
+
+- **3 Programaciones**: 1 con alerta, 1 sin conductor{"cumplida": true}```
+
+
+
+```bash
+
+python manage.py cargar_datos_prueba
+
+```# Marcar presente/ausente# Instalar dependencias> 💡 Este paso instala bibliotecas de machine learning como `scikit-learn` y `scipy`. El proceso puede tardar unos minutos en la primera ejecución.
+
+
+
+---POST /api/drivers/{id}/marcar_presente/
+
+
+
+## ⚙️ ConfiguraciónPOST /api/drivers/{id}/marcar_ausente/pip install -r requirements.txt
+
+
+
+### Variables de Entorno
+
+
+
+```env# Resetear entregas del día### 4. Configurar Variables de Entorno
+
+# Django
+
+SECRET_KEY=tu-secret-key-seguraPOST /api/drivers/resetear_entregas_dia/
+
+DEBUG=False
+
+ALLOWED_HOSTS=tudominio.com,*.onrender.com```# Configurar variables de entorno```bash
+
+
+
+# Database
+
+DATABASE_URL=postgresql://user:pass@host:5432/dbname
+
+### Programacionescp .env.example .envcp .env.example .env
+
+# Mapbox
+
+MAPBOX_API_KEY=pk.tu-api-key-de-mapbox
+
+
+
+# Alertas (días)```bash# Editar .env con tus credenciales# Editar .env con tus configuraciones
+
+ALERTA_PROGRAMACION_DIAS=2
+
+ALERTA_DEMURRAGE_DIAS=2# Listar programaciones
+
+
+
+# Pesos asignación (deben sumar 1.0)GET /api/programaciones/```
+
+PESO_DISPONIBILIDAD=0.30
+
+PESO_OCUPACION=0.25
+
+PESO_CUMPLIMIENTO=0.30
+
+PESO_PROXIMIDAD=0.15# Ver alertas (programaciones urgentes <48h)# Aplicar migraciones
+
+```
+
+GET /api/programaciones/alertas/
+
+---
+
+python manage.py migrate### 5. Ejecutar Migraciones
+
+## 🔒 Seguridad
+
+# Asignar conductor manualmente
+
+**Configuración automática en producción** (cuando `DEBUG=False`):
+
+POST /api/programaciones/{id}/asignar_conductor/```bash
+
+- ✅ `SECURE_SSL_REDIRECT = True`
+
+- ✅ `SESSION_COOKIE_SECURE = True`{"conductor_id": 1}
+
+- ✅ `CSRF_COOKIE_SECURE = True`
+
+- ✅ `SECURE_HSTS_SECONDS = 31536000`# Crear superusuariocd soptraloc_system
+
+- ✅ HTTPS forzado por Render
+
+- ✅ Database connection pooling# Asignar conductor automáticamente
+
+
+
+**⚠️ Cambiar password del superusuario después del primer login**POST /api/programaciones/{id}/asignar_automatico/python manage.py createsuperuserpython manage.py migrate
+
+
+
+---
+
+
+
+## 📚 Documentación# Ver conductores disponibles con scores```
+
+
+
+- **[DEPLOY.md](DEPLOY.md)**: Guía completa de deploy en RenderGET /api/programaciones/{id}/conductores_disponibles/
+
+- **[API_DOCS.md](API_DOCS.md)**: Documentación detallada de API
+
+- **[ESTADO_ACTUAL.md](ESTADO_ACTUAL.md)**: Estado actual del proyecto# Cargar datos iniciales (conductores, CDs)
+
+
+
+---# Asignar múltiples programaciones
+
+
+
+## 🤝 ContribuirPOST /api/programaciones/asignar_multiples/python manage.py loaddata initial_data### 6. Cargar Datos Iniciales (Chile)
+
+
+
+1. Fork el repositorio{"programacion_ids": [1, 2, 3]}
+
+2. Crea una rama: `git checkout -b feature/nueva-funcionalidad`
+
+3. Commit: `git commit -m 'Agrega nueva funcionalidad'```````bash
+
+4. Push: `git push origin feature/nueva-funcionalidad`
+
+5. Abre un Pull Request
+
+
+
+---### Centros de Distribución# Ejecutar servidor# Cargar 35 rutas y 70 operaciones para Chile
+
+
+
+## 📄 Licencia
+
+
+
+Este proyecto es privado y propiedad de SoptraLoc.```bashpython manage.py runserverpython manage.py load_initial_times
+
+
+
+---# Listar CDs
+
+
+
+## 📞 SoporteGET /api/cds/``````
+
+
+
+- **Documentación**: Ver archivos `.md` en el repositorio
+
+- **Issues**: [GitHub Issues](https://github.com/Safary16/soptraloc/issues)
+
+- **Email**: admin@soptraloc.cl# Listar CCTIs
+
+
+
+---GET /api/cds/cctis/
+
+
+
+## 🎉 Estado del Proyecto## 🌐 Deploy en Render### 7. Crear Superusuario
+
+
+
+✅ **Sistema 100% funcional y listo para producción**# Listar Clientes
+
+
+
+- 5 modelos implementados con lógica completaGET /api/cds/clientes/```bash
+
+- 45+ endpoints REST API
+
+- 3 importadores Excel
+
+- Sistema de asignación inteligente
+
+- Integración Mapbox completa# Recibir contenedor vacíoEl proyecto está configurado para deploy automático en Render.com:python manage.py createsuperuser
+
+- Deploy automático configurado
+
+- Documentación completaPOST /api/cds/{id}/recibir_vacio/
+
+
+
+**¡Listo para deploy en Render!** 🚀{"container_id": "ABCD1234567"}```
+
 
 
 

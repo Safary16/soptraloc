@@ -1,46 +1,158 @@
-#!/usr/bin/env bash#!/usr/bin/env bash#!/usr/bin/env bash
+#!/usr/bin/env bash#!/usr/bin/env bash#!/usr/bin/env bash#!/usr/bin/env bash#!/usr/bin/env bash
 
 # Build script automático para Render.com - SoptraLoc TMS
 
-# Se ejecuta automáticamente en cada deploy# Script de build automático para Render# Build script optimizado para Render.com - SoptraLoc TMS v3.0
+# Este script se ejecuta automáticamente en cada deploy# Build script automático para Render.com - SoptraLoc TMS
 
 
+
+set -o errexit  # Exit en caso de error# Este script se ejecuta automáticamente en cada deploy# Build script automático para Render.com - SoptraLoc TMS
+
+
+
+echo "=========================================="
+
+echo "🚀 SOPTRALOC TMS - BUILD AUTOMÁTICO"
+
+echo "=========================================="set -o errexit  # Exit en caso de error# Se ejecuta automáticamente en cada deploy# Script de build automático para Render# Build script optimizado para Render.com - SoptraLoc TMS v3.0
+
+echo ""
+
+
+
+echo "📦 [1/5] Instalando dependencias..."
+
+pip install --upgrade pipecho "🔧 Instalando dependencias..."
+
+pip install -r requirements.txt
+
+echo "✅ Dependencias instaladas"pip install -r requirements.txt
+
+echo ""
 
 set -o errexit  # Exit en caso de error# Este script se ejecuta automáticamente en cada deploy# Deploy desde CERO
 
+echo "📂 [2/5] Recolectando archivos estáticos..."
 
+python manage.py collectstatic --no-inputecho "📦 Recolectando archivos estáticos..."
 
-echo "=========================================================================="set -o errexit
+echo "✅ Archivos estáticos recolectados"
 
-echo "🚀 BUILD SOPTRALOC TMS - RENDER.COM"
-
-echo "=========================================================================="set -o errexit  # Exit en caso de error
-
-echo "Fecha: $(date '+%Y-%m-%d %H:%M:%S')"
-
-echo ""echo "=========================================================================="
+echo ""python manage.py collectstatic --no-input
 
 
 
-# 1. Actualizar pipecho "🔧 Instalando dependencias..."echo "🚀 BUILD SOPTRALOC TMS v3.0 - RENDER.COM"
+echo "🗄️ [3/5] Aplicando migraciones..."
 
-echo "📦 Actualizando pip..."
+python manage.py migrate --no-input
 
-pip install --upgrade pip setuptools wheelpip install -r requirements.txtecho "=========================================================================="
+echo "✅ Migraciones aplicadas"echo "🗄️ Aplicando migraciones de base de datos..."echo "=========================================================================="set -o errexit
+
+echo ""
+
+python manage.py migrate --no-input
+
+echo "👤 [4/5] Configurando superusuario..."
+
+python manage.py shell << ENDecho "🚀 BUILD SOPTRALOC TMS - RENDER.COM"
+
+from django.contrib.auth import get_user_model
+
+User = get_user_model()echo "👤 Creando superusuario automáticamente..."
+
+if not User.objects.filter(username='admin').exists():
+
+    User.objects.create_superuser('admin', 'admin@soptraloc.cl', 'admin')python manage.py shell << ENDecho "=========================================================================="set -o errexit  # Exit en caso de error
+
+    print('✅ Superusuario creado: admin/admin')
+
+else:from django.contrib.auth import get_user_model
+
+    print('ℹ️ Superusuario ya existe')
+
+ENDUser = get_user_model()echo "Fecha: $(date '+%Y-%m-%d %H:%M:%S')"
+
+echo ""
+
+if not User.objects.filter(username='admin').exists():
+
+echo "📊 [5/5] Cargando datos iniciales..."
+
+python manage.py shell << END    User.objects.create_superuser('admin', 'admin@soptraloc.cl', 'admin')echo ""echo "=========================================================================="
+
+from apps.cds.models import CD
+
+from apps.drivers.models import Driver    print('✅ Superusuario creado: admin/admin')
 
 
 
-# 2. Instalar dependenciasecho "Fecha: $(date '+%Y-%m-%d %H:%M:%S')"
+# Solo cargar datos si la base está vacíaelse:
 
-echo "📦 Instalando dependencias..."
+if CD.objects.count() == 0 and Driver.objects.count() == 0:
 
-pip install -r requirements.txtecho "📦 Recolectando archivos estáticos..."echo ""
+    print('🚀 Base de datos vacía, cargando datos de prueba...')    print('ℹ️ Superusuario ya existe')
+
+    import os
+
+    os.system('python manage.py cargar_datos_prueba')END# 1. Actualizar pipecho "🔧 Instalando dependencias..."echo "🚀 BUILD SOPTRALOC TMS v3.0 - RENDER.COM"
+
+    print('✅ Datos de prueba cargados')
+
+else:
+
+    print('ℹ️ Base de datos ya tiene datos, omitiendo carga inicial')
+
+ENDecho "📊 Verificando si cargar datos de prueba..."echo "📦 Actualizando pip..."
+
+echo ""
+
+python manage.py shell << END
+
+echo "=========================================="
+
+echo "✅ BUILD COMPLETADO EXITOSAMENTE"from apps.cds.models import CDpip install --upgrade pip setuptools wheelpip install -r requirements.txtecho "=========================================================================="
+
+echo "=========================================="
+
+echo ""from apps.drivers.models import Driver
+
+echo "🌐 Accesos:"
+
+echo "   Admin: https://\$RENDER_EXTERNAL_URL/admin/"from apps.containers.models import Container
+
+echo "   API:   https://\$RENDER_EXTERNAL_URL/api/"
+
+echo ""
+
+echo "🔑 Credenciales iniciales:"
+
+echo "   Usuario: admin"# Solo cargar datos si la base está vacía# 2. Instalar dependenciasecho "Fecha: $(date '+%Y-%m-%d %H:%M:%S')"
+
+echo "   Password: admin"
+
+echo ""if CD.objects.count() == 0:
+
+echo "⚠️  IMPORTANTE: Cambiar password después del primer login"
+
+echo ""    print('🚀 Base de datos vacía, cargando datos de prueba...')echo "📦 Instalando dependencias..."
+
+
+    import os
+
+    os.system('python manage.py cargar_datos_prueba')pip install -r requirements.txtecho "📦 Recolectando archivos estáticos..."echo ""
+
+    print('✅ Datos de prueba cargados')
+
+else:
+
+    print('ℹ️ Base de datos ya tiene datos, omitiendo carga inicial')
+
+END# 3. Verificar instalación de paquetes críticospython manage.py collectstatic --no-input
 
 
 
-# 3. Verificar instalación de paquetes críticospython manage.py collectstatic --no-input
+echo "✅ Build completado exitosamente!"echo "🔍 Verificando instalación..."
 
-echo "🔍 Verificando instalación..."
 
 python -c "import django; print(f'✅ Django {django.get_version()}')"# Actualizar pip
 
