@@ -1,108 +1,214 @@
-*.pyc# ============================================
+# ============================================*.pyc# ============================================
 
-__pycache__/# SOPTRALOC TMS - .gitignore
+# SOPTRALOC TMS - .gitignore
 
-*.py[cod]# ============================================
+# ============================================__pycache__/# SOPTRALOC TMS - .gitignore
+
+
+
+# Python*.py[cod]# ============================================
+
+__pycache__/
+
+*.py[cod]*$py.class
 
 *$py.class
 
-# Python
+*.so# Python
 
-# Django__pycache__/
+*.egg
 
-*.log*.py[cod]
+*.egg-info/# Django__pycache__/
 
-local_settings.py*$py.class
+.eggs/
 
-db.sqlite3*.so
+.installed.cfg*.log*.py[cod]
 
-db.sqlite3-journal.Python
 
-/media*.egg
 
-/staticfiles*.egg-info/
+# Virtual Environmentslocal_settings.py*$py.class
 
-/static.eggs/
+venv/
 
-.installed.cfg
+env/db.sqlite3*.so
 
-# Environment
+ENV/
 
-.env# Virtual Environments
-
-.venvvenv/
-
-venv/env/
-
-ENV/ENV/
-
-env/.venv
+.venvdb.sqlite3-journal.Python
 
 env.bak/
 
-# IDEsvenv.bak/
+venv.bak//media*.egg
 
-.vscode/
 
-.idea/# Django
 
-*.swp*.log
+# Django/staticfiles*.egg-info/
 
-*.swodb.sqlite3
+*.log
 
-*~db.sqlite3-journal
+db.sqlite3/static.eggs/
 
-.DS_Storestaticfiles/
+db.sqlite3-journal
+
+staticfiles/.installed.cfg
 
 media/
 
-# Testinglocal_settings.py
+local_settings.py# Environment
 
-.tox/
 
-.coverage# Celery
 
-.coverage.*celerybeat-schedule
+# Celery.env# Virtual Environments
 
-.cachecelerybeat-schedule.db
+celerybeat-schedule
 
-nosetests.xmlcelerybeat.pid
-
-coverage.xml
-
-*.cover# Testing & Coverage
-
-.hypothesis/.pytest_cache/
-
-.pytest_cache/.tox/
-
-.coverage
-
-# Celeryhtmlcov/
-
-celerybeat-schedule.mypy_cache/
+celerybeat-schedule.db.venvvenv/
 
 celerybeat.pid
 
+venv/env/
+
+# Testing & Coverage
+
+.pytest_cache/ENV/ENV/
+
+.tox/
+
+.coverageenv/.venv
+
+.coverage.*
+
+htmlcov/env.bak/
+
+.mypy_cache/
+
+nosetests.xml# IDEsvenv.bak/
+
+coverage.xml
+
+*.cover.vscode/
+
+.hypothesis/
+
+.cache.idea/# Django
+
+
+
+# Environment Variables*.swp*.log
+
+.env
+
+.env.local*.swodb.sqlite3
+
+.env.*.local
+
+*~db.sqlite3-journal
+
+# IDEs
+
+.vscode/.DS_Storestaticfiles/
+
+.idea/
+
+*.swpmedia/
+
+*.swo
+
+*~# Testinglocal_settings.py
+
+.DS_Store
+
+.tox/
+
+# Build & Distribution
+
+build/.coverage# Celery
+
+develop-eggs/
+
+dist/.coverage.*celerybeat-schedule
+
+downloads/
+
+wheels/.cachecelerybeat-schedule.db
+
+pip-wheel-metadata/
+
+share/python-wheels/nosetests.xmlcelerybeat.pid
+
+*.whl
+
+coverage.xml
+
+# Logs
+
+*.log*.cover# Testing & Coverage
+
+logs/
+
+.hypothesis/.pytest_cache/
+
+# Backup files
+
+*.bak.pytest_cache/.tox/
+
+*.backup
+
+*.tmp.coverage
+
+
+
+# OS# Celeryhtmlcov/
+
+.DS_Store
+
+Thumbs.dbcelerybeat-schedule.mypy_cache/
+
+
+
+# Jupyter Notebookcelerybeat.pid
+
+.ipynb_checkpoints
+
 # Development
 
-# Logsbuild/
+# pyenv
 
-*.logdevelop-eggs/
+.python-version# Logsbuild/
+
+
+
+# pipenv*.logdevelop-eggs/
+
+Pipfile.lock
 
 dist/
 
-# Backup filesdownloads/
+# Poetry
 
-*.baksdist/
+poetry.lock# Backup filesdownloads/
+
+
+
+# PEP 582*.baksdist/
+
+__pypackages__/
 
 *.backupwheels/
 
-parts/
+# mypy
 
-# Uploads temporalesvar/
+.mypy_cache/parts/
 
-/uploads/temp/lib/
+.dmypy.json
+
+dmypy.json# Uploads temporalesvar/
+
+
+
+# Pyre/uploads/temp/lib/
+
+.pyre/
 
 lib64/
 

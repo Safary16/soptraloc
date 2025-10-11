@@ -1,32 +1,90 @@
-services:services:
+services:services:services:services:
 
-  - type: web  - type: web
+  - type: web
 
-    name: soptraloc    name: soptraloc
+    name: soptraloc  - type: web
 
-    env: python    env: python
+    env: python
 
-    region: oregon    region: oregon
+    region: oregon    name: soptraloc  - type: web  - type: web
 
-    plan: free    plan: free
+    plan: free
 
-    branch: main    branch: main
+    branch: main    env: python
 
-    buildCommand: |    buildCommand: bash build.sh
+    buildCommand: bash build.sh
 
-      pip install --upgrade pip    startCommand: cd soptraloc_system && gunicorn config.wsgi:application --bind 0.0.0.0:$PORT --workers 2 --threads 4 --worker-class gthread --timeout 120 --log-level info
+    startCommand: gunicorn config.wsgi:application --bind 0.0.0.0:$PORT --workers 2 --threads 4 --worker-class gthread --timeout 120 --log-level info    region: oregon    name: soptraloc    name: soptraloc
 
-      pip install -r requirements.txt    envVars:
+    envVars:
 
-      python manage.py collectstatic --no-input      - key: PYTHON_VERSION
+      - key: PYTHON_VERSION    plan: free
+
+        value: 3.12.6
+
+      - key: SECRET_KEY    branch: main    env: python    env: python
+
+        generateValue: true
+
+      - key: DATABASE_URL    buildCommand: bash build.sh
+
+        fromDatabase:
+
+          name: soptraloc-db    startCommand: gunicorn config.wsgi:application --bind 0.0.0.0:$PORT --workers 2 --threads 4 --worker-class gthread --timeout 120 --log-level info    region: oregon    region: oregon
+
+          property: connectionString
+
+      - key: DJANGO_SETTINGS_MODULE    envVars:
+
+        value: config.settings
+
+      - key: MAPBOX_API_KEY      - key: PYTHON_VERSION    plan: free    plan: free
+
+        value: pk.eyJ1Ijoic2FmYXJ5MTYiLCJhIjoiY21naHlvYTQ5MDNlbDJrbjJjcXRtZGg1YSJ9.WCiyTSY_CCfB02N_Nfx7kg
+
+        value: 3.12.6
+
+databases:
+
+  - name: soptraloc-db      - key: SECRET_KEY    branch: main    branch: main
+
+    databaseName: soptraloc
+
+    user: soptraloc        generateValue: true
+
+    region: oregon
+
+    plan: free      - key: DATABASE_URL    buildCommand: |    buildCommand: bash build.sh
+
+
+        fromDatabase:
+
+          name: soptraloc-db      pip install --upgrade pip    startCommand: cd soptraloc_system && gunicorn config.wsgi:application --bind 0.0.0.0:$PORT --workers 2 --threads 4 --worker-class gthread --timeout 120 --log-level info
+
+          property: connectionString
+
+      - key: DJANGO_SETTINGS_MODULE      pip install -r requirements.txt    envVars:
+
+        value: config.settings
+
+      - key: MAPBOX_API_KEY      python manage.py collectstatic --no-input      - key: PYTHON_VERSION
+
+        value: pk.eyJ1Ijoic2FmYXJ5MTYiLCJhIjoiY21naHlvYTQ5MDNlbDJrbjJjcXRtZGg1YSJ9.WCiyTSY_CCfB02N_Nfx7kg
 
       python manage.py migrate --no-input        value: 3.12.6
 
-    startCommand: gunicorn config.wsgi:application --bind 0.0.0.0:$PORT --workers 2 --threads 4 --worker-class gthread --timeout 120      - key: SECRET_KEY
+databases:
 
-    envVars:        generateValue: true
+  - name: soptraloc-db    startCommand: gunicorn config.wsgi:application --bind 0.0.0.0:$PORT --workers 2 --threads 4 --worker-class gthread --timeout 120      - key: SECRET_KEY
 
-      - key: PYTHON_VERSION      - key: DATABASE_URL
+    databaseName: soptraloc
+
+    user: soptraloc    envVars:        generateValue: true
+
+    region: oregon
+
+    plan: free      - key: PYTHON_VERSION      - key: DATABASE_URL
+
 
         value: 3.12.6        fromDatabase:
 
