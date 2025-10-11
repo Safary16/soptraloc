@@ -1,0 +1,258 @@
+/* Paleta de colores Ubuntu */
+:root {
+    --ubuntu-orange: #E95420;
+    --ubuntu-purple: #772953;
+    --ubuntu-dark: #2C001E;
+    --ubuntu-light-grey: #AEA79F;
+    --ubuntu-mid-grey: #77716C;
+    --ubuntu-dark-grey: #333333;
+    --ubuntu-white: #FFFFFF;
+    --ubuntu-light-aubergine: #5E2750;
+}
+
+body {
+    font-family: 'Ubuntu', 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    background-color: #F7F7F7;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+}
+
+.main-content {
+    flex: 1;
+}
+
+/* Navbar estilo Ubuntu */
+.bg-ubuntu {
+    background-color: var(--ubuntu-orange);
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.bg-ubuntu-dark {
+    background-color: var(--ubuntu-dark);
+}
+
+.navbar-brand .ubuntu-logo {
+    width: 32px;
+    height: 32px;
+    background: radial-gradient(circle at 30% 30%, #FFFFFF 0%, #FFFFFF 20%, var(--ubuntu-orange) 20%, var(--ubuntu-orange) 40%, var(--ubuntu-white) 40%, var(--ubuntu-white) 60%, var(--ubuntu-orange) 60%, var(--ubuntu-orange) 80%, var(--ubuntu-white) 80%);
+    border-radius: 50%;
+    border: 2px solid white;
+}
+
+.navbar-dark .navbar-nav .nav-link {
+    color: rgba(255,255,255,0.95);
+    font-weight: 500;
+    padding: 0.5rem 1rem;
+    transition: all 0.3s ease;
+}
+
+.navbar-dark .navbar-nav .nav-link:hover,
+.navbar-dark .navbar-nav .nav-link.active {
+    color: white;
+    background-color: rgba(255,255,255,0.1);
+    border-radius: 4px;
+}
+
+/* Cards con estilo Ubuntu */
+.card {
+    border: none;
+    border-radius: 8px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+    transition: all 0.3s ease;
+}
+
+.card:hover {
+    box-shadow: 0 4px 12px rgba(0,0,0,0.12);
+    transform: translateY(-2px);
+}
+
+.card-ubuntu {
+    border-left: 4px solid var(--ubuntu-orange);
+}
+
+.card-header-ubuntu {
+    background: linear-gradient(135deg, var(--ubuntu-orange) 0%, var(--ubuntu-purple) 100%);
+    color: white;
+    font-weight: bold;
+    border-radius: 8px 8px 0 0 !important;
+}
+
+/* Botones estilo Ubuntu */
+.btn-ubuntu {
+    background-color: var(--ubuntu-orange);
+    border-color: var(--ubuntu-orange);
+    color: white;
+    font-weight: 500;
+    padding: 0.5rem 1.5rem;
+    border-radius: 4px;
+    transition: all 0.3s ease;
+}
+
+.btn-ubuntu:hover {
+    background-color: #DD4814;
+    border-color: #DD4814;
+    color: white;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(233, 84, 32, 0.3);
+}
+
+.btn-ubuntu-outline {
+    background-color: transparent;
+    border: 2px solid var(--ubuntu-orange);
+    color: var(--ubuntu-orange);
+    font-weight: 500;
+}
+
+.btn-ubuntu-outline:hover {
+    background-color: var(--ubuntu-orange);
+    color: white;
+}
+
+/* Stats Cards */
+.stat-card {
+    text-align: center;
+    padding: 2rem 1rem;
+    border-radius: 8px;
+    transition: all 0.3s ease;
+}
+
+.stat-card:hover {
+    transform: translateY(-5px);
+}
+
+.stat-card.orange {
+    background: linear-gradient(135deg, var(--ubuntu-orange) 0%, #DD4814 100%);
+    color: white;
+}
+
+.stat-card.purple {
+    background: linear-gradient(135deg, var(--ubuntu-purple) 0%, var(--ubuntu-light-aubergine) 100%);
+    color: white;
+}
+
+.stat-card.dark {
+    background: linear-gradient(135deg, var(--ubuntu-dark-grey) 0%, var(--ubuntu-mid-grey) 100%);
+    color: white;
+}
+
+.stat-card .stat-icon {
+    font-size: 3rem;
+    opacity: 0.9;
+    margin-bottom: 1rem;
+}
+
+.stat-card .stat-number {
+    font-size: 2.5rem;
+    font-weight: bold;
+    margin-bottom: 0.5rem;
+}
+
+.stat-card .stat-label {
+    font-size: 1rem;
+    opacity: 0.9;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+/* Badges de urgencia */
+.badge-urgencia-critica {
+    background-color: #DC3545;
+    color: white;
+    padding: 0.5rem 1rem;
+    border-radius: 20px;
+    font-weight: bold;
+}
+
+.badge-urgencia-alta {
+    background-color: var(--ubuntu-orange);
+    color: white;
+    padding: 0.5rem 1rem;
+    border-radius: 20px;
+    font-weight: bold;
+}
+
+.badge-urgencia-media {
+    background-color: #FFC107;
+    color: #333;
+    padding: 0.5rem 1rem;
+    border-radius: 20px;
+    font-weight: bold;
+}
+
+.badge-urgencia-baja {
+    background-color: #28A745;
+    color: white;
+    padding: 0.5rem 1rem;
+    border-radius: 20px;
+    font-weight: bold;
+}
+
+/* Tablas */
+.table-ubuntu {
+    background: white;
+    border-radius: 8px;
+    overflow: hidden;
+}
+
+.table-ubuntu thead {
+    background: linear-gradient(135deg, var(--ubuntu-orange) 0%, var(--ubuntu-purple) 100%);
+    color: white;
+}
+
+.table-ubuntu tbody tr:hover {
+    background-color: rgba(233, 84, 32, 0.05);
+}
+
+/* Footer */
+.footer {
+    margin-top: auto;
+}
+
+/* Animaciones */
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(20px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.fade-in {
+    animation: fadeIn 0.5s ease-in;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+    .stat-card {
+        margin-bottom: 1rem;
+    }
+    
+    .stat-card .stat-number {
+        font-size: 2rem;
+    }
+    
+    .stat-card .stat-icon {
+        font-size: 2rem;
+    }
+}
+
+/* Loading spinner */
+.spinner-ubuntu {
+    border: 3px solid rgba(233, 84, 32, 0.1);
+    border-top: 3px solid var(--ubuntu-orange);
+    border-radius: 50%;
+    width: 40px;
+    height: 40px;
+    animation: spin 1s linear infinite;
+    margin: 2rem auto;
+}
+
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+/* Alertas personalizadas */
+.alert-ubuntu {
+    border-left: 4px solid var(--ubuntu-orange);
+    background-color: rgba(233, 84, 32, 0.1);
+    color: var(--ubuntu-dark-grey);
+}

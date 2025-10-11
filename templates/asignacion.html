@@ -1,0 +1,155 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Asignación - SoptraLoc TMS{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card card-ubuntu">
+                <div class="card-header card-header-ubuntu">
+                    <i class="fas fa-truck"></i> Sistema de Asignación Inteligente
+                </div>
+                <div class="card-body">
+                    <p class="lead">
+                        Sistema automático de asignación de conductores basado en Machine Learning
+                    </p>
+                    
+                    <div class="alert alert-ubuntu">
+                        <i class="fas fa-info-circle"></i>
+                        <strong>Funcionalidad:</strong> El sistema evalúa múltiples factores para asignar el mejor conductor disponible a cada programación.
+                    </div>
+
+                    <h5 class="mt-4">Criterios de Asignación:</h5>
+                    <div class="row mt-3">
+                        <div class="col-md-6 mb-3">
+                            <div class="card">
+                                <div class="card-body">
+                                    <h6><i class="fas fa-check-circle text-success"></i> Disponibilidad (40%)</h6>
+                                    <p class="text-muted mb-0">Conductor debe estar disponible y sin asignaciones previas</p>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <div class="card">
+                                <div class="card-body">
+                                    <h6><i class="fas fa-tasks text-primary"></i> Ocupación (30%)</h6>
+                                    <p class="text-muted mb-0">Carga de trabajo actual y capacidad disponible</p>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <div class="card">
+                                <div class="card-body">
+                                    <h6><i class="fas fa-star text-warning"></i> Cumplimiento (20%)</h6>
+                                    <p class="text-muted mb-0">Historial de entregas exitosas y puntualidad</p>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <div class="card">
+                                <div class="card-body">
+                                    <h6><i class="fas fa-map-marker-alt text-danger"></i> Proximidad (10%)</h6>
+                                    <p class="text-muted mb-0">Distancia al centro de distribución</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <h5 class="mt-4">Endpoints de Asignación:</h5>
+                    <div class="table-responsive mt-3">
+                        <table class="table table-ubuntu">
+                            <thead>
+                                <tr>
+                                    <th>Endpoint</th>
+                                    <th>Método</th>
+                                    <th>Descripción</th>
+                                    <th>Acción</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td><code>/api/programaciones/{id}/asignar_automatico/</code></td>
+                                    <td><span class="badge bg-success">POST</span></td>
+                                    <td>Asigna automáticamente el mejor conductor</td>
+                                    <td>
+                                        <a href="/api/programaciones/" class="btn btn-sm btn-ubuntu-outline" target="_blank">
+                                            Ver API
+                                        </a>
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td><code>/api/programaciones/{id}/conductores_disponibles/</code></td>
+                                    <td><span class="badge bg-primary">GET</span></td>
+                                    <td>Lista conductores con scores de asignación</td>
+                                    <td>
+                                        <a href="/api/programaciones/" class="btn btn-sm btn-ubuntu-outline" target="_blank">
+                                            Ver API
+                                        </a>
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td><code>/api/programaciones/asignar_multiples/</code></td>
+                                    <td><span class="badge bg-success">POST</span></td>
+                                    <td>Asigna conductores a múltiples programaciones</td>
+                                    <td>
+                                        <a href="/api/programaciones/" class="btn btn-sm btn-ubuntu-outline" target="_blank">
+                                            Ver API
+                                        </a>
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <div class="text-center mt-4">
+                        <a href="/admin/programaciones/programacion/" class="btn btn-ubuntu btn-lg">
+                            <i class="fas fa-cog"></i> Gestionar Programaciones en Admin
+                        </a>
+                        <a href="/api/programaciones/" class="btn btn-ubuntu-outline btn-lg ms-2" target="_blank">
+                            <i class="fas fa-code"></i> Ver Documentación API
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Machine Learning Info -->
+    <div class="row">
+        <div class="col-md-6 mb-3">
+            <div class="card card-ubuntu h-100">
+                <div class="card-body">
+                    <h5><i class="fas fa-brain text-primary"></i> Machine Learning</h5>
+                    <p>El sistema aprende de operaciones pasadas para mejorar las predicciones:</p>
+                    <ul>
+                        <li><strong>Tiempos de Operación:</strong> Aprende tiempos reales de carga/descarga por CD</li>
+                        <li><strong>Tiempos de Viaje:</strong> Ajusta predicciones de Mapbox con tráfico real</li>
+                        <li><strong>Rendimiento:</strong> Evalúa historial de cada conductor</li>
+                    </ul>
+                    <a href="/api/programaciones/" class="btn btn-ubuntu-outline" target="_blank">
+                        Ver Endpoints ML
+                    </a>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-6 mb-3">
+            <div class="card card-ubuntu h-100">
+                <div class="card-body">
+                    <h5><i class="fas fa-map-marked-alt text-success"></i> Integración Mapbox</h5>
+                    <p>Cálculo de rutas optimizadas en tiempo real:</p>
+                    <ul>
+                        <li><strong>Distancias:</strong> Cálculo preciso de kilómetros</li>
+                        <li><strong>Tiempos:</strong> ETAs considerando tráfico actual</li>
+                        <li><strong>Optimización:</strong> Selección de mejor conductor por proximidad</li>
+                    </ul>
+                    <a href="/admin/cds/cd/" class="btn btn-ubuntu-outline">
+                        Gestionar CDs
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

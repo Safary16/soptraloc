@@ -31,7 +31,14 @@ router.register(r'drivers', DriverViewSet, basename='driver')
 router.register(r'programaciones', ProgramacionViewSet, basename='programacion')
 router.register(r'cds', CDViewSet, basename='cd')
 
+from apps.core.views import home, asignacion
+
 urlpatterns = [
+    # Frontend pages
+    path("", home, name="home"),
+    path("asignacion/", asignacion, name="asignacion"),
+    
+    # Admin and API
     path("admin/", admin.site.urls),
     path("api/", include(router.urls)),
 ]
