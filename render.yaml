@@ -18,6 +18,8 @@ services:
           property: connectionString
       - key: DJANGO_SETTINGS_MODULE
         value: config.settings_production
+      - key: MAPBOX_API_KEY
+        value: pk.eyJ1Ijoic2FmYXJ5MTYiLCJhIjoiY21naHlvYTQ5MDNlbDJrbjJjcXRtZGg1YSJ9.WCiyTSY_CCfB02N_Nfx7kg
 
 databases:
   - name: soptraloc-db

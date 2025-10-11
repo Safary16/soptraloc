@@ -1,5 +1,5 @@
 # Core Django
-Django==5.2.6
+Django==5.1.4
 python-decouple==3.8
 whitenoise==6.11.0
 
@@ -10,13 +10,8 @@ django-filter==25.1
 djangorestframework-simplejwt==5.5.1
 drf-yasg==1.21.11
 
-# Development and utilities
+# Development utilities
 django-extensions==4.1
-django-stubs==5.1.0
-django-stubs-ext==5.1.0
-types-requests==2.32.0.20241022
-types-Pillow==10.4.0.20241016
-pandas-stubs==2.2.2.241009
 
 # File processing and reports
 Pillow==10.4.0
@@ -40,6 +35,3 @@ requests==2.32.3
 celery==5.4.0
 redis==5.2.0
 flower==2.0.1
-
-# Additional utilities for optimization and analysis
-unicodedata2==15.1.0

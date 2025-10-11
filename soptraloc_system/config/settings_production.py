@@ -289,3 +289,6 @@ logger.info(f"APPS INSTALADAS: {len(INSTALLED_APPS)}")
 for app in LOCAL_APPS:
     logger.info(f"  - {app}")
 logger.info("=" * 60)
+
+# Integraciones externas
+MAPBOX_API_KEY = config('MAPBOX_API_KEY', default=None)
