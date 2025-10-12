@@ -95,7 +95,7 @@
                     <i class="fas fa-clock"></i>
                     Demurrage
                     {% if container.dias_para_demurrage < 0 %}
-                        <span class="badge badge-demurrage vencido">VENCIDO ({{ container.dias_para_demurrage|abs }} días)</span>
+                        <span class="badge badge-demurrage vencido">VENCIDO ({{ container.dias_vencido_demurrage }} días)</span>
                     {% elif container.dias_para_demurrage == 0 %}
                         <span class="badge badge-demurrage critico">HOY</span>
                     {% elif container.dias_para_demurrage == 1 %}

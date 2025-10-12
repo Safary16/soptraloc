@@ -182,6 +182,14 @@ class Container(models.Model):
         return delta.days
     
     @property
+    def dias_vencido_demurrage(self):
+        """Retorna días vencidos (valor absoluto cuando es negativo)"""
+        dias = self.dias_para_demurrage
+        if dias is not None and dias < 0:
+            return abs(dias)
+        return 0
+    
+    @property
     def urgencia_demurrage(self):
         """Retorna nivel de urgencia basado en días para demurrage"""
         dias = self.dias_para_demurrage

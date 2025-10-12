@@ -180,8 +180,8 @@ function loadContainers(page = 1) {
                 const row = document.createElement('tr');
                 
                 // Calcular peso total
-                const peso_carga = container.peso_carga || 0;
-                const tara = container.tara || 3500;
+                const peso_carga = parseFloat(container.peso_carga) || 0;
+                const tara = parseFloat(container.tara) || 3500;
                 const peso_total = peso_carga + tara;
                 
                 row.innerHTML = `
