@@ -19,6 +19,40 @@ class NotificationService:
     """
     
     @classmethod
+    def crear_notificacion_asignacion(cls, programacion, driver):
+        """
+        Crea notificación cuando se asigna un conductor a una programación
+        
+        Args:
+            programacion: Programación asignada
+            driver: Conductor asignado
+        
+        Returns:
+            Notification: Notificación creada
+        """
+        container = programacion.container
+        
+        notification = Notification.objects.create(
+            container=container,
+            driver=driver,
+            programacion=programacion,
+            tipo='asignacion',
+            prioridad='media',
+            titulo=f"Nueva asignación - {container.container_id if container else 'N/A'}",
+            mensaje=f"Se te ha asignado el contenedor {container.container_id if container else 'N/A'} "
+                   f"para el cliente {programacion.cliente}. "
+                   f"Fecha programada: {programacion.fecha_programada.strftime('%d/%m/%Y %H:%M') if programacion.fecha_programada else 'Por confirmar'}.",
+            detalles={
+                'cliente': programacion.cliente,
+                'fecha_programada': programacion.fecha_programada.isoformat() if programacion.fecha_programada else None,
+                'fecha_asignacion': timezone.now().isoformat(),
+            }
+        )
+        
+        logger.info(f"Notificación de asignación creada para conductor {driver.nombre}: {notification.id}")
+        return notification
+    
+    @classmethod
     def crear_notificacion_inicio_ruta(cls, programacion, driver, eta_minutos=None, distancia_km=None):
         """
         Crea notificación cuando un conductor inicia la ruta

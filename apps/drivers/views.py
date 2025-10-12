@@ -110,7 +110,16 @@ class DriverViewSet(viewsets.ModelViewSet):
         driver = self.get_object()
         
         # Verificar que el usuario autenticado es el conductor
-        if hasattr(request.user, 'driver') and request.user.driver == driver:
+        # Permitir si el usuario está autenticado y tiene el driver asociado
+        is_authorized = False
+        if request.user.is_authenticated:
+            if hasattr(request.user, 'driver') and request.user.driver == driver:
+                is_authorized = True
+            # También permitir si es admin/staff
+            elif request.user.is_staff or request.user.is_superuser:
+                is_authorized = True
+        
+        if is_authorized:
             lat = request.data.get('lat')
             lng = request.data.get('lng')
             accuracy = request.data.get('accuracy')
@@ -181,7 +190,15 @@ class DriverViewSet(viewsets.ModelViewSet):
         driver = self.get_object()
         
         # Verificar que el usuario autenticado es el conductor
-        if hasattr(request.user, 'driver') and request.user.driver == driver:
+        is_authorized = False
+        if request.user.is_authenticated:
+            if hasattr(request.user, 'driver') and request.user.driver == driver:
+                is_authorized = True
+            # También permitir si es admin/staff
+            elif request.user.is_staff or request.user.is_superuser:
+                is_authorized = True
+        
+        if is_authorized:
             serializer = DriverDetailSerializer(driver)
             return Response(serializer.data)
         else:
