@@ -2,6 +2,7 @@ from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.parsers import MultiPartParser, FormParser
+from rest_framework.permissions import AllowAny
 from django.utils import timezone
 from django.db.models import Q
 import tempfile
@@ -34,7 +35,7 @@ class ContainerViewSet(viewsets.ModelViewSet):
             return ContainerListSerializer
         return ContainerSerializer
     
-    @action(detail=False, methods=['post'], parser_classes=[MultiPartParser, FormParser])
+    @action(detail=False, methods=['post'], parser_classes=[MultiPartParser, FormParser], permission_classes=[AllowAny], url_path='import-embarque')
     def import_embarque(self, request):
         """
         Importa contenedores desde Excel de embarque
@@ -79,7 +80,7 @@ class ContainerViewSet(viewsets.ModelViewSet):
             if os.path.exists(tmp_path):
                 os.unlink(tmp_path)
     
-    @action(detail=False, methods=['post'], parser_classes=[MultiPartParser, FormParser])
+    @action(detail=False, methods=['post'], parser_classes=[MultiPartParser, FormParser], permission_classes=[AllowAny], url_path='import-liberacion')
     def import_liberacion(self, request):
         """
         Importa liberaciones desde Excel
@@ -121,7 +122,7 @@ class ContainerViewSet(viewsets.ModelViewSet):
             if os.path.exists(tmp_path):
                 os.unlink(tmp_path)
     
-    @action(detail=False, methods=['post'], parser_classes=[MultiPartParser, FormParser])
+    @action(detail=False, methods=['post'], parser_classes=[MultiPartParser, FormParser], permission_classes=[AllowAny], url_path='import-programacion')
     def import_programacion(self, request):
         """
         Importa programaciones desde Excel
