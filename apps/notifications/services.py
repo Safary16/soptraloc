@@ -38,8 +38,8 @@ class NotificationService:
             programacion=programacion,
             tipo='asignacion',
             prioridad='media',
-            titulo=f"Nueva asignación - {container.numero_contenedor if container else 'N/A'}",
-            mensaje=f"Se te ha asignado el contenedor {container.numero_contenedor if container else 'N/A'} "
+            titulo=f"Nueva asignación - {container.container_id if container else 'N/A'}",
+            mensaje=f"Se te ha asignado el contenedor {container.container_id if container else 'N/A'} "
                    f"para el cliente {programacion.cliente}. "
                    f"Fecha programada: {programacion.fecha_programada.strftime('%d/%m/%Y %H:%M') if programacion.fecha_programada else 'Por confirmar'}.",
             detalles={
