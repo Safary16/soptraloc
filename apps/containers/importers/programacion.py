@@ -189,7 +189,7 @@ class ProgramacionImporter:
                         })
                         continue
                     
-                    # Parsear fecha
+                    # Parsear fecha y combinar con hora si está disponible
                     fecha_programada = self.parsear_fecha(row['fecha_programada'])
                     if not fecha_programada:
                         self.resultados['errores'] += 1
@@ -199,6 +199,29 @@ class ProgramacionImporter:
                             'error': 'Fecha programada inválida'
                         })
                         continue
+                    
+                    # Combinar con hora si está disponible
+                    if 'hora_programada' in df.columns and pd.notna(row.get('hora_programada')):
+                        try:
+                            # Intentar parsear hora (puede venir como datetime, time, o string)
+                            hora_prog = row['hora_programada']
+                            if isinstance(hora_prog, str):
+                                # Si es string, intentar parsear
+                                hora_time = pd.to_datetime(hora_prog, format='%H:%M:%S').time()
+                            elif hasattr(hora_prog, 'time'):
+                                # Si es datetime, extraer time
+                                hora_time = hora_prog.time()
+                            else:
+                                # Si es time object, usar directamente
+                                hora_time = hora_prog
+                            
+                            # Combinar fecha con hora
+                            fecha_programada = timezone.make_aware(
+                                datetime.combine(fecha_programada.date(), hora_time)
+                            )
+                        except Exception:
+                            # Si falla, mantener fecha_programada original (sin hora)
+                            pass
                     
                     # Buscar CD
                     cd = self.buscar_cd(row['cd'])
@@ -220,6 +243,12 @@ class ProgramacionImporter:
                     
                     if 'referencia' in df.columns and pd.notna(row.get('referencia')):
                         container.referencia = str(row['referencia']).strip()
+                    
+                    # Actualizar nave si viene en el Excel de programación
+                    if 'nave' in df.columns and pd.notna(row.get('nave')):
+                        nave_prog = str(row['nave']).strip()
+                        if nave_prog:
+                            container.nave = nave_prog
                     
                     # Combinar MED y TIPO para obtener tipo completo (ej: 40H = 40HC)
                     if 'medida' in df.columns and 'tipo_contenedor' in df.columns:
