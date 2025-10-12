@@ -70,13 +70,18 @@
                             <i class="fas fa-file-upload"></i> Importar
                         </a>
                     </li>
+                    <li class="nav-item">
+                        <a class="nav-link {% if '/monitoring' in request.path %}active{% endif %}" href="/monitoring/">
+                            <i class="fas fa-map-marked-alt"></i> Monitoreo
+                        </a>
+                    </li>
                     <li class="nav-item dropdown">
                         <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown">
                             <i class="fas fa-chart-line"></i> Dashboards
                         </a>
                         <ul class="dropdown-menu">
                             <li><a class="dropdown-item" href="/executive/">📊 Ejecutivo</a></li>
-                            <li><a class="dropdown-item" href="/driver/dashboard/">📱 Conductor</a></li>
+                            <li><a class="dropdown-item" href="/driver/login/">📱 Conductor</a></li>
                         </ul>
                     </li>
                     <li class="nav-item">
