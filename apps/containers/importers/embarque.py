@@ -42,28 +42,60 @@ class EmbarqueImporter:
         df.columns = df.columns.str.strip()
         
         mapeo = {
+            # Container ID variations
             'contenedor': 'container_id',
             'container': 'container_id',
             'container numbers': 'container_id',
+            'container number': 'container_id',
             'id': 'container_id',
+            'nº contenedor': 'container_id',
+            'n° contenedor': 'container_id',
+            'numero contenedor': 'container_id',
+            'container id': 'container_id',
+            'container_id': 'container_id',
+            
+            # Tipo/Size variations
             'tipo contenedor': 'tipo',
             'tipo_contenedor': 'tipo',
             'container size': 'tipo',
+            'size': 'tipo',
+            'tamaño': 'tipo',
+            'tipo': 'tipo',
+            
+            # Nave variations
             'buque': 'nave',
             'naviera': 'nave',
             'nave confirmado': 'nave',
+            'nave': 'nave',
             'm/n': 'nave',
+            'vessel': 'nave',
+            
+            # Peso variations
             'peso_kg': 'peso',
             'peso (kg)': 'peso',
             'weight kgs': 'peso',
             'peso unidades': 'peso',
+            'peso': 'peso',
+            'weight': 'peso',
+            
+            # Other fields
             'container seal': 'sello',
+            'sello': 'sello',
             'eta confirmada': 'fecha_eta',
+            'eta': 'fecha_eta',
+            'fecha arribo': 'fecha_eta',
             'viaje confirmado': 'viaje',
+            'viaje': 'viaje',
+            'voyage': 'viaje',
             'destino': 'puerto',
+            'puerto': 'puerto',
             'origin': 'origen',
+            'origen': 'origen',
             'mbl': 'booking',
+            'booking': 'booking',
+            'bl': 'booking',
             'po': 'po',
+            'vendor': 'vendor',
         }
         
         df.columns = df.columns.str.lower().str.strip()
@@ -91,25 +123,48 @@ class EmbarqueImporter:
         try:
             # Leer Excel
             df = pd.read_excel(self.archivo_path)
+            
+            # Eliminar filas completamente vacías
+            df = df.dropna(how='all')
+            
+            # Normalizar columnas
             df = self.normalizar_columnas(df)
             
+            # Debug: Log columnas encontradas
+            print(f"DEBUG - Columnas encontradas: {list(df.columns)}")
+            
             # Validar columnas requeridas
+            columnas_faltantes = []
             for col in self.COLUMNAS_REQUERIDAS:
                 if col not in df.columns:
-                    raise ValueError(f"Columna requerida '{col}' no encontrada en el Excel")
+                    columnas_faltantes.append(col)
+            
+            if columnas_faltantes:
+                raise ValueError(
+                    f"Columnas requeridas no encontradas: {columnas_faltantes}. "
+                    f"Columnas disponibles: {list(df.columns)}"
+                )
+            
+            # Filtrar filas donde las columnas requeridas estén vacías
+            df_filtrado = df[
+                df['container_id'].notna() & 
+                (df['container_id'] != '') &
+                (df['container_id'].astype(str).str.upper() != 'NAN')
+            ]
+            
+            if len(df_filtrado) == 0:
+                raise ValueError(
+                    f"No se encontraron filas válidas con datos. "
+                    f"Total filas en Excel: {len(df)}, "
+                    f"Filas después de filtrar vacías: {len(df_filtrado)}"
+                )
+            
+            print(f"DEBUG - Filas a procesar: {len(df_filtrado)} de {len(df)} totales")
             
             # Procesar cada fila
-            for idx, row in df.iterrows():
+            for idx, row in df_filtrado.iterrows():
                 try:
                     container_id = str(row['container_id']).strip().upper()
-                    
-                    if not container_id or container_id == 'NAN':
-                        self.resultados['errores'] += 1
-                        self.resultados['detalles'].append({
-                            'fila': idx + 2,
-                            'error': 'Container ID vacío'
-                        })
-                        continue
                     
                     # Datos del contenedor
                     datos = {

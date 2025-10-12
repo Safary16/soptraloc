@@ -54,9 +54,17 @@ class LiberacionImporter:
         df.columns = df.columns.str.strip()
         
         mapeo = {
+            # Container ID variations
             'contenedor': 'container_id',
             'container': 'container_id',
             'id': 'container_id',
+            'nº contenedor': 'container_id',
+            'n° contenedor': 'container_id',
+            'numero contenedor': 'container_id',
+            'container id': 'container_id',
+            'container_id': 'container_id',
+            
+            # Posicion variations
             'posicion': 'posicion_fisica',
             'posición': 'posicion_fisica',
             'ubicacion': 'posicion_fisica',
@@ -64,19 +72,35 @@ class LiberacionImporter:
             'terminal': 'posicion_fisica',
             'almacen': 'posicion_fisica',
             'almacén': 'posicion_fisica',
+            'posicion fisica': 'posicion_fisica',
+            'posicion_fisica': 'posicion_fisica',
+            
+            # Deposito variations
             'devolucion vacio': 'deposito_devolucion',
             'devolución vacio': 'deposito_devolucion',
             'devolucion vacío': 'deposito_devolucion',
             'devolución vacío': 'deposito_devolucion',
             'depot': 'deposito_devolucion',
+            'deposito': 'deposito_devolucion',
+            'depósito': 'deposito_devolucion',
+            
+            # Other fields
             'peso unidades': 'peso',
+            'peso': 'peso',
             'fecha salida': 'fecha_liberacion',
+            'fecha liberacion': 'fecha_liberacion',
+            'fecha_liberacion': 'fecha_liberacion',
             'hora salida': 'hora_liberacion',
+            'hora': 'hora_liberacion',
             'm/n': 'nave',
+            'nave': 'nave',
             'cliente': 'cliente',
             'ref': 'referencia',
+            'referencia': 'referencia',
             'despacho': 'despacho',
             'tipo cont- temperatura': 'tipo',
+            'tipo': 'tipo',
+            'comuna': 'comuna',
         }
         
         df.columns = df.columns.str.lower().str.strip()
@@ -103,29 +127,49 @@ class LiberacionImporter:
         try:
             # Leer Excel
             df = pd.read_excel(self.archivo_path)
+            
+            # Eliminar filas completamente vacías
+            df = df.dropna(how='all')
+            
+            # Normalizar columnas
             df = self.normalizar_columnas(df)
             
-            # Saltar primera fila si es encabezado secundario (ej: "CELSIUS")
-            if df['container_id'].iloc[0] is pd.NA or pd.isna(df['container_id'].iloc[0]):
-                df = df.iloc[1:].reset_index(drop=True)
+            # Debug: Log columnas encontradas
+            print(f"DEBUG - Columnas encontradas: {list(df.columns)}")
             
             # Validar columnas requeridas
+            columnas_faltantes = []
             for col in self.COLUMNAS_REQUERIDAS:
                 if col not in df.columns:
-                    raise ValueError(f"Columna requerida '{col}' no encontrada en el Excel")
+                    columnas_faltantes.append(col)
+            
+            if columnas_faltantes:
+                raise ValueError(
+                    f"Columnas requeridas no encontradas: {columnas_faltantes}. "
+                    f"Columnas disponibles: {list(df.columns)}"
+                )
+            
+            # Filtrar filas donde las columnas requeridas estén vacías
+            # Para liberación, también necesitamos posicion_fisica
+            df_filtrado = df[
+                df['container_id'].notna() & 
+                (df['container_id'] != '') &
+                (df['container_id'].astype(str).str.upper() != 'NAN')
+            ]
+            
+            if len(df_filtrado) == 0:
+                raise ValueError(
+                    f"No se encontraron filas válidas con datos. "
+                    f"Total filas en Excel: {len(df)}, "
+                    f"Filas después de filtrar vacías: {len(df_filtrado)}"
+                )
+            
+            print(f"DEBUG - Filas a procesar: {len(df_filtrado)} de {len(df)} totales")
             
             # Procesar cada fila
-            for idx, row in df.iterrows():
+            for idx, row in df_filtrado.iterrows():
                 try:
                     container_id = str(row['container_id']).strip().upper()
-                    
-                    if not container_id or container_id == 'NAN':
-                        self.resultados['errores'] += 1
-                        self.resultados['detalles'].append({
-                            'fila': idx + 2,
-                            'error': 'Container ID vacío'
-                        })
-                        continue
                     
                     # Buscar contenedor
                     try:

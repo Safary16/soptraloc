@@ -51,22 +51,45 @@ class ProgramacionImporter:
         df.columns = df.columns.str.strip()
         
         mapeo = {
+            # Container ID variations
             'contenedor': 'container_id',
             'container': 'container_id',
             'id': 'container_id',
+            'nº contenedor': 'container_id',
+            'n° contenedor': 'container_id',
+            'numero contenedor': 'container_id',
+            'container id': 'container_id',
+            'container_id': 'container_id',
+            
+            # Fecha programada variations  
             'fecha': 'fecha_programada',
             'fecha programacion': 'fecha_programada',
             'fecha_programacion': 'fecha_programada',
             'fecha de programacion': 'fecha_programada',
+            'fecha programada': 'fecha_programada',
+            'fecha_programada': 'fecha_programada',
+            
+            # CD/Bodega variations
             'centro distribucion': 'cd',
             'centro_distribucion': 'cd',
             'destino': 'cd',
             'bodega': 'cd',
+            'cd': 'cd',
+            'cliente': 'cliente',
+            
+            # Direccion
             'direccion': 'direccion_entrega',
             'dirección': 'direccion_entrega',
+            'direccion entrega': 'direccion_entrega',
+            'direccion_entrega': 'direccion_entrega',
+            
+            # Demurrage
             'fecha demurrage': 'fecha_demurrage',
             'wk demurrage': 'dias_demurrage',
+            
+            # Others
             'ransportista': 'transportista',  # Nota: en Excel falta la T
+            'transportista': 'transportista',
             'hora': 'hora_programada',
             'producto': 'contenido',
             'referencia': 'referencia',
@@ -74,6 +97,8 @@ class ProgramacionImporter:
             'med': 'medida',
             'tipo': 'tipo_contenedor',
             'cajas': 'cantidad_cajas',
+            'observaciones': 'observaciones',
+            'obs': 'observaciones',
         }
         
         df.columns = df.columns.str.lower().str.strip()
@@ -150,25 +175,48 @@ class ProgramacionImporter:
         try:
             # Leer Excel
             df = pd.read_excel(self.archivo_path)
+            
+            # Eliminar filas completamente vacías
+            df = df.dropna(how='all')
+            
+            # Normalizar columnas
             df = self.normalizar_columnas(df)
             
+            # Debug: Log columnas encontradas
+            print(f"DEBUG - Columnas encontradas: {list(df.columns)}")
+            
             # Validar columnas requeridas
+            columnas_faltantes = []
             for col in self.COLUMNAS_REQUERIDAS:
                 if col not in df.columns:
-                    raise ValueError(f"Columna requerida '{col}' no encontrada en el Excel")
+                    columnas_faltantes.append(col)
+            
+            if columnas_faltantes:
+                raise ValueError(
+                    f"Columnas requeridas no encontradas: {columnas_faltantes}. "
+                    f"Columnas disponibles: {list(df.columns)}"
+                )
+            
+            # Filtrar filas donde las columnas requeridas estén vacías
+            df_filtrado = df[
+                df['container_id'].notna() & 
+                (df['container_id'] != '') &
+                (df['container_id'].astype(str).str.upper() != 'NAN')
+            ]
+            
+            if len(df_filtrado) == 0:
+                raise ValueError(
+                    f"No se encontraron filas válidas con datos. "
+                    f"Total filas en Excel: {len(df)}, "
+                    f"Filas después de filtrar vacías: {len(df_filtrado)}"
+                )
+            
+            print(f"DEBUG - Filas a procesar: {len(df_filtrado)} de {len(df)} totales")
             
             # Procesar cada fila
-            for idx, row in df.iterrows():
+            for idx, row in df_filtrado.iterrows():
                 try:
                     container_id = str(row['container_id']).strip().upper()
-                    
-                    if not container_id or container_id == 'NAN':
-                        self.resultados['errores'] += 1
-                        self.resultados['detalles'].append({
-                            'fila': idx + 2,
-                            'error': 'Container ID vacío'
-                        })
-                        continue
                     
                     # Buscar contenedor
                     try:
