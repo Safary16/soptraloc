@@ -157,6 +157,62 @@ class TiempoOperacion(models.Model):
     
     def __str__(self):
         return f"{self.get_tipo_operacion_display()} - {self.cd.nombre} ({self.fecha})"
+    
+    @classmethod
+    def obtener_tiempo_aprendido(cls, cd, tipo_operacion, conductor=None):
+        """
+        Obtiene tiempo aprendido basado en operaciones históricas
+        
+        Estrategia:
+        - Promedio móvil de las últimas 10 operaciones válidas (no anómalas)
+        - Si hay conductor, priorizarlo pero considerar datos generales del CD
+        - Fallback al tiempo promedio del CD
+        
+        Returns:
+            int: Tiempo estimado en minutos
+        """
+        from datetime import timedelta
+        from django.utils import timezone
+        from django.db.models import Avg
+        
+        # Filtro base: CD + tipo_operacion + sin anomalías + últimos 30 días
+        fecha_limite = timezone.now() - timedelta(days=30)
+        
+        filtros = {
+            'cd': cd,
+            'tipo_operacion': tipo_operacion,
+            'anomalia': False,
+            'fecha__gte': fecha_limite
+        }
+        
+        # Intentar con conductor específico primero
+        if conductor:
+            tiempos_conductor = cls.objects.filter(
+                **filtros,
+                conductor=conductor
+            ).order_by('-fecha')[:10]
+            
+            if tiempos_conductor.count() >= 3:
+                # Suficientes datos del conductor
+                promedio = tiempos_conductor.aggregate(Avg('tiempo_real_min'))['tiempo_real_min__avg']
+                if promedio:
+                    return int(promedio)
+        
+        # Fallback a datos generales del CD
+        tiempos_cd = cls.objects.filter(**filtros).order_by('-fecha')[:20]
+        
+        if tiempos_cd.count() >= 5:
+            # Suficientes datos generales
+            promedio = tiempos_cd.aggregate(Avg('tiempo_real_min'))['tiempo_real_min__avg']
+            if promedio:
+                return int(promedio)
+        
+        # Fallback final al tiempo promedio del CD
+        if tipo_operacion == 'descarga_cd' and cd.tiempo_promedio_descarga_min:
+            return cd.tiempo_promedio_descarga_min
+        
+        # Default genérico
+        return 60
 
 
 class TiempoViaje(models.Model):
@@ -213,3 +269,92 @@ class TiempoViaje(models.Model):
     
     def __str__(self):
         return f"{self.origen_nombre} → {self.destino_nombre} ({self.fecha})"
+    
+    @classmethod
+    def obtener_tiempo_aprendido(cls, origen_coords, destino_coords, tiempo_mapbox, hora_salida, conductor=None):
+        """
+        Obtiene tiempo aprendido basado en viajes históricos similares
+        
+        Estrategia:
+        - Buscar viajes en radio de 1km de origen y destino
+        - Considerar hora del día y día de semana (tráfico)
+        - Calcular factor de corrección sobre tiempo Mapbox
+        - Priorizar datos del conductor si disponibles
+        
+        Args:
+            origen_coords: tuple (lat, lon)
+            destino_coords: tuple (lat, lon)
+            tiempo_mapbox: int (tiempo base de Mapbox)
+            hora_salida: datetime
+            conductor: Driver opcional
+        
+        Returns:
+            int: Tiempo estimado en minutos
+        """
+        from datetime import timedelta
+        from django.utils import timezone
+        from django.db.models import Avg, Q
+        from decimal import Decimal
+        
+        # Radio de búsqueda: ~1km = 0.009 grados
+        radio = Decimal('0.009')
+        
+        # Extraer hora y día de semana
+        hora_del_dia = hora_salida.hour
+        dia_semana = hora_salida.weekday()
+        
+        # Filtros base: origen/destino similares + sin anomalías + últimos 60 días
+        fecha_limite = timezone.now() - timedelta(days=60)
+        
+        filtros_base = Q(
+            origen_lat__gte=Decimal(str(origen_coords[0])) - radio,
+            origen_lat__lte=Decimal(str(origen_coords[0])) + radio,
+            origen_lon__gte=Decimal(str(origen_coords[1])) - radio,
+            origen_lon__lte=Decimal(str(origen_coords[1])) + radio,
+            destino_lat__gte=Decimal(str(destino_coords[0])) - radio,
+            destino_lat__lte=Decimal(str(destino_coords[0])) + radio,
+            destino_lon__gte=Decimal(str(destino_coords[1])) - radio,
+            destino_lon__lte=Decimal(str(destino_coords[1])) + radio,
+            anomalia=False,
+            fecha__gte=fecha_limite
+        )
+        
+        # Priorizar misma franja horaria (±2 horas)
+        hora_min = max(0, hora_del_dia - 2)
+        hora_max = min(23, hora_del_dia + 2)
+        
+        # Intentar con conductor específico primero
+        if conductor:
+            viajes_conductor = cls.objects.filter(
+                filtros_base,
+                conductor=conductor,
+                hora_del_dia__gte=hora_min,
+                hora_del_dia__lte=hora_max
+            ).order_by('-fecha')[:5]
+            
+            if viajes_conductor.count() >= 2:
+                # Suficientes datos del conductor
+                promedio_real = viajes_conductor.aggregate(Avg('tiempo_real_min'))['tiempo_real_min__avg']
+                if promedio_real:
+                    return int(promedio_real)
+        
+        # Fallback a datos generales (misma franja horaria)
+        viajes_similares = cls.objects.filter(
+            filtros_base,
+            hora_del_dia__gte=hora_min,
+            hora_del_dia__lte=hora_max
+        ).order_by('-fecha')[:10]
+        
+        if viajes_similares.count() >= 3:
+            # Calcular factor de corrección
+            promedio_real = viajes_similares.aggregate(Avg('tiempo_real_min'))['tiempo_real_min__avg']
+            promedio_mapbox = viajes_similares.aggregate(Avg('tiempo_mapbox_min'))['tiempo_mapbox_min__avg']
+            
+            if promedio_real and promedio_mapbox and promedio_mapbox > 0:
+                factor = promedio_real / promedio_mapbox
+                # Aplicar factor al tiempo actual de Mapbox
+                tiempo_ajustado = int(tiempo_mapbox * factor)
+                return tiempo_ajustado
+        
+        # Fallback final: usar Mapbox directo
+        return tiempo_mapbox
