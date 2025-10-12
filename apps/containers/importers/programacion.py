@@ -30,7 +30,7 @@ class ProgramacionImporter:
     Si existe WK Demurrage, se calcula desde fecha_liberacion.
     """
     
-    COLUMNAS_REQUERIDAS = ['container_id', 'fecha_programada', 'cliente', 'cd']
+    COLUMNAS_REQUERIDAS = ['container_id', 'fecha_programada', 'cd']
     
     def __init__(self, archivo_path, usuario=None):
         self.archivo_path = archivo_path
@@ -46,6 +46,10 @@ class ProgramacionImporter:
     
     def normalizar_columnas(self, df):
         """Normaliza los nombres de columnas a los esperados"""
+        # Limpiar caracteres especiales en nombres de columnas
+        df.columns = df.columns.str.replace('\xa0', ' ', regex=False)
+        df.columns = df.columns.str.strip()
+        
         mapeo = {
             'contenedor': 'container_id',
             'container': 'container_id',
@@ -62,6 +66,14 @@ class ProgramacionImporter:
             'dirección': 'direccion_entrega',
             'fecha demurrage': 'fecha_demurrage',
             'wk demurrage': 'dias_demurrage',
+            'ransportista': 'transportista',  # Nota: en Excel falta la T
+            'hora': 'hora_programada',
+            'producto': 'contenido',
+            'referencia': 'referencia',
+            'nave': 'nave',
+            'med': 'medida',
+            'tipo': 'tipo_contenedor',
+            'cajas': 'cantidad_cajas',
         }
         
         df.columns = df.columns.str.lower().str.strip()
@@ -192,8 +204,30 @@ class ProgramacionImporter:
                         })
                         continue
                     
-                    # Cliente
-                    cliente = str(row['cliente']).strip() if pd.notna(row['cliente']) else 'N/A'
+                    # Cliente (puede venir de Programacion pero actualizar Container)
+                    cliente = str(row.get('cliente', 'N/A')).strip() if pd.notna(row.get('cliente')) else 'N/A'
+                    
+                    # Actualizar datos del contenedor desde programación
+                    if 'contenido' in df.columns and pd.notna(row.get('contenido')):
+                        container.contenido = str(row['contenido']).strip()
+                    
+                    if 'referencia' in df.columns and pd.notna(row.get('referencia')):
+                        container.referencia = str(row['referencia']).strip()
+                    
+                    # Combinar MED y TIPO para obtener tipo completo (ej: 40H = 40HC)
+                    if 'medida' in df.columns and 'tipo_contenedor' in df.columns:
+                        medida = str(row.get('medida', '')).strip()
+                        tipo = str(row.get('tipo_contenedor', '')).strip().upper()
+                        if medida and tipo:
+                            tipo_completo = f"{medida}{tipo}"
+                            if 'H' in tipo and medida == '40':
+                                container.tipo = '40HC'
+                            elif medida == '20':
+                                container.tipo = '20'
+                            elif medida == '45':
+                                container.tipo = '45'
+                    
+                    container.save()
                     
                     # Crear o actualizar programación
                     programacion, created = Programacion.objects.update_or_create(

@@ -7,6 +7,7 @@ Asigna posición física según reglas:
 """
 import pandas as pd
 from django.utils import timezone
+from datetime import datetime
 from apps.containers.models import Container
 from apps.events.models import Event
 
@@ -48,9 +49,12 @@ class LiberacionImporter:
     
     def normalizar_columnas(self, df):
         """Normaliza los nombres de columnas a los esperados"""
+        # Limpiar caracteres especiales en nombres de columnas
+        df.columns = df.columns.str.replace('\xa0', ' ', regex=False)
+        df.columns = df.columns.str.strip()
+        
         mapeo = {
             'contenedor': 'container_id',
-            'contenedor ': 'container_id',  # Con espacio al final
             'container': 'container_id',
             'id': 'container_id',
             'posicion': 'posicion_fisica',
@@ -66,7 +70,13 @@ class LiberacionImporter:
             'devolución vacío': 'deposito_devolucion',
             'depot': 'deposito_devolucion',
             'peso unidades': 'peso',
-            'fecha salida': 'fecha_salida',
+            'fecha salida': 'fecha_liberacion',
+            'hora salida': 'hora_liberacion',
+            'm/n': 'nave',
+            'cliente': 'cliente',
+            'ref': 'referencia',
+            'despacho': 'despacho',
+            'tipo cont- temperatura': 'tipo',
         }
         
         df.columns = df.columns.str.lower().str.strip()
@@ -94,6 +104,10 @@ class LiberacionImporter:
             # Leer Excel
             df = pd.read_excel(self.archivo_path)
             df = self.normalizar_columnas(df)
+            
+            # Saltar primera fila si es encabezado secundario (ej: "CELSIUS")
+            if df['container_id'].iloc[0] is pd.NA or pd.isna(df['container_id'].iloc[0]):
+                df = df.iloc[1:].reset_index(drop=True)
             
             # Validar columnas requeridas
             for col in self.COLUMNAS_REQUERIDAS:
@@ -129,10 +143,24 @@ class LiberacionImporter:
                     posicion_original = row.get('posicion_fisica')
                     posicion_mapeada = self.mapear_posicion(posicion_original)
                     
+                    # Parsear fecha y hora de liberación
+                    fecha_liberacion = timezone.now()
+                    if 'fecha_liberacion' in df.columns and pd.notna(row.get('fecha_liberacion')):
+                        try:
+                            fecha_lib = pd.to_datetime(row['fecha_liberacion'])
+                            # Combinar con hora si está disponible
+                            if 'hora_liberacion' in df.columns and pd.notna(row.get('hora_liberacion')):
+                                hora_lib = pd.to_datetime(str(row['hora_liberacion']), format='%H:%M:%S').time()
+                                fecha_liberacion = timezone.make_aware(datetime.combine(fecha_lib.date(), hora_lib))
+                            else:
+                                fecha_liberacion = timezone.make_aware(fecha_lib)
+                        except Exception:
+                            fecha_liberacion = timezone.now()
+                    
                     # Actualizar contenedor
                     container.estado = 'liberado'
                     container.posicion_fisica = posicion_mapeada
-                    container.fecha_liberacion = timezone.now()
+                    container.fecha_liberacion = fecha_liberacion
                     
                     # Comuna si viene en el Excel
                     if 'comuna' in df.columns and pd.notna(row.get('comuna')):
@@ -142,12 +170,19 @@ class LiberacionImporter:
                     if 'deposito_devolucion' in df.columns and pd.notna(row.get('deposito_devolucion')):
                         container.deposito_devolucion = str(row['deposito_devolucion']).strip()
                     
-                    # Actualizar peso si viene en el Excel (puede ser más preciso que el inicial)
+                    # Actualizar peso_carga si viene en el Excel (puede ser más preciso que el inicial)
                     if 'peso' in df.columns and pd.notna(row.get('peso')):
                         try:
-                            container.peso = float(row['peso'])
+                            container.peso_carga = float(row['peso'])
                         except (ValueError, TypeError):
                             pass
+                    
+                    # Cliente y referencia
+                    if 'cliente' in df.columns and pd.notna(row.get('cliente')):
+                        container.cliente = str(row['cliente']).strip()
+                    
+                    if 'referencia' in df.columns and pd.notna(row.get('referencia')):
+                        container.referencia = str(row['referencia']).strip()
                     
                     # Fecha salida puede usarse para calcular fecha_demurrage
                     # Nota: La fecha_demurrage real vendrá del Excel de programación

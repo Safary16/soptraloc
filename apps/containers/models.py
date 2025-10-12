@@ -54,6 +54,8 @@ class Container(models.Model):
     
     # Información del embarque
     nave = models.CharField('Nave', max_length=100)
+    viaje = models.CharField('Viaje', max_length=50, null=True, blank=True, help_text='Número de viaje')
+    booking = models.CharField('Booking/MBL', max_length=100, null=True, blank=True, help_text='Número de booking o Master Bill of Lading')
     fecha_eta = models.DateTimeField('ETA (Estimated Time of Arrival)', null=True, blank=True, help_text='Fecha estimada de arribo')
     peso_carga = models.DecimalField('Peso Carga (kg)', max_digits=10, decimal_places=2, null=True, blank=True, help_text='Peso de la mercancía')
     tara = models.DecimalField('Tara (kg)', max_digits=10, decimal_places=2, null=True, blank=True, help_text='Peso del contenedor vacío')
@@ -61,6 +63,7 @@ class Container(models.Model):
     vendor = models.CharField('Vendor', max_length=200, null=True, blank=True)
     sello = models.CharField('Sello', max_length=100, null=True, blank=True)
     puerto = models.CharField('Puerto', max_length=100, default='Valparaíso')
+    referencia = models.CharField('Referencia', max_length=100, null=True, blank=True, help_text='Referencia del cliente')
     
     # Estado y ubicación
     estado = models.CharField('Estado', max_length=20, choices=ESTADOS, default='por_arribar', db_index=True)
@@ -68,6 +71,7 @@ class Container(models.Model):
     tipo_movimiento = models.CharField('Tipo de Movimiento', max_length=20, choices=TIPOS_MOVIMIENTO, default='automatico')
     
     # Información de entrega
+    cliente = models.CharField('Cliente', max_length=200, null=True, blank=True, help_text='Nombre del cliente final')
     comuna = models.CharField('Comuna Destino', max_length=100, null=True, blank=True)
     secuenciado = models.BooleanField('Secuenciado', default=False, help_text='Marcado para próxima liberación')
     cd_entrega = models.ForeignKey('cds.CD', on_delete=models.SET_NULL, null=True, blank=True, related_name='contenedores_entregados', verbose_name='CD de Entrega')
