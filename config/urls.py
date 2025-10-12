@@ -31,7 +31,7 @@ router.register(r'drivers', DriverViewSet, basename='driver')
 router.register(r'programaciones', ProgramacionViewSet, basename='programacion')
 router.register(r'cds', CDViewSet, basename='cd')
 
-from apps.core.views import home, asignacion, importar, estados, container_detail, containers_list
+from apps.core.views import home, asignacion, importar, estados, container_detail, containers_list, drivers_list
 
 urlpatterns = [
     # Frontend pages
@@ -41,6 +41,7 @@ urlpatterns = [
     path("estados/", estados, name="estados"),
     path("containers/", containers_list, name="containers_list"),
     path("container/<str:container_id>/", container_detail, name="container_detail"),
+    path("drivers/", drivers_list, name="drivers_list"),
     
     # Admin and API
     path("admin/", admin.site.urls),

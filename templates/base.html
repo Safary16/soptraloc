@@ -51,6 +51,11 @@
                         </a>
                     </li>
                     <li class="nav-item">
+                        <a class="nav-link {% if '/drivers' in request.path %}active{% endif %}" href="/drivers/">
+                            <i class="fas fa-users"></i> Conductores
+                        </a>
+                    </li>
+                    <li class="nav-item">
                         <a class="nav-link {% if '/estados' in request.path %}active{% endif %}" href="/estados/">
                             <i class="fas fa-sync-alt"></i> Estados
                         </a>

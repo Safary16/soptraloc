@@ -84,3 +84,8 @@ def container_detail(request, container_id):
 def containers_list(request):
     """Vista de listado de contenedores con filtros"""
     return render(request, 'containers_list.html')
+
+
+def drivers_list(request):
+    """Vista de listado de conductores con filtros"""
+    return render(request, 'drivers_list.html')
