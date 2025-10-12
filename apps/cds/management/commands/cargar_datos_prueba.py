@@ -19,7 +19,7 @@ class Command(BaseCommand):
     def handle(self, *args, **options):
         self.stdout.write(self.style.SUCCESS('Cargando datos de prueba...'))
         
-        # Crear CCTIs
+        # Crear CCTIs adicionales (para testing - además del CCTI principal)
         self.stdout.write('Creando CCTIs...')
         ccti_zeal, _ = CD.objects.get_or_create(
             codigo='ZEAL',
@@ -54,14 +54,14 @@ class Command(BaseCommand):
         
         # Puerto Madero - Requiere espera para carga
         cd_puerto_madero, _ = CD.objects.get_or_create(
-            codigo='PUERTO_MADERO',
+            codigo='MADERO',
             defaults={
-                'nombre': 'Puerto Madero',
-                'direccion': 'Puerto Madero, Buenos Aires',
-                'comuna': 'Puerto Madero',
+                'nombre': 'CD Puerto Madero',
+                'direccion': 'Puerto Madero 9710, Pudahuel, Región Metropolitana',
+                'comuna': 'Pudahuel',
                 'tipo': 'cliente',
-                'lat': Decimal('-34.6118'),
-                'lng': Decimal('-58.3638'),
+                'lat': Decimal('-33.3947'),
+                'lng': Decimal('-70.7642'),
                 'requiere_espera_carga': True,  # Conductor espera descarga sobre camión
                 'permite_soltar_contenedor': False,  # No es drop & hook
                 'tiempo_promedio_descarga_min': 90,  # 1.5 horas promedio
@@ -70,17 +70,17 @@ class Command(BaseCommand):
         
         # Campos de Chile - Requiere espera para carga
         cd_campos_chile, _ = CD.objects.get_or_create(
-            codigo='CAMPOS_CHILE',
+            codigo='CAMPOS',
             defaults={
-                'nombre': 'Campos de Chile',
-                'direccion': 'Parque Industrial, Santiago',
-                'comuna': 'Santiago',
+                'nombre': 'CD Campos de Chile',
+                'direccion': 'Av. El Parque 1000, Pudahuel, Región Metropolitana',
+                'comuna': 'Pudahuel',
                 'tipo': 'cliente',
-                'lat': Decimal('-33.4489'),
-                'lng': Decimal('-70.6693'),
+                'lat': Decimal('-33.3986'),
+                'lng': Decimal('-70.7489'),
                 'requiere_espera_carga': True,  # Conductor espera descarga sobre camión
                 'permite_soltar_contenedor': False,  # No es drop & hook
-                'tiempo_promedio_descarga_min': 120,  # 2 horas promedio
+                'tiempo_promedio_descarga_min': 90,  # 1.5 horas promedio
             }
         )
         
@@ -88,28 +88,28 @@ class Command(BaseCommand):
         cd_quilicura, _ = CD.objects.get_or_create(
             codigo='QUILICURA',
             defaults={
-                'nombre': 'Quilicura',
-                'direccion': 'Parque Industrial Quilicura',
+                'nombre': 'CD Quilicura',
+                'direccion': 'Eduardo Frei Montalva 8301, Quilicura, Región Metropolitana',
                 'comuna': 'Quilicura',
                 'tipo': 'cliente',
-                'lat': Decimal('-33.3600'),
-                'lng': Decimal('-70.7267'),
+                'lat': Decimal('-33.3511'),
+                'lng': Decimal('-70.7282'),
                 'requiere_espera_carga': True,  # Conductor espera descarga sobre camión
                 'permite_soltar_contenedor': False,  # No es drop & hook
-                'tiempo_promedio_descarga_min': 80,  # 1h 20min promedio
+                'tiempo_promedio_descarga_min': 90,  # 1.5 horas promedio
             }
         )
         
-        # El Peñón (6020) - Drop & Hook único
+        # El Peñón - Drop & Hook único
         cd_el_penon, _ = CD.objects.get_or_create(
-            codigo='6020',
+            codigo='PENON',
             defaults={
-                'nombre': 'El Peñón',
-                'direccion': 'El Peñón, Coquimbo',
-                'comuna': 'Coquimbo',
+                'nombre': 'CD El Peñón',
+                'direccion': 'Avenida Presidente Jorge Alessandri Rodriguez 18899, San Bernardo, Región Metropolitana',
+                'comuna': 'San Bernardo',
                 'tipo': 'cliente',
-                'lat': Decimal('-29.9549'),
-                'lng': Decimal('-71.3389'),
+                'lat': Decimal('-33.6223'),
+                'lng': Decimal('-70.7089'),
                 'requiere_espera_carga': False,  # NO espera, es drop & hook
                 'permite_soltar_contenedor': True,  # SÍ permite drop & hook
                 'tiempo_promedio_descarga_min': 30,  # Solo tiempo de soltar (30 min)
