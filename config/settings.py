@@ -46,6 +46,7 @@ INSTALLED_APPS = [
     'drf_yasg',
     
     # Local apps
+    'apps.core',
     'apps.containers',
     'apps.drivers',
     'apps.programaciones',

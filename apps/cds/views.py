@@ -1,6 +1,7 @@
 from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
+from rest_framework.permissions import IsAuthenticatedOrReadOnly
 
 from .models import CD
 from .serializers import CDSerializer, CDListSerializer
@@ -16,6 +17,7 @@ class CDViewSet(viewsets.ModelViewSet):
     search_fields = ['nombre', 'codigo', 'direccion', 'comuna']
     ordering_fields = ['nombre', 'tipo']
     ordering = ['nombre']
+    permission_classes = [IsAuthenticatedOrReadOnly]
     
     def get_serializer_class(self):
         if self.action == 'list':

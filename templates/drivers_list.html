@@ -1,0 +1,287 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Conductores - SoptraLoc{% endblock %}
+
+{% block extra_css %}
+<style>
+    .table-hover tbody tr:hover {
+        background-color: #f8f9fa;
+        cursor: pointer;
+    }
+    .badge-disponible {
+        background-color: #28a745;
+    }
+    .badge-no-disponible {
+        background-color: #dc3545;
+    }
+    .btn-action {
+        padding: 4px 8px;
+        font-size: 0.9rem;
+        margin: 2px;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <!-- Header -->
+    <div class="row mb-4">
+        <div class="col-md-8">
+            <h1 class="display-6">
+                <i class="fas fa-users"></i>
+                Listado de Conductores
+            </h1>
+            <p class="text-muted">Gestión de conductores y asignaciones</p>
+        </div>
+        <div class="col-md-4 text-end">
+            <a href="/admin/drivers/driver/add/" class="btn btn-success">
+                <i class="fas fa-plus"></i> Nuevo Conductor
+            </a>
+            <a href="/admin/drivers/driver/" class="btn btn-ubuntu">
+                <i class="fas fa-cog"></i> Admin
+            </a>
+        </div>
+    </div>
+
+    <!-- Filtros -->
+    <div class="row mb-3">
+        <div class="col-md-3">
+            <select class="form-select" id="filter-presente">
+                <option value="">Todos</option>
+                <option value="true">Presentes</option>
+                <option value="false">Ausentes</option>
+            </select>
+        </div>
+        <div class="col-md-3">
+            <select class="form-select" id="filter-activo">
+                <option value="">Todos los estados</option>
+                <option value="true">Activos</option>
+                <option value="false">Inactivos</option>
+            </select>
+        </div>
+        <div class="col-md-4">
+            <input type="text" class="form-control" id="search-driver" placeholder="Buscar por nombre, RUT, teléfono...">
+        </div>
+        <div class="col-md-2">
+            <button class="btn btn-primary w-100" onclick="loadDrivers()">
+                <i class="fas fa-search"></i> Buscar
+            </button>
+        </div>
+    </div>
+
+    <!-- Tabla -->
+    <div class="row">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-hover" id="drivers-table">
+                            <thead class="table-dark">
+                                <tr>
+                                    <th>Acciones</th>
+                                    <th>Nombre</th>
+                                    <th>RUT</th>
+                                    <th>Teléfono</th>
+                                    <th>Estado</th>
+                                    <th>Presente</th>
+                                    <th>Entregas Hoy</th>
+                                    <th>Cumplimiento</th>
+                                    <th>Ocupación</th>
+                                </tr>
+                            </thead>
+                            <tbody id="drivers-tbody">
+                                <tr>
+                                    <td colspan="9" class="text-center">
+                                        <div class="spinner-border text-primary" role="status">
+                                            <span class="visually-hidden">Cargando...</span>
+                                        </div>
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                    
+                    <!-- Paginación -->
+                    <div class="d-flex justify-content-between align-items-center mt-3">
+                        <div id="pagination-info"></div>
+                        <nav>
+                            <ul class="pagination mb-0" id="pagination"></ul>
+                        </nav>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+let currentPage = 1;
+let totalPages = 1;
+
+function loadDrivers(page = 1) {
+    const presente = document.getElementById('filter-presente').value;
+    const activo = document.getElementById('filter-activo').value;
+    const search = document.getElementById('search-driver').value;
+    
+    let url = `/api/drivers/?page=${page}`;
+    if (presente) url += `&presente=${presente}`;
+    if (activo) url += `&activo=${activo}`;
+    if (search) url += `&search=${search}`;
+    
+    fetch(url)
+        .then(response => response.json())
+        .then(data => {
+            const tbody = document.getElementById('drivers-tbody');
+            tbody.innerHTML = '';
+            
+            if (data.results.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="9" class="text-center">No se encontraron conductores</td></tr>';
+                return;
+            }
+            
+            data.results.forEach(driver => {
+                const row = document.createElement('tr');
+                
+                const ocupacion = driver.max_entregas_dia > 0 ? 
+                    ((driver.num_entregas_dia / driver.max_entregas_dia) * 100).toFixed(0) : 0;
+                
+                row.innerHTML = `
+                    <td>
+                        <a href="/admin/drivers/driver/${driver.id}/change/" 
+                           class="btn btn-sm btn-primary btn-action" 
+                           title="Editar">
+                            <i class="fas fa-edit"></i>
+                        </a>
+                        <button onclick="deleteDriver(${driver.id}, '${driver.nombre}')" 
+                                class="btn btn-sm btn-danger btn-action" 
+                                title="Eliminar">
+                            <i class="fas fa-trash"></i>
+                        </button>
+                    </td>
+                    <td><strong>${driver.nombre}</strong></td>
+                    <td>${driver.rut || '-'}</td>
+                    <td>${driver.telefono || '-'}</td>
+                    <td>
+                        <span class="badge ${driver.activo ? 'bg-success' : 'bg-secondary'}">
+                            ${driver.activo ? 'Activo' : 'Inactivo'}
+                        </span>
+                    </td>
+                    <td>
+                        <span class="badge ${driver.presente ? 'badge-disponible' : 'badge-no-disponible'}">
+                            ${driver.presente ? 'Presente' : 'Ausente'}
+                        </span>
+                    </td>
+                    <td>${driver.num_entregas_dia} / ${driver.max_entregas_dia}</td>
+                    <td>
+                        <span class="badge ${driver.cumplimiento_porcentaje >= 80 ? 'bg-success' : 'bg-warning'}">
+                            ${driver.cumplimiento_porcentaje}%
+                        </span>
+                    </td>
+                    <td>
+                        <div class="progress" style="height: 20px;">
+                            <div class="progress-bar ${ocupacion >= 100 ? 'bg-danger' : ocupacion >= 80 ? 'bg-warning' : 'bg-success'}" 
+                                 role="progressbar" 
+                                 style="width: ${Math.min(ocupacion, 100)}%;" 
+                                 aria-valuenow="${ocupacion}" 
+                                 aria-valuemin="0" 
+                                 aria-valuemax="100">
+                                ${ocupacion}%
+                            </div>
+                        </div>
+                    </td>
+                `;
+                tbody.appendChild(row);
+            });
+            
+            // Actualizar paginación
+            updatePagination(data);
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            document.getElementById('drivers-tbody').innerHTML = 
+                '<tr><td colspan="9" class="text-center text-danger">Error al cargar datos</td></tr>';
+        });
+}
+
+function updatePagination(data) {
+    const info = document.getElementById('pagination-info');
+    const pagination = document.getElementById('pagination');
+    
+    info.textContent = `Mostrando ${data.results.length} de ${data.count} conductores`;
+    
+    // Calcular páginas
+    const pageSize = 20;
+    totalPages = Math.ceil(data.count / pageSize);
+    
+    pagination.innerHTML = '';
+    
+    // Botón anterior
+    const prevLi = document.createElement('li');
+    prevLi.className = `page-item ${!data.previous ? 'disabled' : ''}`;
+    prevLi.innerHTML = `<a class="page-link" href="#" onclick="loadDrivers(${currentPage - 1}); return false;">Anterior</a>`;
+    pagination.appendChild(prevLi);
+    
+    // Números de página
+    for (let i = 1; i <= Math.min(totalPages, 5); i++) {
+        const li = document.createElement('li');
+        li.className = `page-item ${i === currentPage ? 'active' : ''}`;
+        li.innerHTML = `<a class="page-link" href="#" onclick="loadDrivers(${i}); return false;">${i}</a>`;
+        pagination.appendChild(li);
+    }
+    
+    // Botón siguiente
+    const nextLi = document.createElement('li');
+    nextLi.className = `page-item ${!data.next ? 'disabled' : ''}`;
+    nextLi.innerHTML = `<a class="page-link" href="#" onclick="loadDrivers(${currentPage + 1}); return false;">Siguiente</a>`;
+    pagination.appendChild(nextLi);
+    
+    currentPage = Math.min(currentPage, totalPages);
+}
+
+function deleteDriver(id, nombre) {
+    if (!confirm(`¿Estás seguro de eliminar al conductor "${nombre}"?\n\nEsta acción no se puede deshacer.`)) {
+        return;
+    }
+    
+    fetch(`/api/drivers/${id}/`, {
+        method: 'DELETE',
+        headers: {
+            'X-CSRFToken': getCookie('csrftoken')
+        }
+    })
+    .then(response => {
+        if (response.ok) {
+            alert('✅ Conductor eliminado exitosamente');
+            loadDrivers(currentPage);
+        } else {
+            alert('❌ Error al eliminar conductor');
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        alert('❌ Error de conexión');
+    });
+}
+
+function getCookie(name) {
+    let cookieValue = null;
+    if (document.cookie && document.cookie !== '') {
+        const cookies = document.cookie.split(';');
+        for (let i = 0; i < cookies.length; i++) {
+            const cookie = cookies[i].trim();
+            if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                break;
+            }
+        }
+    }
+    return cookieValue;
+}
+
+// Cargar al inicio
+document.addEventListener('DOMContentLoaded', function() {
+    loadDrivers();
+});
+</script>
+{% endblock %}

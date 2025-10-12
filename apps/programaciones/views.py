@@ -2,7 +2,7 @@ from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.parsers import MultiPartParser, FormParser
-from rest_framework.permissions import AllowAny
+from rest_framework.permissions import AllowAny, IsAuthenticatedOrReadOnly
 from django.db.models import Q
 from django.utils import timezone
 from datetime import timedelta
@@ -28,6 +28,7 @@ class ProgramacionViewSet(viewsets.ModelViewSet):
     search_fields = ['container__container_id', 'cliente']
     ordering_fields = ['fecha_programada', 'created_at']
     ordering = ['fecha_programada']
+    permission_classes = [IsAuthenticatedOrReadOnly]
     
     def get_serializer_class(self):
         if self.action == 'list':

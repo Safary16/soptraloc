@@ -21,51 +21,106 @@
         </div>
     </div>
 
-    <!-- Stats Cards -->
+    <!-- Stats Cards - Métricas Principales -->
     <div class="row mb-4">
         <div class="col-md-3 mb-3">
-            <a href="/containers/" class="text-decoration-none">
+            <a href="/containers/?estado=programado" class="text-decoration-none">
                 <div class="card stat-card orange fade-in" style="cursor: pointer; transition: transform 0.2s;" onmouseover="this.style.transform='scale(1.05)'" onmouseout="this.style.transform='scale(1)'">
                     <div class="stat-icon">
-                        <i class="fas fa-box"></i>
+                        <i class="fas fa-calendar-day"></i>
                     </div>
-                    <div class="stat-number" id="stat-total">-</div>
-                    <div class="stat-label">Contenedores</div>
+                    <div class="stat-number">{{ stats.programados_hoy }}</div>
+                    <div class="stat-label">Programados Hoy</div>
                 </div>
             </a>
         </div>
         <div class="col-md-3 mb-3">
-            <a href="/containers/?estado=programado" class="text-decoration-none">
+            <a href="/containers/" class="text-decoration-none">
                 <div class="card stat-card purple fade-in" style="cursor: pointer; transition: transform 0.2s;" onmouseover="this.style.transform='scale(1.05)'" onmouseout="this.style.transform='scale(1)'">
                     <div class="stat-icon">
-                        <i class="fas fa-exclamation-triangle"></i>
+                        <i class="fas fa-dollar-sign"></i>
                     </div>
-                    <div class="stat-number" id="stat-criticas">-</div>
-                    <div class="stat-label">Urgencia Crítica</div>
+                    <div class="stat-number">{{ stats.con_demurrage }}</div>
+                    <div class="stat-label">Demurrage Pendiente</div>
                 </div>
             </a>
         </div>
         <div class="col-md-3 mb-3">
-            <a href="/api/drivers/" class="text-decoration-none">
+            <a href="/containers/?estado=liberado" class="text-decoration-none">
                 <div class="card stat-card dark fade-in" style="cursor: pointer; transition: transform 0.2s;" onmouseover="this.style.transform='scale(1.05)'" onmouseout="this.style.transform='scale(1)'">
                     <div class="stat-icon">
-                        <i class="fas fa-truck"></i>
+                        <i class="fas fa-unlock"></i>
                     </div>
-                    <div class="stat-number" id="stat-conductores">{{ stats.conductores }}</div>
-                    <div class="stat-label">Conductores</div>
+                    <div class="stat-number">{{ stats.liberados }}</div>
+                    <div class="stat-label">Liberados</div>
                 </div>
             </a>
         </div>
         <div class="col-md-3 mb-3">
-            <a href="/api/cds/" class="text-decoration-none">
+            <a href="/containers/?estado=en_ruta" class="text-decoration-none">
                 <div class="card stat-card orange fade-in" style="cursor: pointer; transition: transform 0.2s;" onmouseover="this.style.transform='scale(1.05)'" onmouseout="this.style.transform='scale(1)'">
                     <div class="stat-icon">
-                        <i class="fas fa-warehouse"></i>
+                        <i class="fas fa-truck-moving"></i>
                     </div>
-                    <div class="stat-number" id="stat-cds">{{ stats.cds }}</div>
-                    <div class="stat-label">Centros de Distribución</div>
+                    <div class="stat-number">{{ stats.en_ruta }}</div>
+                    <div class="stat-label">En Ruta</div>
                 </div>
             </a>
+        </div>
+    </div>
+
+    <!-- Alertas y Totales -->
+    <div class="row mb-4">
+        <div class="col-md-4 mb-3">
+            <div class="card border-warning">
+                <div class="card-body">
+                    <h5 class="card-title text-warning">
+                        <i class="fas fa-exclamation-triangle"></i> Alertas
+                    </h5>
+                    <div class="d-flex justify-content-between align-items-center">
+                        <span class="text-muted">Sin Asignar (próximas 48h)</span>
+                        <span class="badge bg-warning text-dark fs-5">{{ stats.sin_asignar }}</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4 mb-3">
+            <a href="/drivers/" class="text-decoration-none">
+                <div class="card border-primary" style="cursor: pointer;">
+                    <div class="card-body">
+                        <h5 class="card-title text-primary">
+                            <i class="fas fa-users"></i> Conductores
+                        </h5>
+                        <div class="d-flex justify-content-between align-items-center">
+                            <span class="text-muted">Total Disponibles</span>
+                            <span class="badge bg-primary fs-5">{{ stats.conductores }}</span>
+                        </div>
+                    </div>
+                </div>
+            </a>
+        </div>
+        <div class="col-md-4 mb-3">
+            <div class="card border-success">
+                <div class="card-body">
+                    <h5 class="card-title text-success">
+                        <i class="fas fa-check-circle"></i> Totales Activos
+                    </h5>
+                    <div class="row text-center small mt-2">
+                        <div class="col-4">
+                            <strong>{{ stats.por_arribar }}</strong><br>
+                            <small class="text-muted">Por Arribar</small>
+                        </div>
+                        <div class="col-4">
+                            <strong>{{ stats.programados }}</strong><br>
+                            <small class="text-muted">Programados</small>
+                        </div>
+                        <div class="col-4">
+                            <strong>{{ stats.vacios }}</strong><br>
+                            <small class="text-muted">Vacíos</small>
+                        </div>
+                    </div>
+                </div>
+            </div>
         </div>
     </div>
 

@@ -2,7 +2,7 @@ from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.parsers import MultiPartParser, FormParser
-from rest_framework.permissions import AllowAny
+from rest_framework.permissions import AllowAny, IsAuthenticatedOrReadOnly
 from django.utils import timezone
 from django.db.models import Q
 import tempfile
@@ -29,6 +29,7 @@ class ContainerViewSet(viewsets.ModelViewSet):
     search_fields = ['container_id', 'nave', 'vendor', 'comuna']
     ordering_fields = ['created_at', 'fecha_programacion', 'fecha_liberacion']
     ordering = ['-created_at']
+    permission_classes = [IsAuthenticatedOrReadOnly]
     
     def get_serializer_class(self):
         if self.action == 'list':
