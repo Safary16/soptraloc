@@ -51,7 +51,9 @@ class LiberacionImporter:
         """Normaliza los nombres de columnas a los esperados"""
         # Limpiar caracteres especiales en nombres de columnas
         df.columns = df.columns.str.replace('\xa0', ' ', regex=False)
+        df.columns = df.columns.str.replace(r'\s+', ' ', regex=True)  # Múltiples espacios a uno
         df.columns = df.columns.str.strip()
+        df.columns = df.columns.str.lower()
         
         mapeo = {
             'contenedor': 'container_id',
@@ -77,9 +79,9 @@ class LiberacionImporter:
             'ref': 'referencia',
             'despacho': 'despacho',
             'tipo cont- temperatura': 'tipo',
+            'tipo cont-temperatura': 'tipo',
         }
         
-        df.columns = df.columns.str.lower().str.strip()
         df.rename(columns=mapeo, inplace=True)
         return df
     
@@ -105,14 +107,15 @@ class LiberacionImporter:
             df = pd.read_excel(self.archivo_path)
             df = self.normalizar_columnas(df)
             
-            # Saltar primera fila si es encabezado secundario (ej: "CELSIUS")
-            if df['container_id'].iloc[0] is pd.NA or pd.isna(df['container_id'].iloc[0]):
-                df = df.iloc[1:].reset_index(drop=True)
-            
             # Validar columnas requeridas
             for col in self.COLUMNAS_REQUERIDAS:
                 if col not in df.columns:
                     raise ValueError(f"Columna requerida '{col}' no encontrada en el Excel")
+            
+            # Filtrar filas vacías (donde container_id es NaN o vacío)
+            df = df[df['container_id'].notna()]
+            df = df[df['container_id'].astype(str).str.strip() != '']
+            df = df.reset_index(drop=True)
             
             # Procesar cada fila
             for idx, row in df.iterrows():
