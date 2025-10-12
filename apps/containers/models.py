@@ -6,11 +6,10 @@ class Container(models.Model):
     """Modelo principal de contenedores con ciclo de vida completo"""
     
     ESTADOS = [
-        # Estados iniciales (pre-arribo)
-        ('por_arribar', 'Por Arribar'),
+        # Estados iniciales
+        ('por_arribar', 'Por Arribar'),  # Nave en tránsito
         
-        # Estados post-arribo (contenedor lleno en puerto)
-        ('arribado', 'Arribado'),  # Nave llegó, contenedor en puerto
+        # Estados en puerto (contenedor lleno)
         ('liberado', 'Liberado'),  # Liberado por aduana/naviera
         ('secuenciado', 'Secuenciado'),  # Marcado para próxima entrega
         ('programado', 'Programado'),  # Asignado a fecha y CD
@@ -34,6 +33,14 @@ class Container(models.Model):
         ('45', "45'"),
     ]
     
+    TIPO_CARGA = [
+        ('dry', 'Dry (Seco)'),
+        ('reefer', 'Reefer (Refrigerado)'),
+        ('open_top', 'Open Top'),
+        ('flat_rack', 'Flat Rack'),
+        ('tank', 'Tank'),
+    ]
+    
     TIPOS_MOVIMIENTO = [
         ('automatico', 'Automático (Puerto)'),
         ('retiro_ccti', 'Retiro a CCTI'),
@@ -43,11 +50,14 @@ class Container(models.Model):
     # Identificación
     container_id = models.CharField('ID Contenedor', max_length=50, unique=True, db_index=True)
     tipo = models.CharField('Tipo', max_length=10, choices=TIPOS)
+    tipo_carga = models.CharField('Tipo de Carga', max_length=20, choices=TIPO_CARGA, default='dry')
     
     # Información del embarque
     nave = models.CharField('Nave', max_length=100)
     fecha_eta = models.DateTimeField('ETA (Estimated Time of Arrival)', null=True, blank=True, help_text='Fecha estimada de arribo')
-    peso = models.DecimalField('Peso (kg)', max_digits=10, decimal_places=2, null=True, blank=True)
+    peso_carga = models.DecimalField('Peso Carga (kg)', max_digits=10, decimal_places=2, null=True, blank=True, help_text='Peso de la mercancía')
+    tara = models.DecimalField('Tara (kg)', max_digits=10, decimal_places=2, null=True, blank=True, help_text='Peso del contenedor vacío')
+    contenido = models.TextField('Contenido', null=True, blank=True, help_text='Descripción de la carga')
     vendor = models.CharField('Vendor', max_length=200, null=True, blank=True)
     sello = models.CharField('Sello', max_length=100, null=True, blank=True)
     puerto = models.CharField('Puerto', max_length=100, default='Valparaíso')
@@ -96,6 +106,54 @@ class Container(models.Model):
     def __str__(self):
         return f"{self.container_id} - {self.get_estado_display()}"
     
+    def get_tara_default(self):
+        """Retorna la tara típica según tipo de contenedor y carga"""
+        taras = {
+            '20': {'dry': 2300, 'reefer': 3050},
+            '40': {'dry': 3750, 'reefer': 4480},
+            '40HC': {'dry': 3900, 'reefer': 4600},
+            '45': {'dry': 4800, 'reefer': 5200},
+        }
+        tipo_carga = self.tipo_carga or 'dry'
+        return taras.get(self.tipo, {}).get(tipo_carga, 3500)
+    
+    @property
+    def peso_total(self):
+        """Calcula el peso total: carga + tara"""
+        tara = self.tara or self.get_tara_default()
+        peso_carga = self.peso_carga or 0
+        return float(peso_carga) + float(tara)
+    
+    @property
+    def dias_para_demurrage(self):
+        """Calcula días restantes hasta demurrage"""
+        if not self.fecha_demurrage:
+            return None
+        delta = self.fecha_demurrage - timezone.now()
+        return delta.days
+    
+    @property
+    def urgencia_demurrage(self):
+        """Retorna nivel de urgencia basado en días para demurrage"""
+        dias = self.dias_para_demurrage
+        if dias is None:
+            return 'sin_fecha'
+        if dias < 0:
+            return 'vencido'
+        if dias <= 1:
+            return 'critico'
+        if dias <= 2:
+            return 'alto'
+        if dias <= 5:
+            return 'medio'
+        return 'bajo'
+    
+    def save(self, *args, **kwargs):
+        """Override save para calcular tara si no existe"""
+        if not self.tara:
+            self.tara = self.get_tara_default()
+        super().save(*args, **kwargs)
+    
     def cambiar_estado(self, nuevo_estado, usuario=None):
         """Cambia el estado y registra el timestamp correspondiente"""
         estado_anterior = self.estado
@@ -104,7 +162,6 @@ class Container(models.Model):
         # Actualizar timestamp según el nuevo estado
         now = timezone.now()
         timestamp_map = {
-            'arribado': 'fecha_arribo',
             'liberado': 'fecha_liberacion',
             'programado': 'fecha_programacion',
             'asignado': 'fecha_asignacion',

@@ -16,16 +16,22 @@ class ContainerListSerializer(serializers.ModelSerializer):
     """Serializer simplificado para listas"""
     estado_display = serializers.CharField(source='get_estado_display', read_only=True)
     tipo_movimiento_display = serializers.CharField(source='get_tipo_movimiento_display', read_only=True)
+    tipo_carga_display = serializers.CharField(source='get_tipo_carga_display', read_only=True)
     cd_entrega_nombre = serializers.CharField(source='cd_entrega.nombre', read_only=True)
+    peso_total = serializers.ReadOnlyField()
+    dias_para_demurrage = serializers.ReadOnlyField()
+    urgencia_demurrage = serializers.ReadOnlyField()
     
     class Meta:
         model = Container
         fields = [
-            'id', 'container_id', 'tipo', 'estado', 'estado_display',
+            'id', 'container_id', 'tipo', 'tipo_carga', 'tipo_carga_display',
+            'estado', 'estado_display', 'nave',
+            'peso_carga', 'tara', 'peso_total', 'contenido',
             'posicion_fisica', 'comuna', 'secuenciado', 'fecha_programacion',
-            'fecha_eta', 'fecha_demurrage', 'deposito_devolucion',
-            'tipo_movimiento', 'tipo_movimiento_display',
-            'cd_entrega', 'cd_entrega_nombre', 'hora_descarga'
+            'fecha_eta', 'fecha_demurrage', 'dias_para_demurrage', 'urgencia_demurrage',
+            'deposito_devolucion', 'tipo_movimiento', 'tipo_movimiento_display',
+            'cd_entrega', 'cd_entrega_nombre', 'fecha_descarga'
         ]
 
 

@@ -1,0 +1,353 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Detalle {{ container.container_id }} - SoptraLoc{% endblock %}
+
+{% block extra_css %}
+<style>
+    .detail-card {
+        border-left: 4px solid #E95420;
+        margin-bottom: 20px;
+    }
+    .detail-label {
+        font-weight: 600;
+        color: #666;
+        margin-bottom: 5px;
+    }
+    .detail-value {
+        font-size: 1.1rem;
+        color: #333;
+        margin-bottom: 15px;
+    }
+    .timeline-item {
+        padding: 15px;
+        border-left: 3px solid #E95420;
+        margin-left: 10px;
+        margin-bottom: 10px;
+        background: #f8f9fa;
+        border-radius: 5px;
+    }
+    .timeline-item.completed {
+        border-left-color: #28a745;
+        background: #d4edda;
+    }
+    .timeline-item.pending {
+        border-left-color: #6c757d;
+        background: #e9ecef;
+    }
+    .badge-demurrage {
+        font-size: 1rem;
+        padding: 8px 15px;
+    }
+    .badge-demurrage.vencido {
+        background: #dc3545;
+    }
+    .badge-demurrage.critico {
+        background: #ff6b6b;
+    }
+    .badge-demurrage.alto {
+        background: #ffa500;
+    }
+    .badge-demurrage.medio {
+        background: #ffd700;
+        color: #333;
+    }
+    .badge-demurrage.bajo {
+        background: #28a745;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <!-- Header -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <h1 class="display-6">
+                        <i class="fas fa-box"></i>
+                        {{ container.container_id }}
+                    </h1>
+                    <p class="text-muted mb-0">
+                        <span class="badge" style="background: #E95420;">{{ container.get_estado_display }}</span>
+                        {{ container.tipo }} | {{ container.get_tipo_carga_display }}
+                    </p>
+                </div>
+                <div>
+                    <a href="javascript:history.back()" class="btn btn-secondary">
+                        <i class="fas fa-arrow-left"></i> Volver
+                    </a>
+                    <a href="/admin/containers/container/{{ container.id }}/change/" class="btn btn-ubuntu" target="_blank">
+                        <i class="fas fa-edit"></i> Editar
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Demurrage Alert -->
+    {% if container.fecha_demurrage %}
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="alert {% if container.urgencia_demurrage == 'vencido' %}alert-danger{% elif container.urgencia_demurrage == 'critico' %}alert-warning{% else %}alert-info{% endif %}">
+                <h5>
+                    <i class="fas fa-clock"></i>
+                    Demurrage
+                    {% if container.dias_para_demurrage < 0 %}
+                        <span class="badge badge-demurrage vencido">VENCIDO ({{ container.dias_para_demurrage|abs }} días)</span>
+                    {% elif container.dias_para_demurrage == 0 %}
+                        <span class="badge badge-demurrage critico">HOY</span>
+                    {% elif container.dias_para_demurrage == 1 %}
+                        <span class="badge badge-demurrage critico">MAÑANA</span>
+                    {% else %}
+                        <span class="badge badge-demurrage {{ container.urgencia_demurrage }}">{{ container.dias_para_demurrage }} días</span>
+                    {% endif %}
+                </h5>
+                <p class="mb-0">Fecha límite: {{ container.fecha_demurrage|date:"d/m/Y H:i" }}</p>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Información Principal -->
+    <div class="row mb-4">
+        <!-- Información Básica -->
+        <div class="col-md-6 mb-3">
+            <div class="card detail-card">
+                <div class="card-header bg-ubuntu text-white">
+                    <h5 class="mb-0"><i class="fas fa-info-circle"></i> Información Básica</h5>
+                </div>
+                <div class="card-body">
+                    <div class="detail-label">Container ID</div>
+                    <div class="detail-value"><strong>{{ container.container_id }}</strong></div>
+                    
+                    <div class="detail-label">Tipo / Tamaño</div>
+                    <div class="detail-value">{{ container.get_tipo_display }} - {{ container.get_tipo_carga_display }}</div>
+                    
+                    <div class="detail-label">Estado Actual</div>
+                    <div class="detail-value">
+                        <span class="badge bg-primary">{{ container.get_estado_display }}</span>
+                    </div>
+                    
+                    <div class="detail-label">Nave</div>
+                    <div class="detail-value">{{ container.nave }}</div>
+                    
+                    <div class="detail-label">Puerto</div>
+                    <div class="detail-value">{{ container.puerto }}</div>
+                    
+                    {% if container.posicion_fisica %}
+                    <div class="detail-label">Posición Física</div>
+                    <div class="detail-value">{{ container.posicion_fisica }}</div>
+                    {% endif %}
+                    
+                    {% if container.sello %}
+                    <div class="detail-label">Sello</div>
+                    <div class="detail-value">{{ container.sello }}</div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <!-- Peso y Carga -->
+        <div class="col-md-6 mb-3">
+            <div class="card detail-card">
+                <div class="card-header bg-ubuntu text-white">
+                    <h5 class="mb-0"><i class="fas fa-weight"></i> Peso y Carga</h5>
+                </div>
+                <div class="card-body">
+                    <div class="detail-label">Contenido</div>
+                    <div class="detail-value">
+                        {{ container.contenido|default:"No especificado" }}
+                    </div>
+                    
+                    <div class="detail-label">Peso Carga</div>
+                    <div class="detail-value">
+                        {% if container.peso_carga %}
+                            {{ container.peso_carga|floatformat:0 }} kg
+                        {% else %}
+                            No especificado
+                        {% endif %}
+                    </div>
+                    
+                    <div class="detail-label">Tara (Contenedor Vacío)</div>
+                    <div class="detail-value">{{ container.tara|floatformat:0 }} kg</div>
+                    
+                    <div class="detail-label">Peso Total</div>
+                    <div class="detail-value">
+                        <strong style="color: #E95420; font-size: 1.3rem;">
+                            {{ container.peso_total|floatformat:0 }} kg
+                        </strong>
+                        <small class="text-muted">({{ container.peso_total|floatformat:2|floatformat:2 }} tons)</small>
+                    </div>
+                    
+                    {% if container.vendor %}
+                    <div class="detail-label">Vendor</div>
+                    <div class="detail-value">{{ container.vendor }}</div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Información de Entrega -->
+    {% if container.cd_entrega or container.comuna %}
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card detail-card">
+                <div class="card-header bg-ubuntu text-white">
+                    <h5 class="mb-0"><i class="fas fa-map-marker-alt"></i> Información de Entrega</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        {% if container.cd_entrega %}
+                        <div class="col-md-6">
+                            <div class="detail-label">Centro de Distribución</div>
+                            <div class="detail-value">
+                                <strong>{{ container.cd_entrega.nombre }}</strong><br>
+                                <small class="text-muted">{{ container.cd_entrega.direccion }}</small>
+                            </div>
+                        </div>
+                        {% endif %}
+                        
+                        {% if container.comuna %}
+                        <div class="col-md-6">
+                            <div class="detail-label">Comuna Destino</div>
+                            <div class="detail-value">{{ container.comuna }}</div>
+                        </div>
+                        {% endif %}
+                        
+                        {% if container.deposito_devolucion %}
+                        <div class="col-md-6">
+                            <div class="detail-label">Depósito Devolución</div>
+                            <div class="detail-value">{{ container.deposito_devolucion }}</div>
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Timeline de Estados -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card detail-card">
+                <div class="card-header bg-ubuntu text-white">
+                    <h5 class="mb-0"><i class="fas fa-history"></i> Historial de Estados</h5>
+                </div>
+                <div class="card-body">
+                    {% if container.fecha_devolucion %}
+                    <div class="timeline-item completed">
+                        <strong><i class="fas fa-check-circle"></i> Devuelto</strong><br>
+                        <small>{{ container.fecha_devolucion|date:"d/m/Y H:i" }}</small>
+                    </div>
+                    {% endif %}
+                    
+                    {% if container.fecha_vacio_ruta %}
+                    <div class="timeline-item completed">
+                        <strong><i class="fas fa-truck"></i> Vacío en Ruta</strong><br>
+                        <small>{{ container.fecha_vacio_ruta|date:"d/m/Y H:i" }}</small>
+                    </div>
+                    {% endif %}
+                    
+                    {% if container.fecha_vacio %}
+                    <div class="timeline-item completed">
+                        <strong><i class="fas fa-box-open"></i> Vacío</strong><br>
+                        <small>{{ container.fecha_vacio|date:"d/m/Y H:i" }}</small>
+                    </div>
+                    {% endif %}
+                    
+                    {% if container.fecha_descarga %}
+                    <div class="timeline-item completed">
+                        <strong><i class="fas fa-boxes"></i> Descargado</strong><br>
+                        <small>{{ container.fecha_descarga|date:"d/m/Y H:i" }}</small>
+                    </div>
+                    {% endif %}
+                    
+                    {% if container.fecha_entrega %}
+                    <div class="timeline-item completed">
+                        <strong><i class="fas fa-map-marker-alt"></i> Entregado</strong><br>
+                        <small>{{ container.fecha_entrega|date:"d/m/Y H:i" }}</small>
+                    </div>
+                    {% endif %}
+                    
+                    {% if container.fecha_inicio_ruta %}
+                    <div class="timeline-item completed">
+                        <strong><i class="fas fa-route"></i> En Ruta</strong><br>
+                        <small>{{ container.fecha_inicio_ruta|date:"d/m/Y H:i" }}</small>
+                    </div>
+                    {% endif %}
+                    
+                    {% if container.fecha_asignacion %}
+                    <div class="timeline-item completed">
+                        <strong><i class="fas fa-user-check"></i> Asignado a Conductor</strong><br>
+                        <small>{{ container.fecha_asignacion|date:"d/m/Y H:i" }}</small>
+                    </div>
+                    {% endif %}
+                    
+                    {% if container.fecha_programacion %}
+                    <div class="timeline-item completed">
+                        <strong><i class="fas fa-calendar-check"></i> Programado</strong><br>
+                        <small>{{ container.fecha_programacion|date:"d/m/Y H:i" }}</small>
+                    </div>
+                    {% endif %}
+                    
+                    {% if container.fecha_liberacion %}
+                    <div class="timeline-item completed">
+                        <strong><i class="fas fa-check"></i> Liberado</strong><br>
+                        <small>{{ container.fecha_liberacion|date:"d/m/Y H:i" }}</small>
+                    </div>
+                    {% endif %}
+                    
+                    {% if container.fecha_arribo %}
+                    <div class="timeline-item completed">
+                        <strong><i class="fas fa-anchor"></i> Arribado</strong><br>
+                        <small>{{ container.fecha_arribo|date:"d/m/Y H:i" }}</small>
+                    </div>
+                    {% endif %}
+                    
+                    <div class="timeline-item pending">
+                        <strong><i class="fas fa-clock"></i> Creado</strong><br>
+                        <small>{{ container.created_at|date:"d/m/Y H:i" }}</small>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Información Técnica -->
+    <div class="row">
+        <div class="col-12">
+            <div class="card detail-card">
+                <div class="card-header bg-secondary text-white">
+                    <h5 class="mb-0"><i class="fas fa-cog"></i> Información Técnica</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-4">
+                            <div class="detail-label">Tipo de Movimiento</div>
+                            <div class="detail-value">{{ container.get_tipo_movimiento_display }}</div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="detail-label">Secuenciado</div>
+                            <div class="detail-value">
+                                {% if container.secuenciado %}
+                                    <span class="badge bg-success">Sí</span>
+                                {% else %}
+                                    <span class="badge bg-secondary">No</span>
+                                {% endif %}
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="detail-label">Última Actualización</div>
+                            <div class="detail-value">{{ container.updated_at|date:"d/m/Y H:i" }}</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

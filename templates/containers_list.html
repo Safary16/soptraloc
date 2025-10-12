@@ -1,0 +1,259 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Contenedores - SoptraLoc{% endblock %}
+
+{% block extra_css %}
+<style>
+    .table-hover tbody tr:hover {
+        background-color: #f8f9fa;
+        cursor: pointer;
+    }
+    .badge-urgencia {
+        font-size: 0.8rem;
+        padding: 4px 8px;
+    }
+    .btn-eye {
+        padding: 4px 8px;
+        font-size: 0.9rem;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <!-- Header -->
+    <div class="row mb-4">
+        <div class="col-md-8">
+            <h1 class="display-6">
+                <i class="fas fa-boxes"></i>
+                Listado de Contenedores
+            </h1>
+            <p class="text-muted">Gestión y seguimiento de contenedores</p>
+        </div>
+        <div class="col-md-4 text-end">
+            <a href="/api/containers/export-liberacion-excel/" class="btn btn-success" download>
+                <i class="fas fa-file-excel"></i> Exportar Excel
+            </a>
+            <a href="/estados/" class="btn btn-ubuntu">
+                <i class="fas fa-sync-alt"></i> Ver Estados
+            </a>
+        </div>
+    </div>
+
+    <!-- Filtros -->
+    <div class="row mb-3">
+        <div class="col-md-3">
+            <select class="form-select" id="filter-estado">
+                <option value="">Todos los estados</option>
+                <option value="por_arribar">Por Arribar</option>
+                <option value="liberado">Liberado</option>
+                <option value="secuenciado">Secuenciado</option>
+                <option value="programado">Programado</option>
+                <option value="asignado">Asignado</option>
+                <option value="en_ruta">En Ruta</option>
+                <option value="entregado">Entregado</option>
+                <option value="descargado">Descargado</option>
+                <option value="vacio">Vacío</option>
+                <option value="vacio_en_ruta">Vacío en Ruta</option>
+                <option value="devuelto">Devuelto</option>
+            </select>
+        </div>
+        <div class="col-md-3">
+            <select class="form-select" id="filter-urgencia">
+                <option value="">Todas las urgencias</option>
+                <option value="vencido">Vencido</option>
+                <option value="critico">Crítico (≤1 día)</option>
+                <option value="alto">Alto (≤2 días)</option>
+                <option value="medio">Medio (≤5 días)</option>
+                <option value="bajo">Bajo (>5 días)</option>
+            </select>
+        </div>
+        <div class="col-md-4">
+            <input type="text" class="form-control" id="search-container" placeholder="Buscar por ID, Nave, Vendor...">
+        </div>
+        <div class="col-md-2">
+            <button class="btn btn-primary w-100" onclick="loadContainers()">
+                <i class="fas fa-search"></i> Buscar
+            </button>
+        </div>
+    </div>
+
+    <!-- Tabla -->
+    <div class="row">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-hover" id="containers-table">
+                            <thead class="table-dark">
+                                <tr>
+                                    <th>Ver</th>
+                                    <th>Container ID</th>
+                                    <th>Estado</th>
+                                    <th>Nave</th>
+                                    <th>Tipo</th>
+                                    <th>Peso Total</th>
+                                    <th>Demurrage</th>
+                                    <th>CD Entrega</th>
+                                    <th>Posición</th>
+                                </tr>
+                            </thead>
+                            <tbody id="containers-tbody">
+                                <tr>
+                                    <td colspan="9" class="text-center">
+                                        <div class="spinner-border text-primary" role="status">
+                                            <span class="visually-hidden">Cargando...</span>
+                                        </div>
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                    
+                    <!-- Paginación -->
+                    <div class="d-flex justify-content-between align-items-center mt-3">
+                        <div id="pagination-info"></div>
+                        <nav>
+                            <ul class="pagination mb-0" id="pagination"></ul>
+                        </nav>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+let currentPage = 1;
+let totalPages = 1;
+
+function getBadgeColor(urgencia) {
+    const colors = {
+        'vencido': 'danger',
+        'critico': 'danger',
+        'alto': 'warning',
+        'medio': 'info',
+        'bajo': 'success',
+        'sin_fecha': 'secondary'
+    };
+    return colors[urgencia] || 'secondary';
+}
+
+function getEstadoBadge(estado) {
+    const colors = {
+        'por_arribar': 'secondary',
+        'liberado': 'success',
+        'secuenciado': 'info',
+        'programado': 'primary',
+        'asignado': 'warning',
+        'en_ruta': 'warning',
+        'entregado': 'success',
+        'descargado': 'success',
+        'vacio': 'light text-dark',
+        'vacio_en_ruta': 'secondary',
+        'devuelto': 'dark'
+    };
+    return colors[estado] || 'secondary';
+}
+
+function loadContainers(page = 1) {
+    const estado = document.getElementById('filter-estado').value;
+    const search = document.getElementById('search-container').value;
+    
+    let url = `/api/containers/?page=${page}`;
+    if (estado) url += `&estado=${estado}`;
+    if (search) url += `&search=${search}`;
+    
+    fetch(url)
+        .then(response => response.json())
+        .then(data => {
+            const tbody = document.getElementById('containers-tbody');
+            tbody.innerHTML = '';
+            
+            if (data.results.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="9" class="text-center">No se encontraron contenedores</td></tr>';
+                return;
+            }
+            
+            data.results.forEach(container => {
+                const row = document.createElement('tr');
+                
+                // Calcular peso total
+                const peso_carga = container.peso_carga || 0;
+                const tara = container.tara || 3500;
+                const peso_total = peso_carga + tara;
+                
+                row.innerHTML = `
+                    <td>
+                        <a href="/container/${container.container_id}/" class="btn btn-sm btn-ubuntu btn-eye" title="Ver detalle">
+                            <i class="fas fa-eye"></i>
+                        </a>
+                    </td>
+                    <td><strong>${container.container_id}</strong></td>
+                    <td><span class="badge bg-${getEstadoBadge(container.estado)}">${container.estado_display || container.estado}</span></td>
+                    <td>${container.nave || '-'}</td>
+                    <td>${container.tipo || '-'}</td>
+                    <td>${peso_total.toLocaleString('es-CL')} kg</td>
+                    <td>
+                        ${container.dias_para_demurrage !== null && container.dias_para_demurrage !== undefined ? 
+                            `<span class="badge badge-urgencia bg-${getBadgeColor(container.urgencia_demurrage)}">${container.dias_para_demurrage} días</span>` 
+                            : '<span class="badge bg-secondary">Sin fecha</span>'}
+                    </td>
+                    <td>${container.cd_entrega_nombre || '-'}</td>
+                    <td>${container.posicion_fisica || '-'}</td>
+                `;
+                tbody.appendChild(row);
+            });
+            
+            // Actualizar paginación
+            updatePagination(data);
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            document.getElementById('containers-tbody').innerHTML = 
+                '<tr><td colspan="9" class="text-center text-danger">Error al cargar datos</td></tr>';
+        });
+}
+
+function updatePagination(data) {
+    const info = document.getElementById('pagination-info');
+    const pagination = document.getElementById('pagination');
+    
+    info.textContent = `Mostrando ${data.results.length} de ${data.count} contenedores`;
+    
+    // Calcular páginas
+    const pageSize = 20;
+    totalPages = Math.ceil(data.count / pageSize);
+    
+    pagination.innerHTML = '';
+    
+    // Botón anterior
+    const prevLi = document.createElement('li');
+    prevLi.className = `page-item ${!data.previous ? 'disabled' : ''}`;
+    prevLi.innerHTML = `<a class="page-link" href="#" onclick="loadContainers(${currentPage - 1}); return false;">Anterior</a>`;
+    pagination.appendChild(prevLi);
+    
+    // Números de página
+    for (let i = 1; i <= Math.min(totalPages, 5); i++) {
+        const li = document.createElement('li');
+        li.className = `page-item ${i === currentPage ? 'active' : ''}`;
+        li.innerHTML = `<a class="page-link" href="#" onclick="loadContainers(${i}); return false;">${i}</a>`;
+        pagination.appendChild(li);
+    }
+    
+    // Botón siguiente
+    const nextLi = document.createElement('li');
+    nextLi.className = `page-item ${!data.next ? 'disabled' : ''}`;
+    nextLi.innerHTML = `<a class="page-link" href="#" onclick="loadContainers(${currentPage + 1}); return false;">Siguiente</a>`;
+    pagination.appendChild(nextLi);
+    
+    currentPage = Math.min(currentPage, totalPages);
+}
+
+// Cargar al inicio
+document.addEventListener('DOMContentLoaded', function() {
+    loadContainers();
+});
+</script>
+{% endblock %}

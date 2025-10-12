@@ -97,6 +97,15 @@
         </div>
     </div>
 
+    <!-- Botón de descarga Excel -->
+    <div class="row mb-3">
+        <div class="col-12 text-end">
+            <a href="/api/containers/export-liberacion-excel/" class="btn btn-success btn-lg" download>
+                <i class="fas fa-file-excel"></i> Descargar Excel (Liberados y Por Liberar)
+            </a>
+        </div>
+    </div>
+
     <!-- FASE 1: Pre-Arribo y Puerto -->
     <div class="fase-header">
         <i class="fas fa-ship"></i> FASE 1: PUERTO (Contenedor Lleno)
@@ -107,13 +116,6 @@
                 <i class="fas fa-clock"></i>
                 <div class="estado-count" id="count-por_arribar">0</div>
                 <div class="estado-label">Por Arribar</div>
-            </div>
-        </div>
-        <div class="col-md-2 mb-3">
-            <div class="estado-badge" style="background: #17a2b8;">
-                <i class="fas fa-anchor"></i>
-                <div class="estado-count" id="count-arribado">0</div>
-                <div class="estado-label">Arribado</div>
             </div>
         </div>
         <div class="col-md-2 mb-3">
@@ -250,7 +252,6 @@ function loadEstados() {
             // Count by estado
             const counts = {
                 'por_arribar': 0,
-                'arribado': 0,
                 'liberado': 0,
                 'secuenciado': 0,
                 'programado': 0,

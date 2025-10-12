@@ -35,3 +35,17 @@ def importar(request):
 def estados(request):
     """Vista de estados de contenedores - ciclo de vida completo"""
     return render(request, 'estados.html')
+
+
+def container_detail(request, container_id):
+    """Vista de detalle de un contenedor específico"""
+    from apps.containers.models import Container
+    from django.shortcuts import get_object_or_404
+    
+    container = get_object_or_404(Container, container_id=container_id)
+    return render(request, 'container_detail.html', {'container': container})
+
+
+def containers_list(request):
+    """Vista de listado de contenedores con filtros"""
+    return render(request, 'containers_list.html')

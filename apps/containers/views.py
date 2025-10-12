@@ -184,6 +184,137 @@ class ContainerViewSet(viewsets.ModelViewSet):
             'containers': serializer.data
         })
     
+    @action(detail=False, methods=['get'])
+    def export_liberacion_excel(self, request):
+        """
+        Exporta contenedores liberados y por liberar a Excel
+        Incluye: ID, Nave, Estado, Peso Total, Contenido, Demurrage, etc.
+        """
+        from django.http import HttpResponse
+        import openpyxl
+        from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+        from datetime import datetime
+        
+        # Filtrar contenedores liberados y por arribar
+        containers = Container.objects.filter(
+            Q(estado='liberado') | Q(estado='por_arribar')
+        ).select_related('cd_entrega').order_by('-fecha_demurrage', 'estado')
+        
+        # Crear workbook
+        wb = openpyxl.Workbook()
+        ws = wb.active
+        ws.title = "Liberados y Por Liberar"
+        
+        # Estilos
+        header_fill = PatternFill(start_color="E95420", end_color="E95420", fill_type="solid")
+        header_font = Font(bold=True, color="FFFFFF", size=12)
+        border = Border(
+            left=Side(style='thin'),
+            right=Side(style='thin'),
+            top=Side(style='thin'),
+            bottom=Side(style='thin')
+        )
+        
+        # Headers
+        headers = [
+            'CONTAINER ID', 'ESTADO', 'NAVE', 'TIPO', 'TIPO CARGA',
+            'PESO CARGA (KG)', 'TARA (KG)', 'PESO TOTAL (KG)', 'PESO TOTAL (TON)',
+            'CONTENIDO', 'POSICIÓN FÍSICA', 'PUERTO',
+            'FECHA DEMURRAGE', 'DÍAS DEMURRAGE', 'URGENCIA',
+            'CD ENTREGA', 'COMUNA', 'VENDOR', 'SELLO',
+            'FECHA LIBERACIÓN', 'FECHA ETA', 'SECUENCIADO'
+        ]
+        
+        for col, header in enumerate(headers, 1):
+            cell = ws.cell(row=1, column=col, value=header)
+            cell.fill = header_fill
+            cell.font = header_font
+            cell.alignment = Alignment(horizontal='center', vertical='center')
+            cell.border = border
+        
+        # Datos
+        row = 2
+        for container in containers:
+            ws.cell(row=row, column=1, value=container.container_id).border = border
+            ws.cell(row=row, column=2, value=container.get_estado_display()).border = border
+            ws.cell(row=row, column=3, value=container.nave).border = border
+            ws.cell(row=row, column=4, value=container.get_tipo_display()).border = border
+            ws.cell(row=row, column=5, value=container.get_tipo_carga_display()).border = border
+            
+            ws.cell(row=row, column=6, value=float(container.peso_carga or 0)).border = border
+            ws.cell(row=row, column=7, value=float(container.tara or 0)).border = border
+            ws.cell(row=row, column=8, value=container.peso_total).border = border
+            ws.cell(row=row, column=9, value=round(container.peso_total / 1000, 2)).border = border
+            
+            ws.cell(row=row, column=10, value=container.contenido or '').border = border
+            ws.cell(row=row, column=11, value=container.posicion_fisica or '').border = border
+            ws.cell(row=row, column=12, value=container.puerto).border = border
+            
+            # Demurrage
+            if container.fecha_demurrage:
+                ws.cell(row=row, column=13, value=container.fecha_demurrage.strftime('%d/%m/%Y')).border = border
+                dias = container.dias_para_demurrage
+                ws.cell(row=row, column=14, value=dias if dias is not None else '').border = border
+                ws.cell(row=row, column=15, value=container.urgencia_demurrage.upper()).border = border
+                
+                # Colorear según urgencia
+                urgencia_cell = ws.cell(row=row, column=15)
+                if container.urgencia_demurrage == 'vencido':
+                    urgencia_cell.fill = PatternFill(start_color="FF0000", end_color="FF0000", fill_type="solid")
+                    urgencia_cell.font = Font(bold=True, color="FFFFFF")
+                elif container.urgencia_demurrage == 'critico':
+                    urgencia_cell.fill = PatternFill(start_color="FF6B6B", end_color="FF6B6B", fill_type="solid")
+                    urgencia_cell.font = Font(bold=True, color="FFFFFF")
+                elif container.urgencia_demurrage == 'alto':
+                    urgencia_cell.fill = PatternFill(start_color="FFA500", end_color="FFA500", fill_type="solid")
+                elif container.urgencia_demurrage == 'medio':
+                    urgencia_cell.fill = PatternFill(start_color="FFD700", end_color="FFD700", fill_type="solid")
+            else:
+                ws.cell(row=row, column=13, value='').border = border
+                ws.cell(row=row, column=14, value='').border = border
+                ws.cell(row=row, column=15, value='SIN FECHA').border = border
+            
+            ws.cell(row=row, column=16, value=container.cd_entrega.nombre if container.cd_entrega else '').border = border
+            ws.cell(row=row, column=17, value=container.comuna or '').border = border
+            ws.cell(row=row, column=18, value=container.vendor or '').border = border
+            ws.cell(row=row, column=19, value=container.sello or '').border = border
+            
+            # Fechas
+            if container.fecha_liberacion:
+                ws.cell(row=row, column=20, value=container.fecha_liberacion.strftime('%d/%m/%Y %H:%M')).border = border
+            else:
+                ws.cell(row=row, column=20, value='').border = border
+            
+            if container.fecha_eta:
+                ws.cell(row=row, column=21, value=container.fecha_eta.strftime('%d/%m/%Y')).border = border
+            else:
+                ws.cell(row=row, column=21, value='').border = border
+            
+            ws.cell(row=row, column=22, value='SÍ' if container.secuenciado else 'NO').border = border
+            
+            row += 1
+        
+        # Ajustar anchos de columna
+        column_widths = {
+            1: 18, 2: 15, 3: 25, 4: 10, 5: 15,
+            6: 15, 7: 12, 8: 15, 9: 15, 10: 40,
+            11: 18, 12: 15, 13: 18, 14: 15, 15: 12,
+            16: 30, 17: 15, 18: 30, 19: 15, 20: 18,
+            21: 15, 22: 12
+        }
+        for col, width in column_widths.items():
+            ws.column_dimensions[openpyxl.utils.get_column_letter(col)].width = width
+        
+        # Preparar respuesta
+        response = HttpResponse(
+            content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        )
+        filename = f'liberados_por_liberar_{datetime.now().strftime("%Y%m%d_%H%M%S")}.xlsx'
+        response['Content-Disposition'] = f'attachment; filename="{filename}"'
+        
+        wb.save(response)
+        return response
+    
     @action(detail=True, methods=['post'])
     def cambiar_estado(self, request, pk=None):
         """
@@ -211,20 +342,6 @@ class ContainerViewSet(viewsets.ModelViewSet):
         return Response({
             'success': True,
             'mensaje': f'Estado cambiado a {container.get_estado_display()}',
-            'container': serializer.data
-        })
-    
-    @action(detail=True, methods=['post'])
-    def marcar_arribado(self, request, pk=None):
-        """Marca contenedor como arribado (nave llegó a puerto)"""
-        container = self.get_object()
-        usuario = request.user.username if request.user.is_authenticated else None
-        container.cambiar_estado('arribado', usuario)
-        
-        serializer = self.get_serializer(container)
-        return Response({
-            'success': True,
-            'mensaje': f'Contenedor {container.container_id} marcado como arribado',
             'container': serializer.data
         })
     

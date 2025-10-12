@@ -41,6 +41,11 @@
                         </a>
                     </li>
                     <li class="nav-item">
+                        <a class="nav-link {% if '/containers' in request.path and '/container/' not in request.path %}active{% endif %}" href="/containers/">
+                            <i class="fas fa-boxes"></i> Contenedores
+                        </a>
+                    </li>
+                    <li class="nav-item">
                         <a class="nav-link {% if '/estados' in request.path %}active{% endif %}" href="/estados/">
                             <i class="fas fa-sync-alt"></i> Estados
                         </a>
