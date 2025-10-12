@@ -204,39 +204,58 @@
 
     <!-- Links rápidos -->
     <div class="row mt-4 mb-4">
-        <div class="col-md-4 mb-3">
-            <div class="card card-ubuntu h-100">
+        <!-- Destacado: Portal de Conductores -->
+        <div class="col-md-6 mb-3">
+            <div class="card driver-portal-card h-100">
                 <div class="card-body text-center">
-                    <i class="fas fa-truck fa-3x mb-3 text-primary"></i>
-                    <h5>Asignación de Conductores</h5>
-                    <p class="text-muted">Sistema inteligente de asignación automática</p>
-                    <a href="/asignacion/" class="btn btn-ubuntu">
-                        Ir a Asignación <i class="fas fa-arrow-right"></i>
+                    <i class="fas fa-id-card fa-4x mb-3 text-white"></i>
+                    <h4 class="text-white fw-bold mb-3">Portal de Conductores</h4>
+                    <p class="text-white mb-4">
+                        <i class="fas fa-check-circle me-2"></i>Accede a tus entregas asignadas<br>
+                        <i class="fas fa-map-marker-alt me-2"></i>Activa el GPS para seguimiento<br>
+                        <i class="fas fa-route me-2"></i>Navegación con Google Maps
+                    </p>
+                    <a href="/driver/login/" class="btn btn-driver-portal btn-lg">
+                        <i class="fas fa-sign-in-alt me-2"></i>Ingresar como Conductor
                     </a>
                 </div>
             </div>
         </div>
-        <div class="col-md-4 mb-3">
-            <div class="card card-ubuntu h-100">
-                <div class="card-body text-center">
-                    <i class="fas fa-cog fa-3x mb-3 text-warning"></i>
-                    <h5>Panel de Administración</h5>
-                    <p class="text-muted">Gestión completa del sistema</p>
-                    <a href="/admin/" class="btn btn-ubuntu">
-                        Ir a Admin <i class="fas fa-arrow-right"></i>
-                    </a>
+        
+        <div class="col-md-6 mb-3">
+            <div class="row h-100">
+                <div class="col-12 mb-3">
+                    <div class="card card-ubuntu h-100">
+                        <div class="card-body text-center py-3">
+                            <i class="fas fa-truck fa-2x mb-2 text-primary"></i>
+                            <h6 class="mb-2">Asignación de Conductores</h6>
+                            <a href="/asignacion/" class="btn btn-ubuntu btn-sm">
+                                Ir a Asignación <i class="fas fa-arrow-right"></i>
+                            </a>
+                        </div>
+                    </div>
                 </div>
-            </div>
-        </div>
-        <div class="col-md-4 mb-3">
-            <div class="card card-ubuntu h-100">
-                <div class="card-body text-center">
-                    <i class="fas fa-code fa-3x mb-3 text-success"></i>
-                    <h5>API REST</h5>
-                    <p class="text-muted">Documentación de endpoints</p>
-                    <a href="/api/" class="btn btn-ubuntu">
-                        Ver API <i class="fas fa-arrow-right"></i>
-                    </a>
+                <div class="col-md-6 mb-3">
+                    <div class="card card-ubuntu h-100">
+                        <div class="card-body text-center py-3">
+                            <i class="fas fa-cog fa-2x mb-2 text-warning"></i>
+                            <h6 class="mb-2">Administración</h6>
+                            <a href="/admin/" class="btn btn-ubuntu btn-sm">
+                                Ir a Admin <i class="fas fa-arrow-right"></i>
+                            </a>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-6 mb-3">
+                    <div class="card card-ubuntu h-100">
+                        <div class="card-body text-center py-3">
+                            <i class="fas fa-code fa-2x mb-2 text-success"></i>
+                            <h6 class="mb-2">API REST</h6>
+                            <a href="/api/" class="btn btn-ubuntu btn-sm">
+                                Ver API <i class="fas fa-arrow-right"></i>
+                            </a>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
