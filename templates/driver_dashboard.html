@@ -261,18 +261,72 @@
             }
         }
         
+        // Variable para rastrear asignaciones previas
+        let previousAssignments = [];
+        
         // Cargar asignaciones
         function loadAsignaciones() {
             fetch(`/api/drivers/${driverId}/my_info/`)
                 .then(response => response.json())
                 .then(data => {
-                    renderAsignaciones(data.programaciones_asignadas || []);
+                    const programaciones = data.programaciones_asignadas || [];
+                    
+                    // Verificar si hay nuevas asignaciones
+                    checkForNewAssignments(programaciones);
+                    
+                    renderAsignaciones(programaciones);
                 })
                 .catch(error => {
                     console.error('Error cargando asignaciones:', error);
                     document.getElementById('contenedores-list').innerHTML = 
                         '<p class="text-center text-danger">Error al cargar entregas</p>';
                 });
+        }
+        
+        // Verificar nuevas asignaciones y mostrar notificación
+        function checkForNewAssignments(currentAssignments) {
+            if (previousAssignments.length === 0) {
+                // Primera carga, solo guardar las asignaciones
+                previousAssignments = currentAssignments.map(p => p.id);
+                return;
+            }
+            
+            // Buscar asignaciones nuevas
+            currentAssignments.forEach(assignment => {
+                if (!previousAssignments.includes(assignment.id)) {
+                    // Nueva asignación detectada
+                    showNotification(
+                        '🚚 Nueva Asignación',
+                        `Contenedor ${assignment.contenedor || 'N/A'} - Cliente: ${assignment.cliente || 'N/A'}`
+                    );
+                }
+            });
+            
+            // Actualizar lista de asignaciones previas
+            previousAssignments = currentAssignments.map(p => p.id);
+        }
+        
+        // Mostrar notificación del navegador
+        function showNotification(title, body) {
+            if ('Notification' in window && Notification.permission === 'granted') {
+                const notification = new Notification(title, {
+                    body: body,
+                    icon: '/static/img/truck-icon.png',
+                    badge: '/static/img/badge-icon.png',
+                    tag: 'nueva-asignacion',
+                    requireInteraction: true
+                });
+                
+                notification.onclick = function() {
+                    window.focus();
+                    notification.close();
+                };
+                
+                // Auto-cerrar después de 10 segundos
+                setTimeout(() => notification.close(), 10000);
+            } else {
+                console.log('Notificación:', title, body);
+            }
         }
         
         // Renderizar asignaciones

@@ -91,8 +91,15 @@ class Programacion(models.Model):
         driver.num_entregas_dia += 1
         driver.save(update_fields=['num_entregas_dia'])
         
-        # TODO: Crear notificación para el conductor
-        # Esto se implementaría cuando el modelo Notification esté disponible
+        # Crear notificación para el conductor
+        try:
+            from apps.notifications.services import NotificationService
+            NotificationService.crear_notificacion_asignacion(self, driver)
+        except Exception as e:
+            # Log error pero no fallar la asignación
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.error(f"Error creando notificación de asignación: {str(e)}")
     
     @property
     def horas_hasta_programacion(self):
