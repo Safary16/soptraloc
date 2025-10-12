@@ -1,6 +1,7 @@
 from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
+from rest_framework.parsers import MultiPartParser, FormParser
 from django.db.models import Q
 from django.utils import timezone
 from datetime import timedelta
@@ -354,3 +355,51 @@ class ProgramacionViewSet(viewsets.ModelViewSet):
             'origen': container.posicion_fisica,
             'destino': cd_destino.nombre
         }, status=status.HTTP_201_CREATED)
+    
+    @action(detail=False, methods=['post'], parser_classes=[MultiPartParser, FormParser], url_path='import-excel')
+    def import_excel(self, request):
+        """
+        Importa programaciones desde Excel
+        Crea programaciones y actualiza contenedores a 'programado'
+        """
+        if 'file' not in request.FILES:
+            return Response(
+                {'error': 'No se proporcionó archivo'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        archivo = request.FILES['file']
+        usuario = request.user.username if request.user.is_authenticated else None
+        
+        import tempfile
+        import os
+        
+        with tempfile.NamedTemporaryFile(delete=False, suffix='.xlsx') as tmp:
+            for chunk in archivo.chunks():
+                tmp.write(chunk)
+            tmp_path = tmp.name
+        
+        try:
+            from apps.containers.importers.programacion import ProgramacionImporter
+            importer = ProgramacionImporter(tmp_path, usuario)
+            resultados = importer.procesar()
+            
+            return Response({
+                'success': True,
+                'mensaje': f'Importación de programación completada',
+                'programados': resultados['programados'],
+                'no_encontrados': resultados['no_encontrados'],
+                'cd_no_encontrado': resultados['cd_no_encontrado'],
+                'errores': resultados['errores'],
+                'alertas_generadas': resultados['alertas_generadas'],
+                'detalles': resultados['detalles']
+            })
+        
+        except Exception as e:
+            return Response(
+                {'error': f'Error al importar: {str(e)}'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+        finally:
+            if os.path.exists(tmp_path):
+                os.unlink(tmp_path)
