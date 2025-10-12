@@ -2,7 +2,7 @@ from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.parsers import MultiPartParser, FormParser
-from rest_framework.permissions import AllowAny
+from rest_framework.permissions import AllowAny, IsAuthenticatedOrReadOnly
 from django.db import models
 
 from .models import Driver
@@ -19,6 +19,7 @@ class DriverViewSet(viewsets.ModelViewSet):
     search_fields = ['nombre', 'rut', 'telefono']
     ordering_fields = ['nombre', 'cumplimiento_porcentaje', 'num_entregas_dia']
     ordering = ['nombre']
+    permission_classes = [IsAuthenticatedOrReadOnly]
     
     def get_serializer_class(self):
         if self.action == 'list':

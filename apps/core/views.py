@@ -7,11 +7,46 @@ from apps.programaciones.models import Programacion
 
 def home(request):
     """Vista principal del dashboard"""
+    from django.utils import timezone
+    from datetime import datetime, timedelta
+    
+    # Get today's date range
+    today = timezone.now().date()
+    tomorrow = today + timedelta(days=1)
+    
     stats = {
-        'contenedores': Container.objects.count(),
+        # Métricas principales
+        'contenedores_total': Container.objects.count(),
         'conductores': Driver.objects.count(),
         'cds': CD.objects.count(),
-        'programaciones': Programacion.objects.count(),
+        
+        # Métricas específicas requeridas
+        'programados_hoy': Container.objects.filter(
+            estado='programado',
+            fecha_programacion__date=today
+        ).count(),
+        
+        'con_demurrage': Container.objects.filter(
+            fecha_demurrage__isnull=False,
+            estado__in=['liberado', 'programado', 'asignado']
+        ).exclude(estado='devuelto').count(),
+        
+        'liberados': Container.objects.filter(estado='liberado').count(),
+        'en_ruta': Container.objects.filter(estado='en_ruta').count(),
+        
+        # Alertas de no asignados
+        'sin_asignar': Container.objects.filter(
+            estado='programado',
+            fecha_programacion__lte=timezone.now() + timedelta(hours=48)
+        ).count(),
+        
+        # Totales por estado (excluyendo devueltos)
+        'por_arribar': Container.objects.filter(estado='por_arribar').count(),
+        'programados': Container.objects.filter(estado='programado').count(),
+        'vacios': Container.objects.filter(estado__in=['vacio', 'vacio_en_ruta']).count(),
+        
+        # Total excluyendo devueltos
+        'total_activos': Container.objects.exclude(estado='devuelto').count(),
     }
     return render(request, 'home.html', {'stats': stats})
 
