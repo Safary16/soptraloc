@@ -12,6 +12,12 @@ from apps.drivers.views import DriverViewSet, driver_login, driver_logout, drive
 from apps.containers.views import ContainerViewSet
 from apps.programaciones.views import ProgramacionViewSet
 
+# Import frontend views
+from apps.core.views import (
+    home, asignacion, estados, importar, 
+    containers_list, container_detail
+)
+
 # Setup API router
 router = DefaultRouter()
 router.register(r'drivers', DriverViewSet, basename='driver')
@@ -19,6 +25,14 @@ router.register(r'containers', ContainerViewSet, basename='container')
 router.register(r'programaciones', ProgramacionViewSet, basename='programacion')
 
 urlpatterns = [
+    # Frontend pages
+    path('', home, name='home'),
+    path('asignacion/', asignacion, name='asignacion'),
+    path('estados/', estados, name='estados'),
+    path('importar/', importar, name='importar'),
+    path('containers/', containers_list, name='containers_list'),
+    path('container/<str:container_id>/', container_detail, name='container_detail'),
+    
     # Admin
     path('admin/', admin.site.urls),
     
