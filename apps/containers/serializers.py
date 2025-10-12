@@ -5,6 +5,7 @@ from .models import Container
 class ContainerSerializer(serializers.ModelSerializer):
     estado_display = serializers.CharField(source='get_estado_display', read_only=True)
     tipo_display = serializers.CharField(source='get_tipo_display', read_only=True)
+    container_id_formatted = serializers.ReadOnlyField()
     
     class Meta:
         model = Container
@@ -18,6 +19,7 @@ class ContainerListSerializer(serializers.ModelSerializer):
     tipo_movimiento_display = serializers.CharField(source='get_tipo_movimiento_display', read_only=True)
     tipo_carga_display = serializers.CharField(source='get_tipo_carga_display', read_only=True)
     cd_entrega_nombre = serializers.CharField(source='cd_entrega.nombre', read_only=True)
+    container_id_formatted = serializers.ReadOnlyField()
     peso_total = serializers.ReadOnlyField()
     dias_para_demurrage = serializers.ReadOnlyField()
     urgencia_demurrage = serializers.ReadOnlyField()
@@ -25,7 +27,7 @@ class ContainerListSerializer(serializers.ModelSerializer):
     class Meta:
         model = Container
         fields = [
-            'id', 'container_id', 'tipo', 'tipo_carga', 'tipo_carga_display',
+            'id', 'container_id', 'container_id_formatted', 'tipo', 'tipo_carga', 'tipo_carga_display',
             'estado', 'estado_display', 'nave',
             'peso_carga', 'tara', 'peso_total', 'contenido',
             'posicion_fisica', 'comuna', 'secuenciado', 'fecha_programacion',

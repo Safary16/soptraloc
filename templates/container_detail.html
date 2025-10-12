@@ -120,7 +120,7 @@
                 </div>
                 <div class="card-body">
                     <div class="detail-label">Container ID</div>
-                    <div class="detail-value"><strong>{{ container.container_id }}</strong></div>
+                    <div class="detail-value"><strong>{{ container.container_id_formatted }}</strong></div>
                     
                     <div class="detail-label">Tipo / Tamaño</div>
                     <div class="detail-value">{{ container.get_tipo_display }} - {{ container.get_tipo_carga_display }}</div>
@@ -178,7 +178,7 @@
                         <strong style="color: #E95420; font-size: 1.3rem;">
                             {{ container.peso_total|floatformat:0 }} kg
                         </strong>
-                        <small class="text-muted">({{ container.peso_total|floatformat:2|floatformat:2 }} tons)</small>
+                        <small class="text-muted">({{ container.peso_total_tons|floatformat:2 }} tons)</small>
                     </div>
                     
                     {% if container.vendor %}

@@ -196,7 +196,7 @@ function loadContainers(page = 1) {
                             <i class="fas fa-trash"></i>
                         </button>
                     </td>
-                    <td><strong>${container.container_id}</strong></td>
+                    <td><strong>${container.container_id_formatted || container.container_id}</strong></td>
                     <td><span class="badge bg-${getEstadoBadge(container.estado)}">${container.estado_display || container.estado}</span></td>
                     <td>${container.nave || '-'}</td>
                     <td>${container.tipo || '-'}</td>
