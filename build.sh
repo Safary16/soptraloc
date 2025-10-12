@@ -22,6 +22,10 @@ python manage.py collectstatic --no-input
 echo "🔄 Ejecutando migraciones..."
 python manage.py migrate --no-input
 
+# 5. Crear superusuario admin
+echo "👤 Creando superusuario admin..."
+python manage.py reset_admin --username=admin --password=1234
+
 echo "=========================================="
 echo "✅ Build completado exitosamente"
 echo "=========================================="
