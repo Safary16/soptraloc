@@ -405,3 +405,216 @@ class ProgramacionViewSet(viewsets.ModelViewSet):
         finally:
             if os.path.exists(tmp_path):
                 os.unlink(tmp_path)
+    
+    @action(detail=True, methods=['post'])
+    def validar_asignacion(self, request, pk=None):
+        """
+        Valida si un conductor puede ser asignado considerando ventanas de tiempo
+        
+        Payload:
+        {
+            "driver_id": 1
+        }
+        """
+        from apps.core.services.validation import PreAssignmentValidationService
+        from apps.drivers.models import Driver
+        
+        programacion = self.get_object()
+        driver_id = request.data.get('driver_id')
+        
+        if not driver_id:
+            return Response(
+                {'error': 'driver_id no proporcionado'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        try:
+            driver = Driver.objects.get(id=driver_id)
+        except Driver.DoesNotExist:
+            return Response(
+                {'error': f'Conductor con ID {driver_id} no encontrado'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        
+        # Validar disponibilidad temporal
+        resultado = PreAssignmentValidationService.validar_disponibilidad_temporal(
+            driver, programacion
+        )
+        
+        return Response({
+            'success': True,
+            'disponible': resultado['disponible'],
+            'conflictos': resultado['conflictos'],
+            'tiempo_requerido': resultado['tiempo_requerido'],
+            'ventana_ocupada': resultado['ventana_ocupada'],
+            'nueva_ventana': resultado.get('nueva_ventana'),
+            'conductor': driver.nombre
+        })
+    
+    @action(detail=True, methods=['post'])
+    def iniciar_ruta(self, request, pk=None):
+        """
+        Inicia la ruta de una programación y crea notificación con ETA
+        
+        Payload opcional:
+        {
+            "lat": -33.4372,
+            "lng": -70.6506
+        }
+        """
+        from apps.notifications.services import NotificationService
+        
+        programacion = self.get_object()
+        
+        if not programacion.driver:
+            return Response(
+                {'error': 'Programación no tiene conductor asignado'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Actualizar posición del conductor si se proporciona
+        lat = request.data.get('lat')
+        lng = request.data.get('lng')
+        if lat and lng:
+            programacion.driver.actualizar_posicion(lat, lng)
+        
+        # Cambiar estado del contenedor a 'en_ruta'
+        programacion.container.cambiar_estado('en_ruta', request.user.username if request.user.is_authenticated else None)
+        
+        # Crear notificación con ETA
+        notificacion = NotificationService.crear_notificacion_inicio_ruta(
+            programacion, programacion.driver
+        )
+        
+        serializer = self.get_serializer(programacion)
+        return Response({
+            'success': True,
+            'mensaje': f'Ruta iniciada por conductor {programacion.driver.nombre}',
+            'programacion': serializer.data,
+            'notificacion': {
+                'id': notificacion.id,
+                'titulo': notificacion.titulo,
+                'mensaje': notificacion.mensaje,
+                'eta_minutos': notificacion.eta_minutos,
+                'eta_timestamp': notificacion.eta_timestamp,
+                'distancia_km': str(notificacion.distancia_km) if notificacion.distancia_km else None
+            }
+        })
+    
+    @action(detail=True, methods=['post'])
+    def actualizar_posicion(self, request, pk=None):
+        """
+        Actualiza la posición del conductor y recalcula ETA
+        
+        Payload:
+        {
+            "lat": -33.4372,
+            "lng": -70.6506
+        }
+        """
+        from apps.notifications.services import NotificationService
+        
+        programacion = self.get_object()
+        
+        if not programacion.driver:
+            return Response(
+                {'error': 'Programación no tiene conductor asignado'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        lat = request.data.get('lat')
+        lng = request.data.get('lng')
+        
+        if not lat or not lng:
+            return Response(
+                {'error': 'lat y lng requeridos'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Actualizar posición del conductor
+        programacion.driver.actualizar_posicion(lat, lng)
+        
+        # Actualizar ETA y crear notificación si cambió significativamente
+        resultado = NotificationService.actualizar_eta(
+            programacion, programacion.driver, lat, lng
+        )
+        
+        if not resultado:
+            return Response(
+                {'error': 'No se pudo calcular ETA actualizado'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+        
+        # Verificar si debe crear alerta de arribo próximo
+        if resultado['eta_minutos'] <= 15:
+            NotificationService.crear_alerta_arribo_proximo(programacion)
+        
+        response_data = {
+            'success': True,
+            'mensaje': 'Posición actualizada y ETA recalculado',
+            'eta_minutos': resultado['eta_minutos'],
+            'distancia_km': str(resultado['distancia_km']),
+            'eta_timestamp': resultado['eta_timestamp']
+        }
+        
+        if resultado['notificacion']:
+            response_data['notificacion'] = {
+                'id': resultado['notificacion'].id,
+                'titulo': resultado['notificacion'].titulo,
+                'mensaje': resultado['notificacion'].mensaje
+            }
+        
+        return Response(response_data)
+    
+    @action(detail=True, methods=['get'])
+    def eta(self, request, pk=None):
+        """
+        Calcula el ETA actual para una programación
+        """
+        from apps.core.services.mapbox import MapboxService
+        
+        programacion = self.get_object()
+        
+        if not programacion.driver:
+            return Response(
+                {'error': 'Programación no tiene conductor asignado'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        driver = programacion.driver
+        cd = programacion.cd
+        
+        if not driver.ultima_posicion_lat or not driver.ultima_posicion_lng:
+            return Response(
+                {'error': 'Conductor no tiene posición GPS conocida'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Calcular ETA con Mapbox
+        resultado = MapboxService.calcular_ruta(
+            float(driver.ultima_posicion_lng),
+            float(driver.ultima_posicion_lat),
+            float(cd.lng),
+            float(cd.lat)
+        )
+        
+        if not resultado.get('success'):
+            return Response(
+                {'error': f'Error calculando ETA: {resultado.get("error")}'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+        
+        eta_timestamp = timezone.now() + timedelta(minutes=resultado['duration_minutes'])
+        
+        return Response({
+            'success': True,
+            'eta_minutos': resultado['duration_minutes'],
+            'distancia_km': resultado['distance_km'],
+            'eta_timestamp': eta_timestamp,
+            'conductor': driver.nombre,
+            'destino': cd.nombre,
+            'posicion_actual': {
+                'lat': str(driver.ultima_posicion_lat),
+                'lng': str(driver.ultima_posicion_lng)
+            }
+        })

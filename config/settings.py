@@ -52,6 +52,7 @@ INSTALLED_APPS = [
     'apps.programaciones',
     'apps.events',
     'apps.cds',
+    'apps.notifications',
 ]
 
 MIDDLEWARE = [

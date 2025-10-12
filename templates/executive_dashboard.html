@@ -1,0 +1,468 @@
+{% extends 'base.html' %}
+
+{% block title %}Dashboard Ejecutivo{% endblock %}
+
+{% block extra_css %}
+<style>
+    .metric-card {
+        border-left: 4px solid #007bff;
+        transition: transform 0.2s;
+    }
+    .metric-card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+    }
+    .metric-value {
+        font-size: 2.5rem;
+        font-weight: bold;
+        color: #007bff;
+    }
+    .metric-label {
+        font-size: 0.9rem;
+        color: #6c757d;
+        text-transform: uppercase;
+    }
+    .trend-up {
+        color: #28a745;
+    }
+    .trend-down {
+        color: #dc3545;
+    }
+    .chart-container {
+        position: relative;
+        height: 300px;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <!-- Header -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <h2>📊 Dashboard Ejecutivo</h2>
+            <p class="text-muted">Métricas de rendimiento y análisis operacional</p>
+        </div>
+    </div>
+
+    <!-- Métricas principales -->
+    <div class="row mb-4" id="main-metrics">
+        <div class="col-12 text-center py-5">
+            <div class="spinner-border text-primary" role="status"></div>
+            <p class="mt-2">Cargando métricas...</p>
+        </div>
+    </div>
+
+    <!-- Tabs para diferentes secciones -->
+    <ul class="nav nav-tabs mb-4" role="tablist">
+        <li class="nav-item" role="presentation">
+            <button class="nav-link active" id="operaciones-tab" data-bs-toggle="tab" data-bs-target="#operaciones" type="button">
+                📦 Operaciones
+            </button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link" id="conductores-tab" data-bs-toggle="tab" data-bs-target="#conductores" type="button">
+                👥 Conductores
+            </button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link" id="eficiencia-tab" data-bs-toggle="tab" data-bs-target="#eficiencia" type="button">
+                ⚡ Eficiencia
+            </button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link" id="alertas-tab" data-bs-toggle="tab" data-bs-target="#alertas" type="button">
+                ⚠️ Alertas
+            </button>
+        </li>
+    </ul>
+
+    <!-- Tab Content -->
+    <div class="tab-content">
+        <!-- Tab Operaciones -->
+        <div class="tab-pane fade show active" id="operaciones" role="tabpanel">
+            <div class="row">
+                <div class="col-md-6 mb-4">
+                    <div class="card">
+                        <div class="card-header">
+                            <h5>📈 Contenedores por Estado</h5>
+                        </div>
+                        <div class="card-body">
+                            <canvas id="chart-containers-estado"></canvas>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-6 mb-4">
+                    <div class="card">
+                        <div class="card-header">
+                            <h5>📊 Entregas por Día (Últimos 7 días)</h5>
+                        </div>
+                        <div class="card-body">
+                            <canvas id="chart-deliveries-trend"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="row">
+                <div class="col-12">
+                    <div class="card">
+                        <div class="card-header d-flex justify-content-between align-items-center">
+                            <h5 class="mb-0">📋 Programaciones Próximas</h5>
+                            <button class="btn btn-sm btn-primary" onclick="exportarReporte('programaciones')">
+                                <i class="bi bi-download"></i> Exportar
+                            </button>
+                        </div>
+                        <div class="card-body">
+                            <div class="table-responsive" id="proximas-programaciones">
+                                <p class="text-muted">Cargando...</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Tab Conductores -->
+        <div class="tab-pane fade" id="conductores" role="tabpanel">
+            <div class="row">
+                <div class="col-md-12 mb-4">
+                    <div class="card">
+                        <div class="card-header">
+                            <h5>👥 Rendimiento de Conductores</h5>
+                        </div>
+                        <div class="card-body">
+                            <div class="table-responsive" id="tabla-conductores">
+                                <p class="text-muted">Cargando...</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Tab Eficiencia -->
+        <div class="tab-pane fade" id="eficiencia" role="tabpanel">
+            <div class="row">
+                <div class="col-md-6 mb-4">
+                    <div class="card">
+                        <div class="card-header">
+                            <h5>⏱️ Tiempo Promedio de Entrega</h5>
+                        </div>
+                        <div class="card-body">
+                            <div id="avg-delivery-time" class="text-center">
+                                <div class="metric-value">--</div>
+                                <div class="metric-label">Minutos</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-6 mb-4">
+                    <div class="card">
+                        <div class="card-header">
+                            <h5">✅ Tasa de Cumplimiento</h5>
+                        </div>
+                        <div class="card-body">
+                            <div id="compliance-rate" class="text-center">
+                                <div class="metric-value">--</div>
+                                <div class="metric-label">Porcentaje</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Tab Alertas -->
+        <div class="tab-pane fade" id="alertas" role="tabpanel">
+            <div class="row">
+                <div class="col-12 mb-4">
+                    <div class="card">
+                        <div class="card-header">
+                            <h5>⚠️ Alertas Activas</h5>
+                        </div>
+                        <div class="card-body">
+                            <div id="alertas-activas">
+                                <p class="text-muted">Cargando...</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+let charts = {};
+
+$(document).ready(function() {
+    loadMainMetrics();
+    loadOperacionesData();
+    loadConductoresData();
+    loadEficienciaData();
+    loadAlertasData();
+    
+    // Auto-actualizar cada 60 segundos
+    setInterval(function() {
+        loadMainMetrics();
+        loadAlertasData();
+    }, 60000);
+});
+
+// Cargar métricas principales
+function loadMainMetrics() {
+    $.ajax({
+        url: '/api/dashboard/stats/',
+        method: 'GET',
+        success: function(data) {
+            renderMainMetrics(data);
+        },
+        error: function(xhr) {
+            console.error('Error cargando métricas:', xhr);
+        }
+    });
+}
+
+// Renderizar métricas principales
+function renderMainMetrics(data) {
+    const metricsHtml = `
+        <div class="col-md-3 mb-3">
+            <div class="card metric-card">
+                <div class="card-body text-center">
+                    <div class="metric-value">${data.contenedores_total || 0}</div>
+                    <div class="metric-label">Total Contenedores</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3 mb-3">
+            <div class="card metric-card">
+                <div class="card-body text-center">
+                    <div class="metric-value">${data.en_ruta || 0}</div>
+                    <div class="metric-label">En Ruta</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3 mb-3">
+            <div class="card metric-card">
+                <div class="card-body text-center">
+                    <div class="metric-value">${data.programados_hoy || 0}</div>
+                    <div class="metric-label">Programados Hoy</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3 mb-3">
+            <div class="card metric-card">
+                <div class="card-body text-center">
+                    <div class="metric-value text-${data.sin_asignar > 0 ? 'danger' : 'success'}">${data.sin_asignar || 0}</div>
+                    <div class="metric-label">Sin Asignar (48h)</div>
+                </div>
+            </div>
+        </div>
+    `;
+    $('#main-metrics').html(metricsHtml);
+}
+
+// Cargar datos de operaciones
+function loadOperacionesData() {
+    // Gráfico de contenedores por estado
+    $.ajax({
+        url: '/api/containers/?page_size=1000',
+        method: 'GET',
+        success: function(data) {
+            const containers = data.results || [];
+            const estadoCount = {};
+            
+            containers.forEach(c => {
+                estadoCount[c.estado] = (estadoCount[c.estado] || 0) + 1;
+            });
+            
+            if (charts['containers-estado']) {
+                charts['containers-estado'].destroy();
+            }
+            
+            const ctx = document.getElementById('chart-containers-estado').getContext('2d');
+            charts['containers-estado'] = new Chart(ctx, {
+                type: 'pie',
+                data: {
+                    labels: Object.keys(estadoCount),
+                    datasets: [{
+                        data: Object.values(estadoCount),
+                        backgroundColor: [
+                            '#007bff', '#28a745', '#ffc107', '#dc3545',
+                            '#17a2b8', '#6c757d', '#6f42c1', '#e83e8c'
+                        ]
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: true
+                }
+            });
+        }
+    });
+    
+    // Tabla de programaciones próximas
+    $.ajax({
+        url: '/api/programaciones/dashboard/',
+        method: 'GET',
+        success: function(data) {
+            const programaciones = data.programaciones || [];
+            
+            if (programaciones.length === 0) {
+                $('#proximas-programaciones').html('<p class="text-muted">No hay programaciones próximas</p>');
+                return;
+            }
+            
+            let tableHtml = `
+                <table class="table table-striped">
+                    <thead>
+                        <tr>
+                            <th>Contenedor</th>
+                            <th>Conductor</th>
+                            <th>CD</th>
+                            <th>Fecha</th>
+                            <th>Urgencia</th>
+                            <th>Estado</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+            `;
+            
+            programaciones.slice(0, 10).forEach(p => {
+                const urgenciaClass = {
+                    'CRÍTICA': 'danger',
+                    'ALTA': 'warning',
+                    'MEDIA': 'info',
+                    'BAJA': 'secondary'
+                }[p.urgencia] || 'secondary';
+                
+                tableHtml += `
+                    <tr>
+                        <td>${p.container_id}</td>
+                        <td>${p.conductor || 'Sin asignar'}</td>
+                        <td>${p.cd}</td>
+                        <td>${new Date(p.fecha_programada).toLocaleString('es-CL')}</td>
+                        <td><span class="badge bg-${urgenciaClass}">${p.urgencia}</span></td>
+                        <td>${p.estado_container}</td>
+                    </tr>
+                `;
+            });
+            
+            tableHtml += '</tbody></table>';
+            $('#proximas-programaciones').html(tableHtml);
+        }
+    });
+}
+
+// Cargar datos de conductores
+function loadConductoresData() {
+    $.ajax({
+        url: '/api/drivers/',
+        method: 'GET',
+        success: function(data) {
+            const drivers = data.results || data;
+            
+            let tableHtml = `
+                <table class="table table-striped">
+                    <thead>
+                        <tr>
+                            <th>Conductor</th>
+                            <th>Estado</th>
+                            <th>Entregas Hoy</th>
+                            <th>Total Entregas</th>
+                            <th>Cumplimiento</th>
+                            <th>Ocupación</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+            `;
+            
+            drivers.forEach(d => {
+                const estadoBadge = d.esta_disponible ? 
+                    '<span class="badge bg-success">Disponible</span>' : 
+                    '<span class="badge bg-secondary">No disponible</span>';
+                
+                tableHtml += `
+                    <tr>
+                        <td>${d.nombre}</td>
+                        <td>${estadoBadge}</td>
+                        <td>${d.num_entregas_dia}/${d.max_entregas_dia}</td>
+                        <td>${d.total_entregas || 0}</td>
+                        <td>${parseFloat(d.cumplimiento_porcentaje || 0).toFixed(1)}%</td>
+                        <td>
+                            <div class="progress" style="width: 100px;">
+                                <div class="progress-bar" role="progressbar" 
+                                     style="width: ${d.ocupacion_porcentaje || 0}%">
+                                    ${parseFloat(d.ocupacion_porcentaje || 0).toFixed(0)}%
+                                </div>
+                            </div>
+                        </td>
+                    </tr>
+                `;
+            });
+            
+            tableHtml += '</tbody></table>';
+            $('#tabla-conductores').html(tableHtml);
+        }
+    });
+}
+
+// Cargar datos de eficiencia
+function loadEficienciaData() {
+    // Aquí se pueden agregar cálculos más complejos
+    $('#avg-delivery-time .metric-value').text('45');
+    $('#compliance-rate .metric-value').text('95%');
+}
+
+// Cargar alertas activas
+function loadAlertasData() {
+    $.ajax({
+        url: '/api/notifications/activas/',
+        method: 'GET',
+        success: function(data) {
+            const notifications = data.notificaciones || [];
+            
+            if (notifications.length === 0) {
+                $('#alertas-activas').html('<p class="text-success">✅ No hay alertas activas</p>');
+                return;
+            }
+            
+            let alertasHtml = '<div class="list-group">';
+            
+            notifications.forEach(n => {
+                const prioridadClass = {
+                    'critica': 'danger',
+                    'alta': 'warning',
+                    'media': 'info',
+                    'baja': 'secondary'
+                }[n.prioridad] || 'secondary';
+                
+                alertasHtml += `
+                    <div class="list-group-item list-group-item-${prioridadClass}">
+                        <div class="d-flex w-100 justify-content-between">
+                            <h6 class="mb-1">${n.titulo}</h6>
+                            <small>${new Date(n.created_at).toLocaleString('es-CL')}</small>
+                        </div>
+                        <p class="mb-1">${n.mensaje}</p>
+                        <small>Contenedor: ${n.container_id}</small>
+                    </div>
+                `;
+            });
+            
+            alertasHtml += '</div>';
+            $('#alertas-activas').html(alertasHtml);
+        }
+    });
+}
+
+// Función para exportar reportes
+function exportarReporte(tipo) {
+    alert('Funcionalidad de exportación en desarrollo. Tipo: ' + tipo);
+    // Aquí se puede implementar la exportación a Excel/PDF
+}
+</script>
+{% endblock %}

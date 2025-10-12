@@ -94,3 +94,13 @@ def drivers_list(request):
 def operaciones(request):
     """Vista del panel de operaciones"""
     return render(request, 'operaciones.html')
+
+
+def driver_dashboard(request):
+    """Vista del dashboard móvil para conductores"""
+    return render(request, 'driver_dashboard.html')
+
+
+def executive_dashboard(request):
+    """Vista del dashboard ejecutivo con reportes y analíticas"""
+    return render(request, 'executive_dashboard.html')
