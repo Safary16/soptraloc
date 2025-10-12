@@ -278,3 +278,79 @@ body {
     background-color: rgba(233, 84, 32, 0.1);
     color: var(--ubuntu-dark-grey);
 }
+
+/* Driver Portal Card - Destacado */
+.driver-portal-card {
+    background: linear-gradient(135deg, var(--ubuntu-orange) 0%, var(--ubuntu-purple) 100%);
+    border: none;
+    box-shadow: 0 8px 20px rgba(233, 84, 32, 0.4);
+    transition: all 0.3s ease;
+}
+
+.driver-portal-card:hover {
+    transform: translateY(-8px);
+    box-shadow: 0 12px 30px rgba(233, 84, 32, 0.5);
+}
+
+.btn-driver-portal {
+    background-color: white;
+    color: var(--ubuntu-orange);
+    font-weight: bold;
+    padding: 12px 30px;
+    border: none;
+    border-radius: 8px;
+    transition: all 0.3s ease;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+.btn-driver-portal:hover {
+    background-color: var(--ubuntu-dark);
+    color: white;
+    transform: scale(1.05);
+}
+
+/* Destacar el link de Portal de Conductores en el navbar */
+.nav-driver-portal {
+    background-color: rgba(255, 255, 255, 0.15);
+    border-radius: 4px;
+    font-weight: 600;
+}
+
+.nav-driver-portal:hover {
+    background-color: rgba(255, 255, 255, 0.25) !important;
+}
+
+/* Mejoras al navbar */
+.navbar-brand {
+    font-size: 1.3rem;
+    transition: all 0.3s ease;
+}
+
+.navbar-brand:hover {
+    transform: scale(1.05);
+}
+
+.navbar-nav .nav-item {
+    margin: 0 0.2rem;
+}
+
+/* Mejorar apariencia del header del dashboard */
+.card-ubuntu.fade-in .card-body h2 {
+    font-weight: 500;
+    color: var(--ubuntu-dark-grey);
+}
+
+.card-ubuntu.fade-in .card-body .text-muted {
+    color: var(--ubuntu-mid-grey) !important;
+}
+
+/* Mejorar contraste y legibilidad */
+.stat-card {
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+}
+
+/* Enlaces de las tarjetas de acciones rápidas */
+a.text-decoration-none:hover .card {
+    box-shadow: 0 6px 15px rgba(0, 0, 0, 0.15);
+}
