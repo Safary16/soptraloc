@@ -51,26 +51,29 @@ class DriverDetailSerializer(DriverSerializer):
         """Retorna programaciones asignadas al conductor"""
         from apps.programaciones.models import Programacion
         
+        # Get all programaciones for this driver
         programaciones = Programacion.objects.filter(
-            conductor=obj,
-            estado__in=['asignado', 'en_ruta', 'entregado']
+            driver=obj
         ).select_related('container', 'cd')
         
         resultado = []
         for prog in programaciones:
-            item = {
-                'id': prog.id,
-                'contenedor': prog.container.numero_contenedor if prog.container else None,
-                'cliente': prog.container.cliente if prog.container else None,
-                'cd': prog.cd.nombre if prog.cd else None,
-                'cd_direccion': prog.cd.direccion if prog.cd else None,
-                'cd_telefono': prog.cd.telefono if prog.cd else None,
-                'cd_horario': prog.cd.horario if prog.cd else None,
-                'estado': prog.estado,
-                'fecha_asignacion': prog.fecha_asignacion,
-                'fecha_programada': prog.fecha_programada,
-            }
-            resultado.append(item)
+            # Filter by estado after retrieval since it's a property
+            estado = prog.estado
+            if estado in ['asignado', 'en_ruta', 'programado', 'entregado']:
+                item = {
+                    'id': prog.id,
+                    'contenedor': prog.container.numero_contenedor if prog.container else None,
+                    'cliente': prog.cliente,
+                    'cd': prog.cd.nombre if prog.cd else None,
+                    'cd_direccion': prog.cd.direccion if prog.cd else None,
+                    'cd_telefono': prog.cd.telefono if prog.cd else None,
+                    'cd_horario': prog.cd.horario if prog.cd else None,
+                    'estado': estado,
+                    'fecha_asignacion': prog.fecha_asignacion,
+                    'fecha_programada': prog.fecha_programada,
+                }
+                resultado.append(item)
         
         return resultado
 
