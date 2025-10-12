@@ -110,3 +110,18 @@ def container_detail(request, container_id):
     return render(request, 'container_detail.html', {
         'container': container
     })
+
+
+def operaciones(request):
+    """Panel de operaciones para asignación y gestión de ciclo de vida"""
+    return render(request, 'operaciones.html')
+
+
+def drivers_list(request):
+    """Listado de conductores con filtros"""
+    return render(request, 'drivers_list.html')
+
+
+def executive_dashboard(request):
+    """Dashboard ejecutivo con métricas y análisis"""
+    return render(request, 'executive_dashboard.html')

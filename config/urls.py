@@ -15,7 +15,8 @@ from apps.programaciones.views import ProgramacionViewSet
 # Import frontend views
 from apps.core.views import (
     home, asignacion, estados, importar, 
-    containers_list, container_detail
+    containers_list, container_detail,
+    operaciones, drivers_list, executive_dashboard
 )
 
 # Setup API router
@@ -32,6 +33,9 @@ urlpatterns = [
     path('importar/', importar, name='importar'),
     path('containers/', containers_list, name='containers_list'),
     path('container/<str:container_id>/', container_detail, name='container_detail'),
+    path('operaciones/', operaciones, name='operaciones'),
+    path('drivers/', drivers_list, name='drivers_list'),
+    path('executive/', executive_dashboard, name='executive_dashboard'),
     
     # Admin
     path('admin/', admin.site.urls),
