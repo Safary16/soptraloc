@@ -2,6 +2,7 @@
 :root {
     --ubuntu-orange: #E95420;
     --ubuntu-purple: #772953;
+    --ubuntu-purple-light: #8E3A6A;
     --ubuntu-dark: #2C001E;
     --ubuntu-light-grey: #AEA79F;
     --ubuntu-mid-grey: #77716C;
@@ -11,7 +12,7 @@
 }
 
 body {
-    font-family: 'Ubuntu', 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    font-family: 'Ubuntu Sans', 'Inter', 'Ubuntu', 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
     background-color: #F7F7F7;
     min-height: 100vh;
     display: flex;
@@ -20,6 +21,7 @@ body {
 
 .main-content {
     flex: 1;
+    padding-top: 1rem;
 }
 
 /* Navbar estilo Ubuntu */
@@ -58,12 +60,12 @@ body {
 .card {
     border: none;
     border-radius: 8px;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+    box-shadow: 0 2px 5px rgba(0,0,0,0.1);
     transition: all 0.3s ease;
 }
 
 .card:hover {
-    box-shadow: 0 4px 12px rgba(0,0,0,0.12);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
     transform: translateY(-2px);
 }
 
@@ -76,6 +78,9 @@ body {
     color: white;
     font-weight: bold;
     border-radius: 8px 8px 0 0 !important;
+    border-top: 2px solid transparent;
+    border-image: linear-gradient(90deg, var(--ubuntu-orange), var(--ubuntu-purple), var(--ubuntu-purple-light));
+    border-image-slice: 1;
 }
 
 /* Botones estilo Ubuntu */
@@ -115,10 +120,12 @@ body {
     padding: 2rem 1rem;
     border-radius: 8px;
     transition: all 0.3s ease;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.1);
 }
 
 .stat-card:hover {
     transform: translateY(-5px);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
 }
 
 .stat-card.orange {
@@ -127,13 +134,15 @@ body {
 }
 
 .stat-card.purple {
-    background: linear-gradient(135deg, var(--ubuntu-purple) 0%, var(--ubuntu-light-aubergine) 100%);
+    background: linear-gradient(135deg, var(--ubuntu-purple) 0%, var(--ubuntu-purple-light) 100%);
     color: white;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.1);
 }
 
 .stat-card.dark {
     background: linear-gradient(135deg, var(--ubuntu-dark-grey) 0%, var(--ubuntu-mid-grey) 100%);
     color: white;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.1);
 }
 
 .stat-card .stat-icon {
@@ -157,11 +166,12 @@ body {
 
 /* Badges de urgencia */
 .badge-urgencia-critica {
-    background-color: #DC3545;
+    background: linear-gradient(135deg, var(--ubuntu-purple) 0%, var(--ubuntu-purple-light) 100%);
     color: white;
     padding: 0.5rem 1rem;
     border-radius: 20px;
     font-weight: bold;
+    box-shadow: 0 2px 4px rgba(119, 41, 83, 0.3);
 }
 
 .badge-urgencia-alta {
