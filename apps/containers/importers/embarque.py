@@ -39,7 +39,9 @@ class EmbarqueImporter:
         """Normaliza los nombres de columnas a los esperados"""
         # Limpiar caracteres especiales en nombres de columnas
         df.columns = df.columns.str.replace('\xa0', ' ', regex=False)
+        df.columns = df.columns.str.replace(r'\s+', ' ', regex=True)  # Múltiples espacios a uno
         df.columns = df.columns.str.strip()
+        df.columns = df.columns.str.lower()
         
         mapeo = {
             'contenedor': 'container_id',
@@ -48,6 +50,8 @@ class EmbarqueImporter:
             'id': 'container_id',
             'tipo contenedor': 'tipo',
             'tipo_contenedor': 'tipo',
+            'tipo cont- temperatura': 'tipo',
+            'tipo cont-temperatura': 'tipo',
             'container size': 'tipo',
             'buque': 'nave',
             'naviera': 'nave',
@@ -66,7 +70,6 @@ class EmbarqueImporter:
             'po': 'po',
         }
         
-        df.columns = df.columns.str.lower().str.strip()
         df.rename(columns=mapeo, inplace=True)
         return df
     
@@ -97,6 +100,11 @@ class EmbarqueImporter:
             for col in self.COLUMNAS_REQUERIDAS:
                 if col not in df.columns:
                     raise ValueError(f"Columna requerida '{col}' no encontrada en el Excel")
+            
+            # Filtrar filas vacías (donde container_id es NaN o vacío)
+            df = df[df['container_id'].notna()]
+            df = df[df['container_id'].astype(str).str.strip() != '']
+            df = df.reset_index(drop=True)
             
             # Procesar cada fila
             for idx, row in df.iterrows():

@@ -48,7 +48,9 @@ class ProgramacionImporter:
         """Normaliza los nombres de columnas a los esperados"""
         # Limpiar caracteres especiales en nombres de columnas
         df.columns = df.columns.str.replace('\xa0', ' ', regex=False)
+        df.columns = df.columns.str.replace(r'\s+', ' ', regex=True)  # Múltiples espacios a uno
         df.columns = df.columns.str.strip()
+        df.columns = df.columns.str.lower()
         
         mapeo = {
             'contenedor': 'container_id',
@@ -67,6 +69,7 @@ class ProgramacionImporter:
             'fecha demurrage': 'fecha_demurrage',
             'wk demurrage': 'dias_demurrage',
             'ransportista': 'transportista',  # Nota: en Excel falta la T
+            'transportista': 'transportista',
             'hora': 'hora_programada',
             'producto': 'contenido',
             'referencia': 'referencia',
@@ -76,7 +79,6 @@ class ProgramacionImporter:
             'cajas': 'cantidad_cajas',
         }
         
-        df.columns = df.columns.str.lower().str.strip()
         df.rename(columns=mapeo, inplace=True)
         return df
     
@@ -156,6 +158,11 @@ class ProgramacionImporter:
             for col in self.COLUMNAS_REQUERIDAS:
                 if col not in df.columns:
                     raise ValueError(f"Columna requerida '{col}' no encontrada en el Excel")
+            
+            # Filtrar filas vacías (donde container_id es NaN o vacío)
+            df = df[df['container_id'].notna()]
+            df = df[df['container_id'].astype(str).str.strip() != '']
+            df = df.reset_index(drop=True)
             
             # Procesar cada fila
             for idx, row in df.iterrows():
