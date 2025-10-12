@@ -14,6 +14,8 @@ def home(request):
     two_days_from_now = today + timedelta(days=2)
     
     # Calculate stats for dashboard
+    from apps.programaciones.models import Programacion
+    
     stats = {
         'programados_hoy': Container.objects.filter(
             estado='programado',
@@ -30,10 +32,9 @@ def home(request):
         'programados': Container.objects.filter(estado='programado').count(),
         'vacios': Container.objects.filter(estado__in=['vacio', 'vacio_en_ruta']).count(),
         # Programaciones sin conductor asignado con fecha en las próximas 48 horas
-        'sin_asignar': Container.objects.filter(
-            estado='programado',
-            fecha_programacion__lte=timezone.now() + timedelta(hours=48),
-            programacion__driver__isnull=True
+        'sin_asignar': Programacion.objects.filter(
+            fecha_programada__lte=timezone.now() + timedelta(hours=48),
+            driver__isnull=True
         ).count(),
     }
     
