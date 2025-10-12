@@ -1,4 +1,7 @@
-from django.shortcuts import render
+from django.shortcuts import render, redirect
+from django.contrib.auth import authenticate, login, logout
+from django.contrib.auth.decorators import login_required
+from django.contrib import messages
 from apps.containers.models import Container
 from apps.drivers.models import Driver
 from apps.cds.models import CD
@@ -96,9 +99,64 @@ def operaciones(request):
     return render(request, 'operaciones.html')
 
 
+def driver_login(request):
+    """Vista de login para conductores"""
+    if request.user.is_authenticated:
+        # Si ya está autenticado, redirigir al dashboard
+        try:
+            driver = request.user.driver_profile
+            return redirect('driver_dashboard')
+        except:
+            # Si no tiene perfil de conductor, logout
+            logout(request)
+    
+    if request.method == 'POST':
+        username = request.POST.get('username')
+        password = request.POST.get('password')
+        
+        user = authenticate(request, username=username, password=password)
+        
+        if user is not None:
+            # Verificar que el usuario tiene perfil de conductor
+            try:
+                driver = user.driver_profile
+                login(request, user)
+                return redirect('driver_dashboard')
+            except:
+                messages.error(request, 'Este usuario no tiene un perfil de conductor asociado.')
+        else:
+            messages.error(request, 'Usuario o contraseña incorrectos.')
+    
+    return render(request, 'driver_login.html')
+
+
+def driver_logout(request):
+    """Vista de logout para conductores"""
+    logout(request)
+    messages.success(request, 'Sesión cerrada exitosamente.')
+    return redirect('driver_login')
+
+
+@login_required(login_url='/driver/login/')
 def driver_dashboard(request):
     """Vista del dashboard móvil para conductores"""
-    return render(request, 'driver_dashboard.html')
+    try:
+        driver = request.user.driver_profile
+    except:
+        messages.error(request, 'No tiene un perfil de conductor asociado.')
+        return redirect('driver_login')
+    
+    return render(request, 'driver_dashboard.html', {
+        'driver': driver
+    })
+
+
+def monitoring(request):
+    """Vista de monitoreo en tiempo real de conductores"""
+    from django.conf import settings
+    return render(request, 'monitoring.html', {
+        'MAPBOX_API_KEY': settings.MAPBOX_API_KEY
+    })
 
 
 def executive_dashboard(request):

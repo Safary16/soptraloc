@@ -2,11 +2,13 @@ from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.parsers import MultiPartParser, FormParser
-from rest_framework.permissions import AllowAny, IsAuthenticatedOrReadOnly
+from rest_framework.permissions import AllowAny, IsAuthenticatedOrReadOnly, IsAuthenticated
 from django.db import models
+from django.utils import timezone
+from datetime import timedelta
 
-from .models import Driver
-from .serializers import DriverSerializer, DriverListSerializer
+from .models import Driver, DriverLocation
+from .serializers import DriverSerializer, DriverListSerializer, DriverLocationSerializer
 
 
 class DriverViewSet(viewsets.ModelViewSet):
@@ -206,3 +208,149 @@ class DriverViewSet(viewsets.ModelViewSet):
         Alias for import_conductores to match the frontend URL pattern
         """
         return self.import_conductores(request)
+    
+    @action(detail=True, methods=['post'], permission_classes=[IsAuthenticated])
+    def track_location(self, request, pk=None):
+        """
+        Registra la ubicación GPS del conductor (llamado desde el dashboard del conductor)
+        """
+        driver = self.get_object()
+        
+        # Verificar que el usuario autenticado es el conductor
+        if request.user != driver.user and not request.user.is_staff:
+            return Response(
+                {'error': 'No tiene permiso para actualizar esta ubicación'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+        
+        lat = request.data.get('lat')
+        lng = request.data.get('lng')
+        accuracy = request.data.get('accuracy')
+        
+        if not lat or not lng:
+            return Response(
+                {'error': 'lat y lng son requeridos'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        try:
+            # Actualizar última posición del conductor
+            driver.actualizar_posicion(float(lat), float(lng))
+            
+            # Guardar en historial
+            location = DriverLocation.objects.create(
+                driver=driver,
+                lat=lat,
+                lng=lng,
+                accuracy=accuracy
+            )
+            
+            return Response({
+                'success': True,
+                'mensaje': 'Ubicación registrada',
+                'location': DriverLocationSerializer(location).data
+            })
+        except ValueError as e:
+            return Response(
+                {'error': str(e)},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+    
+    @action(detail=False, methods=['get'], permission_classes=[IsAuthenticatedOrReadOnly])
+    def active_locations(self, request):
+        """
+        Obtiene las ubicaciones activas de todos los conductores en ruta
+        Para la página de monitoreo en tiempo real
+        """
+        # Obtener solo conductores activos con posición reciente (últimos 30 minutos)
+        tiempo_limite = timezone.now() - timedelta(minutes=30)
+        
+        drivers = Driver.objects.filter(
+            activo=True,
+            presente=True,
+            ultima_actualizacion_posicion__gte=tiempo_limite,
+            ultima_posicion_lat__isnull=False,
+            ultima_posicion_lng__isnull=False
+        ).select_related('user')
+        
+        data = []
+        for driver in drivers:
+            # Obtener programación activa si existe
+            programacion = driver.programaciones.filter(
+                fecha_programada__date=timezone.now().date()
+            ).select_related('container', 'cd').first()
+            
+            driver_data = {
+                'id': driver.id,
+                'nombre': driver.nombre,
+                'lat': float(driver.ultima_posicion_lat),
+                'lng': float(driver.ultima_posicion_lng),
+                'ultima_actualizacion': driver.ultima_actualizacion_posicion.isoformat(),
+                'telefono': driver.telefono,
+            }
+            
+            if programacion:
+                driver_data['container'] = programacion.container.numero
+                driver_data['cd_destino'] = programacion.cd.nombre
+                driver_data['cd_lat'] = float(programacion.cd.lat)
+                driver_data['cd_lng'] = float(programacion.cd.lng)
+                driver_data['eta_minutos'] = programacion.eta_minutos
+            
+            data.append(driver_data)
+        
+        return Response({
+            'success': True,
+            'total': len(data),
+            'drivers': data
+        })
+    
+    @action(detail=True, methods=['get'], permission_classes=[IsAuthenticated])
+    def my_info(self, request, pk=None):
+        """
+        Obtiene información del conductor autenticado con sus asignaciones
+        """
+        driver = self.get_object()
+        
+        # Verificar que el usuario autenticado es el conductor
+        if request.user != driver.user and not request.user.is_staff:
+            return Response(
+                {'error': 'No tiene permiso para ver esta información'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+        
+        # Obtener programaciones activas
+        programaciones = driver.programaciones.filter(
+            fecha_programada__date__gte=timezone.now().date()
+        ).select_related('container', 'cd').order_by('fecha_programada')
+        
+        prog_data = []
+        for prog in programaciones:
+            prog_data.append({
+                'id': prog.id,
+                'container': {
+                    'numero': prog.container.numero,
+                    'tipo': prog.container.tipo,
+                    'estado': prog.container.estado,
+                },
+                'cd': {
+                    'nombre': prog.cd.nombre,
+                    'direccion': prog.cd.direccion,
+                    'lat': float(prog.cd.lat) if prog.cd.lat else None,
+                    'lng': float(prog.cd.lng) if prog.cd.lng else None,
+                    'telefono': prog.cd.telefono,
+                    'horario': prog.cd.horario,
+                },
+                'fecha_programada': prog.fecha_programada.isoformat(),
+                'cliente': prog.cliente,
+                'direccion_entrega': prog.direccion_entrega,
+                'observaciones': prog.observaciones,
+                'eta_minutos': prog.eta_minutos,
+                'distancia_km': float(prog.distancia_km) if prog.distancia_km else None,
+            })
+        
+        serializer = self.get_serializer(driver)
+        return Response({
+            'success': True,
+            'driver': serializer.data,
+            'programaciones': prog_data
+        })

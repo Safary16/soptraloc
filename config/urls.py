@@ -37,6 +37,7 @@ router.register(r'notification-preferences', NotificationPreferenceViewSet, base
 from apps.core.views import (
     home, asignacion, importar, estados, container_detail, 
     containers_list, drivers_list, operaciones, driver_dashboard,
+    driver_login, driver_logout, monitoring,
     executive_dashboard
 )
 from apps.core.api_views import (
@@ -54,7 +55,10 @@ urlpatterns = [
     path("containers/", containers_list, name="containers_list"),
     path("container/<str:container_id>/", container_detail, name="container_detail"),
     path("drivers/", drivers_list, name="drivers_list"),
+    path("driver/login/", driver_login, name="driver_login"),
+    path("driver/logout/", driver_logout, name="driver_logout"),
     path("driver/dashboard/", driver_dashboard, name="driver_dashboard"),
+    path("monitoring/", monitoring, name="monitoring"),
     path("executive/", executive_dashboard, name="executive_dashboard"),
     
     # Admin and API

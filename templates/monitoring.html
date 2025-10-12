@@ -1,0 +1,354 @@
+{% extends 'base.html' %}
+
+{% block title %}Monitoreo en Tiempo Real{% endblock %}
+
+{% block extra_css %}
+<style>
+    #map {
+        height: calc(100vh - 200px);
+        min-height: 500px;
+        border-radius: 8px;
+    }
+    .driver-card {
+        transition: all 0.3s;
+        cursor: pointer;
+    }
+    .driver-card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+    }
+    .driver-card.selected {
+        border: 2px solid #007bff;
+        background-color: #f0f8ff;
+    }
+    .status-indicator {
+        width: 12px;
+        height: 12px;
+        border-radius: 50%;
+        display: inline-block;
+        margin-right: 5px;
+    }
+    .status-active {
+        background-color: #28a745;
+        animation: pulse 2s infinite;
+    }
+    @keyframes pulse {
+        0%, 100% { opacity: 1; }
+        50% { opacity: 0.5; }
+    }
+    .refresh-indicator {
+        position: absolute;
+        top: 20px;
+        right: 20px;
+        z-index: 1000;
+        background: white;
+        padding: 10px 15px;
+        border-radius: 8px;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <div class="row mb-3">
+        <div class="col-12">
+            <h2><i class="fas fa-map-marked-alt"></i> Monitoreo en Tiempo Real</h2>
+            <p class="text-muted">Seguimiento GPS de conductores activos</p>
+        </div>
+    </div>
+
+    <div class="row">
+        <!-- Sidebar con lista de conductores -->
+        <div class="col-md-3">
+            <div class="card">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="mb-0">
+                        <i class="fas fa-users"></i> Conductores Activos 
+                        <span class="badge bg-light text-dark" id="active-count">0</span>
+                    </h5>
+                </div>
+                <div class="card-body p-2" style="max-height: calc(100vh - 250px); overflow-y: auto;">
+                    <div id="drivers-list">
+                        <div class="text-center py-4">
+                            <div class="spinner-border text-primary" role="status">
+                                <span class="visually-hidden">Cargando...</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Mapa -->
+        <div class="col-md-9 position-relative">
+            <div class="refresh-indicator" id="refresh-indicator">
+                <i class="fas fa-sync-alt"></i>
+                <span id="last-update">Actualizando...</span>
+            </div>
+            <div id="map"></div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src='https://api.mapbox.com/mapbox-gl-js/v2.14.1/mapbox-gl.js'></script>
+<link href='https://api.mapbox.com/mapbox-gl-js/v2.14.1/mapbox-gl.css' rel='stylesheet' />
+
+<script>
+let map;
+let markers = {};
+let selectedDriver = null;
+let updateInterval;
+
+// Configurar Mapbox
+mapboxgl.accessToken = '{{ MAPBOX_API_KEY }}' || 'pk.your-mapbox-token-here';
+
+// Inicializar mapa
+function initMap() {
+    map = new mapboxgl.Map({
+        container: 'map',
+        style: 'mapbox://styles/mapbox/streets-v12',
+        center: [-70.6693, -33.4489], // Santiago, Chile
+        zoom: 11
+    });
+
+    map.addControl(new mapboxgl.NavigationControl());
+    map.addControl(new mapboxgl.FullscreenControl());
+}
+
+// Cargar conductores activos
+function loadActiveDrivers() {
+    $.ajax({
+        url: '/api/drivers/active_locations/',
+        method: 'GET',
+        success: function(response) {
+            if (response.success) {
+                updateDriversList(response.drivers);
+                updateDriversOnMap(response.drivers);
+                updateLastUpdateTime();
+                $('#active-count').text(response.total);
+            }
+        },
+        error: function(xhr) {
+            console.error('Error loading drivers:', xhr);
+            $('#drivers-list').html(`
+                <div class="alert alert-warning m-2">
+                    Error al cargar conductores
+                </div>
+            `);
+        }
+    });
+}
+
+// Actualizar lista de conductores en sidebar
+function updateDriversList(drivers) {
+    const container = $('#drivers-list');
+    
+    if (drivers.length === 0) {
+        container.html(`
+            <div class="alert alert-info m-2">
+                No hay conductores activos en este momento
+            </div>
+        `);
+        return;
+    }
+
+    let html = '';
+    drivers.forEach(function(driver) {
+        const isSelected = selectedDriver === driver.id;
+        const lastUpdate = new Date(driver.ultima_actualizacion);
+        const timeAgo = getTimeAgo(lastUpdate);
+        
+        html += `
+            <div class="driver-card card mb-2 ${isSelected ? 'selected' : ''}" 
+                 onclick="selectDriver(${driver.id})" 
+                 data-driver-id="${driver.id}">
+                <div class="card-body p-2">
+                    <div class="d-flex align-items-center mb-1">
+                        <span class="status-indicator status-active"></span>
+                        <strong>${driver.nombre}</strong>
+                    </div>
+                    ${driver.container ? `
+                        <small class="text-muted">
+                            <i class="fas fa-box"></i> ${driver.container}<br>
+                        </small>
+                    ` : ''}
+                    ${driver.cd_destino ? `
+                        <small class="text-muted">
+                            <i class="fas fa-map-marker-alt"></i> ${driver.cd_destino}<br>
+                        </small>
+                    ` : ''}
+                    ${driver.eta_minutos ? `
+                        <small class="badge bg-info">
+                            <i class="fas fa-clock"></i> ETA: ${driver.eta_minutos} min
+                        </small>
+                    ` : ''}
+                    <div class="text-muted small mt-1">
+                        <i class="fas fa-history"></i> ${timeAgo}
+                    </div>
+                </div>
+            </div>
+        `;
+    });
+
+    container.html(html);
+}
+
+// Actualizar conductores en el mapa
+function updateDriversOnMap(drivers) {
+    // Remover markers antiguos que ya no están activos
+    Object.keys(markers).forEach(function(driverId) {
+        const stillActive = drivers.find(d => d.id == driverId);
+        if (!stillActive) {
+            markers[driverId].remove();
+            delete markers[driverId];
+        }
+    });
+
+    // Agregar o actualizar markers
+    drivers.forEach(function(driver) {
+        const coords = [driver.lng, driver.lat];
+
+        if (markers[driver.id]) {
+            // Actualizar posición del marker existente
+            markers[driver.id].setLngLat(coords);
+        } else {
+            // Crear nuevo marker
+            const el = document.createElement('div');
+            el.className = 'marker';
+            el.style.width = '40px';
+            el.style.height = '40px';
+            el.style.backgroundImage = 'url(https://docs.mapbox.com/mapbox-gl-js/assets/custom_marker.png)';
+            el.style.backgroundSize = 'contain';
+            el.style.cursor = 'pointer';
+
+            const popup = new mapboxgl.Popup({ offset: 25 }).setHTML(`
+                <div>
+                    <strong>${driver.nombre}</strong><br>
+                    ${driver.telefono ? `<small>📞 ${driver.telefono}</small><br>` : ''}
+                    ${driver.container ? `<small>📦 ${driver.container}</small><br>` : ''}
+                    ${driver.cd_destino ? `<small>📍 ${driver.cd_destino}</small><br>` : ''}
+                    ${driver.eta_minutos ? `<small>⏱️ ETA: ${driver.eta_minutos} min</small>` : ''}
+                </div>
+            `);
+
+            const marker = new mapboxgl.Marker(el)
+                .setLngLat(coords)
+                .setPopup(popup)
+                .addTo(map);
+
+            markers[driver.id] = marker;
+
+            el.addEventListener('click', function() {
+                selectDriver(driver.id);
+            });
+        }
+
+        // Si el conductor tiene destino, dibujar línea
+        if (driver.cd_lat && driver.cd_lng) {
+            drawRoute(driver);
+        }
+    });
+
+    // Ajustar vista del mapa si hay conductores
+    if (drivers.length > 0 && !selectedDriver) {
+        const bounds = new mapboxgl.LngLatBounds();
+        drivers.forEach(d => bounds.extend([d.lng, d.lat]));
+        map.fitBounds(bounds, { padding: 50, maxZoom: 14 });
+    }
+}
+
+// Seleccionar un conductor
+function selectDriver(driverId) {
+    selectedDriver = driverId;
+    
+    // Actualizar UI
+    $('.driver-card').removeClass('selected');
+    $(`.driver-card[data-driver-id="${driverId}"]`).addClass('selected');
+    
+    // Centrar mapa en el conductor
+    if (markers[driverId]) {
+        const lngLat = markers[driverId].getLngLat();
+        map.flyTo({
+            center: [lngLat.lng, lngLat.lat],
+            zoom: 14
+        });
+        markers[driverId].togglePopup();
+    }
+}
+
+// Dibujar ruta hacia destino
+function drawRoute(driver) {
+    const sourceId = `route-${driver.id}`;
+    
+    if (map.getSource(sourceId)) {
+        map.removeLayer(sourceId);
+        map.removeSource(sourceId);
+    }
+
+    map.addSource(sourceId, {
+        type: 'geojson',
+        data: {
+            type: 'Feature',
+            properties: {},
+            geometry: {
+                type: 'LineString',
+                coordinates: [
+                    [driver.lng, driver.lat],
+                    [driver.cd_lng, driver.cd_lat]
+                ]
+            }
+        }
+    });
+
+    map.addLayer({
+        id: sourceId,
+        type: 'line',
+        source: sourceId,
+        layout: {
+            'line-join': 'round',
+            'line-cap': 'round'
+        },
+        paint: {
+            'line-color': '#007cbf',
+            'line-width': 3,
+            'line-dasharray': [2, 2]
+        }
+    });
+}
+
+// Calcular tiempo transcurrido
+function getTimeAgo(date) {
+    const seconds = Math.floor((new Date() - date) / 1000);
+    
+    if (seconds < 60) return 'Hace menos de 1 min';
+    if (seconds < 3600) return `Hace ${Math.floor(seconds / 60)} min`;
+    if (seconds < 86400) return `Hace ${Math.floor(seconds / 3600)} h`;
+    return `Hace ${Math.floor(seconds / 86400)} días`;
+}
+
+// Actualizar tiempo de última actualización
+function updateLastUpdateTime() {
+    const now = new Date();
+    $('#last-update').text(`Última actualización: ${now.toLocaleTimeString('es-CL')}`);
+}
+
+// Inicializar al cargar la página
+$(document).ready(function() {
+    initMap();
+    loadActiveDrivers();
+    
+    // Auto-actualizar cada 15 segundos
+    updateInterval = setInterval(loadActiveDrivers, 15000);
+});
+
+// Limpiar al salir
+window.addEventListener('beforeunload', function() {
+    if (updateInterval) {
+        clearInterval(updateInterval);
+    }
+});
+</script>
+{% endblock %}

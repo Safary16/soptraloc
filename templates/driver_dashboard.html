@@ -1,6 +1,6 @@
 {% extends 'base.html' %}
 
-{% block title %}Dashboard del Conductor{% endblock %}
+{% block title %}Dashboard del Conductor - {{ driver.nombre }}{% endblock %}
 
 {% block extra_css %}
 <style>
@@ -55,17 +55,22 @@
             <div class="card">
                 <div class="card-body">
                     <div class="row align-items-center">
-                        <div class="col-md-8">
-                            <h4 class="mb-1">👤 <span id="driver-name">Cargando...</span></h4>
+                        <div class="col-md-6">
+                            <h4 class="mb-1">👤 {{ driver.nombre }}</h4>
                             <p class="mb-0 text-muted">
-                                <span id="driver-stats">Entregas del día: 0/3</span> • 
+                                <span id="driver-stats">Entregas del día: {{ driver.num_entregas_dia }}/{{ driver.max_entregas_dia }}</span> • 
                                 <span class="location-status" id="location-status">
-                                    📍 Ubicación: No disponible
+                                    📍 Ubicación: Solicitando permiso...
                                 </span>
                             </p>
                         </div>
-                        <div class="col-md-4 text-end">
-                            <span class="badge bg-success" id="status-badge">Activo</span>
+                        <div class="col-md-6 text-end">
+                            <span class="badge bg-{{ driver.presente|yesno:'success,danger' }}" id="status-badge">
+                                {{ driver.presente|yesno:'Activo,Inactivo' }}
+                            </span>
+                            <a href="{% url 'driver_logout' %}" class="btn btn-sm btn-outline-danger ms-2">
+                                <i class="fas fa-sign-out-alt"></i> Cerrar Sesión
+                            </a>
                         </div>
                     </div>
                 </div>
@@ -139,72 +144,150 @@
 {% block extra_js %}
 <script>
 // Variables globales
-let driverId = null;
+const driverId = {{ driver.id }};
 let currentPosition = null;
 let updateInterval = null;
+let gpsWatchId = null;
+let notificationPermissionGranted = false;
+
+// Función para solicitar permisos de notificación
+function requestNotificationPermission() {
+    if ('Notification' in window && Notification.permission === 'default') {
+        Notification.requestPermission().then(function(permission) {
+            if (permission === 'granted') {
+                notificationPermissionGranted = true;
+                console.log('Permiso de notificaciones concedido');
+                new Notification('SoptraLoc TMS', {
+                    body: 'Recibirás notificaciones cuando te asignen un contenedor',
+                    icon: '/static/icon.png'
+                });
+            } else {
+                console.log('Permiso de notificaciones denegado');
+            }
+        });
+    }
+}
+
+// Función para solicitar permisos de GPS
+function requestGPSPermission() {
+    if (!navigator.geolocation) {
+        updateLocationStatus(false, 'GPS no disponible en este dispositivo');
+        return;
+    }
+
+    // Solicitar permiso de ubicación
+    navigator.geolocation.getCurrentPosition(
+        function(position) {
+            currentPosition = {
+                lat: position.coords.latitude,
+                lng: position.coords.longitude,
+                accuracy: position.coords.accuracy
+            };
+            updateLocationStatus(true);
+            
+            // Enviar posición inicial al servidor
+            sendLocationToServer(currentPosition);
+            
+            // Iniciar tracking continuo (cada 30 segundos)
+            gpsWatchId = navigator.geolocation.watchPosition(
+                function(position) {
+                    currentPosition = {
+                        lat: position.coords.latitude,
+                        lng: position.coords.longitude,
+                        accuracy: position.coords.accuracy
+                    };
+                    sendLocationToServer(currentPosition);
+                },
+                function(error) {
+                    console.error('Error tracking ubicación:', error);
+                    updateLocationStatus(false, 'Error al rastrear ubicación');
+                },
+                {
+                    enableHighAccuracy: true,
+                    timeout: 30000,
+                    maximumAge: 0
+                }
+            );
+        },
+        function(error) {
+            let errorMsg = 'Error obteniendo ubicación';
+            switch(error.code) {
+                case error.PERMISSION_DENIED:
+                    errorMsg = 'Permiso de GPS denegado';
+                    break;
+                case error.POSITION_UNAVAILABLE:
+                    errorMsg = 'Ubicación no disponible';
+                    break;
+                case error.TIMEOUT:
+                    errorMsg = 'Tiempo de espera agotado';
+                    break;
+            }
+            console.error(errorMsg, error);
+            updateLocationStatus(false, errorMsg);
+        },
+        {
+            enableHighAccuracy: true,
+            timeout: 10000,
+            maximumAge: 0
+        }
+    );
+}
+
+// Enviar ubicación al servidor
+function sendLocationToServer(position) {
+    $.ajax({
+        url: `/api/drivers/${driverId}/track_location/`,
+        method: 'POST',
+        headers: {
+            'X-CSRFToken': getCookie('csrftoken')
+        },
+        data: {
+            lat: position.lat,
+            lng: position.lng,
+            accuracy: position.accuracy
+        },
+        success: function(response) {
+            console.log('Ubicación actualizada en servidor');
+            updateLocationStatus(true);
+        },
+        error: function(xhr) {
+            console.error('Error enviando ubicación:', xhr);
+        }
+    });
+}
 
 // Inicializar al cargar la página
 $(document).ready(function() {
-    // Obtener driver_id de query params o localStorage
-    const urlParams = new URLSearchParams(window.location.search);
-    driverId = urlParams.get('driver_id') || localStorage.getItem('driver_id');
-    
-    if (!driverId) {
-        // Solicitar ID de conductor
-        const id = prompt('Por favor ingresa tu ID de conductor:');
-        if (id) {
-            driverId = id;
-            localStorage.setItem('driver_id', id);
-            window.location.search = `?driver_id=${id}`;
-        } else {
-            alert('ID de conductor requerido');
-            return;
-        }
-    }
+    // Solicitar permisos al cargar
+    requestNotificationPermission();
+    requestGPSPermission();
     
     // Cargar datos del conductor
     loadDriverInfo();
     loadDeliveries();
     
-    // Intentar obtener ubicación
-    if (navigator.geolocation) {
-        navigator.geolocation.getCurrentPosition(
-            function(position) {
-                currentPosition = {
-                    lat: position.coords.latitude,
-                    lng: position.coords.longitude
-                };
-                updateLocationStatus(true);
-            },
-            function(error) {
-                console.error('Error obteniendo ubicación:', error);
-                updateLocationStatus(false);
-            }
-        );
-    }
-    
     // Auto-actualizar cada 30 segundos
     updateInterval = setInterval(loadDeliveries, 30000);
 });
 
-// Cargar información del conductor
+// Cargar información del conductor con sus asignaciones
 function loadDriverInfo() {
     $.ajax({
-        url: `/api/drivers/${driverId}/`,
+        url: `/api/drivers/${driverId}/my_info/`,
         method: 'GET',
-        success: function(data) {
-            $('#driver-name').text(data.nombre);
+        headers: {
+            'X-CSRFToken': getCookie('csrftoken')
+        },
+        success: function(response) {
+            const data = response.driver;
             $('#driver-stats').text(`Entregas del día: ${data.num_entregas_dia}/${data.max_entregas_dia}`);
             $('#status-badge').text(data.presente && data.activo ? 'Activo' : 'Inactivo')
                 .removeClass('bg-success bg-danger')
                 .addClass(data.presente && data.activo ? 'bg-success' : 'bg-danger');
             
-            if (data.ultima_posicion_lat && data.ultima_posicion_lng) {
-                currentPosition = {
-                    lat: parseFloat(data.ultima_posicion_lat),
-                    lng: parseFloat(data.ultima_posicion_lng)
-                };
-                updateLocationStatus(true);
+            // Mostrar programaciones si existen
+            if (response.programaciones && response.programaciones.length > 0) {
+                displayProgramaciones(response.programaciones);
             }
         },
         error: function(xhr) {
@@ -517,10 +600,29 @@ $('#btn-update-location').click(function() {
     );
 });
 
+// Obtener cookie CSRF
+function getCookie(name) {
+    let cookieValue = null;
+    if (document.cookie && document.cookie !== '') {
+        const cookies = document.cookie.split(';');
+        for (let i = 0; i < cookies.length; i++) {
+            const cookie = cookies[i].trim();
+            if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                break;
+            }
+        }
+    }
+    return cookieValue;
+}
+
 // Limpiar intervalo al salir
 window.addEventListener('beforeunload', function() {
     if (updateInterval) {
         clearInterval(updateInterval);
+    }
+    if (gpsWatchId) {
+        navigator.geolocation.clearWatch(gpsWatchId);
     }
 });
 </script>

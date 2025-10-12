@@ -1,10 +1,21 @@
 from django.db import models
 from django.utils import timezone
+from django.contrib.auth.models import User
 from decimal import Decimal
 
 
 class Driver(models.Model):
     """Modelo de conductores con métricas para asignación automática"""
+    
+    # Usuario del sistema (para login)
+    user = models.OneToOneField(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='driver_profile',
+        verbose_name='Usuario'
+    )
     
     # Información básica
     nombre = models.CharField('Nombre', max_length=200, db_index=True)
@@ -129,3 +140,28 @@ class Driver(models.Model):
             'entregas_a_tiempo', 
             'cumplimiento_porcentaje'
         ])
+
+
+class DriverLocation(models.Model):
+    """Historial de ubicaciones del conductor para tracking GPS"""
+    driver = models.ForeignKey(
+        Driver,
+        on_delete=models.CASCADE,
+        related_name='location_history',
+        verbose_name='Conductor'
+    )
+    lat = models.DecimalField('Latitud', max_digits=9, decimal_places=6)
+    lng = models.DecimalField('Longitud', max_digits=9, decimal_places=6)
+    accuracy = models.FloatField('Precisión (metros)', null=True, blank=True)
+    timestamp = models.DateTimeField('Fecha/Hora', auto_now_add=True, db_index=True)
+    
+    class Meta:
+        ordering = ['-timestamp']
+        verbose_name = 'Ubicación del Conductor'
+        verbose_name_plural = 'Ubicaciones de Conductores'
+        indexes = [
+            models.Index(fields=['driver', '-timestamp']),
+        ]
+    
+    def __str__(self):
+        return f"{self.driver.nombre} - {self.timestamp.strftime('%Y-%m-%d %H:%M:%S')}"

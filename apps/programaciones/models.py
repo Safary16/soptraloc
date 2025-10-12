@@ -112,6 +112,21 @@ class Programacion(models.Model):
             },
             usuario=usuario
         )
+        
+        # Crear notificación para el conductor
+        from apps.notifications.models import Notification
+        Notification.objects.create(
+            programacion=self,
+            tipo='asignacion_conductor',
+            mensaje=f"Se te ha asignado el contenedor {self.container.numero} para entregar en {self.cd.nombre}",
+            detalles={
+                'container': self.container.numero,
+                'cd_nombre': self.cd.nombre,
+                'cd_direccion': self.cd.direccion,
+                'fecha_programada': self.fecha_programada.isoformat(),
+                'cliente': self.cliente,
+            }
+        )
 
 
 class TiempoOperacion(models.Model):
