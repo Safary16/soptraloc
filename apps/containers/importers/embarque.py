@@ -68,6 +68,8 @@ class EmbarqueImporter:
             'origin': 'origen',
             'mbl': 'booking',
             'po': 'po',
+            'import file': 'import_file',
+            'place of receipt': 'place_receipt',
         }
         
         df.rename(columns=mapeo, inplace=True)
@@ -123,12 +125,12 @@ class EmbarqueImporter:
                     datos = {
                         'tipo': self.validar_tipo(row.get('tipo')),
                         'nave': str(row['nave']).strip() if pd.notna(row['nave']) else 'N/A',
-                        'viaje': str(row['viaje']).strip() if pd.notna(row.get('viaje')) else None,
-                        'booking': str(row['booking']).strip() if pd.notna(row.get('booking')) or pd.notna(row.get('mbl')) else None,
+                        'viaje': str(row.get('viaje')).strip() if pd.notna(row.get('viaje')) else None,
+                        'booking': str(row.get('booking')).strip() if pd.notna(row.get('booking')) else None,
                         'peso_carga': float(row['peso']) if pd.notna(row.get('peso')) else None,
-                        'vendor': str(row['vendor']).strip() if pd.notna(row.get('vendor')) else None,
-                        'sello': str(row['sello']).strip() if pd.notna(row.get('sello')) else None,
-                        'puerto': str(row['puerto']).strip() if pd.notna(row.get('puerto')) else 'San Antonio',
+                        'vendor': str(row.get('vendor')).strip() if pd.notna(row.get('vendor')) else None,
+                        'sello': str(row.get('sello')).strip() if pd.notna(row.get('sello')) else None,
+                        'puerto': str(row.get('puerto')).strip() if pd.notna(row.get('puerto')) else 'San Antonio',
                         'estado': 'por_arribar',
                     }
                     

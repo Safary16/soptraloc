@@ -37,7 +37,7 @@ async function loadDashboardData() {
         const data = await response.json();
         
         if (data.success) {
-            updateDashboardStats(data);
+            await updateDashboardStats(data);
             updateProgramacionesTable(data.programaciones);
         }
     } catch (error) {
@@ -46,14 +46,27 @@ async function loadDashboardData() {
 }
 
 // Actualizar estadísticas del dashboard
-function updateDashboardStats(data) {
-    const total = data.total || 0;
+async function updateDashboardStats(data) {
     const criticas = data.programaciones.filter(p => p.urgencia === 'CRÍTICA').length;
     const altas = data.programaciones.filter(p => p.urgencia === 'ALTA').length;
     
-    if (document.getElementById('stat-total')) {
-        document.getElementById('stat-total').textContent = total;
+    // Fetch containers count from API
+    try {
+        const containersResponse = await fetch('/api/containers/?format=json');
+        const containersData = await containersResponse.json();
+        const containersCount = containersData.count || containersData.length || 0;
+        
+        if (document.getElementById('stat-total')) {
+            document.getElementById('stat-total').textContent = containersCount;
+        }
+    } catch (error) {
+        console.error('Error fetching containers count:', error);
+        // Fallback to programaciones count if containers fetch fails
+        if (document.getElementById('stat-total')) {
+            document.getElementById('stat-total').textContent = data.total || 0;
+        }
     }
+    
     if (document.getElementById('stat-criticas')) {
         document.getElementById('stat-criticas').textContent = criticas;
     }

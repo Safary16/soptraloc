@@ -24,40 +24,48 @@
     <!-- Stats Cards -->
     <div class="row mb-4">
         <div class="col-md-3 mb-3">
-            <div class="card stat-card orange fade-in">
-                <div class="stat-icon">
-                    <i class="fas fa-box"></i>
+            <a href="/containers/" class="text-decoration-none">
+                <div class="card stat-card orange fade-in" style="cursor: pointer; transition: transform 0.2s;" onmouseover="this.style.transform='scale(1.05)'" onmouseout="this.style.transform='scale(1)'">
+                    <div class="stat-icon">
+                        <i class="fas fa-box"></i>
+                    </div>
+                    <div class="stat-number" id="stat-total">-</div>
+                    <div class="stat-label">Contenedores</div>
                 </div>
-                <div class="stat-number" id="stat-total">-</div>
-                <div class="stat-label">Programaciones Activas</div>
-            </div>
+            </a>
         </div>
         <div class="col-md-3 mb-3">
-            <div class="card stat-card purple fade-in">
-                <div class="stat-icon">
-                    <i class="fas fa-exclamation-triangle"></i>
+            <a href="/containers/?estado=programado" class="text-decoration-none">
+                <div class="card stat-card purple fade-in" style="cursor: pointer; transition: transform 0.2s;" onmouseover="this.style.transform='scale(1.05)'" onmouseout="this.style.transform='scale(1)'">
+                    <div class="stat-icon">
+                        <i class="fas fa-exclamation-triangle"></i>
+                    </div>
+                    <div class="stat-number" id="stat-criticas">-</div>
+                    <div class="stat-label">Urgencia Crítica</div>
                 </div>
-                <div class="stat-number" id="stat-criticas">-</div>
-                <div class="stat-label">Urgencia Crítica</div>
-            </div>
+            </a>
         </div>
         <div class="col-md-3 mb-3">
-            <div class="card stat-card dark fade-in">
-                <div class="stat-icon">
-                    <i class="fas fa-truck"></i>
+            <a href="/api/drivers/" class="text-decoration-none">
+                <div class="card stat-card dark fade-in" style="cursor: pointer; transition: transform 0.2s;" onmouseover="this.style.transform='scale(1.05)'" onmouseout="this.style.transform='scale(1)'">
+                    <div class="stat-icon">
+                        <i class="fas fa-truck"></i>
+                    </div>
+                    <div class="stat-number" id="stat-conductores">{{ stats.conductores }}</div>
+                    <div class="stat-label">Conductores</div>
                 </div>
-                <div class="stat-number" id="stat-conductores">{{ stats.conductores }}</div>
-                <div class="stat-label">Conductores</div>
-            </div>
+            </a>
         </div>
         <div class="col-md-3 mb-3">
-            <div class="card stat-card orange fade-in">
-                <div class="stat-icon">
-                    <i class="fas fa-warehouse"></i>
+            <a href="/api/cds/" class="text-decoration-none">
+                <div class="card stat-card orange fade-in" style="cursor: pointer; transition: transform 0.2s;" onmouseover="this.style.transform='scale(1.05)'" onmouseout="this.style.transform='scale(1)'">
+                    <div class="stat-icon">
+                        <i class="fas fa-warehouse"></i>
+                    </div>
+                    <div class="stat-number" id="stat-cds">{{ stats.cds }}</div>
+                    <div class="stat-label">Centros de Distribución</div>
                 </div>
-                <div class="stat-number" id="stat-cds">{{ stats.cds }}</div>
-                <div class="stat-label">Centros de Distribución</div>
-            </div>
+            </a>
         </div>
     </div>
 

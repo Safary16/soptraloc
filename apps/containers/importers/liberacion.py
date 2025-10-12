@@ -66,6 +66,7 @@ class LiberacionImporter:
             'terminal': 'posicion_fisica',
             'almacen': 'posicion_fisica',
             'almacén': 'posicion_fisica',
+            'almacen ': 'posicion_fisica',  # Con espacio extra por si acaso
             'devolucion vacio': 'deposito_devolucion',
             'devolución vacio': 'deposito_devolucion',
             'devolucion vacío': 'deposito_devolucion',
@@ -153,10 +154,18 @@ class LiberacionImporter:
                             fecha_lib = pd.to_datetime(row['fecha_liberacion'])
                             # Combinar con hora si está disponible
                             if 'hora_liberacion' in df.columns and pd.notna(row.get('hora_liberacion')):
-                                hora_lib = pd.to_datetime(str(row['hora_liberacion']), format='%H:%M:%S').time()
-                                fecha_liberacion = timezone.make_aware(datetime.combine(fecha_lib.date(), hora_lib))
+                                try:
+                                    # Intentar parsear hora (puede venir como datetime o string)
+                                    if isinstance(row['hora_liberacion'], str):
+                                        hora_lib = pd.to_datetime(row['hora_liberacion'], format='%H:%M:%S').time()
+                                    else:
+                                        hora_lib = pd.to_datetime(row['hora_liberacion']).time()
+                                    fecha_liberacion = timezone.make_aware(datetime.combine(fecha_lib.date(), hora_lib))
+                                except Exception:
+                                    # Si falla el parseo de hora, usar solo fecha
+                                    fecha_liberacion = timezone.make_aware(fecha_lib) if timezone.is_naive(fecha_lib) else fecha_lib
                             else:
-                                fecha_liberacion = timezone.make_aware(fecha_lib)
+                                fecha_liberacion = timezone.make_aware(fecha_lib) if timezone.is_naive(fecha_lib) else fecha_lib
                         except Exception:
                             fecha_liberacion = timezone.now()
                     
