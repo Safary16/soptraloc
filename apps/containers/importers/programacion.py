@@ -167,7 +167,9 @@ class ProgramacionImporter:
             # Procesar cada fila
             for idx, row in df.iterrows():
                 try:
-                    container_id = str(row['container_id']).strip().upper()
+                    # Normalizar container_id (eliminar espacios y guiones)
+                    container_id_raw = str(row['container_id']).strip().upper()
+                    container_id = Container.normalize_container_id(container_id_raw)
                     
                     if not container_id or container_id == 'NAN':
                         self.resultados['errores'] += 1

@@ -180,8 +180,8 @@ function loadContainers(page = 1) {
                 const row = document.createElement('tr');
                 
                 // Calcular peso total
-                const peso_carga = container.peso_carga || 0;
-                const tara = container.tara || 3500;
+                const peso_carga = parseFloat(container.peso_carga) || 0;
+                const tara = parseFloat(container.tara) || 3500;
                 const peso_total = peso_carga + tara;
                 
                 row.innerHTML = `
@@ -196,7 +196,7 @@ function loadContainers(page = 1) {
                             <i class="fas fa-trash"></i>
                         </button>
                     </td>
-                    <td><strong>${container.container_id}</strong></td>
+                    <td><strong>${container.container_id_formatted || container.container_id}</strong></td>
                     <td><span class="badge bg-${getEstadoBadge(container.estado)}">${container.estado_display || container.estado}</span></td>
                     <td>${container.nave || '-'}</td>
                     <td>${container.tipo || '-'}</td>
