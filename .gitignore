@@ -87,7 +87,7 @@ logs/
 .ipynb_checkpoints
 
 # pyenv
-.python-version
+# .python-version - KEEP TRACKED for Render.com
 
 # pipenv
 Pipfile.lock
