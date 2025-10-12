@@ -1,1 +1,320 @@
-404: Not Found
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Monitoreo en Tiempo Real - SoptraLoc</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href='https://api.mapbox.com/mapbox-gl-js/v2.15.0/mapbox-gl.css' rel='stylesheet' />
+    <style>
+        body, html {
+            margin: 0;
+            padding: 0;
+            height: 100%;
+            overflow: hidden;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 15px 20px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
+            z-index: 1000;
+        }
+        
+        .header h1 {
+            font-size: 24px;
+            margin: 0;
+        }
+        
+        .container-fluid {
+            display: flex;
+            height: calc(100vh - 70px);
+            padding: 0;
+        }
+        
+        .sidebar {
+            width: 350px;
+            background: white;
+            box-shadow: 2px 0 10px rgba(0, 0, 0, 0.1);
+            overflow-y: auto;
+            padding: 20px;
+        }
+        
+        .map-container {
+            flex: 1;
+            position: relative;
+        }
+        
+        #map {
+            width: 100%;
+            height: 100%;
+        }
+        
+        .driver-card {
+            background: #f8f9fa;
+            border-radius: 10px;
+            padding: 15px;
+            margin-bottom: 15px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            border: 2px solid transparent;
+        }
+        
+        .driver-card:hover {
+            border-color: #667eea;
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.2);
+        }
+        
+        .driver-card.active {
+            border-color: #667eea;
+            background: #e7eaf6;
+        }
+        
+        .driver-name {
+            font-size: 18px;
+            font-weight: bold;
+            color: #333;
+        }
+        
+        .status-indicator {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            display: inline-block;
+            margin-right: 8px;
+            animation: pulse 2s infinite;
+        }
+        
+        .status-active {
+            background: #28a745;
+        }
+        
+        .status-inactive {
+            background: #dc3545;
+            animation: none;
+        }
+        
+        @keyframes pulse {
+            0%, 100% {
+                opacity: 1;
+            }
+            50% {
+                opacity: 0.5;
+            }
+        }
+        
+        .last-update {
+            font-size: 12px;
+            color: #666;
+        }
+        
+        .refresh-indicator {
+            position: fixed;
+            top: 80px;
+            right: 20px;
+            background: white;
+            padding: 10px 20px;
+            border-radius: 20px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+            z-index: 1000;
+        }
+        
+        .mapboxgl-popup-content {
+            padding: 15px;
+            border-radius: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <div class="d-flex justify-content-between align-items-center">
+            <h1><i class="fas fa-satellite-dish"></i> Monitoreo en Tiempo Real</h1>
+            <div>
+                <a href="/admin/" class="btn btn-light btn-sm">
+                    <i class="fas fa-cog"></i> Admin
+                </a>
+            </div>
+        </div>
+    </div>
+    
+    <div class="refresh-indicator" id="refresh-indicator">
+        <i class="fas fa-sync-alt"></i> <span id="refresh-text">Actualizando...</span>
+    </div>
+    
+    <div class="container-fluid">
+        <div class="sidebar">
+            <h5><i class="fas fa-users"></i> Conductores Activos</h5>
+            <div id="drivers-list">
+                <p class="text-center text-muted">Cargando conductores...</p>
+            </div>
+        </div>
+        
+        <div class="map-container">
+            <div id="map"></div>
+        </div>
+    </div>
+    
+    <script src='https://api.mapbox.com/mapbox-gl-js/v2.15.0/mapbox-gl.js'></script>
+    <script>
+        // Configuración de Mapbox
+        mapboxgl.accessToken = 'pk.eyJ1Ijoic2FmYXJ5MTYiLCJhIjoiY21naHlvYTQ5MDNlbDJrbjJjcXRtZGg1YSJ9.WCiyTSY_CCfB02N_Nfx7kg';
+        
+        // Inicializar mapa centrado en Santiago
+        const map = new mapboxgl.Map({
+            container: 'map',
+            style: 'mapbox://styles/mapbox/streets-v12',
+            center: [-70.6483, -33.4569], // Santiago, Chile
+            zoom: 11
+        });
+        
+        // Controles de navegación
+        map.addControl(new mapboxgl.NavigationControl());
+        
+        // Variables globales
+        let markers = {};
+        let selectedDriver = null;
+        
+        // Cargar datos al inicio y cada 15 segundos
+        window.addEventListener('load', () => {
+            loadDrivers();
+            setInterval(loadDrivers, 15000);
+        });
+        
+        // Cargar conductores activos
+        function loadDrivers() {
+            updateRefreshIndicator('Actualizando...');
+            
+            fetch('/api/drivers/active_locations/')
+                .then(response => response.json())
+                .then(data => {
+                    renderDriversList(data);
+                    updateMap(data);
+                    updateRefreshIndicator(`Actualizado ${new Date().toLocaleTimeString()}`);
+                })
+                .catch(error => {
+                    console.error('Error cargando conductores:', error);
+                    updateRefreshIndicator('Error al actualizar');
+                });
+        }
+        
+        // Renderizar lista de conductores
+        function renderDriversList(drivers) {
+            const container = document.getElementById('drivers-list');
+            
+            if (drivers.length === 0) {
+                container.innerHTML = '<p class="text-center text-muted">No hay conductores activos</p>';
+                return;
+            }
+            
+            let html = '';
+            drivers.forEach(driver => {
+                const minutosDesdeActualizacion = Math.round(
+                    (new Date() - new Date(driver.ultima_actualizacion)) / 60000
+                );
+                
+                const isActive = minutosDesdeActualizacion < 30;
+                const activeClass = selectedDriver === driver.id ? 'active' : '';
+                
+                html += `
+                    <div class="driver-card ${activeClass}" onclick="focusDriver(${driver.id})">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <div>
+                                <span class="status-indicator ${isActive ? 'status-active' : 'status-inactive'}"></span>
+                                <span class="driver-name">${driver.nombre}</span>
+                            </div>
+                            <div class="text-end">
+                                <small class="text-muted">${driver.num_entregas_dia}/${driver.max_entregas_dia}</small>
+                            </div>
+                        </div>
+                        <div class="last-update mt-2">
+                            <i class="fas fa-clock"></i> 
+                            ${minutosDesdeActualizacion < 1 ? 'Ahora' : `Hace ${minutosDesdeActualizacion} min`}
+                        </div>
+                    </div>
+                `;
+            });
+            
+            container.innerHTML = html;
+        }
+        
+        // Actualizar mapa con marcadores
+        function updateMap(drivers) {
+            // Eliminar marcadores que ya no existen
+            Object.keys(markers).forEach(id => {
+                if (!drivers.find(d => d.id == id)) {
+                    markers[id].remove();
+                    delete markers[id];
+                }
+            });
+            
+            // Agregar/actualizar marcadores
+            drivers.forEach(driver => {
+                const coords = [driver.lng, driver.lat];
+                
+                if (markers[driver.id]) {
+                    // Actualizar posición
+                    markers[driver.id].setLngLat(coords);
+                } else {
+                    // Crear nuevo marcador
+                    const el = document.createElement('div');
+                    el.className = 'driver-marker';
+                    el.innerHTML = '<i class="fas fa-truck" style="color: #667eea; font-size: 24px;"></i>';
+                    
+                    const popup = new mapboxgl.Popup({ offset: 25 })
+                        .setHTML(`
+                            <strong>${driver.nombre}</strong><br>
+                            Entregas: ${driver.num_entregas_dia}/${driver.max_entregas_dia}<br>
+                            <small>Actualizado: ${new Date(driver.ultima_actualizacion).toLocaleTimeString()}</small>
+                        `);
+                    
+                    const marker = new mapboxgl.Marker(el)
+                        .setLngLat(coords)
+                        .setPopup(popup)
+                        .addTo(map);
+                    
+                    markers[driver.id] = marker;
+                }
+            });
+            
+            // Auto-ajustar zoom si hay conductores
+            if (drivers.length > 0 && !selectedDriver) {
+                const bounds = new mapboxgl.LngLatBounds();
+                drivers.forEach(driver => {
+                    bounds.extend([driver.lng, driver.lat]);
+                });
+                map.fitBounds(bounds, { padding: 50, maxZoom: 14 });
+            }
+        }
+        
+        // Enfocar conductor específico
+        function focusDriver(driverId) {
+            selectedDriver = driverId;
+            
+            if (markers[driverId]) {
+                const coords = markers[driverId].getLngLat();
+                map.flyTo({
+                    center: [coords.lng, coords.lat],
+                    zoom: 14,
+                    essential: true
+                });
+                
+                // Abrir popup
+                markers[driverId].togglePopup();
+            }
+            
+            // Actualizar UI
+            document.querySelectorAll('.driver-card').forEach(card => {
+                card.classList.remove('active');
+            });
+        }
+        
+        // Actualizar indicador de refresh
+        function updateRefreshIndicator(text) {
+            document.getElementById('refresh-text').textContent = text;
+        }
+    </script>
+</body>
+</html>
