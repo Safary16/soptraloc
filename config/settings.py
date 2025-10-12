@@ -159,3 +159,8 @@ PESO_DISPONIBILIDAD = config('PESO_DISPONIBILIDAD', default=0.30, cast=float)
 PESO_OCUPACION = config('PESO_OCUPACION', default=0.25, cast=float)
 PESO_CUMPLIMIENTO = config('PESO_CUMPLIMIENTO', default=0.30, cast=float)
 PESO_PROXIMIDAD = config('PESO_PROXIMIDAD', default=0.15, cast=float)
+
+# Login URLs
+LOGIN_URL = '/driver/login/'
+LOGIN_REDIRECT_URL = '/driver/dashboard/'
+LOGOUT_REDIRECT_URL = '/driver/login/'
