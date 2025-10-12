@@ -110,6 +110,46 @@ class Container(models.Model):
     def __str__(self):
         return f"{self.container_id} - {self.get_estado_display()}"
     
+    @staticmethod
+    def normalize_container_id(container_id):
+        """
+        Normaliza el ID del contenedor eliminando espacios y guiones
+        Ejemplo: "TEMU 580105-5" o "TEMU5801055" → "TEMU5801055"
+        """
+        if not container_id:
+            return container_id
+        # Eliminar espacios y guiones
+        return str(container_id).replace(' ', '').replace('-', '').upper().strip()
+    
+    @property
+    def container_id_formatted(self):
+        """
+        Retorna el container_id en formato estándar ISO 6346: XXXU 123456-7
+        4 letras + espacio + 6 dígitos + guión + 1 dígito verificador
+        Ejemplo: "TEMU5801055" → "TEMU 580105-5"
+        """
+        if not self.container_id:
+            return self.container_id
+        
+        # Normalizar (eliminar espacios y guiones)
+        normalized = self.normalize_container_id(self.container_id)
+        
+        # Validar que tenga al menos 11 caracteres (4 letras + 7 dígitos)
+        if len(normalized) < 11:
+            return self.container_id  # Retornar original si no cumple formato
+        
+        # Extraer partes: 4 letras + 6 dígitos + 1 dígito verificador
+        prefix = normalized[:4]  # Primeras 4 letras
+        numbers = normalized[4:10]  # 6 dígitos
+        check = normalized[10:11]  # 1 dígito verificador
+        
+        # Validar que el prefijo sean letras y los números sean dígitos
+        if not prefix.isalpha() or not numbers.isdigit() or not check.isdigit():
+            return self.container_id  # Retornar original si no cumple formato
+        
+        # Retornar formateado
+        return f"{prefix} {numbers}-{check}"
+    
     def get_tara_default(self):
         """Retorna la tara típica según tipo de contenedor y carga"""
         taras = {
@@ -129,12 +169,25 @@ class Container(models.Model):
         return float(peso_carga) + float(tara)
     
     @property
+    def peso_total_tons(self):
+        """Retorna el peso total en toneladas"""
+        return self.peso_total / 1000.0
+    
+    @property
     def dias_para_demurrage(self):
         """Calcula días restantes hasta demurrage"""
         if not self.fecha_demurrage:
             return None
         delta = self.fecha_demurrage - timezone.now()
         return delta.days
+    
+    @property
+    def dias_vencido_demurrage(self):
+        """Retorna días vencidos (valor absoluto cuando es negativo)"""
+        dias = self.dias_para_demurrage
+        if dias is not None and dias < 0:
+            return abs(dias)
+        return 0
     
     @property
     def urgencia_demurrage(self):
