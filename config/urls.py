@@ -23,6 +23,7 @@ from apps.containers.views import ContainerViewSet
 from apps.drivers.views import DriverViewSet
 from apps.programaciones.views import ProgramacionViewSet
 from apps.cds.views import CDViewSet
+from apps.notifications.views import NotificationViewSet, NotificationPreferenceViewSet
 
 # Router para la API REST
 router = DefaultRouter()
@@ -30,6 +31,8 @@ router.register(r'containers', ContainerViewSet, basename='container')
 router.register(r'drivers', DriverViewSet, basename='driver')
 router.register(r'programaciones', ProgramacionViewSet, basename='programacion')
 router.register(r'cds', CDViewSet, basename='cd')
+router.register(r'notifications', NotificationViewSet, basename='notification')
+router.register(r'notification-preferences', NotificationPreferenceViewSet, basename='notification-preference')
 
 from apps.core.views import home, asignacion, importar, estados, container_detail, containers_list, drivers_list, operaciones
 
