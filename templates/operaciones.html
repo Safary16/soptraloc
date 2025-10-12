@@ -1,0 +1,542 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Operaciones - SoptraLoc{% endblock %}
+
+{% block extra_css %}
+<style>
+    .container-card {
+        transition: all 0.3s ease;
+        border: 2px solid transparent;
+    }
+    .container-card:hover {
+        border-color: #e95420;
+        box-shadow: 0 4px 12px rgba(233, 84, 32, 0.2);
+    }
+    .estado-badge {
+        font-size: 0.85rem;
+        padding: 6px 12px;
+    }
+    .action-btn {
+        margin: 3px;
+        padding: 6px 12px;
+    }
+    .lifecycle-step {
+        padding: 15px;
+        border-radius: 8px;
+        margin-bottom: 10px;
+        border: 2px solid #e0e0e0;
+    }
+    .lifecycle-step.active {
+        border-color: #e95420;
+        background-color: #fff8f5;
+    }
+    .lifecycle-step.completed {
+        border-color: #28a745;
+        background-color: #f0fff4;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <!-- Header -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <h1 class="display-6">
+                <i class="fas fa-tasks"></i> Panel de Operaciones
+            </h1>
+            <p class="text-muted">Gestión manual y automática de asignaciones y ciclo de vida de contenedores</p>
+        </div>
+    </div>
+
+    <!-- Tabs -->
+    <ul class="nav nav-tabs mb-4" id="operacionesTabs" role="tablist">
+        <li class="nav-item" role="presentation">
+            <button class="nav-link active" id="asignacion-tab" data-bs-toggle="tab" data-bs-target="#asignacion" type="button">
+                <i class="fas fa-user-plus"></i> Asignación
+            </button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link" id="ciclo-tab" data-bs-toggle="tab" data-bs-target="#ciclo" type="button">
+                <i class="fas fa-sync-alt"></i> Ciclo de Vida
+            </button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link" id="preAsignacion-tab" data-bs-toggle="tab" data-bs-target="#preAsignacion" type="button">
+                <i class="fas fa-calendar-plus"></i> Pre-Asignación
+            </button>
+        </li>
+    </ul>
+
+    <!-- Tab Content -->
+    <div class="tab-content" id="operacionesTabContent">
+        <!-- Asignación Tab -->
+        <div class="tab-pane fade show active" id="asignacion" role="tabpanel">
+            <div class="row">
+                <!-- Contenedores sin asignar -->
+                <div class="col-md-6 mb-4">
+                    <div class="card">
+                        <div class="card-header bg-warning text-dark">
+                            <i class="fas fa-exclamation-triangle"></i> Contenedores Sin Asignar
+                        </div>
+                        <div class="card-body" style="max-height: 600px; overflow-y: auto;">
+                            <div id="containers-sin-asignar">
+                                <div class="text-center py-4">
+                                    <div class="spinner-border text-primary"></div>
+                                    <p class="mt-2">Cargando...</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Conductores disponibles -->
+                <div class="col-md-6 mb-4">
+                    <div class="card">
+                        <div class="card-header bg-success text-white">
+                            <i class="fas fa-users"></i> Conductores Disponibles
+                        </div>
+                        <div class="card-body" style="max-height: 600px; overflow-y: auto;">
+                            <div id="conductores-disponibles">
+                                <div class="text-center py-4">
+                                    <div class="spinner-border text-primary"></div>
+                                    <p class="mt-2">Cargando...</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Ciclo de Vida Tab -->
+        <div class="tab-pane fade" id="ciclo" role="tabpanel">
+            <div class="row">
+                <div class="col-12 mb-3">
+                    <div class="card">
+                        <div class="card-body">
+                            <h5>Buscar Contenedor</h5>
+                            <div class="input-group">
+                                <input type="text" class="form-control" id="search-container-ciclo" placeholder="Ingrese ID del contenedor...">
+                                <button class="btn btn-primary" onclick="buscarContenedorCiclo()">
+                                    <i class="fas fa-search"></i> Buscar
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-md-8 mb-4">
+                    <div class="card">
+                        <div class="card-header bg-primary text-white">
+                            <i class="fas fa-sync-alt"></i> Ciclo de Vida del Contenedor
+                        </div>
+                        <div class="card-body" id="container-lifecycle">
+                            <p class="text-muted text-center py-4">Busque un contenedor para ver su ciclo de vida</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-md-4 mb-4">
+                    <div class="card">
+                        <div class="card-header bg-info text-white">
+                            <i class="fas fa-info-circle"></i> Información
+                        </div>
+                        <div class="card-body" id="container-info">
+                            <p class="text-muted">Seleccione un contenedor</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Pre-Asignación Tab -->
+        <div class="tab-pane fade" id="preAsignacion" role="tabpanel">
+            <div class="card">
+                <div class="card-header bg-secondary text-white">
+                    <i class="fas fa-calendar-plus"></i> Pre-Asignación de Conductores
+                </div>
+                <div class="card-body">
+                    <div class="alert alert-info">
+                        <i class="fas fa-info-circle"></i>
+                        <strong>Pre-Asignación:</strong> Permite asignar conductores para rutas futuras. El sistema validará que el conductor esté disponible considerando tiempos de desplazamiento y operaciones previas.
+                    </div>
+                    <div id="pre-asignaciones">
+                        <p class="text-center py-4">Funcionalidad en desarrollo</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal para Asignación Manual -->
+<div class="modal fade" id="asignacionModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Asignar Conductor</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div id="modal-content">
+                    <!-- Contenido dinámico -->
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+let selectedContainer = null;
+let selectedDriver = null;
+
+// Cargar contenedores sin asignar
+function loadContainersSinAsignar() {
+    fetch('/api/containers/?estado=programado')
+        .then(response => response.json())
+        .then(data => {
+            const container = document.getElementById('containers-sin-asignar');
+            container.innerHTML = '';
+            
+            if (data.results.length === 0) {
+                container.innerHTML = '<p class="text-center text-muted py-4">✅ No hay contenedores sin asignar</p>';
+                return;
+            }
+            
+            data.results.forEach(cont => {
+                const card = `
+                    <div class="container-card card mb-3">
+                        <div class="card-body">
+                            <div class="d-flex justify-content-between align-items-start">
+                                <div>
+                                    <h6 class="mb-1"><strong>${cont.container_id}</strong></h6>
+                                    <p class="mb-1 small text-muted">
+                                        <i class="fas fa-ship"></i> ${cont.nave || 'N/A'}<br>
+                                        <i class="fas fa-calendar"></i> ${cont.fecha_programacion ? new Date(cont.fecha_programacion).toLocaleDateString('es-CL') : 'Sin fecha'}
+                                    </p>
+                                    ${cont.dias_para_demurrage !== null ? 
+                                        `<span class="badge bg-${cont.dias_para_demurrage <= 1 ? 'danger' : cont.dias_para_demurrage <= 2 ? 'warning' : 'info'}">
+                                            ${cont.dias_para_demurrage} días demurrage
+                                        </span>` : ''}
+                                </div>
+                                <div>
+                                    <button class="btn btn-sm btn-success action-btn" onclick="asignarAutomatico(${cont.id})">
+                                        <i class="fas fa-robot"></i> Auto
+                                    </button>
+                                    <button class="btn btn-sm btn-primary action-btn" onclick="asignarManual(${cont.id})">
+                                        <i class="fas fa-user-plus"></i> Manual
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+                container.innerHTML += card;
+            });
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            document.getElementById('containers-sin-asignar').innerHTML = 
+                '<p class="text-danger text-center">Error al cargar contenedores</p>';
+        });
+}
+
+// Cargar conductores disponibles
+function loadConductoresDisponibles() {
+    fetch('/api/drivers/?activo=true&presente=true')
+        .then(response => response.json())
+        .then(data => {
+            const container = document.getElementById('conductores-disponibles');
+            container.innerHTML = '';
+            
+            if (data.results.length === 0) {
+                container.innerHTML = '<p class="text-center text-muted py-4">⚠️ No hay conductores disponibles</p>';
+                return;
+            }
+            
+            data.results.forEach(driver => {
+                const ocupacion = driver.max_entregas_dia > 0 ? 
+                    ((driver.num_entregas_dia / driver.max_entregas_dia) * 100).toFixed(0) : 0;
+                
+                const card = `
+                    <div class="card mb-2">
+                        <div class="card-body py-2">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <div>
+                                    <strong>${driver.nombre}</strong><br>
+                                    <small class="text-muted">
+                                        Entregas: ${driver.num_entregas_dia}/${driver.max_entregas_dia} 
+                                        | Cumpl: ${driver.cumplimiento_porcentaje}%
+                                    </small>
+                                </div>
+                                <div class="text-end">
+                                    <div class="progress" style="width: 100px; height: 20px;">
+                                        <div class="progress-bar ${ocupacion >= 100 ? 'bg-danger' : ocupacion >= 80 ? 'bg-warning' : 'bg-success'}" 
+                                             style="width: ${Math.min(ocupacion, 100)}%;">
+                                            ${ocupacion}%
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+                container.innerHTML += card;
+            });
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            document.getElementById('conductores-disponibles').innerHTML = 
+                '<p class="text-danger text-center">Error al cargar conductores</p>';
+        });
+}
+
+// Asignación automática
+function asignarAutomatico(containerId) {
+    if (!confirm('¿Asignar automáticamente el mejor conductor disponible?')) {
+        return;
+    }
+    
+    // Necesitamos buscar la programación asociada
+    fetch(`/api/programaciones/?container=${containerId}`)
+        .then(response => response.json())
+        .then(data => {
+            if (data.results.length === 0) {
+                alert('⚠️ No se encontró programación para este contenedor');
+                return;
+            }
+            
+            const progId = data.results[0].id;
+            
+            fetch(`/api/programaciones/${progId}/asignar_automatico/`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': getCookie('csrftoken')
+                }
+            })
+            .then(response => response.json())
+            .then(result => {
+                if (result.success) {
+                    alert(`✅ Conductor asignado: ${result.mensaje}`);
+                    loadContainersSinAsignar();
+                    loadConductoresDisponibles();
+                } else {
+                    alert(`❌ Error: ${result.error}`);
+                }
+            });
+        });
+}
+
+// Asignación manual
+function asignarManual(containerId) {
+    selectedContainer = containerId;
+    const modal = new bootstrap.Modal(document.getElementById('asignacionModal'));
+    
+    fetch(`/api/drivers/?activo=true&presente=true`)
+        .then(response => response.json())
+        .then(data => {
+            let content = '<h6>Seleccione un conductor:</h6><div class="list-group">';
+            
+            data.results.forEach(driver => {
+                content += `
+                    <button class="list-group-item list-group-item-action" 
+                            onclick="confirmarAsignacionManual(${driver.id}, '${driver.nombre}')">
+                        <strong>${driver.nombre}</strong><br>
+                        <small>Entregas: ${driver.num_entregas_dia}/${driver.max_entregas_dia} | 
+                        Cumplimiento: ${driver.cumplimiento_porcentaje}%</small>
+                    </button>
+                `;
+            });
+            
+            content += '</div>';
+            document.getElementById('modal-content').innerHTML = content;
+            modal.show();
+        });
+}
+
+// Confirmar asignación manual
+function confirmarAsignacionManual(driverId, driverNombre) {
+    // Buscar programación y asignar
+    fetch(`/api/programaciones/?container=${selectedContainer}`)
+        .then(response => response.json())
+        .then(data => {
+            if (data.results.length === 0) {
+                alert('⚠️ No se encontró programación para este contenedor');
+                return;
+            }
+            
+            const progId = data.results[0].id;
+            
+            fetch(`/api/programaciones/${progId}/asignar_driver/`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': getCookie('csrftoken')
+                },
+                body: JSON.stringify({ driver_id: driverId })
+            })
+            .then(response => response.json())
+            .then(result => {
+                if (result.success) {
+                    alert(`✅ ${driverNombre} asignado exitosamente`);
+                    bootstrap.Modal.getInstance(document.getElementById('asignacionModal')).hide();
+                    loadContainersSinAsignar();
+                    loadConductoresDisponibles();
+                } else {
+                    alert(`❌ Error: ${result.error || result.mensaje}`);
+                }
+            });
+        });
+}
+
+// Buscar contenedor para ciclo de vida
+function buscarContenedorCiclo() {
+    const containerId = document.getElementById('search-container-ciclo').value.trim();
+    if (!containerId) return;
+    
+    fetch(`/api/containers/?search=${containerId}`)
+        .then(response => response.json())
+        .then(data => {
+            if (data.results.length === 0) {
+                alert('❌ Contenedor no encontrado');
+                return;
+            }
+            
+            const container = data.results[0];
+            mostrarCicloVida(container);
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('❌ Error al buscar contenedor');
+        });
+}
+
+// Mostrar ciclo de vida
+function mostrarCicloVida(container) {
+    const estados = [
+        { key: 'por_arribar', label: 'Por Arribar', icon: 'ship', fecha: container.fecha_eta },
+        { key: 'liberado', label: 'Liberado', icon: 'unlock', fecha: container.fecha_liberacion },
+        { key: 'programado', label: 'Programado', icon: 'calendar', fecha: container.fecha_programacion },
+        { key: 'asignado', label: 'Asignado', icon: 'user-check', fecha: container.fecha_asignacion },
+        { key: 'en_ruta', label: 'En Ruta', icon: 'truck-moving', fecha: container.fecha_inicio_ruta },
+        { key: 'entregado', label: 'Entregado', icon: 'box', fecha: container.fecha_entrega },
+        { key: 'descargado', label: 'Descargado', icon: 'check-circle', fecha: container.fecha_descarga },
+        { key: 'vacio', label: 'Vacío', icon: 'box-open', fecha: container.fecha_vacio },
+        { key: 'vacio_en_ruta', label: 'Vacío en Ruta', icon: 'truck', fecha: container.fecha_vacio_ruta },
+        { key: 'devuelto', label: 'Devuelto', icon: 'check-double', fecha: container.fecha_devolucion }
+    ];
+    
+    let html = '';
+    const estadoActual = container.estado;
+    let encontrado = false;
+    
+    estados.forEach(estado => {
+        const isCompleted = estado.fecha !== null;
+        const isActive = estado.key === estadoActual && !encontrado;
+        if (isActive) encontrado = true;
+        
+        const cssClass = isCompleted ? 'completed' : (isActive ? 'active' : '');
+        const actionButtons = isActive ? generarBotonesAccion(container, estado.key) : '';
+        
+        html += `
+            <div class="lifecycle-step ${cssClass}">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <i class="fas fa-${estado.icon}"></i>
+                        <strong>${estado.label}</strong>
+                        ${estado.fecha ? `<br><small class="text-muted">${new Date(estado.fecha).toLocaleString('es-CL')}</small>` : ''}
+                    </div>
+                    <div>
+                        ${actionButtons}
+                    </div>
+                </div>
+            </div>
+        `;
+    });
+    
+    document.getElementById('container-lifecycle').innerHTML = html;
+    
+    // Mostrar info
+    document.getElementById('container-info').innerHTML = `
+        <h6><strong>${container.container_id}</strong></h6>
+        <p class="mb-2"><i class="fas fa-ship"></i> ${container.nave || 'N/A'}</p>
+        <p class="mb-2"><i class="fas fa-box"></i> ${container.tipo || 'N/A'}</p>
+        <p class="mb-2"><span class="badge bg-primary">${container.estado_display}</span></p>
+    `;
+}
+
+// Generar botones de acción según estado
+function generarBotonesAccion(container, estado) {
+    const actions = {
+        'programado': `<button class="btn btn-sm btn-success" onclick="cambiarEstado(${container.id}, 'asignado')">Asignar</button>`,
+        'asignado': `<button class="btn btn-sm btn-primary" onclick="cambiarEstado(${container.id}, 'en_ruta')">Iniciar Ruta</button>`,
+        'en_ruta': `<button class="btn btn-sm btn-info" onclick="cambiarEstado(${container.id}, 'entregado')">Marcar Entregado</button>`,
+        'entregado': `<button class="btn btn-sm btn-success" onclick="cambiarEstado(${container.id}, 'descargado')">Marcar Descargado</button>`,
+        'descargado': `<button class="btn btn-sm btn-warning" onclick="cambiarEstado(${container.id}, 'vacio')">Marcar Vacío</button>`,
+        'vacio': `<button class="btn btn-sm btn-primary" onclick="cambiarEstado(${container.id}, 'vacio_en_ruta')">Iniciar Retorno</button>`,
+        'vacio_en_ruta': `<button class="btn btn-sm btn-dark" onclick="cambiarEstado(${container.id}, 'devuelto')">Marcar Devuelto</button>`
+    };
+    
+    return actions[estado] || '';
+}
+
+// Cambiar estado de contenedor
+function cambiarEstado(containerId, nuevoEstado) {
+    if (!confirm(`¿Cambiar estado del contenedor?`)) {
+        return;
+    }
+    
+    fetch(`/api/containers/${containerId}/cambiar_estado/`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': getCookie('csrftoken')
+        },
+        body: JSON.stringify({ estado: nuevoEstado })
+    })
+    .then(response => response.json())
+    .then(result => {
+        if (result.success) {
+            alert('✅ Estado actualizado');
+            buscarContenedorCiclo();
+        } else {
+            alert(`❌ Error: ${result.error || result.mensaje}`);
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        alert('❌ Error al cambiar estado');
+    });
+}
+
+function getCookie(name) {
+    let cookieValue = null;
+    if (document.cookie && document.cookie !== '') {
+        const cookies = document.cookie.split(';');
+        for (let i = 0; i < cookies.length; i++) {
+            const cookie = cookies[i].trim();
+            if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                break;
+            }
+        }
+    }
+    return cookieValue;
+}
+
+// Cargar al inicio
+document.addEventListener('DOMContentLoaded', function() {
+    loadContainersSinAsignar();
+    loadConductoresDisponibles();
+    
+    // Actualizar cada 30 segundos
+    setInterval(() => {
+        loadContainersSinAsignar();
+        loadConductoresDisponibles();
+    }, 30000);
+});
+</script>
+{% endblock %}

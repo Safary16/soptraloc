@@ -89,3 +89,8 @@ def containers_list(request):
 def drivers_list(request):
     """Vista de listado de conductores con filtros"""
     return render(request, 'drivers_list.html')
+
+
+def operaciones(request):
+    """Vista del panel de operaciones"""
+    return render(request, 'operaciones.html')

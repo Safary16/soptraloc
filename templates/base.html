@@ -41,6 +41,11 @@
                         </a>
                     </li>
                     <li class="nav-item">
+                        <a class="nav-link {% if '/operaciones' in request.path %}active{% endif %}" href="/operaciones/">
+                            <i class="fas fa-tasks"></i> Operaciones
+                        </a>
+                    </li>
+                    <li class="nav-item">
                         <a class="nav-link {% if '/asignacion' in request.path %}active{% endif %}" href="/asignacion/">
                             <i class="fas fa-truck"></i> Asignación
                         </a>
