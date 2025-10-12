@@ -1,0 +1,309 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Estados de Contenedores - SoptraLoc{% endblock %}
+
+{% block extra_css %}
+<style>
+    .estado-badge {
+        border-radius: 10px;
+        padding: 15px;
+        text-align: center;
+        color: white;
+        transition: all 0.3s;
+        cursor: pointer;
+    }
+    .estado-badge:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+    }
+    .estado-count {
+        font-size: 2rem;
+        font-weight: bold;
+        margin: 10px 0;
+    }
+    .estado-label {
+        font-size: 0.9rem;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+    }
+    .fase-header {
+        background: linear-gradient(135deg, #E95420, #772953);
+        color: white;
+        padding: 15px;
+        border-radius: 10px;
+        margin: 20px 0 10px 0;
+        text-align: center;
+        font-weight: bold;
+    }
+    .flow-arrow {
+        text-align: center;
+        font-size: 2rem;
+        color: #E95420;
+        margin: 10px 0;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <!-- Header -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <h1 class="display-5">
+                <i class="fas fa-sync-alt text-ubuntu"></i>
+                Estados de Contenedores - Ciclo de Vida
+            </h1>
+            <p class="text-muted">
+                Seguimiento completo desde arribo hasta devolución | 
+                <span id="last-update" class="badge bg-secondary">Actualizando...</span>
+            </p>
+        </div>
+    </div>
+
+    <!-- Resumen rápido -->
+    <div class="row mb-4">
+        <div class="col-md-3">
+            <div class="card bg-info text-white">
+                <div class="card-body text-center">
+                    <h3 id="total-contenedores">-</h3>
+                    <small>Total Contenedores</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-success text-white">
+                <div class="card-body text-center">
+                    <h3 id="total-activos">-</h3>
+                    <small>En Proceso</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-warning text-white">
+                <div class="card-body text-center">
+                    <h3 id="total-transito">-</h3>
+                    <small>En Tránsito</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-dark text-white">
+                <div class="card-body text-center">
+                    <h3 id="total-completos">-</h3>
+                    <small>Ciclo Completo</small>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- FASE 1: Pre-Arribo y Puerto -->
+    <div class="fase-header">
+        <i class="fas fa-ship"></i> FASE 1: PUERTO (Contenedor Lleno)
+    </div>
+    <div class="row">
+        <div class="col-md-2 mb-3">
+            <div class="estado-badge" style="background: #6c757d;">
+                <i class="fas fa-clock"></i>
+                <div class="estado-count" id="count-por_arribar">0</div>
+                <div class="estado-label">Por Arribar</div>
+            </div>
+        </div>
+        <div class="col-md-2 mb-3">
+            <div class="estado-badge" style="background: #17a2b8;">
+                <i class="fas fa-anchor"></i>
+                <div class="estado-count" id="count-arribado">0</div>
+                <div class="estado-label">Arribado</div>
+            </div>
+        </div>
+        <div class="col-md-2 mb-3">
+            <div class="estado-badge" style="background: #28a745;">
+                <i class="fas fa-check-circle"></i>
+                <div class="estado-count" id="count-liberado">0</div>
+                <div class="estado-label">Liberado</div>
+            </div>
+        </div>
+        <div class="col-md-2 mb-3">
+            <div class="estado-badge" style="background: #007bff;">
+                <i class="fas fa-list-ol"></i>
+                <div class="estado-count" id="count-secuenciado">0</div>
+                <div class="estado-label">Secuenciado</div>
+            </div>
+        </div>
+        <div class="col-md-2 mb-3">
+            <div class="estado-badge" style="background: #6610f2;">
+                <i class="fas fa-calendar-check"></i>
+                <div class="estado-count" id="count-programado">0</div>
+                <div class="estado-label">Programado</div>
+            </div>
+        </div>
+        <div class="col-md-2 mb-3">
+            <div class="estado-badge" style="background: #E95420;">
+                <i class="fas fa-user-check"></i>
+                <div class="estado-count" id="count-asignado">0</div>
+                <div class="estado-label">Asignado</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="flow-arrow">
+        <i class="fas fa-arrow-down"></i>
+    </div>
+
+    <!-- FASE 2: Tránsito y Entrega -->
+    <div class="fase-header">
+        <i class="fas fa-truck"></i> FASE 2: ENTREGA AL CLIENTE (Contenedor Lleno)
+    </div>
+    <div class="row">
+        <div class="col-md-3 mb-3">
+            <div class="estado-badge" style="background: #ffc107;">
+                <i class="fas fa-route"></i>
+                <div class="estado-count" id="count-en_ruta">0</div>
+                <div class="estado-label">En Ruta</div>
+            </div>
+        </div>
+        <div class="col-md-3 mb-3">
+            <div class="estado-badge" style="background: #fd7e14;">
+                <i class="fas fa-map-marker-alt"></i>
+                <div class="estado-count" id="count-entregado">0</div>
+                <div class="estado-label">Entregado</div>
+            </div>
+        </div>
+        <div class="col-md-3 mb-3">
+            <div class="estado-badge" style="background: #772953;">
+                <i class="fas fa-boxes"></i>
+                <div class="estado-count" id="count-descargado">0</div>
+                <div class="estado-label">Descargado</div>
+            </div>
+        </div>
+        <div class="col-md-3 mb-3">
+            <div class="estado-badge" style="background: #e9ecef; color: #333;">
+                <i class="fas fa-box-open"></i>
+                <div class="estado-count" id="count-vacio">0</div>
+                <div class="estado-label">Vacío</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="flow-arrow">
+        <i class="fas fa-arrow-down"></i>
+    </div>
+
+    <!-- FASE 3: Retorno -->
+    <div class="fase-header">
+        <i class="fas fa-undo"></i> FASE 3: RETORNO (Contenedor Vacío)
+    </div>
+    <div class="row">
+        <div class="col-md-6 mb-3">
+            <div class="estado-badge" style="background: #6c757d;">
+                <i class="fas fa-truck-loading"></i>
+                <div class="estado-count" id="count-vacio_en_ruta">0</div>
+                <div class="estado-label">Vacío en Ruta</div>
+            </div>
+        </div>
+        <div class="col-md-6 mb-3">
+            <div class="estado-badge" style="background: #2C001E;">
+                <i class="fas fa-warehouse"></i>
+                <div class="estado-count" id="count-devuelto">0</div>
+                <div class="estado-label">Devuelto</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- CDs Information -->
+    <div class="row mt-5">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header bg-ubuntu text-white">
+                    <h5 class="mb-0"><i class="fas fa-building"></i> Centros de Distribución</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <h6><i class="fas fa-check-circle text-success"></i> Drop & Hook (Rápido)</h6>
+                            <ul>
+                                <li><strong>CD El Peñón</strong> - San Bernardo (30 min)</li>
+                                <li><strong>CCTI Base</strong> - Maipú (20 min)</li>
+                            </ul>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <h6><i class="fas fa-clock text-warning"></i> Espera Completa</h6>
+                            <ul>
+                                <li><strong>CD Puerto Madero</strong> - Pudahuel (90 min)</li>
+                                <li><strong>CD Campos de Chile</strong> - Pudahuel (90 min)</li>
+                                <li><strong>CD Quilicura</strong> - Quilicura (90 min)</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+// Auto-refresh data
+function loadEstados() {
+    fetch('/api/containers/?format=json')
+        .then(response => response.json())
+        .then(data => {
+            // Count by estado
+            const counts = {
+                'por_arribar': 0,
+                'arribado': 0,
+                'liberado': 0,
+                'secuenciado': 0,
+                'programado': 0,
+                'asignado': 0,
+                'en_ruta': 0,
+                'entregado': 0,
+                'descargado': 0,
+                'vacio': 0,
+                'vacio_en_ruta': 0,
+                'devuelto': 0
+            };
+            
+            data.results.forEach(container => {
+                if (counts.hasOwnProperty(container.estado)) {
+                    counts[container.estado]++;
+                }
+            });
+            
+            // Update counts
+            Object.keys(counts).forEach(estado => {
+                const elem = document.getElementById(`count-${estado}`);
+                if (elem) {
+                    elem.textContent = counts[estado];
+                }
+            });
+            
+            // Update summary
+            const total = data.count || data.results.length;
+            document.getElementById('total-contenedores').textContent = total;
+            
+            const activos = counts.liberado + counts.secuenciado + counts.programado + counts.asignado;
+            document.getElementById('total-activos').textContent = activos;
+            
+            const transito = counts.en_ruta + counts.vacio_en_ruta;
+            document.getElementById('total-transito').textContent = transito;
+            
+            const completos = counts.devuelto;
+            document.getElementById('total-completos').textContent = completos;
+            
+            // Update timestamp
+            const now = new Date();
+            document.getElementById('last-update').textContent = `Actualizado: ${now.toLocaleTimeString()}`;
+        })
+        .catch(error => {
+            console.error('Error loading estados:', error);
+        });
+}
+
+// Load on page load
+document.addEventListener('DOMContentLoaded', function() {
+    loadEstados();
+    // Refresh every 30 seconds
+    setInterval(loadEstados, 30000);
+});
+</script>
+{% endblock %}

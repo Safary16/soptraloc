@@ -30,3 +30,8 @@ def importar(request):
         'programaciones': Programacion.objects.count(),
     }
     return render(request, 'importar.html', {'stats': stats})
+
+
+def estados(request):
+    """Vista de estados de contenedores - ciclo de vida completo"""
+    return render(request, 'estados.html')

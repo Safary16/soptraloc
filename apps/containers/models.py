@@ -3,20 +3,28 @@ from django.utils import timezone
 
 
 class Container(models.Model):
-    """Modelo principal de contenedores con 11 estados posibles"""
+    """Modelo principal de contenedores con ciclo de vida completo"""
     
     ESTADOS = [
+        # Estados iniciales (pre-arribo)
         ('por_arribar', 'Por Arribar'),
-        ('liberado', 'Liberado'),
-        ('secuenciado', 'Secuenciado'),
-        ('programado', 'Programado'),
-        ('asignado', 'Asignado'),
-        ('en_ruta', 'En Ruta'),
-        ('entregado', 'Entregado'),
-        ('descargado', 'Descargado'),
-        ('en_almacen_ccti', 'En Almacén CCTI'),
-        ('vacio_en_ruta', 'Vacío en Ruta'),
-        ('vacio_en_ccti', 'Vacío en CCTI'),
+        
+        # Estados post-arribo (contenedor lleno en puerto)
+        ('arribado', 'Arribado'),  # Nave llegó, contenedor en puerto
+        ('liberado', 'Liberado'),  # Liberado por aduana/naviera
+        ('secuenciado', 'Secuenciado'),  # Marcado para próxima entrega
+        ('programado', 'Programado'),  # Asignado a fecha y CD
+        ('asignado', 'Asignado'),  # Asignado a conductor
+        
+        # Estados en tránsito (lleno)
+        ('en_ruta', 'En Ruta'),  # Conductor en camino a CD
+        ('entregado', 'Entregado'),  # Llegó a CD cliente
+        ('descargado', 'Descargado'),  # Cliente terminó de descargar
+        
+        # Estados vacío (retorno)
+        ('vacio', 'Vacío'),  # Descargado, esperando retiro
+        ('vacio_en_ruta', 'Vacío en Ruta'),  # Retornando a depósito
+        ('devuelto', 'Devuelto'),  # Devuelto a depósito naviera
     ]
     
     TIPOS = [
@@ -58,14 +66,17 @@ class Container(models.Model):
     deposito_devolucion = models.CharField('Depósito Devolución', max_length=200, null=True, blank=True, help_text='Dónde devolver contenedor vacío')
     fecha_demurrage = models.DateTimeField('Fecha Demurrage', null=True, blank=True, db_index=True, help_text='Fecha de vencimiento de demurrage (después se paga)')
     
-    # Timestamps de cada transición de estado
-    fecha_arribo = models.DateTimeField('Fecha Arribo', null=True, blank=True)
-    fecha_liberacion = models.DateTimeField('Fecha Liberación', null=True, blank=True)
-    fecha_programacion = models.DateTimeField('Fecha Programación', null=True, blank=True)
-    fecha_asignacion = models.DateTimeField('Fecha Asignación', null=True, blank=True)
-    fecha_inicio_ruta = models.DateTimeField('Fecha Inicio Ruta', null=True, blank=True)
-    fecha_entrega = models.DateTimeField('Fecha Entrega', null=True, blank=True)
-    hora_descarga = models.DateTimeField('Hora Descarga', null=True, blank=True, help_text='Hora en que cliente descargó el contenedor')
+    # Timestamps de cada transición de estado (ciclo completo)
+    fecha_arribo = models.DateTimeField('Fecha Arribo', null=True, blank=True, help_text='Nave llega a puerto')
+    fecha_liberacion = models.DateTimeField('Fecha Liberación', null=True, blank=True, help_text='Liberado por aduana/naviera')
+    fecha_programacion = models.DateTimeField('Fecha Programación', null=True, blank=True, help_text='Asignado a fecha y CD')
+    fecha_asignacion = models.DateTimeField('Fecha Asignación', null=True, blank=True, help_text='Asignado a conductor')
+    fecha_inicio_ruta = models.DateTimeField('Fecha Inicio Ruta', null=True, blank=True, help_text='Conductor sale con contenedor')
+    fecha_entrega = models.DateTimeField('Fecha Entrega', null=True, blank=True, help_text='Llega a CD cliente')
+    fecha_descarga = models.DateTimeField('Fecha Descarga', null=True, blank=True, help_text='Cliente termina de descargar')
+    fecha_vacio = models.DateTimeField('Fecha Vacío', null=True, blank=True, help_text='Contenedor vacío listo para retiro')
+    fecha_vacio_ruta = models.DateTimeField('Fecha Vacío en Ruta', null=True, blank=True, help_text='Iniciando retorno a depósito')
+    fecha_devolucion = models.DateTimeField('Fecha Devolución', null=True, blank=True, help_text='Devuelto a depósito naviera')
     
     # Auditoría
     created_at = models.DateTimeField('Creado', auto_now_add=True)
@@ -92,16 +103,21 @@ class Container(models.Model):
         
         # Actualizar timestamp según el nuevo estado
         now = timezone.now()
-        if nuevo_estado == 'liberado':
-            self.fecha_liberacion = now
-        elif nuevo_estado == 'programado':
-            self.fecha_programacion = now
-        elif nuevo_estado == 'asignado':
-            self.fecha_asignacion = now
-        elif nuevo_estado == 'en_ruta':
-            self.fecha_inicio_ruta = now
-        elif nuevo_estado in ['entregado', 'descargado']:
-            self.fecha_entrega = now
+        timestamp_map = {
+            'arribado': 'fecha_arribo',
+            'liberado': 'fecha_liberacion',
+            'programado': 'fecha_programacion',
+            'asignado': 'fecha_asignacion',
+            'en_ruta': 'fecha_inicio_ruta',
+            'entregado': 'fecha_entrega',
+            'descargado': 'fecha_descarga',
+            'vacio': 'fecha_vacio',
+            'vacio_en_ruta': 'fecha_vacio_ruta',
+            'devuelto': 'fecha_devolucion',
+        }
+        
+        if nuevo_estado in timestamp_map:
+            setattr(self, timestamp_map[nuevo_estado], now)
         
         self.save()
         

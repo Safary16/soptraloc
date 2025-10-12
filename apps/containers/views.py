@@ -215,6 +215,97 @@ class ContainerViewSet(viewsets.ModelViewSet):
         })
     
     @action(detail=True, methods=['post'])
+    def marcar_arribado(self, request, pk=None):
+        """Marca contenedor como arribado (nave llegó a puerto)"""
+        container = self.get_object()
+        usuario = request.user.username if request.user.is_authenticated else None
+        container.cambiar_estado('arribado', usuario)
+        
+        serializer = self.get_serializer(container)
+        return Response({
+            'success': True,
+            'mensaje': f'Contenedor {container.container_id} marcado como arribado',
+            'container': serializer.data
+        })
+    
+    @action(detail=True, methods=['post'])
+    def marcar_liberado(self, request, pk=None):
+        """Marca contenedor como liberado por aduana/naviera"""
+        container = self.get_object()
+        usuario = request.user.username if request.user.is_authenticated else None
+        container.cambiar_estado('liberado', usuario)
+        
+        serializer = self.get_serializer(container)
+        return Response({
+            'success': True,
+            'mensaje': f'Contenedor {container.container_id} liberado',
+            'container': serializer.data
+        })
+    
+    @action(detail=True, methods=['post'])
+    def marcar_vacio(self, request, pk=None):
+        """Marca contenedor como vacío (descargado, esperando retiro)"""
+        container = self.get_object()
+        
+        if container.estado != 'descargado':
+            return Response(
+                {'error': f'Contenedor debe estar descargado. Estado actual: {container.get_estado_display()}'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        usuario = request.user.username if request.user.is_authenticated else None
+        container.cambiar_estado('vacio', usuario)
+        
+        serializer = self.get_serializer(container)
+        return Response({
+            'success': True,
+            'mensaje': f'Contenedor {container.container_id} marcado como vacío',
+            'container': serializer.data
+        })
+    
+    @action(detail=True, methods=['post'])
+    def iniciar_retorno(self, request, pk=None):
+        """Inicia retorno de contenedor vacío a depósito"""
+        container = self.get_object()
+        
+        if container.estado != 'vacio':
+            return Response(
+                {'error': f'Contenedor debe estar vacío. Estado actual: {container.get_estado_display()}'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        usuario = request.user.username if request.user.is_authenticated else None
+        container.cambiar_estado('vacio_en_ruta', usuario)
+        
+        serializer = self.get_serializer(container)
+        return Response({
+            'success': True,
+            'mensaje': f'Retorno iniciado para {container.container_id}',
+            'container': serializer.data
+        })
+    
+    @action(detail=True, methods=['post'])
+    def marcar_devuelto(self, request, pk=None):
+        """Marca contenedor como devuelto a depósito naviera"""
+        container = self.get_object()
+        
+        if container.estado != 'vacio_en_ruta':
+            return Response(
+                {'error': f'Contenedor debe estar en ruta vacío. Estado actual: {container.get_estado_display()}'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        usuario = request.user.username if request.user.is_authenticated else None
+        container.cambiar_estado('devuelto', usuario)
+        
+        serializer = self.get_serializer(container)
+        return Response({
+            'success': True,
+            'mensaje': f'Contenedor {container.container_id} devuelto a depósito',
+            'container': serializer.data
+        })
+    
+    @action(detail=True, methods=['post'])
     def registrar_arribo(self, request, pk=None):
         """
         Registra el arribo manual de un contenedor al CD
