@@ -224,3 +224,55 @@ class DriverViewSet(viewsets.ModelViewSet):
         
         serializer = DriverLocationSerializer(ubicaciones, many=True)
         return Response(serializer.data)
+    
+    @action(detail=False, methods=['post'], url_path='import-excel')
+    def import_excel(self, request):
+        """
+        Importa conductores desde archivo Excel
+        
+        POST /api/drivers/import-excel/
+        Body: multipart/form-data with 'file' field
+        """
+        from rest_framework.parsers import MultiPartParser, FormParser
+        import tempfile
+        import os
+        from apps.drivers.importers import ConductorImporter
+        
+        if 'file' not in request.FILES:
+            return Response(
+                {'error': 'No se proporcionó archivo'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        archivo = request.FILES['file']
+        usuario = request.user.username if request.user.is_authenticated else None
+        
+        # Guardar temporalmente
+        with tempfile.NamedTemporaryFile(delete=False, suffix='.xlsx') as tmp:
+            for chunk in archivo.chunks():
+                tmp.write(chunk)
+            tmp_path = tmp.name
+        
+        try:
+            # Procesar con el importador
+            importer = ConductorImporter(tmp_path, usuario)
+            resultados = importer.procesar()
+            
+            return Response({
+                'success': True,
+                'mensaje': f'Importación completada',
+                'creados': resultados['creados'],
+                'actualizados': resultados['actualizados'],
+                'errores': resultados['errores'],
+                'detalles': resultados['detalles']
+            })
+        
+        except Exception as e:
+            return Response(
+                {'error': str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+        finally:
+            # Limpiar archivo temporal
+            if os.path.exists(tmp_path):
+                os.unlink(tmp_path)
