@@ -243,28 +243,41 @@ Visita: `http://localhost:8000`
 
 ## 🌐 Deploy en Render
 
-El proyecto está configurado para deploy automático en Render.com:
+El proyecto está configurado para deploy automático en Render.com con **Blueprint**:
 
-1. Fork el repositorio
-2. Conecta tu cuenta de Render con GitHub
-3. Crea un nuevo Web Service desde el fork
+### 🚀 Despliegue Rápido
+
+1. Ve a: https://dashboard.render.com/
+2. Click en **"New +"** → **"Blueprint"**
+3. Conecta tu repositorio: `Safary16/soptraloc`
 4. Render detectará automáticamente `render.yaml`
-5. Configura las variables de entorno en Render:
-   - `SECRET_KEY`
-   - `DATABASE_URL` (PostgreSQL se crea automáticamente)
-   - `MAPBOX_ACCESS_TOKEN`
+5. Click en **"Apply"**
 
-### Configuración Automática
+**¡Eso es todo!** El sitio estará disponible en: https://soptraloc.onrender.com
 
-**Archivo `render.yaml` incluido con configuración completa**
+### ✅ Configuración Automática
 
-Render ejecuta automáticamente:
+**Archivo `render.yaml` incluido con:**
+- ✅ Web Service configurado
+- ✅ PostgreSQL Database
+- ✅ Variables de entorno
+- ✅ Build script automático
+- ✅ Admin user creado automáticamente (admin/1234)
+
+**Build script ejecuta automáticamente:**
 - `pip install -r requirements.txt`
 - `python manage.py collectstatic --noinput`
 - `python manage.py migrate`
+- `python manage.py reset_admin --username=admin --password=1234`
 - `gunicorn config.wsgi:application`
 
-Deploy automático al hacer push a main.
+### 📚 Documentación Completa
+
+Ver guías detalladas:
+- **[RENDER_DEPLOYMENT.md](RENDER_DEPLOYMENT.md)** - Guía completa de despliegue
+- **[DEPLOYMENT_CHECKLIST.md](DEPLOYMENT_CHECKLIST.md)** - Lista de verificación paso a paso
+
+**Deploy automático** al hacer push a la rama principal.
 
 ---
 
