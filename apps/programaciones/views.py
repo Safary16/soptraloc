@@ -212,9 +212,7 @@ class ProgramacionViewSet(viewsets.ModelViewSet):
         Ordena por urgencia (score más bajo = más urgente)
         """
         ahora = timezone.now()
-        programaciones = self.queryset.filter(
-            driver__isnull=False  # Solo programaciones con conductor asignado
-        ).select_related('container', 'driver', 'cd')
+        programaciones = self.queryset.select_related('container', 'driver', 'cd')
         
         resultados = []
         for prog in programaciones:

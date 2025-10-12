@@ -10,7 +10,10 @@ from apps.cds.models import CD
 def home(request):
     """Dashboard principal con estadísticas"""
     today = timezone.now().date()
+    tomorrow = today + timedelta(days=1)
+    two_days_from_now = today + timedelta(days=2)
     
+    # Calculate stats for dashboard
     stats = {
         'programados_hoy': Container.objects.filter(
             estado='programado',
@@ -22,8 +25,16 @@ def home(request):
         ).exclude(estado='devuelto').count(),
         'liberados': Container.objects.filter(estado='liberado').count(),
         'en_ruta': Container.objects.filter(estado='en_ruta').count(),
-        'total_conductores': Driver.objects.count(),
-        'conductores_disponibles': Driver.objects.filter(activo=True, presente=True).count(),
+        'conductores': Driver.objects.filter(activo=True).count(),
+        'por_arribar': Container.objects.filter(estado='por_arribar').count(),
+        'programados': Container.objects.filter(estado='programado').count(),
+        'vacios': Container.objects.filter(estado__in=['vacio', 'vacio_en_ruta']).count(),
+        # Programaciones sin conductor asignado con fecha en las próximas 48 horas
+        'sin_asignar': Container.objects.filter(
+            estado='programado',
+            fecha_programacion__lte=timezone.now() + timedelta(hours=48),
+            programacion__driver__isnull=True
+        ).count(),
     }
     
     return render(request, 'home.html', {'stats': stats})
