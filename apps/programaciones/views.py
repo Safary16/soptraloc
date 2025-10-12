@@ -2,6 +2,7 @@ from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.parsers import MultiPartParser, FormParser
+from rest_framework.permissions import AllowAny
 from django.db.models import Q
 from django.utils import timezone
 from datetime import timedelta
@@ -356,7 +357,7 @@ class ProgramacionViewSet(viewsets.ModelViewSet):
             'destino': cd_destino.nombre
         }, status=status.HTTP_201_CREATED)
     
-    @action(detail=False, methods=['post'], parser_classes=[MultiPartParser, FormParser], url_path='import-excel')
+    @action(detail=False, methods=['post'], parser_classes=[MultiPartParser, FormParser], url_path='import-excel', permission_classes=[AllowAny])
     def import_excel(self, request):
         """
         Importa programaciones desde Excel
