@@ -110,11 +110,10 @@ class ConductorImporter:
                     driver, created = Driver.objects.get_or_create(
                         nombre=nombre,
                         defaults={
-                            'rut': rut,
-                            'telefono': telefono,
-                            'vehiculo_patente': ppu,
+                            'rut': rut or '',
+                            'telefono': telefono or '',
                             'presente': presente,
-                            'disponible': presente,  # Si está presente, está disponible
+                            'activo': True,
                             'max_entregas_dia': 8,  # Valor por defecto
                         }
                     )
@@ -129,11 +128,12 @@ class ConductorImporter:
                         })
                     else:
                         # Actualizar datos existentes
-                        driver.rut = rut
-                        driver.telefono = telefono
-                        driver.vehiculo_patente = ppu
+                        if rut:
+                            driver.rut = rut
+                        if telefono:
+                            driver.telefono = telefono
                         driver.presente = presente
-                        driver.disponible = presente
+                        driver.activo = True
                         driver.save()
                         
                         self.resultados['actualizados'] += 1

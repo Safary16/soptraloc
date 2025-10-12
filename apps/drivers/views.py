@@ -1,6 +1,7 @@
 from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
+from rest_framework.parsers import MultiPartParser, FormParser
 from django.db import models
 
 from .models import Driver
@@ -136,7 +137,7 @@ class DriverViewSet(viewsets.ModelViewSet):
             'driver': serializer.data
         })
     
-    @action(detail=False, methods=['post'])
+    @action(detail=False, methods=['post'], parser_classes=[MultiPartParser, FormParser])
     def import_conductores(self, request):
         """
         Importa conductores desde archivo Excel
@@ -196,3 +197,10 @@ class DriverViewSet(viewsets.ModelViewSet):
                 {'error': f'Error al importar: {str(e)}'},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
+    
+    @action(detail=False, methods=['post'], parser_classes=[MultiPartParser, FormParser], url_path='import-excel')
+    def import_excel(self, request):
+        """
+        Alias for import_conductores to match the frontend URL pattern
+        """
+        return self.import_conductores(request)
