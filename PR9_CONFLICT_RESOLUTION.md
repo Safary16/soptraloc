@@ -154,10 +154,51 @@ La diferencia es que aquí necesitamos **preservar cambios valiosos** antes de c
 
 ---
 
-## ✅ Estado Actual
+## ✅ RESOLUCIÓN DESCUBIERTA
 
-- ✅ Problema identificado y documentado
-- ⏳ Esperando decisión: ¿Recrear PR o intentar rebase?
-- ⏳ Extracción de cambios importantes pendiente
+### ¡Las mejoras de PR #9 ya están en `main`!
 
-**Recomendación**: Recrear el PR desde `main` limpio es la solución más segura y rápida.
+Tras analizar los archivos, se descubrió que **los cambios valiosos del PR #9 ya fueron integrados a la rama main**:
+
+**Archivos verificados con mejoras:**
+- ✅ `apps/containers/importers/programacion.py` - Tiene mapeo mejorado de columnas
+- ✅ `apps/containers/importers/embarque.py` - Tiene mapeo mejorado de columnas  
+- ✅ `apps/containers/importers/liberacion.py` - Tiene mapeo mejorado de columnas
+
+**Características confirmadas en main:**
+- ✅ Normalización de columnas (50+ variaciones)
+- ✅ Mapeo inteligente: 'container numbers', 'contenedor', 'Container ID', etc.
+- ✅ Filtrado de filas vacías: `df = df.dropna(how='all')`
+- ✅ Validación de datos antes de procesar
+- ✅ Mensajes de error mejorados con DEBUG info
+
+### Conclusión
+
+**PR #9 puede ser cerrado** porque:
+1. ✅ Sus cambios valiosos ya están en `main`
+2. ❌ El branch tiene 400+ archivos de build artifacts conflictivos
+3. ✅ No hay nada más que rescatar del PR
+
+### Acción Recomendada
+
+Cerrar PR #9 con el siguiente comentario:
+
+```
+Este PR está siendo cerrado porque sus cambios valiosos (mejoras a los importadores 
+de Excel) ya fueron integrados exitosamente a la rama main.
+
+El branch tiene conflictos con 400+ archivos de build artifacts (__pycache__, venv/) 
+que fueron eliminados del repositorio en PR #10. Como el código ya está en main, 
+no tiene sentido resolver esos conflictos.
+
+✅ Funcionalidad implementada
+✅ Disponible en producción
+❌ PR conflictivo cerrado
+```
+
+## 📊 Estado Final
+
+- ✅ Problema analizado completamente
+- ✅ Solución verificada: cambios ya están en main
+- ✅ Recomendación clara: cerrar PR #9
+- ✅ No se requiere acción adicional de código
