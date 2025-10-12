@@ -279,9 +279,28 @@ document.querySelectorAll('form').forEach(form => {
             const data = await response.json();
             
             if (data.success) {
-                alert('✅ Importación exitosa!\n\n' + 
-                      'Procesados: ' + (data.procesados || data.total || data.importados || 0) + '\n' +
-                      (data.errores ? 'Errores: ' + data.errores.length : ''));
+                const creados = data.creados || 0;
+                const actualizados = data.actualizados || 0;
+                const programados = data.programados || 0;
+                const liberados = data.liberados || 0;
+                const procesados = data.procesados || data.total || data.importados || 0;
+                const errores = data.errores || 0;
+                
+                let mensaje = '✅ Importación exitosa!\n\n';
+                
+                if (creados > 0) mensaje += `✨ Creados: ${creados}\n`;
+                if (actualizados > 0) mensaje += `🔄 Actualizados: ${actualizados}\n`;
+                if (programados > 0) mensaje += `📅 Programados: ${programados}\n`;
+                if (liberados > 0) mensaje += `🔓 Liberados: ${liberados}\n`;
+                if (procesados > 0 && !creados && !actualizados) mensaje += `📊 Procesados: ${procesados}\n`;
+                if (errores > 0) mensaje += `⚠️ Errores: ${errores}\n`;
+                
+                const total = creados + actualizados + programados + liberados + procesados;
+                if (total === 0) {
+                    mensaje += '\n⚠️ No se procesaron registros. Verifica el formato del archivo.';
+                }
+                
+                alert(mensaje);
                 
                 // Recargar página para actualizar stats
                 location.reload();
