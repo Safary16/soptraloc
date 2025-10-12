@@ -1,531 +1,37 @@
-# ============================================# ============================================# ============================================# ============================================*.pyc# ============================================
-
 # SOPTRALOC TMS - .gitignore
 
-# ============================================# SOPTRALOC TMS - .gitignore
-
-
-
-# Python# ============================================# SOPTRALOC TMS - .gitignore
-
+# Python
 __pycache__/
-
 *.py[cod]
-
 *$py.class
-
-*.so# Python# ============================================# SOPTRALOC TMS - .gitignore
-
+*.so
 *.egg
-
-*.egg-info/__pycache__/
-
+*.egg-info/
 dist/
-
-build/*.py[cod]
-
+build/
 .eggs/
+.Python
 
-.Python*$py.class
-
-
-
-# Virtual Environments*.so# Python# ============================================__pycache__/# SOPTRALOC TMS - .gitignore
-
+# Virtual Environments
 venv/
-
-env/*.egg
-
+env/
 ENV/
-
-.venv/*.egg-info/__pycache__/
-
+.venv/
 env.bak/
+venv.bak/
 
-venv.bak/dist/
-
-
-
-# Djangobuild/*.py[cod]
-
+# Django
 *.log
-
-*.pot.eggs/
-
+*.pot
 *.pyc
-
-db.sqlite3.Python*$py.class
-
+db.sqlite3
 db.sqlite3-journal
-
 media/
-
 staticfiles/
-
-/static/# Virtual Environments*.so# Python*.py[cod]# ============================================
-
+/static/
 local_settings.py
 
-venv/
-
 # IDEs
-
-.vscode/env/*.egg
-
-.idea/
-
-*.swpENV/
-
-*.swo
-
-*~.venv/*.egg-info/__pycache__/
-
-.DS_Store
-
-env.bak/
-
-# Environment variables
-
-.envvenv.bak/dist/
-
-.env.local
-
-.env.production
-
-!.env.example
-
-# Djangobuild/*.py[cod]*$py.class
-
-# Testing & Coverage
-
-.coverage*.log
-
-.coverage.*
-
-htmlcov/*.pot.eggs/
-
-.pytest_cache/
-
-.tox/*.pyc
-
-nosetests.xml
-
-coverage.xmldb.sqlite3.Python*$py.class
-
-*.cover
-
-.hypothesis/db.sqlite3-journal
-
-.mypy_cache/
-
-media/
-
-# Celery
-
-celerybeat-schedulestaticfiles/
-
-celerybeat-schedule.db
-
-celerybeat.pid/static/# Virtual Environments*.so# Python
-
-
-
-# Logs
-
-logs/
-
-*.log# IDEsvenv/
-
-
-
-# Backup files.vscode/
-
-*.bak
-
-*.backup.idea/env/*.egg
-
-*.old
-
-*.tmp*.swp
-
-*.temp
-
-*.corrupted*.swoENV/
-
-
-
-# OS files*~
-
-Thumbs.db
-
-.DS_Store.DS_Store.venv/*.egg-info/# Django__pycache__/
-
-.DS_Store?
-
-._*
-
-.Spotlight-V100
-
-.Trashes# Environment variablesenv.bak/
-
-ehthumbs.db
-
-.env
-
-# Jupyter Notebook
-
-.ipynb_checkpoints/.env.localvenv.bak/.eggs/
-
-
-
-# pyenv.env.production
-
-.python-version
-
-
-
-# pipenv
-
-Pipfile.lock# Coverage
-
-
-
-# PEP 582htmlcov/# Django.installed.cfg*.log*.py[cod]
-
-__pypackages__/
-
-.tox/
-
-# mypy
-
-.mypy_cache/.coverage*.log
-
-.dmypy.json
-
-dmypy.json.coverage.*
-
-
-
-# Pyre.cachelocal_settings.py
-
-.pyre/
-
-nosetests.xml
-
-# Render
-
-.render/coverage.xmldb.sqlite3
-
-
-
-# Node.js (if needed)*.cover
-
-node_modules/
-
-npm-debug.log*.hypothesis/db.sqlite3-journal# Virtual Environmentslocal_settings.py*$py.class
-
-yarn-debug.log*
-
-yarn-error.log*.pytest_cache/
-
-
-
-# Project specific/media
-
-/logs/
-
-*.xlsx.lock# Jupyter Notebook
-
-~$*.xlsx
-
-.ipynb_checkpoints/staticfilesvenv/
-
-# Excel files (except fixtures)
-
-# Uncomment if you don't want to track Excel files
-
-# *.xlsx
-
-# *.xls# Backup files/static
-
-# *.csv
-
-!**/fixtures/*.xlsx*.bak
-
-!apps/*.xlsx
-
-*.backupenv/db.sqlite3*.so
-
-*.corrupted
-
-*.old# IDEs
-
-
-
-# OS.vscode/ENV/
-
-Thumbs.db
-
-.DS_Store.idea/
-
-
-
-# Project specific*.swp.venvdb.sqlite3-journal.Python
-
-/logs/
-
-*.xlsx.lock*.swo
-
-~$*.xlsx
-
-*~env.bak/
-
-.DS_Store
-
-venv.bak//media*.egg
-
-# Environment variables
-
-.env
-
-!.env.example
-
-# Django/staticfiles*.egg-info/
-
-# Testing
-
-.coverage*.log
-
-htmlcov/
-
-.pytest_cache/db.sqlite3/static.eggs/
-
-.tox/
-
-db.sqlite3-journal
-
-# Backup files
-
-*.bakstaticfiles/.installed.cfg
-
-*.backup
-
-*.oldmedia/
-
-
-
-# Temporary fileslocal_settings.py# Environment
-
-*.tmp
-
-*.temp
-
-
-
-# OS files# Celery.env# Virtual Environments
-
-Thumbs.db
-
-.DS_Storecelerybeat-schedule
-
-
-
-# Rendercelerybeat-schedule.db.venvvenv/
-
-.render/
-
-celerybeat.pid
-
-# Node modules (si se usa frontend)
-
-node_modules/venv/env/
-
-npm-debug.log*
-
-yarn-debug.log*# Testing & Coverage
-
-yarn-error.log*
-
-.pytest_cache/ENV/ENV/
-
-# Archivos grandes / datos
-
-*.xlsx.tox/
-
-*.xls
-
-*.csv.coverageenv/.venv
-
-!**/fixtures/*.xlsx
-
-!**/test_data/*.xlsx.coverage.*
-
-
-
-# Logshtmlcov/env.bak/
-
-logs/
-
-*.log.mypy_cache/
-
-
-
-# Media uploadsnosetests.xml# IDEsvenv.bak/
-
-media/
-
-coverage.xml
-
-# Celery
-
-celerybeat-schedule*.cover.vscode/
-
-celerybeat.pid
-
-.hypothesis/
-
-# Jupyter Notebook
-
-.ipynb_checkpoints.cache.idea/# Django
-
-
-
-# pyenv
-
-.python-version
-
-# Environment Variables*.swp*.log
-
-# pipenv
-
-Pipfile.lock.env
-
-
-
-# PEP 582.env.local*.swodb.sqlite3
-
-__pypackages__/
-
-.env.*.local
-
-# Otros
-
-*.sage.py*~db.sqlite3-journal
-
-.mypy_cache/
-
-.dmypy.json# IDEs
-
-dmypy.json
-
-.pyre/.vscode/.DS_Storestaticfiles/
-
-
-.idea/
-
-*.swpmedia/
-
-*.swo
-
-*~# Testinglocal_settings.py
-
-.DS_Store
-
-.tox/
-
-# Build & Distribution
-
-build/.coverage# Celery
-
-develop-eggs/
-
-dist/.coverage.*celerybeat-schedule
-
-downloads/
-
-wheels/.cachecelerybeat-schedule.db
-
-pip-wheel-metadata/
-
-share/python-wheels/nosetests.xmlcelerybeat.pid
-
-*.whl
-
-coverage.xml
-
-# Logs
-
-*.log*.cover# Testing & Coverage
-
-logs/
-
-.hypothesis/.pytest_cache/
-
-# Backup files
-
-*.bak.pytest_cache/.tox/
-
-*.backup
-
-*.tmp.coverage
-
-
-
-# OS# Celeryhtmlcov/
-
-.DS_Store
-
-Thumbs.dbcelerybeat-schedule.mypy_cache/
-
-
-
-# Jupyter Notebookcelerybeat.pid
-
-.ipynb_checkpoints
-
-# Development
-
-# pyenv
-
-.python-version# Logsbuild/
-
-
-
-# pipenv*.logdevelop-eggs/
-
-Pipfile.lock
-
-dist/
-
-# Poetry
-
-poetry.lock# Backup filesdownloads/
-
-
-
-# PEP 582*.baksdist/
-
-__pypackages__/
-
-*.backupwheels/
-
-# mypy
-
-.mypy_cache/parts/
-
-.dmypy.json
-
-dmypy.json# Uploads temporalesvar/
-
-
-
-# Pyre/uploads/temp/lib/
-
-.pyre/
-
-lib64/
-
-# IDE
 .vscode/
 .idea/
 *.swp
@@ -541,20 +47,82 @@ lib64/
 ehthumbs.db
 Thumbs.db
 
-# Environment Variables
+# Environment variables
 .env
 .env.local
 .env.production
+!.env.example
+
+# Testing & Coverage
+.coverage
+.coverage.*
+htmlcov/
+.pytest_cache/
+.tox/
+nosetests.xml
+coverage.xml
+*.cover
+.hypothesis/
+.mypy_cache/
+.cache
+
+# Celery
+celerybeat-schedule
+celerybeat-schedule.db
+celerybeat.pid
 
 # Logs
 logs/
+*.log
 
-# Temporary Files
+# Backup files
+*.bak
+*.backup
+*.old
 *.tmp
 *.temp
+*.corrupted
 
-# Docker
-.docker/
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# pyenv
+.python-version
+
+# pipenv
+Pipfile.lock
+
+# Poetry
+poetry.lock
+
+# PEP 582
+__pypackages__/
+
+# mypy
+.mypy_cache/
+.dmypy.json
+dmypy.json
+
+# Pyre
+.pyre/
+
+# Build & Distribution
+build/
+develop-eggs/
+dist/
+downloads/
+wheels/
+sdist/
+parts/
+var/
+lib/
+lib64/
+pip-wheel-metadata/
+share/python-wheels/
+*.whl
+
+# Render
+.render/
 
 # Node.js (if needed)
 node_modules/
@@ -562,5 +130,19 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 
-# Render
-.render/
+# Project specific
+/logs/
+*.xlsx.lock
+~$*.xlsx
+
+# Excel files (except fixtures and test data)
+# Uncomment if you don't want to track Excel files
+# *.xlsx
+# *.xls
+# *.csv
+!**/fixtures/*.xlsx
+!**/test_data/*.xlsx
+!apps/*.xlsx
+
+# Temporary uploads
+/uploads/temp/
