@@ -12,6 +12,18 @@ Sistema profesional de gestión de contenedores para CCTi con **integración Map
 
 ---
 
+## 📱 ¿Necesitas la App Nativa para Conductores?
+
+> **La app nativa está lista al 100%**, pero requiere compilación en una máquina con acceso a internet.
+
+**📖 Ver guía completa:** [SOLUCION_PROBLEMA_APP_NATIVA.md](SOLUCION_PROBLEMA_APP_NATIVA.md)
+
+**🔨 Compilar ahora:** [COMO_COMPILAR_APP_NATIVA.md](COMO_COMPILAR_APP_NATIVA.md)
+
+La app nativa en `/mobile-app/android` resuelve el problema de GPS con celular bloqueado (PWA y TWA no funcionan para este caso).
+
+---
+
 ## ✨ Características Principales
 
 ### 📦 Gestión Completa de Contenedores

@@ -1,13 +1,37 @@
 # SoptraLoc Driver - Native Android App
 
+## ⚠️ IMPORTANTE: Esta Es la App Nativa Correcta
+
+Este repositorio contiene **DOS** proyectos Android:
+
+| Directorio | Tipo | ¿Funciona con celular bloqueado? |
+|------------|------|-----------------------------------|
+| `/android` | TWA (Trusted Web Activity) | ❌ **NO** |
+| `/mobile-app/android` | **App Nativa React Native** | ✅ **SÍ** |
+
+**Este directorio (`/mobile-app/android`) es la app nativa REAL que DEBE usarse.**
+
 ## 🚀 Quick Start
 
-### Prerequisites
-- Node.js 16+
-- Android Studio or Android SDK
-- JDK 11+
+### ⚠️ Nota Importante Sobre Compilación
 
-### Installation
+**No se puede compilar en el entorno sandbox actual** porque los repositorios de Android (dl.google.com, maven.google.com) están bloqueados.
+
+**Para compilar esta app:** Ver guía completa en [../COMO_COMPILAR_APP_NATIVA.md](../COMO_COMPILAR_APP_NATIVA.md)
+
+### Validar que Todo Está Listo
+
+```bash
+./validate-build-ready.sh
+```
+
+### Prerequisites
+- Node.js 16+ ✅ (tenemos v20.19.5)
+- Android Studio or Android SDK ✅
+- JDK 11+ ✅ (tenemos v17.0.16)
+- **Internet access** ❌ (bloqueado en sandbox - requerido para compilar)
+
+### Installation (Requiere Internet)
 
 ```bash
 # Install dependencies
