@@ -293,3 +293,101 @@ class DriverViewSet(viewsets.ModelViewSet):
             # Limpiar archivo temporal
             if os.path.exists(tmp_path):
                 os.unlink(tmp_path)
+    
+    @action(detail=False, methods=['post'], url_path='verify-patente')
+    def verify_patente(self, request):
+        """
+        Verifica y autentica conductor por patente (para app nativa)
+        
+        POST /api/drivers/verify-patente/
+        Body: {
+            "patente": "ABCD12"
+        }
+        
+        Response: {
+            "success": true,
+            "driver_id": 1,
+            "driver_name": "Juan Pérez",
+            "patente": "ABCD12"
+        }
+        """
+        patente = request.data.get('patente', '').strip().upper()
+        
+        if not patente:
+            return Response(
+                {'error': 'Patente es requerida'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        try:
+            # Buscar conductor por patente
+            driver = Driver.objects.get(patente=patente, activo=True)
+            
+            return Response({
+                'success': True,
+                'driver_id': driver.id,
+                'driver_name': driver.nombre,
+                'patente': driver.patente,
+                'max_entregas_dia': driver.max_entregas_dia,
+                'num_entregas_dia': driver.num_entregas_dia
+            })
+            
+        except Driver.DoesNotExist:
+            return Response(
+                {
+                    'success': False,
+                    'error': f'No se encontró conductor activo con patente {patente}'
+                },
+                status=status.HTTP_404_NOT_FOUND
+            )
+        except Driver.MultipleObjectsReturned:
+            return Response(
+                {
+                    'success': False,
+                    'error': f'Múltiples conductores encontrados con patente {patente}'
+                },
+                status=status.HTTP_400_BAD_REQUEST
+            )
+    
+    @action(detail=True, methods=['post'], url_path='update-location')
+    def update_location(self, request, pk=None):
+        """
+        Actualiza ubicación GPS del conductor (endpoint simplificado para app nativa)
+        
+        POST /api/drivers/{id}/update-location/
+        Body: {
+            "lat": -33.4569,
+            "lng": -70.6483,
+            "accuracy": 10.5  (opcional)
+        }
+        
+        Response: {
+            "ok": true
+        }
+        """
+        driver = self.get_object()
+        
+        lat = request.data.get('lat')
+        lng = request.data.get('lng')
+        accuracy = request.data.get('accuracy')
+        
+        if lat is None or lng is None:
+            return Response(
+                {'error': 'Se requieren lat y lng'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        try:
+            # Actualizar posición
+            driver.actualizar_posicion(lat, lng, accuracy)
+            
+            return Response({
+                'ok': True,
+                'timestamp': driver.ultima_actualizacion_posicion.isoformat()
+            })
+            
+        except Exception as e:
+            return Response(
+                {'error': str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
