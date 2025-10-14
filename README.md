@@ -16,9 +16,13 @@ Sistema profesional de gestión de contenedores para CCTi con **integración Map
 
 > **La app nativa está lista al 100%**, pero requiere compilación en una máquina con acceso a internet.
 
-**📖 Ver guía completa:** [SOLUCION_PROBLEMA_APP_NATIVA.md](SOLUCION_PROBLEMA_APP_NATIVA.md)
+**👉 EMPEZAR AQUÍ:** [LEEME_APP_NATIVA.md](LEEME_APP_NATIVA.md) ⭐
 
-**🔨 Compilar ahora:** [COMO_COMPILAR_APP_NATIVA.md](COMO_COMPILAR_APP_NATIVA.md)
+**Guías disponibles:**
+- [LEEME_APP_NATIVA.md](LEEME_APP_NATIVA.md) - Resumen general (empezar aquí)
+- [SOLUCION_PROBLEMA_APP_NATIVA.md](SOLUCION_PROBLEMA_APP_NATIVA.md) - Análisis del problema
+- [COMO_COMPILAR_APP_NATIVA.md](COMO_COMPILAR_APP_NATIVA.md) - Guía completa paso a paso
+- [INICIO_RAPIDO_COMPILACION.md](INICIO_RAPIDO_COMPILACION.md) - Comandos rápidos
 
 La app nativa en `/mobile-app/android` resuelve el problema de GPS con celular bloqueado (PWA y TWA no funcionan para este caso).
 
