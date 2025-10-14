@@ -9,6 +9,7 @@ buildscript {
         kotlinVersion = "1.7.22"
     }
     repositories {
+        maven { url "$rootDir/../node_modules/react-native/android" }
         maven { url 'https://maven.google.com' }
         mavenCentral()
         maven { url 'https://www.jitpack.io' }
