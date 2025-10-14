@@ -74,6 +74,22 @@ Score Total = (Disponibilidad × 30%) +
 - **Geocoding** de direcciones
 - **Matriz de distancias** para múltiples puntos
 
+### 📱 Portal del Conductor (GPS Background)
+
+- **PWA instalable** con Service Workers
+- **App Nativa Android (APK)** con GPS continuo
+- **Tracking GPS en background** incluso con pantalla bloqueada
+- **Permisos nativos Android** para ubicación permanente
+- **Servicio foreground** mantiene GPS activo
+- **Notificación persistente** indica estado GPS
+- **Legal y seguro**: Cumple Ley de Tránsito N° 18.290 (Chile)
+- **Sin Google Play requerido**: APK descargable directamente
+
+**Documentación:**
+- [📱 NATIVE_ANDROID_APP.md](NATIVE_ANDROID_APP.md) - Guía técnica completa
+- [👨‍✈️ GUIA_INSTALACION_APP_CONDUCTORES.md](GUIA_INSTALACION_APP_CONDUCTORES.md) - Guía para conductores
+- [📂 android/](android/) - Código fuente Android (TWA)
+
 ### 🏢 Centros de Distribución (CDs)
 
 - **2 tipos**: CCTI (almacenes propios) y Clientes

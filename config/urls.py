@@ -2,10 +2,12 @@
 URL Configuration for SoptraLoc TMS
 """
 from django.contrib import admin
-from django.urls import path, include
+from django.urls import path, include, re_path
 from django.conf import settings
 from django.conf.urls.static import static
+from django.views.static import serve
 from rest_framework.routers import DefaultRouter
+import os
 
 # Import viewsets
 from apps.drivers.views import DriverViewSet, driver_login, driver_logout, driver_dashboard, monitoring
@@ -53,6 +55,11 @@ urlpatterns = [
     
     # API Authentication
     path('api-auth/', include('rest_framework.urls')),
+    
+    # Digital Asset Links for Android TWA
+    re_path(r'^\.well-known/(?P<path>.*)$', serve, {
+        'document_root': os.path.join(settings.BASE_DIR, 'static', '.well-known'),
+    }),
 ]
 
 # Static and media files

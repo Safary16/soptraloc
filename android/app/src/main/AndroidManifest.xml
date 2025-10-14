@@ -1,0 +1,83 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    package="com.soptraloc.driver">
+
+    <!-- Permisos de ubicación para tracking GPS -->
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+    
+    <!-- Permiso para ubicación en background (Android 10+) -->
+    <uses-permission android:name="android.permission.ACCESS_BACKGROUND_LOCATION" />
+    
+    <!-- Permiso para mantener la app activa en background -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
+    
+    <!-- Notificaciones -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
+    <application
+        android:allowBackup="true"
+        android:icon="@mipmap/ic_launcher"
+        android:label="@string/app_name"
+        android:roundIcon="@mipmap/ic_launcher_round"
+        android:supportsRtl="true"
+        android:theme="@style/Theme.TWA"
+        tools:ignore="GoogleAppIndexingWarning">
+
+        <!-- TWA (Trusted Web Activity) Launcher -->
+        <activity
+            android:name="com.google.androidbrowserhelper.trusted.LauncherActivity"
+            android:exported="true"
+            android:label="@string/app_name"
+            android:theme="@style/Theme.TWA.Launcher">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+            
+            <!-- App Links para deep linking -->
+            <intent-filter android:autoVerify="true">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data
+                    android:scheme="https"
+                    android:host="${hostName}" />
+            </intent-filter>
+        </activity>
+
+        <!-- TWA Provider Activity (handles the web content) -->
+        <activity
+            android:name="com.google.androidbrowserhelper.trusted.TwaProviderActivity"
+            android:exported="true"
+            android:theme="@style/Theme.TWA">
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+        </activity>
+
+        <!-- Delegación de ubicación para permitir acceso GPS continuo -->
+        <service
+            android:name="com.google.androidbrowserhelper.locationdelegation.LocationUpdateService"
+            android:exported="false"
+            android:foregroundServiceType="location" />
+
+        <!-- Metadata para TWA -->
+        <meta-data
+            android:name="asset_statements"
+            android:resource="@string/asset_statements" />
+        
+        <meta-data
+            android:name="android.webkit.WebView.EnableSafeBrowsing"
+            android:value="true" />
+            
+        <meta-data
+            android:name="twa_generator"
+            android:value="SoptraLoc TWA Builder" />
+    </application>
+
+</manifest>

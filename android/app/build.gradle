@@ -1,0 +1,44 @@
+plugins {
+    id 'com.android.application'
+}
+
+android {
+    compileSdkVersion 33
+    
+    defaultConfig {
+        applicationId "com.soptraloc.driver"
+        minSdkVersion 23
+        targetSdkVersion 33
+        versionCode 1
+        versionName "1.0.0"
+        
+        // Enable manifest placeholders for TWA
+        manifestPlaceholders = [
+            hostName: "soptraloc.onrender.com",
+            defaultUrl: "https://soptraloc.onrender.com/driver/dashboard/",
+            launcherName: "SoptraLoc Driver",
+            appName: "SoptraLoc",
+            themeColor: "#667eea",
+            navigationColor: "#667eea",
+            backgroundColor: "#667eea",
+            enableNotifications: "true"
+        ]
+    }
+    
+    buildTypes {
+        release {
+            minifyEnabled true
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+        }
+    }
+    
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_1_8
+        targetCompatibility JavaVersion.VERSION_1_8
+    }
+}
+
+dependencies {
+    implementation 'com.google.androidbrowserhelper:androidbrowserhelper:2.5.0'
+    implementation 'com.google.androidbrowserhelper:locationdelegation:1.1.0'
+}

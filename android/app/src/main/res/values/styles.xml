@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Base TWA Theme -->
+    <style name="Theme.TWA" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:statusBarColor">#667eea</item>
+        <item name="android:navigationBarColor">#667eea</item>
+        <item name="android:windowBackground">@color/twa_background</item>
+    </style>
+    
+    <!-- TWA Launcher Theme (splash screen) -->
+    <style name="Theme.TWA.Launcher" parent="Theme.TWA">
+        <item name="android:windowIsTranslucent">true</item>
+        <item name="android:windowNoTitle">true</item>
+        <item name="android:windowFullscreen">false</item>
+        <item name="android:windowContentOverlay">@null</item>
+        <item name="android:windowActionBar">false</item>
+    </style>
+</resources>

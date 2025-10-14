@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">SoptraLoc Driver</string>
+    <string name="app_short_name">SoptraLoc</string>
+    
+    <!-- TWA Configuration -->
+    <string name="twa_url">https://soptraloc.onrender.com/driver/dashboard/</string>
+    
+    <!-- Digital Asset Links para verificación del dominio -->
+    <string name="asset_statements">
+        [{
+            \"relation\": [\"delegate_permission/common.handle_all_urls\"],
+            \"target\": {
+                \"namespace\": \"web\",
+                \"site\": \"https://soptraloc.onrender.com\"
+            }
+        },
+        {
+            \"relation\": [\"delegate_permission/common.use_as_origin\"],
+            \"target\": {
+                \"namespace\": \"web\",
+                \"site\": \"https://soptraloc.onrender.com\"
+            }
+        },
+        {
+            \"relation\": [\"delegate_permission/common.get_login_creds\"],
+            \"target\": {
+                \"namespace\": \"web\",
+                \"site\": \"https://soptraloc.onrender.com\"
+            }
+        }]
+    </string>
+    
+    <!-- Notificación de servicio foreground para GPS -->
+    <string name="location_service_notification_title">SoptraLoc GPS Activo</string>
+    <string name="location_service_notification_text">Rastreando tu ubicación para entregas</string>
+    <string name="location_permission_rationale">SoptraLoc necesita acceso a tu ubicación todo el tiempo para rastrear las entregas, incluso cuando la pantalla está bloqueada.</string>
+</resources>
