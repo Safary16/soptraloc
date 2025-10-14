@@ -31,7 +31,7 @@ class ContainerListSerializer(serializers.ModelSerializer):
             'estado', 'estado_display', 'nave',
             'peso_carga', 'tara', 'peso_total', 'contenido',
             'posicion_fisica', 'comuna', 'secuenciado', 'fecha_programacion',
-            'fecha_eta', 'fecha_demurrage', 'dias_para_demurrage', 'urgencia_demurrage',
+            'fecha_eta', 'fecha_liberacion', 'fecha_demurrage', 'dias_para_demurrage', 'urgencia_demurrage',
             'deposito_devolucion', 'tipo_movimiento', 'tipo_movimiento_display',
             'cd_entrega', 'cd_entrega_nombre', 'fecha_descarga'
         ]
