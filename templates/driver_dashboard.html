@@ -341,10 +341,11 @@
             let html = '';
             programaciones.forEach(prog => {
                 const statusColor = prog.estado === 'asignado' ? 'warning' : 
-                                  prog.estado === 'en_ruta' ? 'info' : 'success';
+                                  prog.estado === 'en_ruta' ? 'info' : 
+                                  prog.estado === 'entregado' ? 'primary' : 'success';
                 
                 html += `
-                    <div class="container-item">
+                    <div class="container-item" data-prog-id="${prog.id}">
                         <div class="d-flex justify-content-between align-items-center">
                             <div class="container-number">
                                 <i class="fas fa-box"></i> ${prog.contenedor || 'N/A'}
@@ -373,11 +374,103 @@
                             ` : ''}
                         </div>
                         ` : ''}
+                        
+                        <div class="mt-3">
+                            ${prog.estado === 'asignado' ? `
+                                <button class="btn btn-primary w-100" onclick="confirmarInicioRuta(${prog.id})">
+                                    <i class="fas fa-play-circle"></i> Iniciar Ruta
+                                </button>
+                            ` : prog.estado === 'en_ruta' ? `
+                                <button class="btn btn-info w-100" onclick="notificarArribo(${prog.id})">
+                                    <i class="fas fa-map-pin"></i> Notificar Arribo
+                                </button>
+                            ` : prog.estado === 'entregado' ? `
+                                <button class="btn btn-success w-100" onclick="notificarVacio(${prog.id})">
+                                    <i class="fas fa-check-circle"></i> Notificar Vacío
+                                </button>
+                            ` : ''}
+                        </div>
                     </div>
                 `;
             });
             
             container.innerHTML = html;
+        }
+        
+        // Confirmar inicio de ruta con patente
+        function confirmarInicioRuta(progId) {
+            const patente = prompt('🚚 Confirme la PATENTE del vehículo que está usando:\n\n(Ejemplo: ABC123, ABCD12, etc.)');
+            
+            if (!patente) {
+                alert('❌ Debe ingresar la patente del vehículo para iniciar la ruta');
+                return;
+            }
+            
+            const patenteNormalizada = patente.trim().toUpperCase();
+            
+            if (!navigator.geolocation) {
+                alert('❌ Su navegador no soporta geolocalización');
+                return;
+            }
+            
+            // Obtener posición GPS
+            navigator.geolocation.getCurrentPosition(
+                (position) => {
+                    const lat = position.coords.latitude;
+                    const lng = position.coords.longitude;
+                    
+                    // Enviar al servidor
+                    fetch(`/api/programaciones/${progId}/iniciar_ruta/`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'X-CSRFToken': getCookie('csrftoken')
+                        },
+                        body: JSON.stringify({ 
+                            patente: patenteNormalizada,
+                            lat: lat,
+                            lng: lng
+                        })
+                    })
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.success) {
+                            alert('✅ Ruta iniciada exitosamente\\n\\nPatente confirmada: ' + data.patente_confirmada);
+                            loadAsignaciones(); // Recargar lista
+                        } else {
+                            alert('❌ Error: ' + (data.error || 'No se pudo iniciar la ruta'));
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Error iniciando ruta:', error);
+                        alert('❌ Error de conexión al iniciar la ruta');
+                    });
+                },
+                (error) => {
+                    alert('❌ No se pudo obtener su ubicación GPS. Active el GPS y vuelva a intentar.');
+                    console.error('Error GPS:', error);
+                }
+            );
+        }
+        
+        // Notificar arribo al CD
+        function notificarArribo(progId) {
+            if (!confirm('¿Confirma que ha llegado al Centro de Distribución?')) {
+                return;
+            }
+            
+            // TODO: Implementar endpoint de arribo
+            alert('⏳ Función de arribo en desarrollo');
+        }
+        
+        // Notificar contenedor vacío
+        function notificarVacio(progId) {
+            if (!confirm('¿Confirma que el contenedor está vacío y listo para retiro?')) {
+                return;
+            }
+            
+            // TODO: Implementar endpoint de vacío
+            alert('⏳ Función de vacío en desarrollo');
         }
         
         // Get CSRF token

@@ -46,6 +46,10 @@ class Programacion(models.Model):
         verbose_name='Distancia (km)'
     )
     ruta_geojson = models.JSONField(null=True, blank=True, verbose_name='Ruta GeoJSON')
+    patente_confirmada = models.CharField(max_length=20, null=True, blank=True, verbose_name='Patente Confirmada', help_text='Patente confirmada al iniciar ruta')
+    fecha_inicio_ruta = models.DateTimeField(null=True, blank=True, verbose_name='Fecha Inicio Ruta', help_text='Timestamp cuando el conductor inició la ruta')
+    gps_inicio_lat = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True, verbose_name='GPS Inicio Latitud')
+    gps_inicio_lng = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True, verbose_name='GPS Inicio Longitud')
     
     # Alertas
     alerta_48h_enviada = models.BooleanField(default=False, verbose_name='Alerta 48h Enviada')

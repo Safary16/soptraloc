@@ -21,6 +21,7 @@ class Driver(models.Model):
     nombre = models.CharField(max_length=200, verbose_name='Nombre', db_index=True)
     rut = models.CharField(max_length=20, null=True, blank=True, unique=True, verbose_name='RUT')
     telefono = models.CharField(max_length=20, null=True, blank=True, verbose_name='Teléfono')
+    patente = models.CharField(max_length=20, null=True, blank=True, verbose_name='Patente', help_text='Patente del vehículo asignado')
     
     # Disponibilidad
     presente = models.BooleanField(default=True, verbose_name='Presente', help_text='¿Está disponible hoy?')

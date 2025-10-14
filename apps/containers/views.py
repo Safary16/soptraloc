@@ -109,6 +109,7 @@ class ContainerViewSet(viewsets.ModelViewSet):
                 'success': True,
                 'mensaje': f'Importación de liberación completada',
                 'liberados': resultados['liberados'],
+                'por_liberar': resultados.get('por_liberar', 0),
                 'no_encontrados': resultados['no_encontrados'],
                 'errores': resultados['errores'],
                 'detalles': resultados['detalles']
@@ -167,10 +168,10 @@ class ContainerViewSet(viewsets.ModelViewSet):
             if os.path.exists(tmp_path):
                 os.unlink(tmp_path)
     
-    @action(detail=False, methods=['get'])
+    @action(detail=False, methods=['get'], url_path='export-stock')
     def export_stock(self, request):
         """
-        Exporta stock de contenedores liberados y por arribar
+        Exporta stock de contenedores liberados y por arribar (formato JSON)
         Incluye flag de 'secuenciado' para próximas liberaciones
         """
         # Filtrar solo liberados y por_arribar
@@ -186,7 +187,7 @@ class ContainerViewSet(viewsets.ModelViewSet):
             'containers': serializer.data
         })
     
-    @action(detail=False, methods=['get'])
+    @action(detail=False, methods=['get'], url_path='export-liberacion-excel')
     def export_liberacion_excel(self, request):
         """
         Exporta contenedores liberados y por liberar a Excel

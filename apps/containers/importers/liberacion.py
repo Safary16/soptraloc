@@ -42,6 +42,7 @@ class LiberacionImporter:
         self.usuario = usuario
         self.resultados = {
             'liberados': 0,
+            'por_liberar': 0,  # Contenedores con fecha futura
             'no_encontrados': 0,
             'errores': 0,
             'detalles': []
@@ -149,8 +150,8 @@ class LiberacionImporter:
                     posicion_original = row.get('posicion_fisica')
                     posicion_mapeada = self.mapear_posicion(posicion_original)
                     
-                    # Parsear fecha y hora de liberación
-                    fecha_liberacion = timezone.now()
+                    # Parsear fecha y hora de liberación desde el Excel
+                    fecha_liberacion = None
                     if 'fecha_liberacion' in df.columns and pd.notna(row.get('fecha_liberacion')):
                         try:
                             fecha_lib = pd.to_datetime(row['fecha_liberacion'])
@@ -169,10 +170,25 @@ class LiberacionImporter:
                             else:
                                 fecha_liberacion = timezone.make_aware(fecha_lib) if timezone.is_naive(fecha_lib) else fecha_lib
                         except Exception:
-                            fecha_liberacion = timezone.now()
+                            # Si falla el parseo, no tiene fecha de liberación válida
+                            pass
+                    
+                    # Si no hay fecha de liberación en el Excel, usar la fecha actual
+                    if not fecha_liberacion:
+                        fecha_liberacion = timezone.now()
+                    
+                    # Determinar el estado basado en la fecha de liberación
+                    # Solo marcar como 'liberado' si la fecha es hoy o anterior
+                    # Si la fecha es futura, mantener en 'por_arribar' o estado actual
+                    now = timezone.now()
+                    if fecha_liberacion <= now:
+                        nuevo_estado = 'liberado'
+                    else:
+                        # Fecha futura: mantener en por_arribar
+                        nuevo_estado = 'por_arribar'
                     
                     # Actualizar contenedor
-                    container.estado = 'liberado'
+                    container.estado = nuevo_estado
                     container.posicion_fisica = posicion_mapeada
                     container.fecha_liberacion = fecha_liberacion
                     
@@ -221,16 +237,25 @@ class LiberacionImporter:
                             'posicion_original': str(posicion_original) if pd.notna(posicion_original) else None,
                             'posicion_mapeada': posicion_mapeada,
                             'comuna': container.comuna,
+                            'fecha_liberacion': fecha_liberacion.isoformat(),
+                            'estado_resultante': nuevo_estado,
                         },
                         usuario=self.usuario
                     )
                     
-                    self.resultados['liberados'] += 1
+                    # Actualizar contador según el estado resultante
+                    if nuevo_estado == 'liberado':
+                        self.resultados['liberados'] += 1
+                    else:
+                        self.resultados['por_liberar'] += 1
+                    
                     self.resultados['detalles'].append({
                         'fila': idx + 2,
                         'container_id': container_id,
                         'posicion': posicion_mapeada,
-                        'accion': 'liberado'
+                        'fecha_liberacion': fecha_liberacion.strftime('%Y-%m-%d %H:%M') if fecha_liberacion else 'N/A',
+                        'estado': nuevo_estado,
+                        'accion': 'liberado' if nuevo_estado == 'liberado' else 'programado para liberación'
                     })
                 
                 except Exception as e:
