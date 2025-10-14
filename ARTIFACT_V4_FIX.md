@@ -81,6 +81,15 @@ jobs:
           fi
 ```
 
+## 🔧 Problema Adicional Resuelto: Gradle Wrapper JAR Faltante
+
+Durante el proceso de build, se descubrió que el archivo `gradle-wrapper.jar` estaba siendo ignorado por `.gitignore`, lo que causaba fallos en CI/CD. 
+
+**Solución aplicada:**
+1. ✅ Modificado `android/.gitignore` para NO ignorar el `gradle-wrapper.jar`
+2. ✅ Descargado el Gradle wrapper JAR apropiado (versión 7.5)
+3. ✅ Añadido al repositorio para uso en CI/CD
+
 ## 🚀 Próximos Pasos
 
 ### Aprobación del Workflow
