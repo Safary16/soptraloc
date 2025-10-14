@@ -455,22 +455,110 @@
         
         // Notificar arribo al CD
         function notificarArribo(progId) {
-            if (!confirm('¿Confirma que ha llegado al Centro de Distribución?')) {
+            if (!confirm('📍 ¿Confirma que ha llegado al Centro de Distribución?')) {
                 return;
             }
             
-            // TODO: Implementar endpoint de arribo
-            alert('⏳ Función de arribo en desarrollo');
+            if (!navigator.geolocation) {
+                // Si no hay GPS, aún permitir notificar
+                enviarNotificacionArribo(progId, null, null);
+                return;
+            }
+            
+            // Obtener posición GPS
+            navigator.geolocation.getCurrentPosition(
+                (position) => {
+                    enviarNotificacionArribo(progId, position.coords.latitude, position.coords.longitude);
+                },
+                (error) => {
+                    console.warn('No se pudo obtener GPS, enviando sin coordenadas');
+                    enviarNotificacionArribo(progId, null, null);
+                }
+            );
+        }
+        
+        function enviarNotificacionArribo(progId, lat, lng) {
+            const payload = {};
+            if (lat && lng) {
+                payload.lat = lat;
+                payload.lng = lng;
+            }
+            
+            fetch(`/api/programaciones/${progId}/notificar_arribo/`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': getCookie('csrftoken')
+                },
+                body: JSON.stringify(payload)
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    alert('✅ Arribo registrado exitosamente');
+                    loadAsignaciones(); // Recargar lista
+                } else {
+                    alert('❌ Error: ' + (data.error || 'No se pudo registrar el arribo'));
+                }
+            })
+            .catch(error => {
+                console.error('Error notificando arribo:', error);
+                alert('❌ Error de conexión al notificar arribo');
+            });
         }
         
         // Notificar contenedor vacío
         function notificarVacio(progId) {
-            if (!confirm('¿Confirma que el contenedor está vacío y listo para retiro?')) {
+            if (!confirm('📦 ¿Confirma que el contenedor está VACÍO y listo para retiro?')) {
                 return;
             }
             
-            // TODO: Implementar endpoint de vacío
-            alert('⏳ Función de vacío en desarrollo');
+            if (!navigator.geolocation) {
+                // Si no hay GPS, aún permitir notificar
+                enviarNotificacionVacio(progId, null, null);
+                return;
+            }
+            
+            // Obtener posición GPS
+            navigator.geolocation.getCurrentPosition(
+                (position) => {
+                    enviarNotificacionVacio(progId, position.coords.latitude, position.coords.longitude);
+                },
+                (error) => {
+                    console.warn('No se pudo obtener GPS, enviando sin coordenadas');
+                    enviarNotificacionVacio(progId, null, null);
+                }
+            );
+        }
+        
+        function enviarNotificacionVacio(progId, lat, lng) {
+            const payload = {};
+            if (lat && lng) {
+                payload.lat = lat;
+                payload.lng = lng;
+            }
+            
+            fetch(`/api/programaciones/${progId}/notificar_vacio/`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': getCookie('csrftoken')
+                },
+                body: JSON.stringify(payload)
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    alert('✅ Contenedor marcado como vacío exitosamente');
+                    loadAsignaciones(); // Recargar lista
+                } else {
+                    alert('❌ Error: ' + (data.error || 'No se pudo marcar como vacío'));
+                }
+            })
+            .catch(error => {
+                console.error('Error notificando vacío:', error);
+                alert('❌ Error de conexión al notificar vacío');
+            });
         }
         
         // Get CSRF token

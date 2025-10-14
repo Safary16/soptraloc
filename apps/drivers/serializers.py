@@ -20,7 +20,7 @@ class DriverSerializer(serializers.ModelSerializer):
     class Meta:
         model = Driver
         fields = [
-            'id', 'nombre', 'rut', 'telefono', 'presente', 'activo',
+            'id', 'nombre', 'rut', 'telefono', 'patente', 'presente', 'activo',
             'cumplimiento_porcentaje', 'num_entregas_dia', 'max_entregas_dia',
             'ultima_posicion_lat', 'ultima_posicion_lng', 'ultima_actualizacion_posicion',
             'total_entregas', 'entregas_a_tiempo', 'esta_disponible', 'ubicacion_actual',
@@ -63,7 +63,7 @@ class DriverDetailSerializer(DriverSerializer):
             if estado in ['asignado', 'en_ruta', 'programado', 'entregado']:
                 item = {
                     'id': prog.id,
-                    'contenedor': prog.container.numero_contenedor if prog.container else None,
+                    'contenedor': prog.container.container_id if prog.container else None,
                     'cliente': prog.cliente,
                     'cd': prog.cd.nombre if prog.cd else None,
                     'cd_direccion': prog.cd.direccion if prog.cd else None,

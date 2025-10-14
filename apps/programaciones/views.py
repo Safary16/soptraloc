@@ -565,6 +565,130 @@ class ProgramacionViewSet(viewsets.ModelViewSet):
         return Response(response_data)
     
     @action(detail=True, methods=['post'])
+    def notificar_arribo(self, request, pk=None):
+        """
+        Notifica que el conductor ha arribado al CD (llegó al destino)
+        Cambia el estado del contenedor a 'entregado'
+        
+        Payload opcional:
+        {
+            "lat": -33.4372,
+            "lng": -70.6506
+        }
+        """
+        programacion = self.get_object()
+        
+        if not programacion.driver:
+            return Response(
+                {'error': 'Programación no tiene conductor asignado'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        if programacion.container.estado != 'en_ruta':
+            return Response(
+                {'error': f'Contenedor debe estar en ruta. Estado actual: {programacion.container.get_estado_display()}'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Actualizar posición del conductor si se proporciona
+        lat = request.data.get('lat')
+        lng = request.data.get('lng')
+        if lat and lng:
+            programacion.driver.actualizar_posicion(lat, lng)
+        
+        # Cambiar estado del contenedor a 'entregado'
+        usuario = request.user.username if request.user.is_authenticated else None
+        programacion.container.cambiar_estado('entregado', usuario)
+        
+        # Crear evento de arribo
+        from apps.events.models import Event
+        Event.objects.create(
+            container=programacion.container,
+            event_type='arribo_cd',
+            detalles={
+                'conductor': programacion.driver.nombre,
+                'cd': programacion.cd.nombre,
+                'gps_lat': str(lat) if lat else None,
+                'gps_lng': str(lng) if lng else None,
+                'timestamp': timezone.now().isoformat()
+            },
+            usuario=usuario
+        )
+        
+        serializer = self.get_serializer(programacion)
+        return Response({
+            'success': True,
+            'mensaje': f'Arribo registrado en {programacion.cd.nombre}',
+            'programacion': serializer.data,
+            'nuevo_estado': 'entregado'
+        })
+    
+    @action(detail=True, methods=['post'])
+    def notificar_vacio(self, request, pk=None):
+        """
+        Notifica que el contenedor está vacío (descargado y listo para retiro)
+        Cambia el estado del contenedor a 'vacio'
+        
+        Payload opcional:
+        {
+            "lat": -33.4372,
+            "lng": -70.6506
+        }
+        """
+        programacion = self.get_object()
+        
+        if not programacion.driver:
+            return Response(
+                {'error': 'Programación no tiene conductor asignado'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Permitir notificar vacío desde 'entregado' o 'descargado'
+        if programacion.container.estado not in ['entregado', 'descargado']:
+            return Response(
+                {'error': f'Contenedor debe estar entregado o descargado. Estado actual: {programacion.container.get_estado_display()}'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Actualizar posición del conductor si se proporciona
+        lat = request.data.get('lat')
+        lng = request.data.get('lng')
+        if lat and lng:
+            programacion.driver.actualizar_posicion(lat, lng)
+        
+        # Si está entregado, pasar primero por descargado
+        if programacion.container.estado == 'entregado':
+            usuario = request.user.username if request.user.is_authenticated else None
+            programacion.container.cambiar_estado('descargado', usuario)
+        
+        # Cambiar estado del contenedor a 'vacio'
+        usuario = request.user.username if request.user.is_authenticated else None
+        programacion.container.cambiar_estado('vacio', usuario)
+        
+        # Crear evento de vacío
+        from apps.events.models import Event
+        Event.objects.create(
+            container=programacion.container,
+            event_type='contenedor_vacio',
+            detalles={
+                'conductor': programacion.driver.nombre,
+                'cd': programacion.cd.nombre,
+                'gps_lat': str(lat) if lat else None,
+                'gps_lng': str(lng) if lng else None,
+                'timestamp': timezone.now().isoformat()
+            },
+            usuario=usuario
+        )
+        
+        serializer = self.get_serializer(programacion)
+        return Response({
+            'success': True,
+            'mensaje': f'Contenedor marcado como vacío. Listo para retiro.',
+            'programacion': serializer.data,
+            'nuevo_estado': 'vacio'
+        })
+    
+    @action(detail=True, methods=['post'])
     def actualizar_posicion(self, request, pk=None):
         """
         Actualiza la posición del conductor y recalcula ETA
