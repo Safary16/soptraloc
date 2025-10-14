@@ -1,0 +1,13 @@
+rootProject.name = 'SoptraLocDriver'
+
+include ':app'
+include ':react-native-geolocation-service'
+project(':react-native-geolocation-service').projectDir = new File(rootProject.projectDir, '../node_modules/react-native-geolocation-service/android')
+
+include ':react-native-background-actions'
+project(':react-native-background-actions').projectDir = new File(rootProject.projectDir, '../node_modules/react-native-background-actions/android')
+
+include ':@react-native-async-storage_async-storage'
+project(':@react-native-async-storage_async-storage').projectDir = new File(rootProject.projectDir, '../node_modules/@react-native-async-storage/async-storage/android')
+
+apply from: file("../node_modules/@react-native/gradle-plugin/settings.gradle")
