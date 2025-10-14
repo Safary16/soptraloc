@@ -146,6 +146,48 @@
     
     <div class="container-fluid">
         <div class="sidebar">
+            <!-- Historical Tracking Section -->
+            <div style="background: #f8f9fa; padding: 15px; border-radius: 10px; margin-bottom: 20px;">
+                <h5><i class="fas fa-history"></i> Seguimiento Histórico</h5>
+                <div class="form-group" style="margin-top: 10px;">
+                    <label for="driver-select" style="font-size: 14px; font-weight: 500;">Conductor:</label>
+                    <select id="driver-select" class="form-select form-select-sm" style="margin-top: 5px;">
+                        <option value="">Seleccione conductor...</option>
+                    </select>
+                </div>
+                
+                <div class="form-group" style="margin-top: 10px;">
+                    <label style="font-size: 14px; font-weight: 500;">Período:</label>
+                    <select id="time-range" class="form-select form-select-sm" style="margin-top: 5px;">
+                        <option value="1">Últimas 24 horas</option>
+                        <option value="3">Últimos 3 días</option>
+                        <option value="7">Última semana</option>
+                        <option value="30">Último mes</option>
+                        <option value="custom">Personalizado</option>
+                    </select>
+                </div>
+                
+                <div id="custom-date-range" style="display: none; margin-top: 10px;">
+                    <div class="form-group">
+                        <label style="font-size: 12px;">Desde:</label>
+                        <input type="datetime-local" id="fecha-desde" class="form-control form-control-sm" style="margin-top: 5px;">
+                    </div>
+                    <div class="form-group" style="margin-top: 5px;">
+                        <label style="font-size: 12px;">Hasta:</label>
+                        <input type="datetime-local" id="fecha-hasta" class="form-control form-control-sm" style="margin-top: 5px;">
+                    </div>
+                </div>
+                
+                <div style="margin-top: 15px;">
+                    <button class="btn btn-primary btn-sm w-100" onclick="showHistoricalTrack()">
+                        <i class="fas fa-route"></i> Ver Recorrido
+                    </button>
+                    <button class="btn btn-outline-secondary btn-sm w-100" onclick="clearHistoricalTrack()" style="margin-top: 5px;">
+                        <i class="fas fa-eraser"></i> Limpiar
+                    </button>
+                </div>
+            </div>
+            
             <h5><i class="fas fa-users"></i> Conductores Activos</h5>
             <div id="drivers-list">
                 <p class="text-center text-muted">Cargando conductores...</p>
@@ -176,11 +218,15 @@
         // Variables globales
         let markers = {};
         let selectedDriver = null;
+        let historicalRoute = null;  // Layer for historical route
+        let historicalMarkers = [];   // Markers for historical points
+        let allDrivers = [];          // Store all drivers for dropdown
         
         // Cargar datos al inicio y cada 15 segundos
         window.addEventListener('load', () => {
             loadDrivers();
             setInterval(loadDrivers, 15000);
+            setupTimeRangeListener();
         });
         
         // Cargar conductores activos
@@ -192,6 +238,7 @@
                 .then(data => {
                     renderDriversList(data);
                     updateMap(data);
+                    updateDriverDropdown(data);  // Update historical tracking dropdown
                     updateRefreshIndicator(`Actualizado ${new Date().toLocaleTimeString()}`);
                 })
                 .catch(error => {
@@ -314,6 +361,230 @@
         // Actualizar indicador de refresh
         function updateRefreshIndicator(text) {
             document.getElementById('refresh-text').textContent = text;
+        }
+        
+        // ============================================
+        // Historical Tracking Functions
+        // ============================================
+        
+        // Setup time range listener
+        function setupTimeRangeListener() {
+            const timeRangeSelect = document.getElementById('time-range');
+            const customDateRange = document.getElementById('custom-date-range');
+            
+            timeRangeSelect.addEventListener('change', (e) => {
+                if (e.target.value === 'custom') {
+                    customDateRange.style.display = 'block';
+                    
+                    // Set default values
+                    const now = new Date();
+                    const yesterday = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+                    
+                    document.getElementById('fecha-hasta').value = formatDateTimeLocal(now);
+                    document.getElementById('fecha-desde').value = formatDateTimeLocal(yesterday);
+                } else {
+                    customDateRange.style.display = 'none';
+                }
+            });
+        }
+        
+        // Format date for datetime-local input
+        function formatDateTimeLocal(date) {
+            const year = date.getFullYear();
+            const month = String(date.getMonth() + 1).padStart(2, '0');
+            const day = String(date.getDate()).padStart(2, '0');
+            const hours = String(date.getHours()).padStart(2, '0');
+            const minutes = String(date.getMinutes()).padStart(2, '0');
+            return `${year}-${month}-${day}T${hours}:${minutes}`;
+        }
+        
+        // Update driver dropdown when drivers are loaded
+        function updateDriverDropdown(drivers) {
+            const select = document.getElementById('driver-select');
+            const currentValue = select.value;
+            
+            // Save all drivers
+            allDrivers = drivers;
+            
+            // Keep existing options + update
+            let html = '<option value="">Seleccione conductor...</option>';
+            drivers.forEach(driver => {
+                html += `<option value="${driver.id}">${driver.nombre}</option>`;
+            });
+            
+            select.innerHTML = html;
+            if (currentValue) {
+                select.value = currentValue;
+            }
+        }
+        
+        // Show historical track
+        async function showHistoricalTrack() {
+            const driverId = document.getElementById('driver-select').value;
+            
+            if (!driverId) {
+                alert('Por favor seleccione un conductor');
+                return;
+            }
+            
+            const timeRange = document.getElementById('time-range').value;
+            let url;
+            
+            if (timeRange === 'custom') {
+                const fechaDesde = document.getElementById('fecha-desde').value;
+                const fechaHasta = document.getElementById('fecha-hasta').value;
+                
+                if (!fechaDesde || !fechaHasta) {
+                    alert('Por favor ingrese las fechas');
+                    return;
+                }
+                
+                // Convert to ISO format
+                const desde = new Date(fechaDesde).toISOString();
+                const hasta = new Date(fechaHasta).toISOString();
+                
+                url = `/api/drivers/${driverId}/historial/?fecha_desde=${desde}&fecha_hasta=${hasta}`;
+            } else {
+                url = `/api/drivers/${driverId}/historial/?dias=${timeRange}`;
+            }
+            
+            try {
+                updateRefreshIndicator('Cargando historial...');
+                const response = await fetch(url);
+                const locations = await response.json();
+                
+                if (locations.length === 0) {
+                    alert('No hay datos de ubicación para el período seleccionado');
+                    updateRefreshIndicator('Sin datos');
+                    return;
+                }
+                
+                // Clear existing historical route
+                clearHistoricalTrack();
+                
+                // Draw route on map
+                drawHistoricalRoute(locations);
+                
+                // Get driver name
+                const driver = allDrivers.find(d => d.id == driverId);
+                const driverName = driver ? driver.nombre : 'Conductor';
+                
+                updateRefreshIndicator(`${driverName}: ${locations.length} puntos`);
+            } catch (error) {
+                console.error('Error loading historical track:', error);
+                alert('Error al cargar el historial');
+                updateRefreshIndicator('Error');
+            }
+        }
+        
+        // Draw historical route on map
+        function drawHistoricalRoute(locations) {
+            if (locations.length === 0) return;
+            
+            // Create GeoJSON for the route
+            const coordinates = locations.map(loc => [parseFloat(loc.lng), parseFloat(loc.lat)]);
+            
+            const geojson = {
+                type: 'Feature',
+                properties: {},
+                geometry: {
+                    type: 'LineString',
+                    coordinates: coordinates
+                }
+            };
+            
+            // Add source and layer to the map
+            if (map.getSource('historical-route')) {
+                map.getSource('historical-route').setData(geojson);
+            } else {
+                map.addSource('historical-route', {
+                    type: 'geojson',
+                    data: geojson
+                });
+                
+                map.addLayer({
+                    id: 'historical-route',
+                    type: 'line',
+                    source: 'historical-route',
+                    layout: {
+                        'line-join': 'round',
+                        'line-cap': 'round'
+                    },
+                    paint: {
+                        'line-color': '#FF6B6B',
+                        'line-width': 4,
+                        'line-opacity': 0.8
+                    }
+                });
+            }
+            
+            // Add start and end markers
+            const startCoords = [parseFloat(locations[0].lng), parseFloat(locations[0].lat)];
+            const endCoords = [parseFloat(locations[locations.length - 1].lng), parseFloat(locations[locations.length - 1].lat)];
+            
+            // Start marker (green)
+            const startEl = document.createElement('div');
+            startEl.innerHTML = '<i class="fas fa-flag" style="color: #28a745; font-size: 28px;"></i>';
+            const startMarker = new mapboxgl.Marker(startEl)
+                .setLngLat(startCoords)
+                .setPopup(new mapboxgl.Popup().setHTML(`
+                    <strong>Inicio</strong><br>
+                    ${new Date(locations[0].timestamp).toLocaleString()}
+                `))
+                .addTo(map);
+            historicalMarkers.push(startMarker);
+            
+            // End marker (red)
+            const endEl = document.createElement('div');
+            endEl.innerHTML = '<i class="fas fa-flag-checkered" style="color: #dc3545; font-size: 28px;"></i>';
+            const endMarker = new mapboxgl.Marker(endEl)
+                .setLngLat(endCoords)
+                .setPopup(new mapboxgl.Popup().setHTML(`
+                    <strong>Final</strong><br>
+                    ${new Date(locations[locations.length - 1].timestamp).toLocaleString()}
+                `))
+                .addTo(map);
+            historicalMarkers.push(endMarker);
+            
+            // Add intermediate points (every 10th point to avoid clutter)
+            const step = Math.max(1, Math.floor(locations.length / 20));
+            for (let i = step; i < locations.length - 1; i += step) {
+                const loc = locations[i];
+                const coords = [parseFloat(loc.lng), parseFloat(loc.lat)];
+                
+                const el = document.createElement('div');
+                el.innerHTML = '<div style="width: 8px; height: 8px; background: #FF6B6B; border: 2px solid white; border-radius: 50%;"></div>';
+                
+                const marker = new mapboxgl.Marker(el)
+                    .setLngLat(coords)
+                    .setPopup(new mapboxgl.Popup().setHTML(`
+                        <small>${new Date(loc.timestamp).toLocaleString()}</small>
+                    `))
+                    .addTo(map);
+                historicalMarkers.push(marker);
+            }
+            
+            // Fit map to route bounds
+            const bounds = new mapboxgl.LngLatBounds();
+            coordinates.forEach(coord => bounds.extend(coord));
+            map.fitBounds(bounds, { padding: 50 });
+        }
+        
+        // Clear historical track
+        function clearHistoricalTrack() {
+            // Remove route layer and source
+            if (map.getLayer('historical-route')) {
+                map.removeLayer('historical-route');
+            }
+            if (map.getSource('historical-route')) {
+                map.removeSource('historical-route');
+            }
+            
+            // Remove all historical markers
+            historicalMarkers.forEach(marker => marker.remove());
+            historicalMarkers = [];
+            
+            updateRefreshIndicator('Actualizando...');
         }
     </script>
 </body>

@@ -229,18 +229,101 @@ class DriverViewSet(viewsets.ModelViewSet):
         Obtener historial de ubicaciones del conductor
         
         GET /api/drivers/{id}/historial/?dias=7
+        GET /api/drivers/{id}/historial/?fecha_desde=2025-10-01T00:00:00&fecha_hasta=2025-10-14T23:59:59
         """
         driver = self.get_object()
-        dias = int(request.query_params.get('dias', 7))
         
-        fecha_desde = timezone.now() - timedelta(days=dias)
+        # Opción 1: Usar rango de fechas específico
+        fecha_desde_str = request.query_params.get('fecha_desde')
+        fecha_hasta_str = request.query_params.get('fecha_hasta')
+        
+        if fecha_desde_str and fecha_hasta_str:
+            from django.utils.dateparse import parse_datetime
+            fecha_desde = parse_datetime(fecha_desde_str)
+            fecha_hasta = parse_datetime(fecha_hasta_str)
+            
+            if not fecha_desde or not fecha_hasta:
+                return Response(
+                    {'error': 'Formato de fecha inválido. Use ISO 8601: YYYY-MM-DDTHH:MM:SS'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+        else:
+            # Opción 2: Usar días hacia atrás (por defecto 7 días)
+            dias = int(request.query_params.get('dias', 7))
+            fecha_hasta = timezone.now()
+            fecha_desde = fecha_hasta - timedelta(days=dias)
+        
+        # Obtener ubicaciones en el rango
         ubicaciones = DriverLocation.objects.filter(
             driver=driver,
-            timestamp__gte=fecha_desde
-        ).order_by('-timestamp')[:100]
+            timestamp__gte=fecha_desde,
+            timestamp__lte=fecha_hasta
+        ).order_by('timestamp')  # Ordenar cronológicamente para dibujar rutas
+        
+        # Limitar a 1000 puntos para no sobrecargar el mapa
+        max_points = int(request.query_params.get('max_points', 1000))
+        
+        # Si hay más puntos de los permitidos, hacer muestreo
+        if ubicaciones.count() > max_points:
+            step = ubicaciones.count() // max_points
+            ubicaciones = ubicaciones[::step][:max_points]
         
         serializer = DriverLocationSerializer(ubicaciones, many=True)
         return Response(serializer.data)
+    
+    @action(detail=False, methods=['get'], url_path='historial-multiple')
+    def historial_multiple(self, request):
+        """
+        Obtener historial de ubicaciones para múltiples conductores
+        
+        GET /api/drivers/historial-multiple/?driver_ids=1,2,3&fecha_desde=...&fecha_hasta=...
+        GET /api/drivers/historial-multiple/?dias=1
+        """
+        # Obtener IDs de conductores
+        driver_ids_str = request.query_params.get('driver_ids')
+        if driver_ids_str:
+            driver_ids = [int(id.strip()) for id in driver_ids_str.split(',') if id.strip()]
+        else:
+            # Si no se especifican, usar todos los activos
+            driver_ids = Driver.objects.filter(activo=True).values_list('id', flat=True)
+        
+        # Obtener rango de fechas
+        fecha_desde_str = request.query_params.get('fecha_desde')
+        fecha_hasta_str = request.query_params.get('fecha_hasta')
+        
+        if fecha_desde_str and fecha_hasta_str:
+            from django.utils.dateparse import parse_datetime
+            fecha_desde = parse_datetime(fecha_desde_str)
+            fecha_hasta = parse_datetime(fecha_hasta_str)
+            
+            if not fecha_desde or not fecha_hasta:
+                return Response(
+                    {'error': 'Formato de fecha inválido. Use ISO 8601: YYYY-MM-DDTHH:MM:SS'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+        else:
+            dias = int(request.query_params.get('dias', 1))
+            fecha_hasta = timezone.now()
+            fecha_desde = fecha_hasta - timedelta(days=dias)
+        
+        # Obtener ubicaciones de todos los conductores
+        resultado = {}
+        for driver_id in driver_ids:
+            ubicaciones = DriverLocation.objects.filter(
+                driver_id=driver_id,
+                timestamp__gte=fecha_desde,
+                timestamp__lte=fecha_hasta
+            ).order_by('timestamp')[:500]  # Limitar para cada conductor
+            
+            if ubicaciones.exists():
+                driver = Driver.objects.get(id=driver_id)
+                serializer = DriverLocationSerializer(ubicaciones, many=True)
+                resultado[driver_id] = {
+                    'driver_name': driver.nombre,
+                    'locations': serializer.data
+                }
+        
+        return Response(resultado)
     
     @action(detail=False, methods=['post'], url_path='import-excel')
     def import_excel(self, request):
