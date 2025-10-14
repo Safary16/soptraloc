@@ -133,6 +133,40 @@
         .btn-logout:hover {
             background: #c82333;
         }
+        
+        .install-banner {
+            position: fixed;
+            bottom: 80px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: white;
+            padding: 15px 20px;
+            border-radius: 10px;
+            box-shadow: 0 5px 20px rgba(0, 0, 0, 0.3);
+            z-index: 1001;
+            max-width: 90%;
+            display: none;
+            animation: slideUp 0.3s ease;
+        }
+        
+        @keyframes slideUp {
+            from {
+                bottom: -100px;
+                opacity: 0;
+            }
+            to {
+                bottom: 80px;
+                opacity: 1;
+            }
+        }
+        
+        .install-banner.visible {
+            display: block;
+        }
+        
+        .install-banner .btn {
+            margin: 5px;
+        }
     </style>
 </head>
 <body>
@@ -153,11 +187,29 @@
         <span id="gps-text">GPS desactivado</span>
     </div>
     
+    <div class="container-card" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; margin-top: 80px;">
+        <h5 style="margin: 0;"><i class="fas fa-shield-alt"></i> <span id="safety-tip-title">Consejo de Seguridad</span></h5>
+        <p id="safety-tip" style="margin: 10px 0 0 0; font-size: 14px;">Cargando...</p>
+    </div>
+    
     <div class="container-card">
         <h3><i class="fas fa-box"></i> Mis Entregas</h3>
         
         <div id="contenedores-list">
             <p class="text-center text-muted">Cargando entregas asignadas...</p>
+        </div>
+    </div>
+    
+    <div class="install-banner" id="install-banner">
+        <div class="text-center">
+            <h6 style="margin: 0 0 10px 0;"><i class="fas fa-mobile-alt"></i> Instalar Aplicación</h6>
+            <p style="margin: 0 0 10px 0; font-size: 14px;">Instala SoptraLoc en tu dispositivo para acceso rápido y GPS en segundo plano</p>
+            <button class="btn btn-primary btn-sm" onclick="installPWA()">
+                <i class="fas fa-download"></i> Instalar
+            </button>
+            <button class="btn btn-secondary btn-sm" onclick="dismissInstallBanner()">
+                Ahora no
+            </button>
         </div>
     </div>
     
@@ -170,6 +222,7 @@
         let watchId = null;
         let gpsActive = false;
         let serviceWorkerRegistration = null;
+        let deferredPrompt = null;
         
         // Registrar Service Worker para GPS en background
         if ('serviceWorker' in navigator) {
@@ -218,9 +271,130 @@
                     console.log('📍 GPS sincronizado desde background:', event.data.position);
                     updateGPSIndicator(true, 'Background');
                 }
+                // Manejar solicitudes de sincronización GPS desde el service worker
+                else if (event.data.type === 'REQUEST_GPS_SYNC') {
+                    console.log('📍 Service Worker solicita sincronización GPS');
+                    // Obtener y enviar ubicación actual
+                    if (navigator.geolocation) {
+                        navigator.geolocation.getCurrentPosition(
+                            (position) => {
+                                sendLocationToServer(
+                                    position.coords.latitude,
+                                    position.coords.longitude,
+                                    position.coords.accuracy
+                                );
+                            },
+                            (error) => {
+                                console.error('Error obteniendo GPS para sync:', error);
+                            },
+                            {
+                                enableHighAccuracy: true,
+                                timeout: 10000,
+                                maximumAge: 30000
+                            }
+                        );
+                    }
+                }
             });
         } else {
             console.warn('⚠️  Service Workers no soportados en este navegador');
+        }
+        
+        // Consejos de seguridad vial
+        const safetyTips = [
+            { title: "Cinturón de Seguridad", tip: "Siempre usa el cinturón, incluso en trayectos cortos. Puede salvar tu vida." },
+            { title: "Distancia de Seguridad", tip: "Mantén al menos 2 segundos de distancia con el vehículo de adelante." },
+            { title: "Velocidad Adecuada", tip: "Respeta los límites de velocidad. Llegar tarde es mejor que no llegar." },
+            { title: "Punto Ciego", tip: "Revisa siempre tus puntos ciegos antes de cambiar de carril." },
+            { title: "Clima Adverso", tip: "Con lluvia o niebla, reduce la velocidad y aumenta la distancia de seguridad." },
+            { title: "Fatiga al Volante", tip: "Si sientes sueño, detente y descansa. La fatiga es tan peligrosa como el alcohol." },
+            { title: "Uso del Celular", tip: "Nunca uses el celular mientras conduces. Usa manos libres o detente." },
+            { title: "Señalización", tip: "Usa las luces direccionales con anticipación para avisar tus maniobras." },
+            { title: "Carga Segura", tip: "Asegura bien la carga. Una carga mal asegurada puede causar accidentes graves." },
+            { title: "Espejos Retrovisores", tip: "Ajusta tus espejos correctamente antes de partir. Deben cubrir tus puntos ciegos." },
+            { title: "Luces del Vehículo", tip: "Revisa que todas las luces funcionen: delanteras, traseras, frenos y direccionales." },
+            { title: "Neumáticos", tip: "Verifica la presión y el estado de los neumáticos antes de viajes largos." },
+            { title: "Intersecciones", tip: "Reduce la velocidad en intersecciones, incluso con luz verde. Mira a ambos lados." },
+            { title: "Peatones", tip: "Siempre cede el paso a los peatones en cruces peatonales." },
+            { title: "Anticipación", tip: "Conduce de forma defensiva. Anticipa las acciones de otros conductores." },
+            { title: "Paciencia", tip: "La impaciencia es enemiga de la seguridad. Mantén la calma en el tráfico." },
+            { title: "Frenos", tip: "No frenes bruscamente excepto en emergencias. Frena gradualmente." },
+            { title: "Hidratación", tip: "Mantente hidratado durante el día. La deshidratación afecta tu concentración." },
+            { title: "Estacionamiento", tip: "Al estacionar, asegura el vehículo con freno de mano y en primera velocidad." },
+            { title: "Condición del Vehículo", tip: "Reporta cualquier falla mecánica inmediatamente. Tu seguridad es primero." }
+        ];
+        
+        function showRandomSafetyTip() {
+            const randomTip = safetyTips[Math.floor(Math.random() * safetyTips.length)];
+            document.getElementById('safety-tip-title').textContent = randomTip.title;
+            document.getElementById('safety-tip').textContent = randomTip.tip;
+        }
+        
+        // Capturar evento de instalación PWA
+        window.addEventListener('beforeinstallprompt', (e) => {
+            console.log('💡 beforeinstallprompt capturado');
+            // Prevenir el prompt automático del navegador
+            e.preventDefault();
+            // Guardar el evento para usarlo después
+            deferredPrompt = e;
+            // Mostrar nuestro banner personalizado
+            showInstallBanner();
+        });
+        
+        // Mostrar banner de instalación
+        function showInstallBanner() {
+            const banner = document.getElementById('install-banner');
+            // Solo mostrar si no se ha instalado ya
+            if (!window.matchMedia('(display-mode: standalone)').matches && 
+                !localStorage.getItem('pwa-install-dismissed')) {
+                banner.classList.add('visible');
+            }
+        }
+        
+        // Instalar PWA
+        function installPWA() {
+            const banner = document.getElementById('install-banner');
+            banner.classList.remove('visible');
+            
+            if (!deferredPrompt) {
+                // Si no hay prompt disponible, mostrar instrucciones manuales
+                alert('Para instalar:\n\n' +
+                      'Android: Menú (⋮) > "Agregar a pantalla de inicio"\n' +
+                      'iOS: Botón compartir > "Agregar a pantalla de inicio"');
+                return;
+            }
+            
+            // Mostrar el prompt de instalación
+            deferredPrompt.prompt();
+            
+            // Esperar la respuesta del usuario
+            deferredPrompt.userChoice.then((choiceResult) => {
+                if (choiceResult.outcome === 'accepted') {
+                    console.log('✅ Usuario aceptó instalar PWA');
+                } else {
+                    console.log('❌ Usuario rechazó instalar PWA');
+                }
+                deferredPrompt = null;
+            });
+        }
+        
+        // Descartar banner de instalación
+        function dismissInstallBanner() {
+            const banner = document.getElementById('install-banner');
+            banner.classList.remove('visible');
+            // Guardar preferencia por 7 días
+            localStorage.setItem('pwa-install-dismissed', Date.now());
+        }
+        
+        // Verificar si debe mostrar banner nuevamente (después de 7 días)
+        function checkInstallBannerDismissal() {
+            const dismissedTime = localStorage.getItem('pwa-install-dismissed');
+            if (dismissedTime) {
+                const sevenDays = 7 * 24 * 60 * 60 * 1000;
+                if (Date.now() - dismissedTime > sevenDays) {
+                    localStorage.removeItem('pwa-install-dismissed');
+                }
+            }
         }
         
         // Solicitar permisos GPS al cargar
@@ -228,9 +402,26 @@
             requestGPSPermission();
             requestNotificationPermission();
             loadAsignaciones();
+            showRandomSafetyTip();
+            checkInstallBannerDismissal();
+            
+            // Si ya está instalada como PWA, mostrar mensaje
+            if (window.matchMedia('(display-mode: standalone)').matches) {
+                console.log('✅ Aplicación ejecutándose como PWA');
+            } else {
+                // Mostrar banner después de 5 segundos si no está instalada
+                setTimeout(() => {
+                    if (deferredPrompt || !window.matchMedia('(display-mode: standalone)').matches) {
+                        showInstallBanner();
+                    }
+                }, 5000);
+            }
             
             // Auto-refresh cada 30 segundos
             setInterval(loadAsignaciones, 30000);
+            
+            // Cambiar consejo cada 2 minutos
+            setInterval(showRandomSafetyTip, 120000);
         });
         
         // Solicitar permisos GPS

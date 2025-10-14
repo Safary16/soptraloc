@@ -41,6 +41,47 @@
             box-shadow: 2px 0 10px rgba(0, 0, 0, 0.1);
             overflow-y: auto;
             padding: 20px;
+            transition: transform 0.3s ease;
+        }
+        
+        /* Estilos para móvil */
+        @media (max-width: 768px) {
+            .sidebar {
+                position: fixed;
+                left: 0;
+                top: 70px;
+                bottom: 0;
+                z-index: 999;
+                transform: translateX(-100%);
+            }
+            
+            .sidebar.visible {
+                transform: translateX(0);
+            }
+            
+            .map-container {
+                width: 100%;
+            }
+        }
+        
+        .toggle-sidebar-btn {
+            position: fixed;
+            top: 80px;
+            left: 10px;
+            z-index: 1001;
+            background: white;
+            border: none;
+            padding: 10px 15px;
+            border-radius: 50%;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
+            cursor: pointer;
+            display: none;
+        }
+        
+        @media (max-width: 768px) {
+            .toggle-sidebar-btn {
+                display: block;
+            }
         }
         
         .map-container {
@@ -144,8 +185,12 @@
         <i class="fas fa-sync-alt"></i> <span id="refresh-text">Actualizando...</span>
     </div>
     
+    <button class="toggle-sidebar-btn" id="toggle-sidebar-btn" onclick="toggleSidebar()">
+        <i class="fas fa-bars"></i>
+    </button>
+    
     <div class="container-fluid">
-        <div class="sidebar">
+        <div class="sidebar" id="sidebar">
             <h5><i class="fas fa-users"></i> Conductores Activos</h5>
             <div id="drivers-list">
                 <p class="text-center text-muted">Cargando conductores...</p>
@@ -289,7 +334,29 @@
             }
         }
         
-        // Enfocar conductor específico
+
+        
+        // Actualizar indicador de refresh
+        function updateRefreshIndicator(text) {
+            document.getElementById('refresh-text').textContent = text;
+        }
+        
+        // Toggle sidebar en móvil
+        function toggleSidebar() {
+            const sidebar = document.getElementById('sidebar');
+            const btn = document.getElementById('toggle-sidebar-btn');
+            const icon = btn.querySelector('i');
+            
+            sidebar.classList.toggle('visible');
+            
+            if (sidebar.classList.contains('visible')) {
+                icon.className = 'fas fa-times';
+            } else {
+                icon.className = 'fas fa-bars';
+            }
+        }
+        
+        // Cerrar sidebar al hacer click en un conductor (solo en móvil)
         function focusDriver(driverId) {
             selectedDriver = driverId;
             
@@ -309,11 +376,11 @@
             document.querySelectorAll('.driver-card').forEach(card => {
                 card.classList.remove('active');
             });
-        }
-        
-        // Actualizar indicador de refresh
-        function updateRefreshIndicator(text) {
-            document.getElementById('refresh-text').textContent = text;
+            
+            // Cerrar sidebar en móvil
+            if (window.innerWidth <= 768) {
+                toggleSidebar();
+            }
         }
     </script>
 </body>

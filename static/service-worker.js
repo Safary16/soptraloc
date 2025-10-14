@@ -85,12 +85,14 @@ self.addEventListener('sync', (event) => {
 
 /**
  * Sincronizar ubicación GPS con el servidor
+ * NOTA: El Service Worker NO puede acceder a navigator.geolocation
+ * Por lo tanto, solicitamos a la página principal que obtenga y envíe la ubicación
  */
 async function syncGPSLocation() {
     try {
-        console.log('[SW] Sincronizando ubicación GPS...');
+        console.log('[SW] Solicitando sincronización GPS...');
         
-        // Obtener driver ID del IndexedDB o localStorage
+        // Obtener driver ID del cache
         const driverData = await getDriverData();
         
         if (!driverData || !driverData.id) {
@@ -98,45 +100,26 @@ async function syncGPSLocation() {
             return;
         }
         
-        // Obtener ubicación GPS
-        const position = await getCurrentPosition();
+        // Solicitar a todas las ventanas abiertas que sincronicen GPS
+        const clients = await self.clients.matchAll({ type: 'window' });
         
-        // Enviar al servidor
-        const response = await fetch(`/api/drivers/${driverData.id}/track_location/`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-                lat: position.coords.latitude,
-                lng: position.coords.longitude,
-                accuracy: position.coords.accuracy,
-                timestamp: new Date().toISOString(),
-                background: true // Indica que viene del service worker
-            })
+        if (clients.length === 0) {
+            console.log('[SW] No hay ventanas abiertas para sincronizar GPS');
+            return;
+        }
+        
+        // Enviar mensaje a todas las ventanas para que sincronicen GPS
+        clients.forEach(client => {
+            client.postMessage({
+                type: 'REQUEST_GPS_SYNC',
+                driverId: driverData.id
+            });
         });
         
-        if (response.ok) {
-            console.log('[SW] ✅ Ubicación sincronizada');
-            
-            // Notificar a las ventanas abiertas
-            const clients = await self.clients.matchAll();
-            clients.forEach(client => {
-                client.postMessage({
-                    type: 'GPS_SYNCED',
-                    position: {
-                        lat: position.coords.latitude,
-                        lng: position.coords.longitude
-                    }
-                });
-            });
-        } else {
-            console.error('[SW] ❌ Error al sincronizar:', response.status);
-        }
+        console.log('[SW] ✅ Solicitud de sincronización GPS enviada');
         
     } catch (error) {
         console.error('[SW] Error en syncGPSLocation:', error);
-        throw error; // Re-throw para que Background Sync lo reintente
     }
 }
 
@@ -159,26 +142,9 @@ async function getDriverData() {
 }
 
 /**
- * Obtener posición GPS (Promise wrapper)
+ * NOTA: getCurrentPosition eliminado porque service workers no tienen acceso a geolocation API
+ * La ubicación GPS se obtiene desde la página principal (window context)
  */
-function getCurrentPosition() {
-    return new Promise((resolve, reject) => {
-        if (!navigator.geolocation) {
-            reject(new Error('Geolocation not supported'));
-            return;
-        }
-        
-        navigator.geolocation.getCurrentPosition(
-            resolve,
-            reject,
-            {
-                enableHighAccuracy: false, // Menor precisión = menor batería
-                timeout: 10000,
-                maximumAge: 30000 // Usar ubicación cacheada de hasta 30s
-            }
-        );
-    });
-}
 
 /**
  * Push Notifications

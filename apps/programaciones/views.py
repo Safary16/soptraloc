@@ -482,14 +482,20 @@ class ProgramacionViewSet(viewsets.ModelViewSet):
             )
         
         # Si el conductor tiene una patente asignada, validar que coincida
-        if programacion.driver.patente:
+        if programacion.driver.patente and programacion.driver.patente.strip():
             patente_asignada = programacion.driver.patente.strip().upper()
             if patente_ingresada != patente_asignada:
                 return Response({
                     'error': f'La patente ingresada ({patente_ingresada}) no coincide con la asignada ({patente_asignada})',
                     'patente_esperada': patente_asignada,
-                    'patente_ingresada': patente_ingresada
+                    'patente_ingresada': patente_ingresada,
+                    'success': False
                 }, status=status.HTTP_400_BAD_REQUEST)
+        else:
+            # Si no hay patente asignada, aceptar cualquiera pero registrarla
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.info(f'Conductor {programacion.driver.nombre} no tiene patente asignada. Usando: {patente_ingresada}')
         
         # Obtener coordenadas GPS (requeridas para registrar posición de inicio)
         lat = request.data.get('lat')
