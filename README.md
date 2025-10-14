@@ -14,17 +14,21 @@ Sistema profesional de gestión de contenedores para CCTi con **integración Map
 
 ## 📱 ¿Necesitas la App Nativa para Conductores?
 
-> **La app nativa está lista al 100%**, pero requiere compilación en una máquina con acceso a internet.
+> **La PWA NO funciona con celular bloqueado. La app nativa SÍ funciona y está lista al 100%.**
 
-**👉 EMPEZAR AQUÍ:** [LEEME_APP_NATIVA.md](LEEME_APP_NATIVA.md) ⭐
+### 🚀 EMPEZAR AQUÍ
 
-**Guías disponibles:**
-- [LEEME_APP_NATIVA.md](LEEME_APP_NATIVA.md) - Resumen general (empezar aquí)
-- [SOLUCION_PROBLEMA_APP_NATIVA.md](SOLUCION_PROBLEMA_APP_NATIVA.md) - Análisis del problema
+**👉 [EMPIEZA_AQUI_APP_NATIVA.md](EMPIEZA_AQUI_APP_NATIVA.md)** ⭐ Punto de entrada con mapa de navegación
+
+### 📚 Documentación Completa
+
+- [LEEME_APP_NATIVA.md](LEEME_APP_NATIVA.md) - Resumen general con FAQ
+- [SOLUCION_PROBLEMA_APP_NATIVA.md](SOLUCION_PROBLEMA_APP_NATIVA.md) - Análisis del problema y solución
 - [COMO_COMPILAR_APP_NATIVA.md](COMO_COMPILAR_APP_NATIVA.md) - Guía completa paso a paso
-- [INICIO_RAPIDO_COMPILACION.md](INICIO_RAPIDO_COMPILACION.md) - Comandos rápidos
+- [INICIO_RAPIDO_COMPILACION.md](INICIO_RAPIDO_COMPILACION.md) - Para expertos (5 min)
+- [RESUMEN_FINAL_APP_NATIVA.md](RESUMEN_FINAL_APP_NATIVA.md) - Estado y validación
 
-La app nativa en `/mobile-app/android` resuelve el problema de GPS con celular bloqueado (PWA y TWA no funcionan para este caso).
+**⏱️ Tiempo:** 10 minutos para compilar | **📍 Ubicación:** `/mobile-app/android` (NO `/android` que es TWA)
 
 ---
 
