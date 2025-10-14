@@ -454,10 +454,13 @@ class ProgramacionViewSet(viewsets.ModelViewSet):
         """
         Inicia la ruta de una programación y crea notificación con ETA
         
-        Payload opcional:
+        Requiere confirmación de patente del conductor para verificar que está usando el vehículo correcto.
+        
+        Payload requerido:
         {
-            "lat": -33.4372,
-            "lng": -70.6506
+            "patente": "ABC123",  // Patente del vehículo que está usando
+            "lat": -33.4372,      // Ubicación GPS actual (opcional)
+            "lng": -70.6506       // Ubicación GPS actual (opcional)
         }
         """
         from apps.notifications.services import NotificationService
@@ -470,26 +473,69 @@ class ProgramacionViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST
             )
         
-        # Actualizar posición del conductor si se proporciona
+        # Validar que se proporcione la patente
+        patente_ingresada = request.data.get('patente', '').strip().upper()
+        if not patente_ingresada:
+            return Response(
+                {'error': 'Debe ingresar la patente del vehículo para confirmar'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Si el conductor tiene una patente asignada, validar que coincida
+        if programacion.driver.patente:
+            patente_asignada = programacion.driver.patente.strip().upper()
+            if patente_ingresada != patente_asignada:
+                return Response({
+                    'error': f'La patente ingresada ({patente_ingresada}) no coincide con la asignada ({patente_asignada})',
+                    'patente_esperada': patente_asignada,
+                    'patente_ingresada': patente_ingresada
+                }, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Obtener coordenadas GPS (requeridas para registrar posición de inicio)
         lat = request.data.get('lat')
         lng = request.data.get('lng')
-        if lat and lng:
-            programacion.driver.actualizar_posicion(lat, lng)
+        
+        if not lat or not lng:
+            return Response(
+                {'error': 'Se requieren coordenadas GPS (lat, lng) para iniciar la ruta'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Actualizar posición del conductor
+        programacion.driver.actualizar_posicion(lat, lng)
+        
+        # Guardar datos de inicio de ruta en la programación
+        programacion.patente_confirmada = patente_ingresada
+        programacion.fecha_inicio_ruta = timezone.now()
+        programacion.gps_inicio_lat = lat
+        programacion.gps_inicio_lng = lng
+        programacion.save()
         
         # Cambiar estado del contenedor a 'en_ruta'
-        programacion.container.cambiar_estado('en_ruta', request.user.username if request.user.is_authenticated else None)
+        usuario = request.user.username if request.user.is_authenticated else None
+        programacion.container.cambiar_estado('en_ruta', usuario)
         
-        # Crear notificación con ETA
-        notificacion = NotificationService.crear_notificacion_inicio_ruta(
-            programacion, programacion.driver
+        # Crear evento de inicio de ruta con datos GPS
+        from apps.events.models import Event
+        Event.objects.create(
+            container=programacion.container,
+            event_type='inicio_ruta',
+            detalles={
+                'conductor': programacion.driver.nombre,
+                'patente': patente_ingresada,
+                'gps_lat': str(lat),
+                'gps_lng': str(lng),
+                'timestamp': timezone.now().isoformat()
+            },
+            usuario=usuario
         )
         
-        serializer = self.get_serializer(programacion)
-        return Response({
-            'success': True,
-            'mensaje': f'Ruta iniciada por conductor {programacion.driver.nombre}',
-            'programacion': serializer.data,
-            'notificacion': {
+        # Crear notificación con ETA
+        try:
+            notificacion = NotificationService.crear_notificacion_inicio_ruta(
+                programacion, programacion.driver
+            )
+            notificacion_data = {
                 'id': notificacion.id,
                 'titulo': notificacion.titulo,
                 'mensaje': notificacion.mensaje,
@@ -497,6 +543,149 @@ class ProgramacionViewSet(viewsets.ModelViewSet):
                 'eta_timestamp': notificacion.eta_timestamp,
                 'distancia_km': str(notificacion.distancia_km) if notificacion.distancia_km else None
             }
+        except Exception as e:
+            # Si falla la notificación, continuar pero registrar el error
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.warning(f"Error creando notificación de inicio de ruta: {str(e)}")
+            notificacion_data = None
+        
+        serializer = self.get_serializer(programacion)
+        response_data = {
+            'success': True,
+            'mensaje': f'Ruta iniciada por conductor {programacion.driver.nombre} con patente {patente_ingresada}',
+            'programacion': serializer.data,
+            'patente_confirmada': patente_ingresada,
+            'gps_registrado': {'lat': str(lat), 'lng': str(lng)}
+        }
+        
+        if notificacion_data:
+            response_data['notificacion'] = notificacion_data
+        
+        return Response(response_data)
+    
+    @action(detail=True, methods=['post'])
+    def notificar_arribo(self, request, pk=None):
+        """
+        Notifica que el conductor ha arribado al CD (llegó al destino)
+        Cambia el estado del contenedor a 'entregado'
+        
+        Payload opcional:
+        {
+            "lat": -33.4372,
+            "lng": -70.6506
+        }
+        """
+        programacion = self.get_object()
+        
+        if not programacion.driver:
+            return Response(
+                {'error': 'Programación no tiene conductor asignado'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        if programacion.container.estado != 'en_ruta':
+            return Response(
+                {'error': f'Contenedor debe estar en ruta. Estado actual: {programacion.container.get_estado_display()}'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Actualizar posición del conductor si se proporciona
+        lat = request.data.get('lat')
+        lng = request.data.get('lng')
+        if lat and lng:
+            programacion.driver.actualizar_posicion(lat, lng)
+        
+        # Cambiar estado del contenedor a 'entregado'
+        usuario = request.user.username if request.user.is_authenticated else None
+        programacion.container.cambiar_estado('entregado', usuario)
+        
+        # Crear evento de arribo
+        from apps.events.models import Event
+        Event.objects.create(
+            container=programacion.container,
+            event_type='arribo_cd',
+            detalles={
+                'conductor': programacion.driver.nombre,
+                'cd': programacion.cd.nombre,
+                'gps_lat': str(lat) if lat else None,
+                'gps_lng': str(lng) if lng else None,
+                'timestamp': timezone.now().isoformat()
+            },
+            usuario=usuario
+        )
+        
+        serializer = self.get_serializer(programacion)
+        return Response({
+            'success': True,
+            'mensaje': f'Arribo registrado en {programacion.cd.nombre}',
+            'programacion': serializer.data,
+            'nuevo_estado': 'entregado'
+        })
+    
+    @action(detail=True, methods=['post'])
+    def notificar_vacio(self, request, pk=None):
+        """
+        Notifica que el contenedor está vacío (descargado y listo para retiro)
+        Cambia el estado del contenedor a 'vacio'
+        
+        Payload opcional:
+        {
+            "lat": -33.4372,
+            "lng": -70.6506
+        }
+        """
+        programacion = self.get_object()
+        
+        if not programacion.driver:
+            return Response(
+                {'error': 'Programación no tiene conductor asignado'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Permitir notificar vacío desde 'entregado' o 'descargado'
+        if programacion.container.estado not in ['entregado', 'descargado']:
+            return Response(
+                {'error': f'Contenedor debe estar entregado o descargado. Estado actual: {programacion.container.get_estado_display()}'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Actualizar posición del conductor si se proporciona
+        lat = request.data.get('lat')
+        lng = request.data.get('lng')
+        if lat and lng:
+            programacion.driver.actualizar_posicion(lat, lng)
+        
+        # Si está entregado, pasar primero por descargado
+        if programacion.container.estado == 'entregado':
+            usuario = request.user.username if request.user.is_authenticated else None
+            programacion.container.cambiar_estado('descargado', usuario)
+        
+        # Cambiar estado del contenedor a 'vacio'
+        usuario = request.user.username if request.user.is_authenticated else None
+        programacion.container.cambiar_estado('vacio', usuario)
+        
+        # Crear evento de vacío
+        from apps.events.models import Event
+        Event.objects.create(
+            container=programacion.container,
+            event_type='contenedor_vacio',
+            detalles={
+                'conductor': programacion.driver.nombre,
+                'cd': programacion.cd.nombre,
+                'gps_lat': str(lat) if lat else None,
+                'gps_lng': str(lng) if lng else None,
+                'timestamp': timezone.now().isoformat()
+            },
+            usuario=usuario
+        )
+        
+        serializer = self.get_serializer(programacion)
+        return Response({
+            'success': True,
+            'mensaje': f'Contenedor marcado como vacío. Listo para retiro.',
+            'programacion': serializer.data,
+            'nuevo_estado': 'vacio'
         })
     
     @action(detail=True, methods=['post'])
