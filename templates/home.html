@@ -5,60 +5,36 @@
 
 {% block content %}
 <div class="container-fluid py-4">
-    <!-- Header con reloj -->
+    <!-- Header simplificado -->
     <div class="row mb-4">
-        <div class="col-12">
-            <div class="card card-ubuntu fade-in">
-                <div class="card-body text-center">
-                    <h2 class="mb-2">
-                        <i class="fas fa-shipping-fast text-warning"></i> 
-                        Panel de Control SoptraLoc
-                    </h2>
-                    <p class="text-muted mb-2">Sistema de Gestión de Transporte con Machine Learning</p>
-                    <div id="realtime-clock" class="h5 text-primary mb-0"></div>
-                </div>
-            </div>
+        <div class="col-md-8">
+            <h2 class="mb-0">
+                <i class="fas fa-shipping-fast text-warning"></i> 
+                Dashboard Operacional
+            </h2>
+            <small class="text-muted">Panel de control TMS</small>
+        </div>
+        <div class="col-md-4 text-end">
+            <div id="realtime-clock" class="h5 text-primary mb-0"></div>
         </div>
     </div>
 
-    <!-- Stats Cards - Métricas Principales -->
+    <!-- KPIs Críticos -->
     <div class="row mb-4">
-        <div class="col-md-3 mb-3">
+        <div class="col-lg-3 col-md-6 mb-3">
             <a href="/containers/?estado=programado" class="text-decoration-none">
                 <div class="card stat-card orange fade-in" style="cursor: pointer; transition: transform 0.2s;" onmouseover="this.style.transform='scale(1.05)'" onmouseout="this.style.transform='scale(1)'">
                     <div class="stat-icon">
-                        <i class="fas fa-calendar-day"></i>
+                        <i class="fas fa-calendar-check"></i>
                     </div>
                     <div class="stat-number">{{ stats.programados_hoy }}</div>
-                    <div class="stat-label">Programados Hoy</div>
+                    <div class="stat-label">Entregas Hoy</div>
                 </div>
             </a>
         </div>
-        <div class="col-md-3 mb-3">
-            <a href="/containers/" class="text-decoration-none">
-                <div class="card stat-card purple fade-in" style="cursor: pointer; transition: transform 0.2s;" onmouseover="this.style.transform='scale(1.05)'" onmouseout="this.style.transform='scale(1)'">
-                    <div class="stat-icon">
-                        <i class="fas fa-dollar-sign"></i>
-                    </div>
-                    <div class="stat-number">{{ stats.con_demurrage }}</div>
-                    <div class="stat-label">Demurrage Pendiente</div>
-                </div>
-            </a>
-        </div>
-        <div class="col-md-3 mb-3">
-            <a href="/containers/?estado=liberado" class="text-decoration-none">
-                <div class="card stat-card dark fade-in" style="cursor: pointer; transition: transform 0.2s;" onmouseover="this.style.transform='scale(1.05)'" onmouseout="this.style.transform='scale(1)'">
-                    <div class="stat-icon">
-                        <i class="fas fa-unlock"></i>
-                    </div>
-                    <div class="stat-number">{{ stats.liberados }}</div>
-                    <div class="stat-label">Liberados</div>
-                </div>
-            </a>
-        </div>
-        <div class="col-md-3 mb-3">
+        <div class="col-lg-3 col-md-6 mb-3">
             <a href="/containers/?estado=en_ruta" class="text-decoration-none">
-                <div class="card stat-card orange fade-in" style="cursor: pointer; transition: transform 0.2s;" onmouseover="this.style.transform='scale(1.05)'" onmouseout="this.style.transform='scale(1)'">
+                <div class="card stat-card purple fade-in" style="cursor: pointer; transition: transform 0.2s;" onmouseover="this.style.transform='scale(1.05)'" onmouseout="this.style.transform='scale(1)'">
                     <div class="stat-icon">
                         <i class="fas fa-truck-moving"></i>
                     </div>
@@ -67,197 +43,142 @@
                 </div>
             </a>
         </div>
-    </div>
-
-    <!-- Alertas y Totales -->
-    <div class="row mb-4">
-        <div class="col-md-4 mb-3">
-            <div class="card border-warning">
-                <div class="card-body">
-                    <h5 class="card-title text-warning">
-                        <i class="fas fa-exclamation-triangle"></i> Alertas
-                    </h5>
-                    <div class="d-flex justify-content-between align-items-center">
-                        <span class="text-muted">Sin Asignar (próximas 48h)</span>
-                        <span class="badge bg-warning text-dark fs-5">{{ stats.sin_asignar }}</span>
-                    </div>
+        <div class="col-lg-3 col-md-6 mb-3">
+            <div class="card stat-card {% if stats.sin_asignar > 0 %}bg-warning{% else %}dark{% endif %} fade-in">
+                <div class="stat-icon">
+                    <i class="fas fa-exclamation-triangle"></i>
                 </div>
+                <div class="stat-number">{{ stats.sin_asignar }}</div>
+                <div class="stat-label">Sin Asignar (48h)</div>
             </div>
         </div>
-        <div class="col-md-4 mb-3">
-            <a href="/drivers/" class="text-decoration-none">
-                <div class="card border-primary" style="cursor: pointer;">
-                    <div class="card-body">
-                        <h5 class="card-title text-primary">
-                            <i class="fas fa-users"></i> Conductores
-                        </h5>
-                        <div class="d-flex justify-content-between align-items-center">
-                            <span class="text-muted">Total Disponibles</span>
-                            <span class="badge bg-primary fs-5">{{ stats.conductores }}</span>
-                        </div>
+        <div class="col-lg-3 col-md-6 mb-3">
+            <a href="/containers/" class="text-decoration-none">
+                <div class="card stat-card {% if stats.con_demurrage > 0 %}bg-danger text-white{% else %}dark{% endif %} fade-in" style="cursor: pointer; transition: transform 0.2s;" onmouseover="this.style.transform='scale(1.05)'" onmouseout="this.style.transform='scale(1)'">
+                    <div class="stat-icon">
+                        <i class="fas fa-dollar-sign"></i>
                     </div>
+                    <div class="stat-number">{{ stats.con_demurrage }}</div>
+                    <div class="stat-label">Con Demurrage</div>
                 </div>
             </a>
         </div>
-        <div class="col-md-4 mb-3">
-            <div class="card border-success">
-                <div class="card-body">
-                    <h5 class="card-title text-success">
-                        <i class="fas fa-check-circle"></i> Totales Activos
-                    </h5>
-                    <div class="row text-center small mt-2">
-                        <div class="col-4">
-                            <strong>{{ stats.por_arribar }}</strong><br>
+    </div>
+
+    <!-- Resumen de Operaciones -->
+    <div class="row mb-4">
+        <div class="col-md-8 mb-3">
+            <div class="card">
+                <div class="card-body py-3">
+                    <div class="row text-center">
+                        <div class="col">
+                            <h5 class="mb-0">{{ stats.liberados }}</h5>
+                            <small class="text-muted">Liberados</small>
+                        </div>
+                        <div class="col border-start">
+                            <h5 class="mb-0">{{ stats.por_arribar }}</h5>
                             <small class="text-muted">Por Arribar</small>
                         </div>
-                        <div class="col-4">
-                            <strong>{{ stats.programados }}</strong><br>
+                        <div class="col border-start">
+                            <h5 class="mb-0">{{ stats.programados }}</h5>
                             <small class="text-muted">Programados</small>
                         </div>
-                        <div class="col-4">
-                            <strong>{{ stats.vacios }}</strong><br>
+                        <div class="col border-start">
+                            <h5 class="mb-0">{{ stats.vacios }}</h5>
                             <small class="text-muted">Vacíos</small>
                         </div>
                     </div>
                 </div>
             </div>
         </div>
+        <div class="col-md-4 mb-3">
+            <a href="/drivers/" class="text-decoration-none">
+                <div class="card h-100 border-primary" style="cursor: pointer; transition: transform 0.2s;" onmouseover="this.style.transform='scale(1.02)'" onmouseout="this.style.transform='scale(1)'">
+                    <div class="card-body d-flex align-items-center justify-content-between">
+                        <div>
+                            <h5 class="card-title text-primary mb-0">
+                                <i class="fas fa-users"></i> Conductores
+                            </h5>
+                            <small class="text-muted">Activos en sistema</small>
+                        </div>
+                        <h2 class="text-primary mb-0">{{ stats.conductores }}</h2>
+                    </div>
+                </div>
+            </a>
+        </div>
     </div>
 
-    <!-- Tabla de Programaciones Urgentes -->
+    <!-- Tabla de Programaciones Prioritarias -->
     <div class="row">
         <div class="col-12">
             <div class="card fade-in">
-                <div class="card-header card-header-ubuntu">
-                    <i class="fas fa-list"></i> Programaciones Prioritarias (Top 10)
+                <div class="card-header card-header-ubuntu d-flex justify-content-between align-items-center">
+                    <span><i class="fas fa-list-ul"></i> Programaciones Prioritarias</span>
+                    <div class="d-flex gap-2 align-items-center">
+                        <small class="text-muted me-2">
+                            <span class="badge badge-urgencia-critica">CRÍTICA</span>
+                            <span class="badge badge-urgencia-alta ms-1">ALTA</span>
+                            <span class="badge badge-urgencia-media ms-1">MEDIA</span>
+                        </small>
+                        <a href="/containers/" class="btn btn-sm btn-ubuntu-outline">
+                            Ver Todos <i class="fas fa-arrow-right"></i>
+                        </a>
+                    </div>
                 </div>
-                <div class="card-body">
+                <div class="card-body p-0">
                     <div class="table-responsive">
-                        <table class="table table-ubuntu table-hover">
+                        <table class="table table-ubuntu table-hover mb-0">
                             <thead>
                                 <tr>
-                                    <th><i class="fas fa-box"></i> Contenedor</th>
-                                    <th><i class="fas fa-warehouse"></i> Centro Distribución</th>
-                                    <th><i class="fas fa-user"></i> Conductor</th>
-                                    <th><i class="fas fa-calendar"></i> Días Programación</th>
-                                    <th><i class="fas fa-clock"></i> Días Demurrage</th>
-                                    <th><i class="fas fa-flag"></i> Urgencia</th>
+                                    <th>Contenedor</th>
+                                    <th>Centro Distribución</th>
+                                    <th>Conductor</th>
+                                    <th>Días Prog.</th>
+                                    <th>Demurrage</th>
+                                    <th>Urgencia</th>
                                 </tr>
                             </thead>
                             <tbody id="programaciones-tbody">
                                 <tr>
-                                    <td colspan="6" class="text-center">
+                                    <td colspan="6" class="text-center py-4">
                                         <div class="spinner-ubuntu"></div>
-                                        <p class="text-muted">Cargando datos...</p>
+                                        <p class="text-muted mb-0">Cargando datos...</p>
                                     </td>
                                 </tr>
                             </tbody>
                         </table>
                     </div>
                 </div>
-                <div class="card-footer">
-                    <div class="row">
-                        <div class="col-md-6">
-                            <small class="text-muted">
-                                <i class="fas fa-sync-alt"></i> Actualización automática cada 30 segundos
-                            </small>
-                        </div>
-                        <div class="col-md-6 text-end">
-                            <a href="/api/programaciones/dashboard/" class="btn btn-sm btn-ubuntu-outline" target="_blank">
-                                <i class="fas fa-code"></i> Ver API
-                            </a>
-                        </div>
-                    </div>
+                <div class="card-footer py-2">
+                    <small class="text-muted">
+                        <i class="fas fa-sync-alt"></i> Actualización automática cada 30s
+                    </small>
                 </div>
             </div>
         </div>
     </div>
 
-    <!-- Leyenda de Urgencias -->
-    <div class="row mt-4">
-        <div class="col-12">
-            <div class="card">
-                <div class="card-body">
-                    <h6 class="card-title"><i class="fas fa-info-circle"></i> Leyenda de Urgencias</h6>
-                    <div class="d-flex flex-wrap gap-3">
-                        <div>
-                            <span class="badge badge-urgencia-critica">CRÍTICA</span>
-                            <small class="text-muted ms-2">Menos de 1 día</small>
-                        </div>
-                        <div>
-                            <span class="badge badge-urgencia-alta">ALTA</span>
-                            <small class="text-muted ms-2">1-2 días</small>
-                        </div>
-                        <div>
-                            <span class="badge badge-urgencia-media">MEDIA</span>
-                            <small class="text-muted ms-2">2-3 días</small>
-                        </div>
-                        <div>
-                            <span class="badge badge-urgencia-baja">BAJA</span>
-                            <small class="text-muted ms-2">Más de 3 días</small>
-                        </div>
-                    </div>
-                </div>
-            </div>
+    <!-- Accesos Rápidos -->
+    <div class="row mt-4 mb-3">
+        <div class="col-md-3 mb-2">
+            <a href="/asignacion/" class="btn btn-ubuntu w-100">
+                <i class="fas fa-truck me-2"></i>Asignación
+            </a>
         </div>
-    </div>
-
-    <!-- Links rápidos -->
-    <div class="row mt-4 mb-4">
-        <!-- Destacado: Portal de Conductores -->
-        <div class="col-md-6 mb-3">
-            <div class="card driver-portal-card h-100">
-                <div class="card-body text-center">
-                    <i class="fas fa-id-card fa-4x mb-3 text-white"></i>
-                    <h4 class="text-white fw-bold mb-3">Portal de Conductores</h4>
-                    <p class="text-white mb-4">
-                        <i class="fas fa-check-circle me-2"></i>Accede a tus entregas asignadas<br>
-                        <i class="fas fa-map-marker-alt me-2"></i>Activa el GPS para seguimiento<br>
-                        <i class="fas fa-route me-2"></i>Navegación con Google Maps
-                    </p>
-                    <a href="/driver/login/" class="btn btn-driver-portal btn-lg">
-                        <i class="fas fa-sign-in-alt me-2"></i>Ingresar como Conductor
-                    </a>
-                </div>
-            </div>
+        <div class="col-md-3 mb-2">
+            <a href="/monitoring/" class="btn btn-ubuntu w-100">
+                <i class="fas fa-map-marked-alt me-2"></i>Monitoreo GPS
+            </a>
         </div>
-        
-        <div class="col-md-6 mb-3">
-            <div class="row h-100">
-                <div class="col-12 mb-3">
-                    <div class="card card-ubuntu h-100">
-                        <div class="card-body text-center py-3">
-                            <i class="fas fa-truck fa-2x mb-2 text-primary"></i>
-                            <h6 class="mb-2">Asignación de Conductores</h6>
-                            <a href="/asignacion/" class="btn btn-ubuntu btn-sm">
-                                Ir a Asignación <i class="fas fa-arrow-right"></i>
-                            </a>
-                        </div>
-                    </div>
-                </div>
-                <div class="col-md-6 mb-3">
-                    <div class="card card-ubuntu h-100">
-                        <div class="card-body text-center py-3">
-                            <i class="fas fa-cog fa-2x mb-2 text-warning"></i>
-                            <h6 class="mb-2">Administración</h6>
-                            <a href="/admin/" class="btn btn-ubuntu btn-sm">
-                                Ir a Admin <i class="fas fa-arrow-right"></i>
-                            </a>
-                        </div>
-                    </div>
-                </div>
-                <div class="col-md-6 mb-3">
-                    <div class="card card-ubuntu h-100">
-                        <div class="card-body text-center py-3">
-                            <i class="fas fa-code fa-2x mb-2 text-success"></i>
-                            <h6 class="mb-2">API REST</h6>
-                            <a href="/api/" class="btn btn-ubuntu btn-sm">
-                                Ver API <i class="fas fa-arrow-right"></i>
-                            </a>
-                        </div>
-                    </div>
-                </div>
-            </div>
+        <div class="col-md-3 mb-2">
+            <a href="/driver/login/" class="btn btn-ubuntu w-100">
+                <i class="fas fa-id-card me-2"></i>Portal Conductores
+            </a>
+        </div>
+        <div class="col-md-3 mb-2">
+            <a href="/admin/" class="btn btn-outline-secondary w-100">
+                <i class="fas fa-cog me-2"></i>Administración
+            </a>
         </div>
     </div>
 </div>

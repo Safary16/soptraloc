@@ -29,6 +29,11 @@ db.sqlite3-journal
 media/
 staticfiles/
 /static/
+!static/manifest.json
+!static/service-worker.js
+!static/img/icon-*.png
+!static/img/badge.png
+!static/img/ICONS_README.md
 local_settings.py
 
 # IDEs

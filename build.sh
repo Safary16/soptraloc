@@ -18,9 +18,9 @@ pip install -r requirements.txt
 echo "�� Colectando archivos estáticos..."
 python manage.py collectstatic --no-input
 
-# 4. Ejecutar migraciones
+# 4. Ejecutar migraciones con el nuevo comando seguro
 echo "🔄 Ejecutando migraciones..."
-python manage.py migrate --no-input
+python manage.py render_migrate
 
 # 5. Crear superusuario admin
 echo "👤 Creando superusuario admin..."
