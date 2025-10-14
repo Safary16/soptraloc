@@ -1,8 +1,13 @@
 apply plugin: "com.android.application"
 
+def projectRoot = rootProject.file("../")
+def reactNativeRoot = file("${projectRoot}/node_modules/react-native")
+
 android {
     compileSdkVersion 33
     buildToolsVersion "33.0.0"
+
+    namespace "com.soptraloc"
 
     defaultConfig {
         applicationId "com.soptraloc"
@@ -11,6 +16,7 @@ android {
         versionCode 1
         versionName "1.0.0"
         multiDexEnabled true
+        buildConfigField("boolean", "IS_HERMES_ENABLED", "true")
     }
 
     signingConfigs {
@@ -36,9 +42,9 @@ android {
             signingConfig signingConfigs.debug
         }
         release {
-            minifyEnabled true
+            minifyEnabled false
             proguardFiles getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro"
-            signingConfig signingConfigs.release
+            signingConfig signingConfigs.debug  // Use debug signing for now
         }
     }
     
@@ -54,7 +60,9 @@ dependencies {
     implementation fileTree(dir: "libs", include: ["*.jar"])
     
     // React Native
+    implementation "com.facebook.react:react-android"
     implementation "com.facebook.react:react-native:+"
+    implementation "com.facebook.react:hermes-android"
     
     // Geolocation
     implementation project(':react-native-geolocation-service')

@@ -161,3 +161,15 @@ mobile-app/ios/build
 
 # Temporary uploads
 /uploads/temp/
+
+# Android build artifacts (root android/ directory)
+android/.gradle
+android/build
+android/app/build
+android/local.properties
+android/*.keystore
+android/app/release/
+android/app/debug/
+
+# Keep only the committed debug keystore
+!android/app/debug.keystore
