@@ -5,8 +5,18 @@
 [![Python 3.12+](https://img.shields.io/badge/Python-3.12+-blue.svg)](https://www.python.org/)
 [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-Ready-blue.svg)](https://www.postgresql.org/)
 [![Stable Checkpoint](https://img.shields.io/badge/Checkpoint-v1.0.0--stable-brightgreen.svg)](CHECKPOINT_ESTABLE.md)
+[![Download APK](https://img.shields.io/badge/Download-Android_APK-green.svg)](https://github.com/Safary16/soptraloc/releases/latest)
 
 Sistema profesional de gestión de contenedores para CCTi con **integración Mapbox**, **asignación inteligente de conductores** y **seguimiento en tiempo real**.
+
+## 📱 App Móvil para Conductores
+
+**¡Descarga la app Android ahora!** 👉 [**DOWNLOAD_APK.md**](DOWNLOAD_APK.md)
+
+- ✅ GPS continuo en background
+- ✅ Funciona con pantalla bloqueada
+- ✅ Bajo consumo de batería
+- 📲 [Descargar última versión](https://github.com/Safary16/soptraloc/releases/latest)
 
 > 🔖 **Checkpoint Estable**: Este proyecto tiene un punto de referencia estable marcado como `v1.0.0-stable`. [Ver detalles del checkpoint →](CHECKPOINT_ESTABLE.md)
 

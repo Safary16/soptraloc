@@ -145,6 +145,20 @@ mobile-app/android/*.keystore
 mobile-app/ios/Pods
 mobile-app/ios/build
 
+# Android TWA Build Artifacts
+android/.gradle
+android/build
+android/app/build
+android/local.properties
+android/*.keystore
+!android/debug.keystore
+android/.idea
+android/*.iml
+android/app/*.iml
+android/captures
+android/.externalNativeBuild
+android/.cxx
+
 # Project specific
 /logs/
 *.xlsx.lock
