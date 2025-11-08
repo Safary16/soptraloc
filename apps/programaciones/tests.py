@@ -97,3 +97,23 @@ class ProgramacionAsignacionTests(TestCase):
         self.programacion.refresh_from_db()
         self.assertIsNotNone(self.programacion.fecha_asignacion)
         self.assertEqual(self.programacion.driver, self.driver)
+    
+    def test_aceptar_asignacion_workflow(self):
+        """Test driver acceptance workflow"""
+        # Assign driver first
+        self.programacion.asignar_conductor(self.driver)
+        
+        # Verify not accepted initially
+        self.programacion.refresh_from_db()
+        self.assertFalse(self.programacion.aceptada_por_conductor)
+        self.assertIsNone(self.programacion.fecha_aceptacion)
+        
+        # Accept assignment
+        self.programacion.aceptada_por_conductor = True
+        self.programacion.fecha_aceptacion = timezone.now()
+        self.programacion.save()
+        
+        # Verify acceptance recorded
+        self.programacion.refresh_from_db()
+        self.assertTrue(self.programacion.aceptada_por_conductor)
+        self.assertIsNotNone(self.programacion.fecha_aceptacion)
