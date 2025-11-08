@@ -2,11 +2,14 @@ from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.parsers import MultiPartParser, FormParser
-from rest_framework.permissions import AllowAny, IsAuthenticatedOrReadOnly
+from rest_framework.permissions import IsAuthenticated, IsAuthenticatedOrReadOnly
+from rest_framework.exceptions import ValidationError
 from django.utils import timezone
 from django.db.models import Q
+from django.db import transaction
 import tempfile
 import os
+import logging
 
 from .models import Container
 from .serializers import (
@@ -17,6 +20,9 @@ from .serializers import (
 from .importers.embarque import EmbarqueImporter
 from .importers.liberacion import LiberacionImporter
 from .importers.programacion import ProgramacionImporter
+from apps.core.utils.file_validators import validate_excel_file, sanitize_filename
+
+logger = logging.getLogger(__name__)
 
 
 class ContainerViewSet(viewsets.ModelViewSet):
@@ -36,137 +42,215 @@ class ContainerViewSet(viewsets.ModelViewSet):
             return ContainerListSerializer
         return ContainerSerializer
     
-    @action(detail=False, methods=['post'], parser_classes=[MultiPartParser, FormParser], permission_classes=[AllowAny], url_path='import-embarque')
+    @action(detail=False, methods=['post'], parser_classes=[MultiPartParser, FormParser], permission_classes=[IsAuthenticated], url_path='import-embarque')
     def import_embarque(self, request):
         """
         Importa contenedores desde Excel de embarque
         Crea contenedores con estado 'por_arribar'
+        
+        Requires authentication for security
         """
-        if 'file' not in request.FILES:
-            return Response(
-                {'error': 'No se proporcionó archivo'},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-        
-        archivo = request.FILES['file']
-        usuario = request.user.username if request.user.is_authenticated else None
-        
-        # Guardar temporalmente
-        with tempfile.NamedTemporaryFile(delete=False, suffix='.xlsx') as tmp:
-            for chunk in archivo.chunks():
-                tmp.write(chunk)
-            tmp_path = tmp.name
-        
         try:
-            # Procesar con el importador
-            importer = EmbarqueImporter(tmp_path, usuario)
-            resultados = importer.procesar()
+            if 'file' not in request.FILES:
+                return Response(
+                    {'error': 'No se proporcionó archivo'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
             
-            return Response({
-                'success': True,
-                'mensaje': f'Importación completada',
-                'creados': resultados['creados'],
-                'actualizados': resultados['actualizados'],
-                'errores': resultados['errores'],
-                'detalles': resultados['detalles']
-            })
+            archivo = request.FILES['file']
+            
+            # Validate file before processing
+            try:
+                validate_excel_file(archivo)
+            except ValidationError as e:
+                return Response(
+                    {'error': str(e)},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            usuario = request.user.username
+            
+            # Guardar temporalmente con nombre seguro
+            safe_filename = sanitize_filename(archivo.name)
+            with tempfile.NamedTemporaryFile(delete=False, suffix='.xlsx', prefix='embarque_') as tmp:
+                for chunk in archivo.chunks():
+                    tmp.write(chunk)
+                tmp_path = tmp.name
+            
+            try:
+                # Procesar con el importador
+                logger.info(f"Usuario {usuario} iniciando importación de embarque: {safe_filename}")
+                importer = EmbarqueImporter(tmp_path, usuario)
+                resultados = importer.procesar()
+                
+                logger.info(
+                    f"Importación de embarque completada por {usuario}: "
+                    f"{resultados['creados']} creados, {resultados['actualizados']} actualizados, "
+                    f"{resultados['errores']} errores"
+                )
+                
+                return Response({
+                    'success': True,
+                    'mensaje': 'Importación completada',
+                    'creados': resultados['creados'],
+                    'actualizados': resultados['actualizados'],
+                    'errores': resultados['errores'],
+                    'detalles': resultados['detalles']
+                })
+            
+            finally:
+                # Limpiar archivo temporal
+                if os.path.exists(tmp_path):
+                    try:
+                        os.unlink(tmp_path)
+                    except Exception as e:
+                        logger.warning(f"Error eliminando archivo temporal: {str(e)}")
         
         except Exception as e:
+            logger.error(f"Error en importación de embarque: {str(e)}", exc_info=True)
             return Response(
-                {'error': str(e)},
+                {'error': 'Error procesando archivo. Por favor contacte al administrador.'},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
-        finally:
-            # Limpiar archivo temporal
-            if os.path.exists(tmp_path):
-                os.unlink(tmp_path)
     
-    @action(detail=False, methods=['post'], parser_classes=[MultiPartParser, FormParser], permission_classes=[AllowAny], url_path='import-liberacion')
+    @action(detail=False, methods=['post'], parser_classes=[MultiPartParser, FormParser], permission_classes=[IsAuthenticated], url_path='import-liberacion')
     def import_liberacion(self, request):
         """
         Importa liberaciones desde Excel
         Actualiza contenedores a estado 'liberado' y asigna posición física
+        
+        Requires authentication for security
         """
-        if 'file' not in request.FILES:
-            return Response(
-                {'error': 'No se proporcionó archivo'},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-        
-        archivo = request.FILES['file']
-        usuario = request.user.username if request.user.is_authenticated else None
-        
-        with tempfile.NamedTemporaryFile(delete=False, suffix='.xlsx') as tmp:
-            for chunk in archivo.chunks():
-                tmp.write(chunk)
-            tmp_path = tmp.name
-        
         try:
-            importer = LiberacionImporter(tmp_path, usuario)
-            resultados = importer.procesar()
+            if 'file' not in request.FILES:
+                return Response(
+                    {'error': 'No se proporcionó archivo'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
             
-            return Response({
-                'success': True,
-                'mensaje': f'Importación de liberación completada',
-                'liberados': resultados['liberados'],
-                'por_liberar': resultados.get('por_liberar', 0),
-                'no_encontrados': resultados['no_encontrados'],
-                'errores': resultados['errores'],
-                'detalles': resultados['detalles']
-            })
+            archivo = request.FILES['file']
+            
+            # Validate file before processing
+            try:
+                validate_excel_file(archivo)
+            except ValidationError as e:
+                return Response(
+                    {'error': str(e)},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            usuario = request.user.username
+            
+            # Guardar temporalmente con nombre seguro
+            safe_filename = sanitize_filename(archivo.name)
+            with tempfile.NamedTemporaryFile(delete=False, suffix='.xlsx', prefix='liberacion_') as tmp:
+                for chunk in archivo.chunks():
+                    tmp.write(chunk)
+                tmp_path = tmp.name
+            
+            try:
+                logger.info(f"Usuario {usuario} iniciando importación de liberación: {safe_filename}")
+                importer = LiberacionImporter(tmp_path, usuario)
+                resultados = importer.procesar()
+                
+                logger.info(
+                    f"Importación de liberación completada por {usuario}: "
+                    f"{resultados['liberados']} liberados, {resultados['no_encontrados']} no encontrados"
+                )
+                
+                return Response({
+                    'success': True,
+                    'mensaje': 'Importación de liberación completada',
+                    'liberados': resultados['liberados'],
+                    'por_liberar': resultados.get('por_liberar', 0),
+                    'no_encontrados': resultados['no_encontrados'],
+                    'errores': resultados['errores'],
+                    'detalles': resultados['detalles']
+                })
+            
+            finally:
+                if os.path.exists(tmp_path):
+                    try:
+                        os.unlink(tmp_path)
+                    except Exception as e:
+                        logger.warning(f"Error eliminando archivo temporal: {str(e)}")
         
         except Exception as e:
+            logger.error(f"Error en importación de liberación: {str(e)}", exc_info=True)
             return Response(
-                {'error': str(e)},
+                {'error': 'Error procesando archivo. Por favor contacte al administrador.'},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
-        finally:
-            if os.path.exists(tmp_path):
-                os.unlink(tmp_path)
     
-    @action(detail=False, methods=['post'], parser_classes=[MultiPartParser, FormParser], permission_classes=[AllowAny], url_path='import-programacion')
+    @action(detail=False, methods=['post'], parser_classes=[MultiPartParser, FormParser], permission_classes=[IsAuthenticated], url_path='import-programacion')
     def import_programacion(self, request):
         """
         Importa programaciones desde Excel
         Crea programaciones y actualiza contenedores a 'programado'
+        
+        Requires authentication for security
         """
-        if 'file' not in request.FILES:
-            return Response(
-                {'error': 'No se proporcionó archivo'},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-        
-        archivo = request.FILES['file']
-        usuario = request.user.username if request.user.is_authenticated else None
-        
-        with tempfile.NamedTemporaryFile(delete=False, suffix='.xlsx') as tmp:
-            for chunk in archivo.chunks():
-                tmp.write(chunk)
-            tmp_path = tmp.name
-        
         try:
-            importer = ProgramacionImporter(tmp_path, usuario)
-            resultados = importer.procesar()
+            if 'file' not in request.FILES:
+                return Response(
+                    {'error': 'No se proporcionó archivo'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
             
-            return Response({
-                'success': True,
-                'mensaje': f'Importación de programación completada',
-                'programados': resultados['programados'],
-                'no_encontrados': resultados['no_encontrados'],
-                'cd_no_encontrado': resultados['cd_no_encontrado'],
-                'errores': resultados['errores'],
-                'alertas_generadas': resultados['alertas_generadas'],
-                'detalles': resultados['detalles']
-            })
+            archivo = request.FILES['file']
+            
+            # Validate file before processing
+            try:
+                validate_excel_file(archivo)
+            except ValidationError as e:
+                return Response(
+                    {'error': str(e)},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            usuario = request.user.username
+            
+            # Guardar temporalmente con nombre seguro
+            safe_filename = sanitize_filename(archivo.name)
+            with tempfile.NamedTemporaryFile(delete=False, suffix='.xlsx', prefix='programacion_') as tmp:
+                for chunk in archivo.chunks():
+                    tmp.write(chunk)
+                tmp_path = tmp.name
+            
+            try:
+                logger.info(f"Usuario {usuario} iniciando importación de programación: {safe_filename}")
+                importer = ProgramacionImporter(tmp_path, usuario)
+                resultados = importer.procesar()
+                
+                logger.info(
+                    f"Importación de programación completada por {usuario}: "
+                    f"{resultados['programados']} programados, {resultados['alertas_generadas']} alertas"
+                )
+                
+                return Response({
+                    'success': True,
+                    'mensaje': 'Importación de programación completada',
+                    'programados': resultados['programados'],
+                    'no_encontrados': resultados['no_encontrados'],
+                    'cd_no_encontrado': resultados['cd_no_encontrado'],
+                    'errores': resultados['errores'],
+                    'alertas_generadas': resultados['alertas_generadas'],
+                    'detalles': resultados['detalles']
+                })
+            
+            finally:
+                if os.path.exists(tmp_path):
+                    try:
+                        os.unlink(tmp_path)
+                    except Exception as e:
+                        logger.warning(f"Error eliminando archivo temporal: {str(e)}")
         
         except Exception as e:
+            logger.error(f"Error en importación de programación: {str(e)}", exc_info=True)
             return Response(
-                {'error': str(e)},
+                {'error': 'Error procesando archivo. Por favor contacte al administrador.'},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
-        finally:
-            if os.path.exists(tmp_path):
-                os.unlink(tmp_path)
     
     @action(detail=False, methods=['get'], url_path='export-stock')
     def export_stock(self, request):
