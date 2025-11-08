@@ -86,10 +86,9 @@ class Programacion(models.Model):
         self.fecha_asignacion = timezone.now()
         self.save()
         
-        # Actualizar estado del contenedor si existe
+        # Actualizar estado del contenedor si existe usando cambiar_estado
         if self.container:
-            self.container.estado = 'asignado'
-            self.container.save()
+            self.container.cambiar_estado('asignado', usuario)
         
         # Incrementar contador de entregas del conductor
         driver.num_entregas_dia += 1

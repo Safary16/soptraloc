@@ -11,7 +11,7 @@ from datetime import timedelta
 from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import IsAuthenticated, IsAuthenticatedOrReadOnly
 
 from .models import Driver, DriverLocation
 from .serializers import DriverSerializer, DriverDetailSerializer, DriverLocationSerializer
@@ -77,7 +77,7 @@ class DriverViewSet(viewsets.ModelViewSet):
     
     queryset = Driver.objects.all()
     serializer_class = DriverSerializer
-    permission_classes = []  # Allow access without authentication for now
+    permission_classes = [IsAuthenticatedOrReadOnly]  # Require auth for writes
     
     def get_queryset(self):
         """Filtrar conductores según parámetros"""

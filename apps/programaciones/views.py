@@ -458,9 +458,9 @@ class ProgramacionViewSet(viewsets.ModelViewSet):
         
         Payload requerido:
         {
-            "patente": "ABC123",  // Patente del vehículo que está usando
-            "lat": -33.4372,      // Ubicación GPS actual (opcional)
-            "lng": -70.6506       // Ubicación GPS actual (opcional)
+            "patente": "ABC123",  // Patente del vehículo que está usando (REQUERIDO)
+            "lat": -33.4372,      // Ubicación GPS actual (REQUERIDO)
+            "lng": -70.6506       // Ubicación GPS actual (REQUERIDO)
         }
         """
         from apps.notifications.services import NotificationService

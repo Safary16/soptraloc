@@ -10,6 +10,8 @@ class Event(models.Model):
         ('import_programacion', 'Importación Programación'),
         ('asignacion_driver', 'Asignación de Conductor'),
         ('inicio_ruta', 'Inicio de Ruta'),
+        ('arribo_cd', 'Arribo a CD'),
+        ('contenedor_vacio', 'Contenedor Vacío'),
         ('llegada_destino', 'Llegada a Destino'),
         ('devolucion_vacio', 'Devolución Vacío'),
         ('alerta_48h', 'Alerta 48 Horas'),
