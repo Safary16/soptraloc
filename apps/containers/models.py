@@ -211,40 +211,103 @@ class Container(models.Model):
             self.tara = self.get_tara_default()
         super().save(*args, **kwargs)
     
-    def cambiar_estado(self, nuevo_estado, usuario=None):
-        """Cambia el estado y registra el timestamp correspondiente"""
+    # Valid state transitions
+    VALID_TRANSITIONS = {
+        'por_arribar': ['liberado', 'secuenciado'],
+        'liberado': ['secuenciado', 'programado'],
+        'secuenciado': ['programado', 'liberado'],
+        'programado': ['asignado', 'liberado'],
+        'asignado': ['en_ruta', 'programado'],
+        'en_ruta': ['entregado', 'asignado'],
+        'entregado': ['descargado', 'en_ruta'],
+        'descargado': ['vacio'],
+        'vacio': ['vacio_en_ruta'],
+        'vacio_en_ruta': ['devuelto', 'vacio'],
+        'devuelto': [],  # Terminal state
+    }
+    
+    def validar_transicion_estado(self, nuevo_estado):
+        """
+        Valida si la transición de estado es válida
+        
+        Args:
+            nuevo_estado: El nuevo estado al que se quiere cambiar
+            
+        Returns:
+            tuple: (es_valido: bool, mensaje_error: str or None)
+        """
+        if self.estado == nuevo_estado:
+            return True, None
+        
+        if nuevo_estado not in dict(self.ESTADOS):
+            return False, f"Estado inválido: {nuevo_estado}"
+        
+        estados_permitidos = self.VALID_TRANSITIONS.get(self.estado, [])
+        if nuevo_estado not in estados_permitidos:
+            return False, (
+                f"Transición no permitida: {self.get_estado_display()} → "
+                f"{dict(self.ESTADOS)[nuevo_estado]}. "
+                f"Estados permitidos: {', '.join([dict(self.ESTADOS)[e] for e in estados_permitidos])}"
+            )
+        
+        return True, None
+    
+    def cambiar_estado(self, nuevo_estado, usuario=None, forzar=False):
+        """
+        Cambia el estado y registra el timestamp correspondiente
+        
+        Args:
+            nuevo_estado: Nuevo estado del contenedor
+            usuario: Usuario que realiza el cambio (opcional)
+            forzar: Si True, omite la validación de transiciones (usar con precaución)
+            
+        Raises:
+            ValueError: Si la transición no es válida
+        """
+        from django.db import transaction
+        
+        # Validar transición
+        if not forzar:
+            es_valido, mensaje_error = self.validar_transicion_estado(nuevo_estado)
+            if not es_valido:
+                raise ValueError(mensaje_error)
+        
         estado_anterior = self.estado
-        self.estado = nuevo_estado
         
-        # Actualizar timestamp según el nuevo estado
-        now = timezone.now()
-        timestamp_map = {
-            'liberado': 'fecha_liberacion',
-            'programado': 'fecha_programacion',
-            'asignado': 'fecha_asignacion',
-            'en_ruta': 'fecha_inicio_ruta',
-            'entregado': 'fecha_entrega',
-            'descargado': 'fecha_descarga',
-            'vacio': 'fecha_vacio',
-            'vacio_en_ruta': 'fecha_vacio_ruta',
-            'devuelto': 'fecha_devolucion',
-        }
-        
-        if nuevo_estado in timestamp_map:
-            setattr(self, timestamp_map[nuevo_estado], now)
-        
-        self.save()
-        
-        # Registrar evento
-        from apps.events.models import Event
-        Event.objects.create(
-            container=self,
-            event_type='cambio_estado',
-            detalles={
-                'estado_anterior': estado_anterior,
-                'estado_nuevo': nuevo_estado,
-            },
-            usuario=usuario
-        )
+        # Usar transacción para asegurar atomicidad
+        with transaction.atomic():
+            self.estado = nuevo_estado
+            
+            # Actualizar timestamp según el nuevo estado
+            now = timezone.now()
+            timestamp_map = {
+                'liberado': 'fecha_liberacion',
+                'programado': 'fecha_programacion',
+                'asignado': 'fecha_asignacion',
+                'en_ruta': 'fecha_inicio_ruta',
+                'entregado': 'fecha_entrega',
+                'descargado': 'fecha_descarga',
+                'vacio': 'fecha_vacio',
+                'vacio_en_ruta': 'fecha_vacio_ruta',
+                'devuelto': 'fecha_devolucion',
+            }
+            
+            if nuevo_estado in timestamp_map:
+                setattr(self, timestamp_map[nuevo_estado], now)
+            
+            self.save()
+            
+            # Registrar evento
+            from apps.events.models import Event
+            Event.objects.create(
+                container=self,
+                event_type='cambio_estado',
+                detalles={
+                    'estado_anterior': estado_anterior,
+                    'estado_nuevo': nuevo_estado,
+                    'forzado': forzar,
+                },
+                usuario=usuario
+            )
         
         return self

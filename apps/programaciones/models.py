@@ -81,28 +81,71 @@ class Programacion(models.Model):
         return 'sin_contenedor'
     
     def asignar_conductor(self, driver, usuario=None):
-        """Asigna un conductor a la programación"""
-        self.driver = driver
-        self.fecha_asignacion = timezone.now()
-        self.save()
+        """
+        Asigna un conductor a la programación
         
-        # Actualizar estado del contenedor si existe
-        if self.container:
-            self.container.estado = 'asignado'
-            self.container.save()
+        Args:
+            driver: Driver object to assign
+            usuario: Username of person making assignment
+            
+        Raises:
+            ValueError: If driver is already assigned or driver not available
+        """
+        from django.db import transaction
+        import logging
+        logger = logging.getLogger(__name__)
         
-        # Incrementar contador de entregas del conductor
-        driver.num_entregas_dia += 1
-        driver.save(update_fields=['num_entregas_dia'])
+        # Validaciones
+        if self.driver:
+            raise ValueError(f"Esta programación ya tiene conductor asignado: {self.driver.nombre}")
         
-        # Crear notificación para el conductor
+        if not driver.esta_disponible:
+            raise ValueError(
+                f"Conductor {driver.nombre} no está disponible. "
+                f"Activo: {driver.activo}, Presente: {driver.presente}, "
+                f"Entregas: {driver.num_entregas_dia}/{driver.max_entregas_dia}"
+            )
+        
+        # Usar transacción para asegurar atomicidad
+        with transaction.atomic():
+            # Bloquear registros para evitar race conditions
+            driver_locked = Driver.objects.select_for_update().get(pk=driver.pk)
+            
+            # Re-verificar disponibilidad después del lock
+            if not driver_locked.esta_disponible:
+                raise ValueError(f"Conductor {driver.nombre} ya no está disponible")
+            
+            # Asignar conductor
+            self.driver = driver_locked
+            self.fecha_asignacion = timezone.now()
+            self.save()
+            
+            # Actualizar estado del contenedor si existe
+            if self.container:
+                try:
+                    self.container.cambiar_estado('asignado', usuario)
+                except ValueError as e:
+                    logger.warning(
+                        f"No se pudo cambiar estado del contenedor a asignado: {str(e)}. "
+                        "Usando forzado."
+                    )
+                    self.container.cambiar_estado('asignado', usuario, forzar=True)
+            
+            # Incrementar contador de entregas del conductor
+            driver_locked.num_entregas_dia += 1
+            driver_locked.save(update_fields=['num_entregas_dia'])
+            
+            logger.info(
+                f"Conductor {driver.nombre} asignado a programación {self.id} "
+                f"(contenedor: {self.container.container_id if self.container else 'N/A'})"
+            )
+        
+        # Crear notificación para el conductor (fuera de la transacción)
         try:
             from apps.notifications.services import NotificationService
             NotificationService.crear_notificacion_asignacion(self, driver)
         except Exception as e:
             # Log error pero no fallar la asignación
-            import logging
-            logger = logging.getLogger(__name__)
             logger.error(f"Error creando notificación de asignación: {str(e)}")
     
     @property
