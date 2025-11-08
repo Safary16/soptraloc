@@ -71,7 +71,7 @@ class Programacion(models.Model):
         ]
     
     def __str__(self):
-        return f"{self.container.numero_contenedor if self.container else 'N/A'} - {self.cliente}"
+        return f"{self.container.container_id_formatted if self.container else 'N/A'} - {self.cliente}"
     
     @property
     def estado(self):
@@ -123,6 +123,18 @@ class Programacion(models.Model):
         return horas < 48
     requiere_conductor_urgente.boolean = True
     requiere_conductor_urgente.short_description = 'Urgente'
+    
+    def verificar_alerta(self):
+        """
+        Verifica y actualiza el estado de alerta de la programación
+        Retorna True si se debe generar alerta (< 48h sin conductor)
+        """
+        debe_alertar = self.requiere_conductor_urgente()
+        if debe_alertar and not self.alerta_48h_enviada:
+            self.requiere_alerta = True
+            self.save(update_fields=['requiere_alerta'])
+            return True
+        return False
 
 
 class TiempoOperacion(models.Model):
