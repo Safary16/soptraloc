@@ -42,8 +42,9 @@ def home(request):
 
 
 def asignacion(request):
-    """Sistema de asignación de conductores"""
-    return render(request, 'asignacion.html')
+    """Sistema de asignación de conductores - redirige a operaciones"""
+    from django.shortcuts import redirect
+    return redirect('operaciones')
 
 
 def estados(request):
