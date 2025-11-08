@@ -243,6 +243,7 @@ class ProgramacionViewSet(viewsets.ModelViewSet):
             resultados.append({
                 'id': prog.id,
                 'container_id': prog.container.container_id,
+                'container_id_formatted': prog.container.container_id_formatted,
                 'fecha_programada': prog.fecha_programada,
                 'fecha_demurrage': prog.container.fecha_demurrage,
                 'conductor': prog.driver.nombre if prog.driver else None,
