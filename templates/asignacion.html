@@ -160,12 +160,18 @@ let selectedContainer = null;
 // Cargar contenedores sin asignar
 function loadContainersSinAsignar() {
     fetch('/api/containers/?estado=programado')
-        .then(response => response.json())
+        .then(response => {
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            return response.json();
+        })
         .then(data => {
             const container = document.getElementById('containers-sin-asignar');
+            if (!container) return;
             container.innerHTML = '';
             
-            if (data.results.length === 0) {
+            if (!data.results || data.results.length === 0) {
                 container.innerHTML = '<p class="text-center text-muted py-4">✅ No hay contenedores sin asignar</p>';
                 return;
             }
@@ -211,12 +217,18 @@ function loadContainersSinAsignar() {
 // Cargar conductores disponibles
 function loadConductoresDisponibles() {
     fetch('/api/drivers/?activo=true&presente=true')
-        .then(response => response.json())
+        .then(response => {
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            return response.json();
+        })
         .then(data => {
             const container = document.getElementById('conductores-disponibles');
+            if (!container) return;
             container.innerHTML = '';
             
-            if (data.results.length === 0) {
+            if (!data.results || data.results.length === 0) {
                 container.innerHTML = '<p class="text-center text-muted py-4">⚠️ No hay conductores disponibles</p>';
                 return;
             }
@@ -266,10 +278,15 @@ function asignarAutomatico(containerId) {
     
     // Necesitamos buscar la programación asociada
     fetch(`/api/programaciones/?container=${containerId}`)
-        .then(response => response.json())
+        .then(response => {
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            return response.json();
+        })
         .then(data => {
-            if (data.results.length === 0) {
-                alert('⚠️ No se encontró programación para este contenedor');
+            if (!data.results || data.results.length === 0) {
+                alert('⚠️ No se encontró programación para este contenedor. Debe programar primero la entrega.');
                 return;
             }
             
@@ -282,7 +299,12 @@ function asignarAutomatico(containerId) {
                     'X-CSRFToken': getCookie('csrftoken')
                 }
             })
-            .then(response => response.json())
+            .then(response => {
+                if (!response.ok) {
+                    return response.json().then(err => { throw err; });
+                }
+                return response.json();
+            })
             .then(result => {
                 if (result.success) {
                     alert(`✅ Conductor asignado: ${result.mensaje}`);
@@ -291,7 +313,15 @@ function asignarAutomatico(containerId) {
                 } else {
                     alert(`❌ Error: ${result.error}`);
                 }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert(`❌ Error al asignar: ${error.error || error.mensaje || 'Error desconocido'}`);
             });
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert(`❌ Error al buscar programación: ${error.message || 'Error desconocido'}`);
         });
 }
 
@@ -301,8 +331,18 @@ function asignarManual(containerId) {
     const modal = new bootstrap.Modal(document.getElementById('asignacionModal'));
     
     fetch(`/api/drivers/?activo=true&presente=true`)
-        .then(response => response.json())
+        .then(response => {
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            return response.json();
+        })
         .then(data => {
+            if (!data.results || data.results.length === 0) {
+                alert('⚠️ No hay conductores disponibles en este momento');
+                return;
+            }
+            
             let content = '<h6>Seleccione un conductor:</h6><div class="list-group">';
             
             data.results.forEach(driver => {
@@ -319,6 +359,10 @@ function asignarManual(containerId) {
             content += '</div>';
             document.getElementById('modal-content').innerHTML = content;
             modal.show();
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert(`❌ Error al cargar conductores: ${error.message || 'Error desconocido'}`);
         });
 }
 
@@ -326,16 +370,21 @@ function asignarManual(containerId) {
 function confirmarAsignacionManual(driverId, driverNombre) {
     // Buscar programación y asignar
     fetch(`/api/programaciones/?container=${selectedContainer}`)
-        .then(response => response.json())
+        .then(response => {
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            return response.json();
+        })
         .then(data => {
-            if (data.results.length === 0) {
-                alert('⚠️ No se encontró programación para este contenedor');
+            if (!data.results || data.results.length === 0) {
+                alert('⚠️ No se encontró programación para este contenedor. Debe programar primero la entrega.');
                 return;
             }
             
             const progId = data.results[0].id;
             
-            fetch(`/api/programaciones/${progId}/asignar_driver/`, {
+            fetch(`/api/programaciones/${progId}/asignar_conductor/`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -343,7 +392,12 @@ function confirmarAsignacionManual(driverId, driverNombre) {
                 },
                 body: JSON.stringify({ driver_id: driverId })
             })
-            .then(response => response.json())
+            .then(response => {
+                if (!response.ok) {
+                    return response.json().then(err => { throw err; });
+                }
+                return response.json();
+            })
             .then(result => {
                 if (result.success) {
                     alert(`✅ ${driverNombre} asignado exitosamente`);
@@ -353,6 +407,10 @@ function confirmarAsignacionManual(driverId, driverNombre) {
                 } else {
                     alert(`❌ Error: ${result.error || result.mensaje}`);
                 }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert(`❌ Error al asignar: ${error.error || error.mensaje || 'Error desconocido'}`);
             });
         });
 }

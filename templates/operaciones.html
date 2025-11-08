@@ -383,13 +383,18 @@ function getCookie(name) {
 
 function loadContainersPorArribar() {
     fetch('/api/containers/?estado=por_arribar')
-        .then(response => response.json())
+        .then(response => {
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            return response.json();
+        })
         .then(data => {
             const container = document.getElementById('containers-por-arribar');
             if (!container) return;
             container.innerHTML = '';
             
-            if (data.results.length === 0) {
+            if (!data.results || data.results.length === 0) {
                 container.innerHTML = '<p class="text-center text-muted py-4">✅ No hay contenedores por arribar</p>';
                 return;
             }
@@ -430,16 +435,21 @@ function buscarParaLiberar() {
     }
     
     fetch(`/api/containers/?search=${containerId}`)
-        .then(response => response.json())
+        .then(response => {
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            return response.json();
+        })
         .then(data => {
-            if (data.results.length === 0) {
+            if (!data.results || data.results.length === 0) {
                 alert('❌ Contenedor no encontrado');
                 return;
             }
             
             const container = data.results[0];
             if (container.estado !== 'por_arribar') {
-                alert(`❌ Contenedor está en estado "${container.estado_display}", no se puede liberar`);
+                alert(`❌ Contenedor está en estado "${container.estado_display}", no se puede liberar. Solo contenedores "Por Arribar" pueden ser liberados.`);
                 return;
             }
             
@@ -541,13 +551,18 @@ function confirmarLiberacion() {
 
 function loadContainersLiberados() {
     fetch('/api/containers/?estado=liberado')
-        .then(response => response.json())
+        .then(response => {
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            return response.json();
+        })
         .then(data => {
             const container = document.getElementById('containers-liberados');
             if (!container) return;
             container.innerHTML = '';
             
-            if (data.results.length === 0) {
+            if (!data.results || data.results.length === 0) {
                 container.innerHTML = '<p class="text-center text-muted py-4">✅ No hay contenedores liberados</p>';
                 return;
             }
@@ -592,16 +607,21 @@ function buscarParaProgramar() {
     }
     
     fetch(`/api/containers/?search=${containerId}`)
-        .then(response => response.json())
+        .then(response => {
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            return response.json();
+        })
         .then(data => {
-            if (data.results.length === 0) {
+            if (!data.results || data.results.length === 0) {
                 alert('❌ Contenedor no encontrado');
                 return;
             }
             
             const container = data.results[0];
             if (container.estado !== 'liberado') {
-                alert(`❌ Contenedor está en estado "${container.estado_display}", debe estar liberado para programar`);
+                alert(`❌ Contenedor está en estado "${container.estado_display}", debe estar liberado para programar. Primero libere el contenedor desde el tab de Liberación.`);
                 return;
             }
             
@@ -651,21 +671,34 @@ function iniciarProgramacion(containerId) {
 
 function loadCDsForProgramacion() {
     fetch('/api/cds/')
-        .then(response => response.json())
+        .then(response => {
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            return response.json();
+        })
         .then(data => {
             const select = document.getElementById('programar-cd');
             if (!select) return;
             
             select.innerHTML = '<option value="">Seleccione CD...</option>';
+            
+            if (!data.results || data.results.length === 0) {
+                select.innerHTML = '<option value="">No hay CDs disponibles</option>';
+                alert('⚠️ No hay Centros de Distribución registrados. Por favor registre CDs en el panel de administración.');
+                return;
+            }
+            
             data.results.forEach(cd => {
                 const option = document.createElement('option');
                 option.value = cd.id;
-                option.textContent = `${cd.nombre} - ${cd.direccion}`;
+                option.textContent = `${cd.nombre} - ${cd.direccion || cd.comuna || ''}`;
                 select.appendChild(option);
             });
         })
         .catch(error => {
             console.error('Error:', error);
+            alert('❌ Error al cargar Centros de Distribución: ' + error.message);
         });
 }
 
@@ -675,12 +708,26 @@ function confirmarProgramacion() {
     const cliente = document.getElementById('programar-cliente').value.trim();
     const observaciones = document.getElementById('programar-obs').value.trim();
     
+    // Validación de campos
     if (!cdId || !fecha || !cliente) {
-        alert('❌ Complete todos los campos requeridos (CD, Fecha, Cliente)');
+        alert('❌ Complete todos los campos requeridos:\n• Centro de Distribución\n• Fecha y Hora\n• Cliente');
         return;
     }
     
-    if (!confirm(`¿Programar entrega del contenedor ${selectedContainerData.container_id}?`)) {
+    // Validar que la fecha no sea en el pasado
+    const fechaSeleccionada = new Date(fecha);
+    const ahora = new Date();
+    if (fechaSeleccionada < ahora) {
+        alert('❌ La fecha programada no puede ser en el pasado');
+        return;
+    }
+    
+    if (!selectedContainer || !selectedContainerData) {
+        alert('❌ Error: No hay contenedor seleccionado');
+        return;
+    }
+    
+    if (!confirm(`¿Programar entrega del contenedor ${selectedContainerData.container_id}?\n\nCD: ${document.getElementById('programar-cd').selectedOptions[0].text}\nFecha: ${new Date(fecha).toLocaleString('es-CL')}\nCliente: ${cliente}`)) {
         return;
     }
     
@@ -706,7 +753,7 @@ function confirmarProgramacion() {
         return response.json();
     })
     .then(data => {
-        alert('✅ Entrega programada exitosamente');
+        alert(`✅ Entrega programada exitosamente\n\nContenedor: ${selectedContainerData.container_id}\nSiguiente paso: Asignar conductor en /asignacion/`);
         
         // Limpiar formulario
         document.getElementById('contenedor-programar-form').classList.add('d-none');
@@ -720,7 +767,19 @@ function confirmarProgramacion() {
     })
     .catch(error => {
         console.error('Error:', error);
-        alert('❌ Error al programar: ' + (error.detail || error.message || JSON.stringify(error)));
+        let errorMsg = '❌ Error al programar entrega:\n';
+        if (error.container) {
+            errorMsg += error.container[0] || 'Error en contenedor';
+        } else if (error.cd) {
+            errorMsg += error.cd[0] || 'Error en CD';
+        } else if (error.detail) {
+            errorMsg += error.detail;
+        } else if (error.message) {
+            errorMsg += error.message;
+        } else {
+            errorMsg += JSON.stringify(error);
+        }
+        alert(errorMsg);
     });
 }
 
