@@ -1,155 +1,445 @@
 {% extends 'base.html' %}
 {% load static %}
 
-{% block title %}Asignación - SoptraLoc TMS{% endblock %}
+{% block title %}Asignación de Conductores - SoptraLoc TMS{% endblock %}
+
+{% block extra_css %}
+<style>
+    .container-card {
+        transition: all 0.3s ease;
+        border: 2px solid transparent;
+    }
+    .container-card:hover {
+        border-color: #e95420;
+        box-shadow: 0 4px 12px rgba(233, 84, 32, 0.2);
+    }
+    .action-btn {
+        margin: 3px;
+        padding: 6px 12px;
+    }
+</style>
+{% endblock %}
 
 {% block content %}
 <div class="container-fluid py-4">
+    <!-- Header -->
     <div class="row mb-4">
         <div class="col-12">
-            <div class="card card-ubuntu">
-                <div class="card-header card-header-ubuntu">
-                    <i class="fas fa-truck"></i> Sistema de Asignación Inteligente
+            <h1 class="display-6">
+                <i class="fas fa-user-plus"></i> Asignación de Conductores
+            </h1>
+            <p class="text-muted">Asigne conductores a contenedores programados (manual o automático con ML)</p>
+        </div>
+    </div>
+
+    <!-- Main Assignment Interface -->
+    <div class="row">
+        <!-- Contenedores sin asignar -->
+        <div class="col-md-6 mb-4">
+            <div class="card">
+                <div class="card-header bg-warning text-dark">
+                    <i class="fas fa-exclamation-triangle"></i> Contenedores Sin Asignar
                 </div>
-                <div class="card-body">
-                    <p class="lead">
-                        Sistema automático de asignación de conductores basado en Machine Learning
-                    </p>
-                    
-                    <div class="alert alert-ubuntu">
-                        <i class="fas fa-info-circle"></i>
-                        <strong>Funcionalidad:</strong> El sistema evalúa múltiples factores para asignar el mejor conductor disponible a cada programación.
-                    </div>
-
-                    <h5 class="mt-4">Criterios de Asignación:</h5>
-                    <div class="row mt-3">
-                        <div class="col-md-6 mb-3">
-                            <div class="card">
-                                <div class="card-body">
-                                    <h6><i class="fas fa-check-circle text-success"></i> Disponibilidad (40%)</h6>
-                                    <p class="text-muted mb-0">Conductor debe estar disponible y sin asignaciones previas</p>
-                                </div>
-                            </div>
-                        </div>
-                        <div class="col-md-6 mb-3">
-                            <div class="card">
-                                <div class="card-body">
-                                    <h6><i class="fas fa-tasks text-primary"></i> Ocupación (30%)</h6>
-                                    <p class="text-muted mb-0">Carga de trabajo actual y capacidad disponible</p>
-                                </div>
-                            </div>
-                        </div>
-                        <div class="col-md-6 mb-3">
-                            <div class="card">
-                                <div class="card-body">
-                                    <h6><i class="fas fa-star text-warning"></i> Cumplimiento (20%)</h6>
-                                    <p class="text-muted mb-0">Historial de entregas exitosas y puntualidad</p>
-                                </div>
-                            </div>
-                        </div>
-                        <div class="col-md-6 mb-3">
-                            <div class="card">
-                                <div class="card-body">
-                                    <h6><i class="fas fa-map-marker-alt text-danger"></i> Proximidad (10%)</h6>
-                                    <p class="text-muted mb-0">Distancia al centro de distribución</p>
-                                </div>
-                            </div>
+                <div class="card-body" style="max-height: 600px; overflow-y: auto;">
+                    <div id="containers-sin-asignar">
+                        <div class="text-center py-4">
+                            <div class="spinner-border text-primary"></div>
+                            <p class="mt-2">Cargando...</p>
                         </div>
                     </div>
+                </div>
+            </div>
+        </div>
 
-                    <h5 class="mt-4">Endpoints de Asignación:</h5>
-                    <div class="table-responsive mt-3">
-                        <table class="table table-ubuntu">
-                            <thead>
-                                <tr>
-                                    <th>Endpoint</th>
-                                    <th>Método</th>
-                                    <th>Descripción</th>
-                                    <th>Acción</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                <tr>
-                                    <td><code>/api/programaciones/{id}/asignar_automatico/</code></td>
-                                    <td><span class="badge bg-success">POST</span></td>
-                                    <td>Asigna automáticamente el mejor conductor</td>
-                                    <td>
-                                        <a href="/api/programaciones/" class="btn btn-sm btn-ubuntu-outline" target="_blank">
-                                            Ver API
-                                        </a>
-                                    </td>
-                                </tr>
-                                <tr>
-                                    <td><code>/api/programaciones/{id}/conductores_disponibles/</code></td>
-                                    <td><span class="badge bg-primary">GET</span></td>
-                                    <td>Lista conductores con scores de asignación</td>
-                                    <td>
-                                        <a href="/api/programaciones/" class="btn btn-sm btn-ubuntu-outline" target="_blank">
-                                            Ver API
-                                        </a>
-                                    </td>
-                                </tr>
-                                <tr>
-                                    <td><code>/api/programaciones/asignar_multiples/</code></td>
-                                    <td><span class="badge bg-success">POST</span></td>
-                                    <td>Asigna conductores a múltiples programaciones</td>
-                                    <td>
-                                        <a href="/api/programaciones/" class="btn btn-sm btn-ubuntu-outline" target="_blank">
-                                            Ver API
-                                        </a>
-                                    </td>
-                                </tr>
-                            </tbody>
-                        </table>
-                    </div>
-
-                    <div class="text-center mt-4">
-                        <a href="/admin/programaciones/programacion/" class="btn btn-ubuntu btn-lg">
-                            <i class="fas fa-cog"></i> Gestionar Programaciones en Admin
-                        </a>
-                        <a href="/api/programaciones/" class="btn btn-ubuntu-outline btn-lg ms-2" target="_blank">
-                            <i class="fas fa-code"></i> Ver Documentación API
-                        </a>
+        <!-- Conductores disponibles -->
+        <div class="col-md-6 mb-4">
+            <div class="card">
+                <div class="card-header bg-success text-white">
+                    <i class="fas fa-users"></i> Conductores Disponibles
+                </div>
+                <div class="card-body" style="max-height: 600px; overflow-y: auto;">
+                    <div id="conductores-disponibles">
+                        <div class="text-center py-4">
+                            <div class="spinner-border text-primary"></div>
+                            <p class="mt-2">Cargando...</p>
+                        </div>
                     </div>
                 </div>
             </div>
         </div>
     </div>
 
-    <!-- Machine Learning Info -->
-    <div class="row">
-        <div class="col-md-6 mb-3">
-            <div class="card card-ubuntu h-100">
-                <div class="card-body">
-                    <h5><i class="fas fa-brain text-primary"></i> Machine Learning</h5>
-                    <p>El sistema aprende de operaciones pasadas para mejorar las predicciones:</p>
-                    <ul>
-                        <li><strong>Tiempos de Operación:</strong> Aprende tiempos reales de carga/descarga por CD</li>
-                        <li><strong>Tiempos de Viaje:</strong> Ajusta predicciones de Mapbox con tráfico real</li>
-                        <li><strong>Rendimiento:</strong> Evalúa historial de cada conductor</li>
-                    </ul>
-                    <a href="/api/programaciones/" class="btn btn-ubuntu-outline" target="_blank">
-                        Ver Endpoints ML
-                    </a>
+    <!-- Machine Learning Info (Collapsible) -->
+    <div class="row mt-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header bg-primary text-white" data-bs-toggle="collapse" data-bs-target="#mlInfo" style="cursor: pointer;">
+                    <i class="fas fa-brain"></i> Información del Sistema de Asignación Inteligente (ML)
+                    <i class="fas fa-chevron-down float-end"></i>
                 </div>
-            </div>
-        </div>
-        <div class="col-md-6 mb-3">
-            <div class="card card-ubuntu h-100">
-                <div class="card-body">
-                    <h5><i class="fas fa-map-marked-alt text-success"></i> Integración Mapbox</h5>
-                    <p>Cálculo de rutas optimizadas en tiempo real:</p>
-                    <ul>
-                        <li><strong>Distancias:</strong> Cálculo preciso de kilómetros</li>
-                        <li><strong>Tiempos:</strong> ETAs considerando tráfico actual</li>
-                        <li><strong>Optimización:</strong> Selección de mejor conductor por proximidad</li>
-                    </ul>
-                    <a href="/admin/cds/cd/" class="btn btn-ubuntu-outline">
-                        Gestionar CDs
-                    </a>
+                <div id="mlInfo" class="collapse">
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-md-12 mb-3">
+                                <h6>Criterios de Asignación Automática:</h6>
+                                <div class="row mt-2">
+                                    <div class="col-md-3">
+                                        <div class="text-center p-3 bg-light rounded">
+                                            <i class="fas fa-check-circle text-success fa-2x"></i>
+                                            <h6 class="mt-2">Disponibilidad</h6>
+                                            <p class="text-muted small mb-0">40% peso</p>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-3">
+                                        <div class="text-center p-3 bg-light rounded">
+                                            <i class="fas fa-tasks text-primary fa-2x"></i>
+                                            <h6 class="mt-2">Ocupación</h6>
+                                            <p class="text-muted small mb-0">30% peso</p>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-3">
+                                        <div class="text-center p-3 bg-light rounded">
+                                            <i class="fas fa-star text-warning fa-2x"></i>
+                                            <h6 class="mt-2">Cumplimiento</h6>
+                                            <p class="text-muted small mb-0">20% peso</p>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-3">
+                                        <div class="text-center p-3 bg-light rounded">
+                                            <i class="fas fa-map-marker-alt text-danger fa-2x"></i>
+                                            <h6 class="mt-2">Proximidad</h6>
+                                            <p class="text-muted small mb-0">10% peso</p>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <h6><i class="fas fa-brain text-primary"></i> Aprendizaje Automático</h6>
+                                <ul class="small">
+                                    <li>Aprende tiempos reales de carga/descarga por CD</li>
+                                    <li>Ajusta predicciones de Mapbox con tráfico real</li>
+                                    <li>Evalúa historial de rendimiento de cada conductor</li>
+                                </ul>
+                            </div>
+                            <div class="col-md-6">
+                                <h6><i class="fas fa-map-marked-alt text-success"></i> Integración Mapbox</h6>
+                                <ul class="small">
+                                    <li>Cálculo preciso de distancias en kilómetros</li>
+                                    <li>ETAs considerando tráfico actual</li>
+                                    <li>Optimización por proximidad geográfica</li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
     </div>
 </div>
+
+<!-- Modal para Asignación Manual -->
+<div class="modal fade" id="asignacionModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Asignar Conductor</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div id="modal-content">
+                    <!-- Contenido dinámico -->
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+let selectedContainer = null;
+
+// Cargar contenedores sin asignar
+function loadContainersSinAsignar() {
+    fetch('/api/containers/?estado=programado')
+        .then(response => {
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            return response.json();
+        })
+        .then(data => {
+            const container = document.getElementById('containers-sin-asignar');
+            if (!container) return;
+            container.innerHTML = '';
+            
+            if (!data.results || data.results.length === 0) {
+                container.innerHTML = '<p class="text-center text-muted py-4">✅ No hay contenedores sin asignar</p>';
+                return;
+            }
+            
+            data.results.forEach(cont => {
+                const card = `
+                    <div class="container-card card mb-3">
+                        <div class="card-body">
+                            <div class="d-flex justify-content-between align-items-start">
+                                <div>
+                                    <h6 class="mb-1"><strong>${cont.container_id}</strong></h6>
+                                    <p class="mb-1 small text-muted">
+                                        <i class="fas fa-ship"></i> ${cont.nave || 'N/A'}<br>
+                                        <i class="fas fa-calendar"></i> ${cont.fecha_programacion ? new Date(cont.fecha_programacion).toLocaleDateString('es-CL') : 'Sin fecha'}
+                                    </p>
+                                    ${cont.dias_para_demurrage !== null ? 
+                                        `<span class="badge bg-${cont.dias_para_demurrage <= 1 ? 'danger' : cont.dias_para_demurrage <= 2 ? 'warning' : 'info'}">
+                                            ${cont.dias_para_demurrage} días demurrage
+                                        </span>` : ''}
+                                </div>
+                                <div>
+                                    <button class="btn btn-sm btn-success action-btn" onclick="asignarAutomatico(${cont.id})">
+                                        <i class="fas fa-robot"></i> Auto
+                                    </button>
+                                    <button class="btn btn-sm btn-primary action-btn" onclick="asignarManual(${cont.id})">
+                                        <i class="fas fa-user-plus"></i> Manual
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+                container.innerHTML += card;
+            });
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            document.getElementById('containers-sin-asignar').innerHTML = 
+                '<p class="text-danger text-center">Error al cargar contenedores</p>';
+        });
+}
+
+// Cargar conductores disponibles
+function loadConductoresDisponibles() {
+    fetch('/api/drivers/?activo=true&presente=true')
+        .then(response => {
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            return response.json();
+        })
+        .then(data => {
+            const container = document.getElementById('conductores-disponibles');
+            if (!container) return;
+            container.innerHTML = '';
+            
+            if (!data.results || data.results.length === 0) {
+                container.innerHTML = '<p class="text-center text-muted py-4">⚠️ No hay conductores disponibles</p>';
+                return;
+            }
+            
+            data.results.forEach(driver => {
+                const ocupacion = driver.max_entregas_dia > 0 ? 
+                    ((driver.num_entregas_dia / driver.max_entregas_dia) * 100).toFixed(0) : 0;
+                
+                const card = `
+                    <div class="card mb-2">
+                        <div class="card-body py-2">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <div>
+                                    <strong>${driver.nombre}</strong><br>
+                                    <small class="text-muted">
+                                        Entregas: ${driver.num_entregas_dia}/${driver.max_entregas_dia} 
+                                        | Cumpl: ${driver.cumplimiento_porcentaje}%
+                                    </small>
+                                </div>
+                                <div class="text-end">
+                                    <div class="progress" style="width: 100px; height: 20px;">
+                                        <div class="progress-bar ${ocupacion >= 100 ? 'bg-danger' : ocupacion >= 80 ? 'bg-warning' : 'bg-success'}" 
+                                             style="width: ${Math.min(ocupacion, 100)}%;">
+                                            ${ocupacion}%
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+                container.innerHTML += card;
+            });
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            document.getElementById('conductores-disponibles').innerHTML = 
+                '<p class="text-danger text-center">Error al cargar conductores</p>';
+        });
+}
+
+// Asignación automática
+function asignarAutomatico(containerId) {
+    if (!confirm('¿Asignar automáticamente el mejor conductor disponible?')) {
+        return;
+    }
+    
+    // Necesitamos buscar la programación asociada
+    fetch(`/api/programaciones/?container=${containerId}`)
+        .then(response => {
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            return response.json();
+        })
+        .then(data => {
+            if (!data.results || data.results.length === 0) {
+                alert('⚠️ No se encontró programación para este contenedor. Debe programar primero la entrega.');
+                return;
+            }
+            
+            const progId = data.results[0].id;
+            
+            fetch(`/api/programaciones/${progId}/asignar_automatico/`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': getCookie('csrftoken')
+                }
+            })
+            .then(response => {
+                if (!response.ok) {
+                    return response.json().then(err => { throw err; });
+                }
+                return response.json();
+            })
+            .then(result => {
+                if (result.success) {
+                    alert(`✅ Conductor asignado: ${result.mensaje}`);
+                    loadContainersSinAsignar();
+                    loadConductoresDisponibles();
+                } else {
+                    alert(`❌ Error: ${result.error}`);
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert(`❌ Error al asignar: ${error.error || error.mensaje || 'Error desconocido'}`);
+            });
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert(`❌ Error al buscar programación: ${error.message || 'Error desconocido'}`);
+        });
+}
+
+// Asignación manual
+function asignarManual(containerId) {
+    selectedContainer = containerId;
+    const modal = new bootstrap.Modal(document.getElementById('asignacionModal'));
+    
+    fetch(`/api/drivers/?activo=true&presente=true`)
+        .then(response => {
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            return response.json();
+        })
+        .then(data => {
+            if (!data.results || data.results.length === 0) {
+                alert('⚠️ No hay conductores disponibles en este momento');
+                return;
+            }
+            
+            let content = '<h6>Seleccione un conductor:</h6><div class="list-group">';
+            
+            data.results.forEach(driver => {
+                content += `
+                    <button class="list-group-item list-group-item-action" 
+                            onclick="confirmarAsignacionManual(${driver.id}, '${driver.nombre}')">
+                        <strong>${driver.nombre}</strong><br>
+                        <small>Entregas: ${driver.num_entregas_dia}/${driver.max_entregas_dia} | 
+                        Cumplimiento: ${driver.cumplimiento_porcentaje}%</small>
+                    </button>
+                `;
+            });
+            
+            content += '</div>';
+            document.getElementById('modal-content').innerHTML = content;
+            modal.show();
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert(`❌ Error al cargar conductores: ${error.message || 'Error desconocido'}`);
+        });
+}
+
+// Confirmar asignación manual
+function confirmarAsignacionManual(driverId, driverNombre) {
+    // Buscar programación y asignar
+    fetch(`/api/programaciones/?container=${selectedContainer}`)
+        .then(response => {
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            return response.json();
+        })
+        .then(data => {
+            if (!data.results || data.results.length === 0) {
+                alert('⚠️ No se encontró programación para este contenedor. Debe programar primero la entrega.');
+                return;
+            }
+            
+            const progId = data.results[0].id;
+            
+            fetch(`/api/programaciones/${progId}/asignar_conductor/`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': getCookie('csrftoken')
+                },
+                body: JSON.stringify({ driver_id: driverId })
+            })
+            .then(response => {
+                if (!response.ok) {
+                    return response.json().then(err => { throw err; });
+                }
+                return response.json();
+            })
+            .then(result => {
+                if (result.success) {
+                    alert(`✅ ${driverNombre} asignado exitosamente`);
+                    bootstrap.Modal.getInstance(document.getElementById('asignacionModal')).hide();
+                    loadContainersSinAsignar();
+                    loadConductoresDisponibles();
+                } else {
+                    alert(`❌ Error: ${result.error || result.mensaje}`);
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert(`❌ Error al asignar: ${error.error || error.mensaje || 'Error desconocido'}`);
+            });
+        });
+}
+
+function getCookie(name) {
+    let cookieValue = null;
+    if (document.cookie && document.cookie !== '') {
+        const cookies = document.cookie.split(';');
+        for (let i = 0; i < cookies.length; i++) {
+            const cookie = cookies[i].trim();
+            if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                break;
+            }
+        }
+    }
+    return cookieValue;
+}
+
+// Cargar al inicio
+document.addEventListener('DOMContentLoaded', function() {
+    loadContainersSinAsignar();
+    loadConductoresDisponibles();
+    
+    // Actualizar cada 30 segundos
+    setInterval(() => {
+        loadContainersSinAsignar();
+        loadConductoresDisponibles();
+    }, 30000);
+});
+</script>
 {% endblock %}

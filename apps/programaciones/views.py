@@ -38,6 +38,22 @@ class ProgramacionViewSet(viewsets.ModelViewSet):
         return ProgramacionSerializer
     
     @action(detail=False, methods=['get'])
+    def sin_asignar(self, request):
+        """
+        Lista programaciones sin conductor asignado (para asignación)
+        """
+        sin_asignar = self.queryset.filter(
+            driver__isnull=True
+        ).order_by('fecha_programada')
+        
+        serializer = ProgramacionListSerializer(sin_asignar, many=True)
+        return Response({
+            'success': True,
+            'total': sin_asignar.count(),
+            'programaciones': serializer.data
+        })
+    
+    @action(detail=False, methods=['get'])
     def alertas(self, request):
         """
         Lista programaciones que requieren alerta (< 48h sin conductor)

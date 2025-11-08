@@ -12,10 +12,21 @@
         color: white;
         transition: all 0.3s;
         cursor: pointer;
+        text-decoration: none;
+        display: block;
     }
     .estado-badge:hover {
         transform: translateY(-5px);
         box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+        color: white;
+    }
+    .action-link {
+        margin-top: 10px;
+        font-size: 0.8rem;
+    }
+    .action-link a {
+        color: white;
+        text-decoration: underline;
     }
     .estado-count {
         font-size: 2rem;
@@ -112,39 +123,42 @@
     </div>
     <div class="row">
         <div class="col-md-2 mb-3">
-            <div class="estado-badge" style="background: #6c757d;">
+            <a href="/containers/?estado=por_arribar" class="estado-badge" style="background: #6c757d;">
                 <i class="fas fa-clock"></i>
                 <div class="estado-count" id="count-por_arribar">0</div>
                 <div class="estado-label">Por Arribar</div>
-            </div>
+                <div class="action-link"><i class="fas fa-unlock"></i> <a href="/operaciones/">Liberar</a></div>
+            </a>
         </div>
         <div class="col-md-2 mb-3">
-            <div class="estado-badge" style="background: #28a745;">
+            <a href="/containers/?estado=liberado" class="estado-badge" style="background: #28a745;">
                 <i class="fas fa-check-circle"></i>
                 <div class="estado-count" id="count-liberado">0</div>
                 <div class="estado-label">Liberado</div>
-            </div>
+                <div class="action-link"><i class="fas fa-calendar"></i> <a href="/operaciones/">Programar</a></div>
+            </a>
         </div>
         <div class="col-md-2 mb-3">
-            <div class="estado-badge" style="background: #007bff;">
+            <a href="/containers/?estado=secuenciado" class="estado-badge" style="background: #007bff;">
                 <i class="fas fa-list-ol"></i>
                 <div class="estado-count" id="count-secuenciado">0</div>
                 <div class="estado-label">Secuenciado</div>
-            </div>
+            </a>
         </div>
         <div class="col-md-2 mb-3">
-            <div class="estado-badge" style="background: #6610f2;">
+            <a href="/containers/?estado=programado" class="estado-badge" style="background: #6610f2;">
                 <i class="fas fa-calendar-check"></i>
                 <div class="estado-count" id="count-programado">0</div>
                 <div class="estado-label">Programado</div>
-            </div>
+                <div class="action-link"><i class="fas fa-user-plus"></i> <a href="/asignacion/">Asignar</a></div>
+            </a>
         </div>
         <div class="col-md-2 mb-3">
-            <div class="estado-badge" style="background: #E95420;">
+            <a href="/containers/?estado=asignado" class="estado-badge" style="background: #E95420;">
                 <i class="fas fa-user-check"></i>
                 <div class="estado-count" id="count-asignado">0</div>
                 <div class="estado-label">Asignado</div>
-            </div>
+            </a>
         </div>
     </div>
 
@@ -158,32 +172,35 @@
     </div>
     <div class="row">
         <div class="col-md-3 mb-3">
-            <div class="estado-badge" style="background: #ffc107;">
+            <a href="/containers/?estado=en_ruta" class="estado-badge" style="background: #ffc107;">
                 <i class="fas fa-route"></i>
                 <div class="estado-count" id="count-en_ruta">0</div>
                 <div class="estado-label">En Ruta</div>
-            </div>
+                <div class="action-link"><i class="fas fa-map-marker-alt"></i> <a href="/monitoring/">Ver en Mapa</a></div>
+            </a>
         </div>
         <div class="col-md-3 mb-3">
-            <div class="estado-badge" style="background: #fd7e14;">
+            <a href="/containers/?estado=entregado" class="estado-badge" style="background: #fd7e14;">
                 <i class="fas fa-map-marker-alt"></i>
                 <div class="estado-count" id="count-entregado">0</div>
                 <div class="estado-label">Entregado</div>
-            </div>
+                <div class="action-link"><i class="fas fa-check"></i> <a href="/operaciones/">Marcar Descargado</a></div>
+            </a>
         </div>
         <div class="col-md-3 mb-3">
-            <div class="estado-badge" style="background: #772953;">
+            <a href="/containers/?estado=descargado" class="estado-badge" style="background: #772953;">
                 <i class="fas fa-boxes"></i>
                 <div class="estado-count" id="count-descargado">0</div>
                 <div class="estado-label">Descargado</div>
-            </div>
+                <div class="action-link"><i class="fas fa-box-open"></i> <a href="/operaciones/">Marcar Vacío</a></div>
+            </a>
         </div>
         <div class="col-md-3 mb-3">
-            <div class="estado-badge" style="background: #e9ecef; color: #333;">
+            <a href="/containers/?estado=vacio" class="estado-badge" style="background: #e9ecef; color: #333;">
                 <i class="fas fa-box-open"></i>
                 <div class="estado-count" id="count-vacio">0</div>
                 <div class="estado-label">Vacío</div>
-            </div>
+            </a>
         </div>
     </div>
 
@@ -197,18 +214,18 @@
     </div>
     <div class="row">
         <div class="col-md-6 mb-3">
-            <div class="estado-badge" style="background: #6c757d;">
+            <a href="/containers/?estado=vacio_en_ruta" class="estado-badge" style="background: #6c757d;">
                 <i class="fas fa-truck-loading"></i>
                 <div class="estado-count" id="count-vacio_en_ruta">0</div>
                 <div class="estado-label">Vacío en Ruta</div>
-            </div>
+            </a>
         </div>
         <div class="col-md-6 mb-3">
-            <div class="estado-badge" style="background: #2C001E;">
+            <a href="/containers/?estado=devuelto" class="estado-badge" style="background: #2C001E;">
                 <i class="fas fa-warehouse"></i>
                 <div class="estado-count" id="count-devuelto">0</div>
                 <div class="estado-label">Devuelto</div>
-            </div>
+            </a>
         </div>
     </div>
 
