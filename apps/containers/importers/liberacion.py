@@ -187,8 +187,7 @@ class LiberacionImporter:
                         # Fecha futura: mantener en por_arribar
                         nuevo_estado = 'por_arribar'
                     
-                    # Actualizar contenedor
-                    container.estado = nuevo_estado
+                    # Actualizar campos del contenedor (excepto estado)
                     container.posicion_fisica = posicion_mapeada
                     container.fecha_liberacion = fecha_liberacion
                     
@@ -227,7 +226,12 @@ class LiberacionImporter:
                         except Exception:
                             pass
                     
+                    # Guardar cambios primero
                     container.save()
+                    
+                    # LUEGO cambiar estado usando el método correcto para auditoría
+                    if nuevo_estado != container.estado:
+                        container.cambiar_estado(nuevo_estado, self.usuario)
                     
                     # Registrar evento
                     Event.objects.create(
