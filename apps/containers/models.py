@@ -206,9 +206,15 @@ class Container(models.Model):
         return 'bajo'
     
     def save(self, *args, **kwargs):
-        """Override save para calcular tara si no existe"""
+        """Override save para calcular tara si no existe y normalizar container_id"""
+        # Normalizar container_id antes de guardar (eliminar espacios y guiones)
+        if self.container_id:
+            self.container_id = self.normalize_container_id(self.container_id)
+        
+        # Calcular tara si no existe
         if not self.tara:
             self.tara = self.get_tara_default()
+        
         super().save(*args, **kwargs)
     
     def cambiar_estado(self, nuevo_estado, usuario=None):

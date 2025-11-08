@@ -5,6 +5,32 @@ function formatNumber(num) {
     return num.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ".");
 }
 
+// Formatear container_id al formato ISO 6346: XXXU 123456-7
+function formatContainerId(containerId) {
+    if (!containerId) return containerId;
+    
+    // Normalizar (eliminar espacios y guiones)
+    const normalized = String(containerId).replace(/[\s-]/g, '').toUpperCase().trim();
+    
+    // Validar que tenga al menos 11 caracteres (4 letras + 7 dígitos)
+    if (normalized.length < 11) {
+        return containerId; // Retornar original si no cumple formato
+    }
+    
+    // Extraer partes: 4 letras + 6 dígitos + 1 dígito verificador
+    const prefix = normalized.substring(0, 4);  // Primeras 4 letras
+    const numbers = normalized.substring(4, 10);  // 6 dígitos
+    const check = normalized.substring(10, 11);  // 1 dígito verificador
+    
+    // Validar que el prefijo sean letras y los números sean dígitos
+    if (!/^[A-Z]{4}$/.test(prefix) || !/^\d{6}$/.test(numbers) || !/^\d$/.test(check)) {
+        return containerId; // Retornar original si no cumple formato
+    }
+    
+    // Retornar formateado
+    return `${prefix} ${numbers}-${check}`;
+}
+
 // Actualizar reloj en tiempo real
 function updateClock() {
     const now = new Date();
@@ -91,8 +117,16 @@ function updateProgramacionesTable(programaciones) {
         else if (prog.urgencia === 'ALTA') badgeClass = 'badge-urgencia-alta';
         else if (prog.urgencia === 'MEDIA') badgeClass = 'badge-urgencia-media';
         
+        // Hacer la fila clickeable si no tiene conductor asignado
+        if (!prog.conductor) {
+            row.style.cursor = 'pointer';
+            row.title = 'Click para asignar conductor';
+            row.onclick = () => window.location.href = '/operaciones/';
+            row.classList.add('table-hover-row');
+        }
+        
         row.innerHTML = `
-            <td><strong>${prog.container_id}</strong></td>
+            <td><strong>${formatContainerId(prog.container_id)}</strong></td>
             <td>${prog.cd}</td>
             <td>${prog.conductor || '<span class="text-muted">Sin asignar</span>'}</td>
             <td>${prog.dias_hasta_programacion.toFixed(1)}d</td>
