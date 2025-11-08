@@ -71,7 +71,7 @@ class Programacion(models.Model):
         ]
     
     def __str__(self):
-        return f"{self.container.numero_contenedor if self.container else 'N/A'} - {self.cliente}"
+        return f"{self.container.container_id if self.container else 'N/A'} - {self.cliente}"
     
     @property
     def estado(self):
