@@ -58,13 +58,18 @@
             </button>
         </li>
         <li class="nav-item" role="presentation">
+            <button class="nav-link" id="programacion-tab" data-bs-toggle="tab" data-bs-target="#programacion" type="button">
+                <i class="fas fa-calendar-plus"></i> Programación Manual
+            </button>
+        </li>
+        <li class="nav-item" role="presentation">
             <button class="nav-link" id="ciclo-tab" data-bs-toggle="tab" data-bs-target="#ciclo" type="button">
                 <i class="fas fa-sync-alt"></i> Ciclo de Vida
             </button>
         </li>
         <li class="nav-item" role="presentation">
             <button class="nav-link" id="preAsignacion-tab" data-bs-toggle="tab" data-bs-target="#preAsignacion" type="button">
-                <i class="fas fa-calendar-plus"></i> Pre-Asignación
+                <i class="fas fa-calendar-check"></i> Pre-Asignación
             </button>
         </li>
     </ul>
@@ -104,6 +109,92 @@
                                     <p class="mt-2">Cargando...</p>
                                 </div>
                             </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Programación Manual Tab -->
+        <div class="tab-pane fade" id="programacion" role="tabpanel">
+            <div class="card">
+                <div class="card-header bg-primary text-white">
+                    <i class="fas fa-calendar-plus"></i> Crear Programación Manual
+                </div>
+                <div class="card-body">
+                    <div class="alert alert-info">
+                        <i class="fas fa-info-circle"></i>
+                        <strong>Programación Manual:</strong> Permite crear programaciones para contenedores liberados sin necesidad de importar Excel. Seleccione un contenedor, asigne un CD y fecha de entrega.
+                    </div>
+                    
+                    <form id="form-programacion-manual">
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                <label class="form-label"><i class="fas fa-box"></i> Contenedor Liberado</label>
+                                <select class="form-select" id="prog-container-select" required>
+                                    <option value="">Cargando contenedores liberados...</option>
+                                </select>
+                                <div id="prog-container-info" class="mt-2"></div>
+                            </div>
+                            
+                            <div class="col-md-6 mb-3">
+                                <label class="form-label"><i class="fas fa-warehouse"></i> Centro de Distribución</label>
+                                <select class="form-select" id="prog-cd-select" required>
+                                    <option value="">Seleccione un CD...</option>
+                                </select>
+                            </div>
+                        </div>
+                        
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                <label class="form-label"><i class="fas fa-calendar"></i> Fecha Programada</label>
+                                <input type="datetime-local" class="form-control" id="prog-fecha" required>
+                            </div>
+                            
+                            <div class="col-md-6 mb-3">
+                                <label class="form-label"><i class="fas fa-user"></i> Cliente</label>
+                                <input type="text" class="form-control" id="prog-cliente" placeholder="Nombre del cliente">
+                            </div>
+                        </div>
+                        
+                        <div class="row">
+                            <div class="col-12 mb-3">
+                                <label class="form-label"><i class="fas fa-map-marker-alt"></i> Dirección de Entrega</label>
+                                <textarea class="form-control" id="prog-direccion" rows="2" placeholder="Dirección completa de entrega"></textarea>
+                            </div>
+                        </div>
+                        
+                        <div class="row">
+                            <div class="col-12 mb-3">
+                                <label class="form-label"><i class="fas fa-comment"></i> Observaciones</label>
+                                <textarea class="form-control" id="prog-observaciones" rows="3" placeholder="Observaciones adicionales (opcional)"></textarea>
+                            </div>
+                        </div>
+                        
+                        <div class="row">
+                            <div class="col-12 text-center">
+                                <button type="submit" class="btn btn-primary btn-lg">
+                                    <i class="fas fa-save"></i> Crear Programación
+                                </button>
+                                <button type="reset" class="btn btn-secondary btn-lg ms-2">
+                                    <i class="fas fa-times"></i> Limpiar
+                                </button>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+            </div>
+            
+            <!-- Lista de Programaciones Recientes -->
+            <div class="card mt-4">
+                <div class="card-header bg-secondary text-white">
+                    <i class="fas fa-list"></i> Programaciones Recientes
+                </div>
+                <div class="card-body" style="max-height: 400px; overflow-y: auto;">
+                    <div id="programaciones-recientes">
+                        <div class="text-center py-4">
+                            <div class="spinner-border text-primary"></div>
+                            <p class="mt-2">Cargando...</p>
                         </div>
                     </div>
                 </div>
@@ -317,7 +408,10 @@ function loadConductoresDisponibles() {
                     ((driver.num_entregas_dia / driver.max_entregas_dia) * 100).toFixed(0) : 0;
                 
                 const card = `
-                    <div class="card mb-2">
+                    <div class="card mb-2" style="cursor: pointer; transition: all 0.2s;" 
+                         onmouseover="this.style.borderColor='#e95420'; this.style.boxShadow='0 2px 8px rgba(233,84,32,0.3)'"
+                         onmouseout="this.style.borderColor=''; this.style.boxShadow=''"
+                         onclick="verAsignacionesConductor(${driver.id}, '${driver.nombre}')">
                         <div class="card-body py-2">
                             <div class="d-flex justify-content-between align-items-center">
                                 <div>
@@ -334,6 +428,7 @@ function loadConductoresDisponibles() {
                                             ${ocupacion}%
                                         </div>
                                     </div>
+                                    <small class="text-muted"><i class="fas fa-eye"></i> Ver asignaciones</small>
                                 </div>
                             </div>
                         </div>
@@ -347,6 +442,96 @@ function loadConductoresDisponibles() {
             document.getElementById('conductores-disponibles').innerHTML = 
                 '<p class="text-danger text-center">Error al cargar conductores</p>';
         });
+}
+
+// Ver asignaciones actuales del conductor
+function verAsignacionesConductor(driverId, driverNombre) {
+    fetch(`/api/programaciones/?driver=${driverId}`)
+        .then(response => response.json())
+        .then(data => {
+            const modal = new bootstrap.Modal(document.getElementById('asignacionModal'));
+            let content = `<h6><i class="fas fa-user"></i> ${driverNombre}</h6><hr>`;
+            
+            if (data.results.length === 0) {
+                content += '<p class="text-muted text-center py-3">Este conductor no tiene asignaciones actualmente</p>';
+            } else {
+                content += '<h6 class="mb-3">Contenedores Asignados:</h6>';
+                content += '<div class="list-group">';
+                
+                data.results.forEach(prog => {
+                    const fechaProgStr = new Date(prog.fecha_programada).toLocaleDateString('es-CL', {
+                        year: 'numeric',
+                        month: 'short',
+                        day: 'numeric',
+                        hour: '2-digit',
+                        minute: '2-digit'
+                    });
+                    
+                    const estadoBadge = prog.container_detail ? 
+                        getEstadoBadge(prog.container_detail.estado) : '';
+                    
+                    content += `
+                        <div class="list-group-item">
+                            <div class="d-flex justify-content-between align-items-start">
+                                <div>
+                                    <h6 class="mb-1">
+                                        <i class="fas fa-box"></i> 
+                                        ${prog.container_detail?.container_id || 'N/A'}
+                                    </h6>
+                                    <p class="mb-1 small">
+                                        <strong>CD:</strong> ${prog.cd_detail?.nombre || 'N/A'}<br>
+                                        <strong>Cliente:</strong> ${prog.cliente || 'N/A'}<br>
+                                        <strong>Fecha:</strong> ${fechaProgStr}
+                                    </p>
+                                </div>
+                                <div class="text-end">
+                                    ${estadoBadge}
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                });
+                
+                content += '</div>';
+            }
+            
+            document.getElementById('modal-content').innerHTML = content;
+            modal.show();
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('❌ Error al cargar asignaciones del conductor');
+        });
+}
+
+// Helper function para badge de estado
+function getEstadoBadge(estado) {
+    const badges = {
+        'programado': 'secondary',
+        'asignado': 'primary',
+        'en_ruta': 'info',
+        'entregado': 'success',
+        'descargado': 'success',
+        'vacio': 'warning',
+        'vacio_en_ruta': 'warning',
+        'devuelto': 'dark'
+    };
+    
+    const labels = {
+        'programado': 'Programado',
+        'asignado': 'Asignado',
+        'en_ruta': 'En Ruta',
+        'entregado': 'Entregado',
+        'descargado': 'Descargado',
+        'vacio': 'Vacío',
+        'vacio_en_ruta': 'Vacío en Ruta',
+        'devuelto': 'Devuelto'
+    };
+    
+    const color = badges[estado] || 'secondary';
+    const label = labels[estado] || estado;
+    
+    return `<span class="badge bg-${color}">${label}</span>`;
 }
 
 // Asignación automática
@@ -800,6 +985,200 @@ function eliminarPreAsignacion(id) {
         console.error('Error:', error);
         alert('❌ Error al eliminar pre-asignación');
     });
+}
+
+// ============================================
+// PROGRAMACIÓN MANUAL
+// ============================================
+
+// Cargar contenedores liberados para programación manual
+function loadContaineresLiberados() {
+    fetch('/api/containers/?estado=liberado')
+        .then(response => response.json())
+        .then(data => {
+            const select = document.getElementById('prog-container-select');
+            if (!select) return;
+            
+            select.innerHTML = '<option value="">Seleccione un contenedor...</option>';
+            
+            if (data.results.length === 0) {
+                select.innerHTML = '<option value="">No hay contenedores liberados</option>';
+                return;
+            }
+            
+            data.results.forEach(container => {
+                const option = document.createElement('option');
+                option.value = container.id;
+                option.textContent = `${container.container_id} - ${container.nave || 'Sin nave'}`;
+                option.dataset.container = JSON.stringify(container);
+                select.appendChild(option);
+            });
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            document.getElementById('prog-container-select').innerHTML = 
+                '<option value="">Error al cargar contenedores</option>';
+        });
+}
+
+// Cargar CDs para programación
+function loadCDsForProgramacion() {
+    fetch('/api/cds/')
+        .then(response => response.json())
+        .then(data => {
+            const select = document.getElementById('prog-cd-select');
+            if (!select) return;
+            
+            select.innerHTML = '<option value="">Seleccione un CD...</option>';
+            
+            data.results.forEach(cd => {
+                const option = document.createElement('option');
+                option.value = cd.id;
+                option.textContent = `${cd.nombre} - ${cd.tipo}`;
+                option.dataset.cd = JSON.stringify(cd);
+                select.appendChild(option);
+            });
+        })
+        .catch(error => {
+            console.error('Error:', error);
+        });
+}
+
+// Mostrar info del contenedor seleccionado
+document.addEventListener('change', function(e) {
+    if (e.target.id === 'prog-container-select') {
+        const select = e.target;
+        const option = select.options[select.selectedIndex];
+        const infoDiv = document.getElementById('prog-container-info');
+        
+        if (option.dataset.container) {
+            const container = JSON.parse(option.dataset.container);
+            infoDiv.innerHTML = `
+                <div class="alert alert-info small">
+                    <strong>Nave:</strong> ${container.nave || 'N/A'}<br>
+                    <strong>Tipo:</strong> ${container.tipo || 'N/A'}<br>
+                    <strong>Posición:</strong> ${container.posicion_fisica || 'N/A'}<br>
+                    ${container.fecha_demurrage ? 
+                        `<strong>Demurrage:</strong> ${new Date(container.fecha_demurrage).toLocaleDateString('es-CL')}<br>` : ''}
+                </div>
+            `;
+        } else {
+            infoDiv.innerHTML = '';
+        }
+    }
+});
+
+// Manejar envío del formulario de programación manual
+document.getElementById('form-programacion-manual')?.addEventListener('submit', function(e) {
+    e.preventDefault();
+    
+    const containerId = document.getElementById('prog-container-select').value;
+    const cdId = document.getElementById('prog-cd-select').value;
+    const fecha = document.getElementById('prog-fecha').value;
+    const cliente = document.getElementById('prog-cliente').value;
+    const direccion = document.getElementById('prog-direccion').value;
+    const observaciones = document.getElementById('prog-observaciones').value;
+    
+    if (!containerId || !cdId || !fecha) {
+        alert('⚠️ Por favor complete los campos requeridos');
+        return;
+    }
+    
+    // Crear programación
+    fetch('/api/programaciones/', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': getCookie('csrftoken')
+        },
+        body: JSON.stringify({
+            container: containerId,
+            cd: cdId,
+            fecha_programada: fecha,
+            cliente: cliente || '',
+            direccion_entrega: direccion || '',
+            observaciones: observaciones || ''
+        })
+    })
+    .then(response => {
+        if (!response.ok) {
+            return response.json().then(err => {
+                throw new Error(JSON.stringify(err));
+            });
+        }
+        return response.json();
+    })
+    .then(data => {
+        alert('✅ Programación creada exitosamente');
+        document.getElementById('form-programacion-manual').reset();
+        document.getElementById('prog-container-info').innerHTML = '';
+        loadContaineresLiberados();
+        loadProgramacionesRecientes();
+        loadContainersSinAsignar();
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        alert('❌ Error al crear programación: ' + error.message);
+    });
+});
+
+// Cargar programaciones recientes
+function loadProgramacionesRecientes() {
+    fetch('/api/programaciones/?ordering=-created_at&limit=10')
+        .then(response => response.json())
+        .then(data => {
+            const container = document.getElementById('programaciones-recientes');
+            if (!container) return;
+            
+            container.innerHTML = '';
+            
+            if (data.results.length === 0) {
+                container.innerHTML = '<p class="text-center text-muted py-4">No hay programaciones recientes</p>';
+                return;
+            }
+            
+            data.results.forEach(prog => {
+                const card = `
+                    <div class="card mb-2">
+                        <div class="card-body py-2">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <div>
+                                    <strong>${prog.container_detail?.container_id || 'N/A'}</strong><br>
+                                    <small class="text-muted">
+                                        CD: ${prog.cd_detail?.nombre || 'N/A'} |
+                                        Fecha: ${new Date(prog.fecha_programada).toLocaleDateString('es-CL')}
+                                        ${prog.driver_detail ? ` | Conductor: ${prog.driver_detail.nombre}` : ''}
+                                    </small>
+                                </div>
+                                <span class="badge bg-${prog.driver_detail ? 'success' : 'warning'}">
+                                    ${prog.driver_detail ? 'Asignado' : 'Sin asignar'}
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+                `;
+                container.innerHTML += card;
+            });
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            document.getElementById('programaciones-recientes').innerHTML = 
+                '<p class="text-danger text-center">Error al cargar programaciones</p>';
+        });
+}
+
+// Inicializar programación manual cuando se muestra la pestaña
+document.querySelector('[data-bs-target="#programacion"]')?.addEventListener('shown.bs.tab', function() {
+    loadContaineresLiberados();
+    loadCDsForProgramacion();
+    loadProgramacionesRecientes();
+});
+
+// También cargar al inicio si la pestaña está activa
+if (document.querySelector('#programacion.active')) {
+    loadContaineresLiberados();
+    loadCDsForProgramacion();
+    loadProgramacionesRecientes();
 }
 </script>
 {% endblock %}

@@ -55,6 +55,10 @@ class Programacion(models.Model):
     alerta_48h_enviada = models.BooleanField(default=False, verbose_name='Alerta 48h Enviada')
     requiere_alerta = models.BooleanField(default=False, verbose_name='Requiere Alerta')
     
+    # Estado de aceptación del conductor
+    aceptada_por_conductor = models.BooleanField(default=False, verbose_name='Aceptada por Conductor', help_text='Indica si el conductor aceptó la asignación')
+    fecha_aceptacion = models.DateTimeField(null=True, blank=True, verbose_name='Fecha Aceptación', help_text='Fecha cuando el conductor aceptó la asignación')
+    
     # Timestamps
     fecha_asignacion = models.DateTimeField(null=True, blank=True, verbose_name='Fecha Asignación')
     created_at = models.DateTimeField(auto_now_add=True, verbose_name='Creado')

@@ -695,6 +695,63 @@ class ProgramacionViewSet(viewsets.ModelViewSet):
         })
     
     @action(detail=True, methods=['post'])
+    def aceptar_asignacion(self, request, pk=None):
+        """
+        Permite al conductor aceptar una asignación
+        
+        Payload opcional:
+        {
+            "lat": -33.4372,
+            "lng": -70.6506
+        }
+        """
+        programacion = self.get_object()
+        
+        if not programacion.driver:
+            return Response(
+                {'error': 'Esta programación no tiene conductor asignado'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        if programacion.aceptada_por_conductor:
+            return Response(
+                {'error': 'Esta asignación ya fue aceptada'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Marcar como aceptada
+        programacion.aceptada_por_conductor = True
+        programacion.fecha_aceptacion = timezone.now()
+        programacion.save()
+        
+        # Actualizar posición del conductor si se proporciona
+        lat = request.data.get('lat')
+        lng = request.data.get('lng')
+        if lat and lng:
+            programacion.driver.actualizar_posicion(lat, lng)
+        
+        # Crear evento de aceptación
+        from apps.events.models import Event
+        Event.objects.create(
+            container=programacion.container,
+            event_type='asignacion_aceptada',
+            detalles={
+                'conductor': programacion.driver.nombre,
+                'fecha_aceptacion': timezone.now().isoformat(),
+                'gps_lat': str(lat) if lat else None,
+                'gps_lng': str(lng) if lng else None,
+            },
+            usuario=request.user.username if request.user.is_authenticated else None
+        )
+        
+        serializer = self.get_serializer(programacion)
+        return Response({
+            'success': True,
+            'mensaje': f'Asignación aceptada por {programacion.driver.nombre}',
+            'programacion': serializer.data
+        })
+    
+    @action(detail=True, methods=['post'])
     def actualizar_posicion(self, request, pk=None):
         """
         Actualiza la posición del conductor y recalcula ETA
