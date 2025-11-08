@@ -29,13 +29,24 @@ class ContainerViewSet(viewsets.ModelViewSet):
     """
     ViewSet para gestión de contenedores
     """
-    queryset = Container.objects.all()
     serializer_class = ContainerSerializer
     filterset_fields = ['estado', 'tipo', 'secuenciado', 'puerto', 'posicion_fisica']
     search_fields = ['container_id', 'nave', 'vendor', 'comuna']
     ordering_fields = ['created_at', 'fecha_programacion', 'fecha_liberacion']
     ordering = ['-created_at']
     permission_classes = [IsAuthenticatedOrReadOnly]
+    
+    def get_queryset(self):
+        """
+        Optimize queryset with select_related to avoid N+1 queries
+        """
+        queryset = Container.objects.select_related('cd_entrega')
+        
+        # For list view, can use prefetch_related for related objects
+        if self.action == 'list':
+            queryset = queryset.prefetch_related('programacion')
+        
+        return queryset
     
     def get_serializer_class(self):
         if self.action == 'list':
@@ -257,11 +268,13 @@ class ContainerViewSet(viewsets.ModelViewSet):
         """
         Exporta stock de contenedores liberados y por arribar (formato JSON)
         Incluye flag de 'secuenciado' para próximas liberaciones
+        
+        Optimized with select_related to avoid N+1 queries
         """
-        # Filtrar solo liberados y por_arribar
+        # Filtrar solo liberados y por_arribar con optimización
         containers = Container.objects.filter(
             Q(estado='liberado') | Q(estado='por_arribar')
-        ).order_by('secuenciado', '-fecha_liberacion')
+        ).select_related('cd_entrega').order_by('secuenciado', '-fecha_liberacion')
         
         serializer = ContainerStockExportSerializer(containers, many=True)
         
