@@ -21,6 +21,12 @@ from apps.core.views import (
     operaciones, drivers_list, executive_dashboard
 )
 
+# Import API views
+from apps.core.api_views import (
+    dashboard_stats, dashboard_alertas, 
+    analytics_conductores, analytics_eficiencia, analytics_tendencias
+)
+
 # Setup API router
 router = DefaultRouter()
 router.register(r'drivers', DriverViewSet, basename='driver')
@@ -52,6 +58,13 @@ urlpatterns = [
     
     # API
     path('api/', include(router.urls)),
+    
+    # Dashboard API endpoints
+    path('api/dashboard/stats/', dashboard_stats, name='dashboard_stats'),
+    path('api/dashboard/alertas/', dashboard_alertas, name='dashboard_alertas'),
+    path('api/analytics/conductores/', analytics_conductores, name='analytics_conductores'),
+    path('api/analytics/eficiencia/', analytics_eficiencia, name='analytics_eficiencia'),
+    path('api/analytics/tendencias/', analytics_tendencias, name='analytics_tendencias'),
     
     # API Authentication
     path('api-auth/', include('rest_framework.urls')),

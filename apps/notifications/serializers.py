@@ -6,6 +6,7 @@ class NotificationSerializer(serializers.ModelSerializer):
     """Serializer completo para notificaciones"""
     
     container_id = serializers.CharField(source='container.container_id', read_only=True)
+    container_id_formatted = serializers.CharField(source='container.container_id_formatted', read_only=True)
     driver_nombre = serializers.CharField(source='driver.nombre', read_only=True, allow_null=True)
     tipo_display = serializers.CharField(source='get_tipo_display', read_only=True)
     prioridad_display = serializers.CharField(source='get_prioridad_display', read_only=True)
@@ -16,7 +17,7 @@ class NotificationSerializer(serializers.ModelSerializer):
     class Meta:
         model = Notification
         fields = [
-            'id', 'container', 'container_id', 'driver', 'driver_nombre',
+            'id', 'container', 'container_id', 'container_id_formatted', 'driver', 'driver_nombre',
             'programacion', 'tipo', 'tipo_display', 'prioridad', 'prioridad_display',
             'estado', 'estado_display', 'titulo', 'mensaje', 'eta_minutos',
             'eta_timestamp', 'distancia_km', 'lat_actual', 'lng_actual',
@@ -32,6 +33,7 @@ class NotificationListSerializer(serializers.ModelSerializer):
     """Serializer simplificado para listados"""
     
     container_id = serializers.CharField(source='container.container_id', read_only=True)
+    container_id_formatted = serializers.CharField(source='container.container_id_formatted', read_only=True)
     driver_nombre = serializers.CharField(source='driver.nombre', read_only=True, allow_null=True)
     tipo_display = serializers.CharField(source='get_tipo_display', read_only=True)
     prioridad_display = serializers.CharField(source='get_prioridad_display', read_only=True)
@@ -39,7 +41,7 @@ class NotificationListSerializer(serializers.ModelSerializer):
     class Meta:
         model = Notification
         fields = [
-            'id', 'container_id', 'driver_nombre', 'tipo', 'tipo_display',
+            'id', 'container_id', 'container_id_formatted', 'driver_nombre', 'tipo', 'tipo_display',
             'prioridad', 'prioridad_display', 'estado', 'titulo', 'mensaje',
             'eta_minutos', 'eta_timestamp', 'created_at'
         ]

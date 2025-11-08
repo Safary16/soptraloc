@@ -12,6 +12,13 @@
         transform: translateY(-5px);
         box-shadow: 0 4px 8px rgba(0,0,0,0.1);
     }
+    .clickable-card {
+        cursor: pointer;
+    }
+    .clickable-card:hover {
+        border-left-color: #dc3545;
+        box-shadow: 0 6px 12px rgba(220, 53, 69, 0.2);
+    }
     .metric-value {
         font-size: 2.5rem;
         font-weight: bold;
@@ -255,10 +262,11 @@ function renderMainMetrics(data) {
             </div>
         </div>
         <div class="col-md-3 mb-3">
-            <div class="card metric-card">
+            <div class="card metric-card ${data.sin_asignar > 0 ? 'clickable-card' : ''}" onclick="${data.sin_asignar > 0 ? 'window.location.href=\'/asignacion/\'' : ''}">
                 <div class="card-body text-center">
                     <div class="metric-value text-${data.sin_asignar > 0 ? 'danger' : 'success'}">${data.sin_asignar || 0}</div>
                     <div class="metric-label">Sin Asignar (48h)</div>
+                    ${data.sin_asignar > 0 ? '<small class="text-muted">Click para asignar</small>' : ''}
                 </div>
             </div>
         </div>
@@ -342,7 +350,7 @@ function loadOperacionesData() {
                 
                 tableHtml += `
                     <tr>
-                        <td>${p.container_id}</td>
+                        <td>${p.container_id_formatted || p.container_id}</td>
                         <td>${p.conductor || 'Sin asignar'}</td>
                         <td>${p.cd}</td>
                         <td>${new Date(p.fecha_programada).toLocaleString('es-CL')}</td>
@@ -448,7 +456,7 @@ function loadAlertasData() {
                             <small>${new Date(n.created_at).toLocaleString('es-CL')}</small>
                         </div>
                         <p class="mb-1">${n.mensaje}</p>
-                        <small>Contenedor: ${n.container_id}</small>
+                        <small>Contenedor: ${n.container_id_formatted || n.container_id}</small>
                     </div>
                 `;
             });
