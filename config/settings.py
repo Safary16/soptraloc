@@ -4,14 +4,28 @@ Django settings for SoptraLoc TMS
 import os
 from pathlib import Path
 from decouple import config
+from django.core.exceptions import ImproperlyConfigured
 import dj_database_url
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 # Security
-SECRET_KEY = config('SECRET_KEY', default='django-insecure-change-in-production')
-DEBUG = config('DEBUG', default=True, cast=bool)
-ALLOWED_HOSTS = config('ALLOWED_HOSTS', default='*', cast=lambda v: [s.strip() for s in v.split(',')])
+try:
+    SECRET_KEY = config('SECRET_KEY')
+except Exception:
+    raise ImproperlyConfigured(
+        "SECRET_KEY must be set in environment variables. "
+        "Generate one using: python -c 'from django.core.management.utils import get_random_secret_key; print(get_random_secret_key())'"
+    )
+
+# Validate SECRET_KEY is not insecure default
+if 'django-insecure' in SECRET_KEY or SECRET_KEY == 'your-secret-key-here':
+    raise ImproperlyConfigured(
+        "SECRET_KEY is using an insecure default value. Please generate a proper secret key."
+    )
+
+DEBUG = config('DEBUG', default=False, cast=bool)  # Default to False for security
+ALLOWED_HOSTS = config('ALLOWED_HOSTS', default='localhost,127.0.0.1', cast=lambda v: [s.strip() for s in v.split(',')])
 
 # Render.com automatic hostname
 RENDER_EXTERNAL_HOSTNAME = config('RENDER_EXTERNAL_HOSTNAME', default=None)
@@ -143,9 +157,16 @@ REST_FRAMEWORK = {
     'PAGE_SIZE': 50,
 }
 
-# CORS
+# CORS - Security: Only allow in DEBUG mode, require explicit origins in production
 CORS_ALLOW_ALL_ORIGINS = DEBUG
 CORS_ALLOW_CREDENTIALS = True
+if not DEBUG:
+    # In production, specify allowed origins explicitly
+    CORS_ALLOWED_ORIGINS = config(
+        'CORS_ALLOWED_ORIGINS',
+        default='',
+        cast=lambda v: [origin.strip() for origin in v.split(',') if origin.strip()]
+    )
 
 # Mapbox
 MAPBOX_API_KEY = config('MAPBOX_API_KEY', default=None)

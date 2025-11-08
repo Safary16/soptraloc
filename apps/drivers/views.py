@@ -77,7 +77,7 @@ class DriverViewSet(viewsets.ModelViewSet):
     
     queryset = Driver.objects.all()
     serializer_class = DriverSerializer
-    permission_classes = []  # Allow access without authentication for now
+    permission_classes = [IsAuthenticated]  # Require authentication for all operations
     
     def get_queryset(self):
         """Filtrar conductores según parámetros"""
