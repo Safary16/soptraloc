@@ -30,6 +30,22 @@ class ProgramacionViewSet(viewsets.ModelViewSet):
     ordering = ['fecha_programada']
     permission_classes = [IsAuthenticatedOrReadOnly]
     
+    def get_queryset(self):
+        """
+        Override to support driver__isnull filter for programaciones sin asignar
+        """
+        queryset = super().get_queryset()
+        
+        # Filtro especial para driver__isnull
+        driver_isnull = self.request.query_params.get('driver__isnull', None)
+        if driver_isnull is not None:
+            if driver_isnull.lower() == 'true':
+                queryset = queryset.filter(driver__isnull=True)
+            elif driver_isnull.lower() == 'false':
+                queryset = queryset.filter(driver__isnull=False)
+        
+        return queryset
+    
     def get_serializer_class(self):
         if self.action == 'list':
             return ProgramacionListSerializer

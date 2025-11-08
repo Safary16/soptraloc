@@ -300,6 +300,16 @@ function loadEstados() {
         });
 }
 
+// Sistema de sincronización entre pestañas
+window.addEventListener('storage', function(e) {
+    if (e.key === 'soptralocDataChange' && e.newValue) {
+        const event = JSON.parse(e.newValue);
+        console.log('Cambio detectado desde otra pestaña:', event);
+        // Recargar estados inmediatamente
+        loadEstados();
+    }
+});
+
 // Load on page load
 document.addEventListener('DOMContentLoaded', function() {
     loadEstados();

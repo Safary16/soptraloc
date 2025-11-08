@@ -74,11 +74,28 @@
         <!-- Asignación Tab -->
         <div class="tab-pane fade show active" id="asignacion" role="tabpanel">
             <div class="row">
-                <!-- Contenedores sin asignar -->
-                <div class="col-md-6 mb-4">
+                <!-- Contenedores liberados (para programar) -->
+                <div class="col-md-4 mb-4">
+                    <div class="card">
+                        <div class="card-header bg-info text-white">
+                            <i class="fas fa-box"></i> Liberados (Para Programar)
+                        </div>
+                        <div class="card-body" style="max-height: 600px; overflow-y: auto;">
+                            <div id="containers-liberados">
+                                <div class="text-center py-4">
+                                    <div class="spinner-border text-primary"></div>
+                                    <p class="mt-2">Cargando...</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Contenedores programados sin asignar -->
+                <div class="col-md-4 mb-4">
                     <div class="card">
                         <div class="card-header bg-warning text-dark">
-                            <i class="fas fa-exclamation-triangle"></i> Contenedores Sin Asignar
+                            <i class="fas fa-exclamation-triangle"></i> Programados Sin Conductor
                         </div>
                         <div class="card-body" style="max-height: 600px; overflow-y: auto;">
                             <div id="containers-sin-asignar">
@@ -92,7 +109,7 @@
                 </div>
 
                 <!-- Conductores disponibles -->
-                <div class="col-md-6 mb-4">
+                <div class="col-md-4 mb-4">
                     <div class="card">
                         <div class="card-header bg-success text-white">
                             <i class="fas fa-users"></i> Conductores Disponibles
@@ -248,40 +265,42 @@
 let selectedContainer = null;
 let selectedDriver = null;
 
-// Cargar contenedores sin asignar
+// Cargar contenedores sin asignar (programados sin conductor)
 function loadContainersSinAsignar() {
-    fetch('/api/containers/?estado=programado')
+    // Obtener programaciones sin conductor asignado
+    fetch('/api/programaciones/?driver__isnull=true')
         .then(response => response.json())
         .then(data => {
             const container = document.getElementById('containers-sin-asignar');
             container.innerHTML = '';
             
-            if (data.results.length === 0) {
+            if (!data.results || data.results.length === 0) {
                 container.innerHTML = '<p class="text-center text-muted py-4">✅ No hay contenedores sin asignar</p>';
                 return;
             }
             
-            data.results.forEach(cont => {
+            data.results.forEach(prog => {
                 const card = `
-                    <div class="container-card card mb-3">
+                    <div class="container-card card mb-3" data-prog-id="${prog.id}">
                         <div class="card-body">
                             <div class="d-flex justify-content-between align-items-start">
                                 <div>
-                                    <h6 class="mb-1"><strong>${cont.container_id}</strong></h6>
+                                    <h6 class="mb-1"><strong>${prog.container_id || 'N/A'}</strong></h6>
                                     <p class="mb-1 small text-muted">
-                                        <i class="fas fa-ship"></i> ${cont.nave || 'N/A'}<br>
-                                        <i class="fas fa-calendar"></i> ${cont.fecha_programacion ? new Date(cont.fecha_programacion).toLocaleDateString('es-CL') : 'Sin fecha'}
+                                        <i class="fas fa-building"></i> ${prog.cd_nombre || 'N/A'}<br>
+                                        <i class="fas fa-user"></i> ${prog.cliente || 'Sin cliente'}<br>
+                                        <i class="fas fa-calendar"></i> ${prog.fecha_programada ? new Date(prog.fecha_programada).toLocaleDateString('es-CL') : 'Sin fecha'}
                                     </p>
-                                    ${cont.dias_para_demurrage !== null ? 
-                                        `<span class="badge bg-${cont.dias_para_demurrage <= 1 ? 'danger' : cont.dias_para_demurrage <= 2 ? 'warning' : 'info'}">
-                                            ${cont.dias_para_demurrage} días demurrage
+                                    ${prog.requiere_alerta ? 
+                                        `<span class="badge bg-danger">
+                                            <i class="fas fa-exclamation-triangle"></i> Urgente (< 48h)
                                         </span>` : ''}
                                 </div>
                                 <div>
-                                    <button class="btn btn-sm btn-success action-btn" onclick="asignarAutomatico(${cont.id})">
-                                        <i class="fas fa-robot"></i> Auto
+                                    <button class="btn btn-sm btn-success action-btn" onclick="asignarAutomatico(${prog.id}, true)">
+                                        <i class="fas fa-robot"></i> Auto IA
                                     </button>
-                                    <button class="btn btn-sm btn-primary action-btn" onclick="asignarManual(${cont.id})">
+                                    <button class="btn btn-sm btn-primary action-btn" onclick="asignarManual(${prog.id}, true)">
                                         <i class="fas fa-user-plus"></i> Manual
                                     </button>
                                 </div>
@@ -349,60 +368,127 @@ function loadConductoresDisponibles() {
         });
 }
 
-// Asignación automática
-function asignarAutomatico(containerId) {
-    if (!confirm('¿Asignar automáticamente el mejor conductor disponible?')) {
+// Asignación automática con IA/ML
+function asignarAutomatico(progId, isProgramacion = false) {
+    if (!confirm('¿Asignar automáticamente usando Inteligencia Artificial?\n\nEl sistema evaluará disponibilidad, ocupación, cumplimiento y proximidad para elegir el mejor conductor.')) {
         return;
     }
     
-    // Necesitamos buscar la programación asociada
-    fetch(`/api/programaciones/?container=${containerId}`)
+    // Mostrar loading
+    const cardElement = document.querySelector(`[data-prog-id="${progId}"]`);
+    if (cardElement) {
+        cardElement.style.opacity = '0.5';
+        cardElement.style.pointerEvents = 'none';
+    }
+    
+    fetch(`/api/programaciones/${progId}/asignar_automatico/`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': getCookie('csrftoken')
+        }
+    })
+    .then(response => response.json())
+    .then(result => {
+        if (cardElement) {
+            cardElement.style.opacity = '1';
+            cardElement.style.pointerEvents = 'auto';
+        }
+        
+        if (result.success) {
+            // Mostrar resultado con scores ML
+            const desglose = result.desglose || {};
+            let mensaje = `✅ Conductor asignado: ${result.mensaje}\n\n`;
+            mensaje += `📊 Score IA: ${result.score.toFixed(1)}/100\n\n`;
+            mensaje += `Desglose:\n`;
+            mensaje += `• Disponibilidad: ${(desglose.disponibilidad || 0).toFixed(1)}%\n`;
+            mensaje += `• Ocupación: ${(desglose.ocupacion || 0).toFixed(1)}%\n`;
+            mensaje += `• Cumplimiento: ${(desglose.cumplimiento || 0).toFixed(1)}%\n`;
+            mensaje += `• Proximidad: ${(desglose.proximidad || 0).toFixed(1)}%`;
+            
+            alert(mensaje);
+            
+            // Recargar datos locales
+            loadContainersLiberados();
+            loadContainersSinAsignar();
+            loadConductoresDisponibles();
+            
+            // Notificar a otras pestañas/páginas que hubo cambios
+            broadcastDataChange('asignacion_completada');
+            
+            // Actualizar estados si está en la misma página
+            if (typeof loadEstados === 'function') {
+                loadEstados();
+            }
+        } else {
+            alert(`❌ Error: ${result.error}`);
+        }
+    })
+    .catch(error => {
+        if (cardElement) {
+            cardElement.style.opacity = '1';
+            cardElement.style.pointerEvents = 'auto';
+        }
+        console.error('Error:', error);
+        alert('❌ Error al asignar conductor automáticamente');
+    });
+}
+
+// Asignación manual con scores IA
+function asignarManual(progId, isProgramacion = false) {
+    selectedContainer = progId;
+    const modal = new bootstrap.Modal(document.getElementById('asignacionModal'));
+    
+    // Obtener conductores disponibles con scores calculados por IA
+    fetch(`/api/programaciones/${progId}/conductores_disponibles/`)
         .then(response => response.json())
         .then(data => {
-            if (data.results.length === 0) {
-                alert('⚠️ No se encontró programación para este contenedor');
+            if (!data.success || !data.conductores || data.conductores.length === 0) {
+                document.getElementById('modal-content').innerHTML = 
+                    '<div class="alert alert-warning">⚠️ No hay conductores disponibles en este momento</div>';
+                modal.show();
                 return;
             }
             
-            const progId = data.results[0].id;
+            let content = '<h6>Seleccione un conductor (ordenados por score IA):</h6>';
+            content += '<div class="alert alert-info"><small><i class="fas fa-info-circle"></i> Los conductores están ordenados por Inteligencia Artificial considerando disponibilidad, ocupación, cumplimiento y proximidad.</small></div>';
+            content += '<div class="list-group">';
             
-            fetch(`/api/programaciones/${progId}/asignar_automatico/`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-CSRFToken': getCookie('csrftoken')
-                }
-            })
-            .then(response => response.json())
-            .then(result => {
-                if (result.success) {
-                    alert(`✅ Conductor asignado: ${result.mensaje}`);
-                    loadContainersSinAsignar();
-                    loadConductoresDisponibles();
-                } else {
-                    alert(`❌ Error: ${result.error}`);
-                }
-            });
-        });
-}
-
-// Asignación manual
-function asignarManual(containerId) {
-    selectedContainer = containerId;
-    const modal = new bootstrap.Modal(document.getElementById('asignacionModal'));
-    
-    fetch(`/api/drivers/?activo=true&presente=true`)
-        .then(response => response.json())
-        .then(data => {
-            let content = '<h6>Seleccione un conductor:</h6><div class="list-group">';
-            
-            data.results.forEach(driver => {
+            data.conductores.forEach((item, index) => {
+                const driver = item;
+                const score = driver.score || 0;
+                const desglose = driver.desglose || {};
+                
+                // Color según score
+                let badgeClass = 'bg-success';
+                if (score < 50) badgeClass = 'bg-warning';
+                if (score < 30) badgeClass = 'bg-danger';
+                
+                // Icono de recomendación
+                const recommended = index === 0 ? '<span class="badge bg-primary ms-2"><i class="fas fa-star"></i> Recomendado IA</span>' : '';
+                
                 content += `
                     <button class="list-group-item list-group-item-action" 
                             onclick="confirmarAsignacionManual(${driver.id}, '${driver.nombre}')">
-                        <strong>${driver.nombre}</strong><br>
-                        <small>Entregas: ${driver.num_entregas_dia}/${driver.max_entregas_dia} | 
-                        Cumplimiento: ${driver.cumplimiento_porcentaje}%</small>
+                        <div class="d-flex justify-content-between align-items-start">
+                            <div>
+                                <strong>${driver.nombre}</strong> ${recommended}<br>
+                                <small class="text-muted">
+                                    Entregas: ${driver.num_entregas_dia || 0}/${driver.max_entregas_dia || 0} | 
+                                    Cumplimiento: ${driver.cumplimiento_porcentaje || 0}%
+                                </small>
+                            </div>
+                            <div class="text-end">
+                                <span class="badge ${badgeClass} fs-6">${score.toFixed(1)}</span><br>
+                                <small class="text-muted">Score IA</small>
+                            </div>
+                        </div>
+                        <div class="progress mt-2" style="height: 5px;">
+                            <div class="progress-bar bg-primary" style="width: ${(desglose.disponibilidad || 0)}%;" title="Disponibilidad"></div>
+                            <div class="progress-bar bg-info" style="width: ${(desglose.ocupacion || 0)}%;" title="Ocupación"></div>
+                            <div class="progress-bar bg-success" style="width: ${(desglose.cumplimiento || 0)}%;" title="Cumplimiento"></div>
+                            <div class="progress-bar bg-warning" style="width: ${(desglose.proximidad || 0)}%;" title="Proximidad"></div>
+                        </div>
                     </button>
                 `;
             });
@@ -410,42 +496,53 @@ function asignarManual(containerId) {
             content += '</div>';
             document.getElementById('modal-content').innerHTML = content;
             modal.show();
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            document.getElementById('modal-content').innerHTML = 
+                '<div class="alert alert-danger">❌ Error al cargar conductores disponibles</div>';
+            modal.show();
         });
 }
 
 // Confirmar asignación manual
 function confirmarAsignacionManual(driverId, driverNombre) {
-    // Buscar programación y asignar
-    fetch(`/api/programaciones/?container=${selectedContainer}`)
-        .then(response => response.json())
-        .then(data => {
-            if (data.results.length === 0) {
-                alert('⚠️ No se encontró programación para este contenedor');
-                return;
+    const progId = selectedContainer;
+    
+    fetch(`/api/programaciones/${progId}/asignar_conductor/`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': getCookie('csrftoken')
+        },
+        body: JSON.stringify({ driver_id: driverId })
+    })
+    .then(response => response.json())
+    .then(result => {
+        if (result.success) {
+            alert(`✅ ${driverNombre} asignado exitosamente`);
+            bootstrap.Modal.getInstance(document.getElementById('asignacionModal')).hide();
+            
+            // Recargar datos locales
+            loadContainersLiberados();
+            loadContainersSinAsignar();
+            loadConductoresDisponibles();
+            
+            // Notificar cambios
+            broadcastDataChange('asignacion_completada');
+            
+            // Actualizar estados si está en la misma página
+            if (typeof loadEstados === 'function') {
+                loadEstados();
             }
-            
-            const progId = data.results[0].id;
-            
-            fetch(`/api/programaciones/${progId}/asignar_driver/`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-CSRFToken': getCookie('csrftoken')
-                },
-                body: JSON.stringify({ driver_id: driverId })
-            })
-            .then(response => response.json())
-            .then(result => {
-                if (result.success) {
-                    alert(`✅ ${driverNombre} asignado exitosamente`);
-                    bootstrap.Modal.getInstance(document.getElementById('asignacionModal')).hide();
-                    loadContainersSinAsignar();
-                    loadConductoresDisponibles();
-                } else {
-                    alert(`❌ Error: ${result.error || result.mensaje}`);
-                }
-            });
-        });
+        } else {
+            alert(`❌ Error: ${result.error || result.mensaje}`);
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        alert('❌ Error al asignar conductor');
+    });
 }
 
 // Buscar contenedor para ciclo de vida
@@ -558,6 +655,13 @@ function cambiarEstado(containerId, nuevoEstado) {
         if (result.success) {
             alert('✅ Estado actualizado');
             buscarContenedorCiclo();
+            
+            // Notificar cambios a otras pestañas
+            broadcastDataChange('estado_cambiado');
+            
+            // Recargar listas
+            loadContainersLiberados();
+            loadContainersSinAsignar();
         } else {
             alert(`❌ Error: ${result.error || result.mensaje}`);
         }
@@ -583,14 +687,97 @@ function getCookie(name) {
     return cookieValue;
 }
 
+// Cargar contenedores liberados (listos para programar)
+function loadContainersLiberados() {
+    fetch('/api/containers/?estado=liberado')
+        .then(response => response.json())
+        .then(data => {
+            const container = document.getElementById('containers-liberados');
+            container.innerHTML = '';
+            
+            if (!data.results || data.results.length === 0) {
+                container.innerHTML = '<p class="text-center text-muted py-4">✅ No hay contenedores liberados</p>';
+                return;
+            }
+            
+            data.results.forEach(cont => {
+                const card = `
+                    <div class="container-card card mb-2">
+                        <div class="card-body py-2">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <div>
+                                    <strong class="small">${cont.container_id}</strong><br>
+                                    <small class="text-muted">
+                                        <i class="fas fa-ship"></i> ${cont.nave || 'N/A'}
+                                    </small>
+                                    ${cont.dias_para_demurrage !== null && cont.dias_para_demurrage <= 2 ? 
+                                        `<br><span class="badge bg-danger small">
+                                            ${cont.dias_para_demurrage} días
+                                        </span>` : ''}
+                                </div>
+                                <div>
+                                    <button class="btn btn-sm btn-primary" onclick="programarContenedor('${cont.container_id}')" title="Programar entrega">
+                                        <i class="fas fa-calendar-plus"></i>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+                container.innerHTML += card;
+            });
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            document.getElementById('containers-liberados').innerHTML = 
+                '<p class="text-danger text-center small">Error al cargar</p>';
+        });
+}
+
+// Función para programar un contenedor liberado
+function programarContenedor(containerId) {
+    alert('Función de programación rápida en desarrollo.\nPor ahora, use la página de Importar para crear programaciones desde Excel.');
+}
+
+// Sistema de sincronización entre pestañas usando localStorage
+function broadcastDataChange(changeType) {
+    const event = {
+        type: changeType,
+        timestamp: new Date().getTime(),
+        page: 'operaciones'
+    };
+    localStorage.setItem('soptralocDataChange', JSON.stringify(event));
+    // Limpiar después de 1 segundo
+    setTimeout(() => {
+        localStorage.removeItem('soptralocDataChange');
+    }, 1000);
+}
+
+// Escuchar cambios de otras pestañas
+window.addEventListener('storage', function(e) {
+    if (e.key === 'soptralocDataChange' && e.newValue) {
+        const event = JSON.parse(e.newValue);
+        console.log('Cambio detectado desde otra pestaña:', event);
+        
+        // Recargar datos si el cambio es relevante y no viene de esta misma página
+        if (event.page !== 'operaciones') {
+            loadContainersLiberados();
+            loadContainersSinAsignar();
+            loadConductoresDisponibles();
+        }
+    }
+});
+
 // Cargar al inicio
 document.addEventListener('DOMContentLoaded', function() {
+    loadContainersLiberados();
     loadContainersSinAsignar();
     loadConductoresDisponibles();
     loadPreAsignacionData();
     
     // Actualizar cada 30 segundos
     setInterval(() => {
+        loadContainersLiberados();
         loadContainersSinAsignar();
         loadConductoresDisponibles();
     }, 30000);
