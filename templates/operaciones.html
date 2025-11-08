@@ -611,7 +611,7 @@ function confirmarAsignacionManual(driverId, driverNombre) {
             
             const progId = data.results[0].id;
             
-            fetch(`/api/programaciones/${progId}/asignar_driver/`, {
+            fetch(`/api/programaciones/${progId}/asignar_conductor/`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
