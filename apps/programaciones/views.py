@@ -30,6 +30,22 @@ class ProgramacionViewSet(viewsets.ModelViewSet):
     ordering = ['fecha_programada']
     permission_classes = [IsAuthenticatedOrReadOnly]
     
+    def get_queryset(self):
+        """
+        Override to support driver__isnull filter for programaciones sin asignar
+        """
+        queryset = super().get_queryset()
+        
+        # Filtro especial para driver__isnull
+        driver_isnull = self.request.query_params.get('driver__isnull', None)
+        if driver_isnull is not None:
+            if driver_isnull.lower() == 'true':
+                queryset = queryset.filter(driver__isnull=True)
+            elif driver_isnull.lower() == 'false':
+                queryset = queryset.filter(driver__isnull=False)
+        
+        return queryset
+    
     def get_serializer_class(self):
         if self.action == 'list':
             return ProgramacionListSerializer
@@ -606,6 +622,56 @@ class ProgramacionViewSet(viewsets.ModelViewSet):
         usuario = request.user.username if request.user.is_authenticated else None
         programacion.container.cambiar_estado('entregado', usuario)
         
+        # Registrar tiempo de viaje real para ML (si hay datos de inicio)
+        if programacion.fecha_inicio_ruta and programacion.gps_inicio_lat and programacion.gps_inicio_lng:
+            try:
+                from apps.programaciones.models import TiempoViaje
+                from apps.core.services.mapbox import MapboxService
+                
+                # Calcular tiempo real del viaje
+                tiempo_real_min = int((timezone.now() - programacion.fecha_inicio_ruta).total_seconds() / 60)
+                
+                # Obtener tiempo que Mapbox estimó originalmente
+                tiempo_mapbox_result = MapboxService.calcular_ruta(
+                    float(programacion.gps_inicio_lng), float(programacion.gps_inicio_lat),
+                    float(programacion.cd.lng), float(programacion.cd.lat)
+                )
+                tiempo_mapbox = tiempo_mapbox_result.get('duration_minutes', 60) if tiempo_mapbox_result else 60
+                distancia_km = tiempo_mapbox_result.get('distance_km', 0) if tiempo_mapbox_result else 0
+                
+                # Detectar anomalías (tiempo real > 3x estimado = probable pausa/desvío)
+                anomalia = tiempo_real_min > (tiempo_mapbox * 3)
+                
+                # Crear registro de TiempoViaje para ML
+                TiempoViaje.objects.create(
+                    conductor=programacion.driver,
+                    programacion=programacion,
+                    origen_lat=programacion.gps_inicio_lat,
+                    origen_lon=programacion.gps_inicio_lng,
+                    destino_lat=programacion.cd.lat,
+                    destino_lon=programacion.cd.lng,
+                    origen_nombre=programacion.container.posicion_fisica or 'Puerto',
+                    destino_nombre=programacion.cd.nombre,
+                    tiempo_mapbox_min=tiempo_mapbox,
+                    tiempo_real_min=tiempo_real_min,
+                    hora_salida=programacion.fecha_inicio_ruta,
+                    hora_llegada=timezone.now(),
+                    hora_del_dia=programacion.fecha_inicio_ruta.hour,
+                    dia_semana=programacion.fecha_inicio_ruta.weekday(),
+                    distancia_km=distancia_km,
+                    anomalia=anomalia,
+                    observaciones='Registrado automáticamente al marcar entregado'
+                )
+                
+                import logging
+                logger = logging.getLogger(__name__)
+                logger.info(f'ML: TiempoViaje registrado - Real: {tiempo_real_min}min, Mapbox: {tiempo_mapbox}min, Anomalía: {anomalia}')
+            
+            except Exception as e:
+                import logging
+                logger = logging.getLogger(__name__)
+                logger.warning(f'Error registrando TiempoViaje para ML: {str(e)}')
+        
         # Crear evento de arribo
         from apps.events.models import Event
         Event.objects.create(
@@ -662,10 +728,47 @@ class ProgramacionViewSet(viewsets.ModelViewSet):
         if lat and lng:
             programacion.driver.actualizar_posicion(lat, lng)
         
-        # Si está entregado, pasar primero por descargado
+        # Si está entregado, pasar primero por descargado y registrar tiempo de operación para ML
         if programacion.container.estado == 'entregado':
             usuario = request.user.username if request.user.is_authenticated else None
             programacion.container.cambiar_estado('descargado', usuario)
+            
+            # Registrar tiempo de operación real para ML
+            if programacion.container.fecha_entrega:
+                try:
+                    from apps.programaciones.models import TiempoOperacion
+                    
+                    # Calcular tiempo real de descarga
+                    tiempo_real_min = int((timezone.now() - programacion.container.fecha_entrega).total_seconds() / 60)
+                    
+                    # Tiempo estimado inicial (del CD o default)
+                    tiempo_estimado = programacion.cd.tiempo_promedio_descarga_min or 60
+                    
+                    # Detectar anomalías (> 3x estimado)
+                    anomalia = tiempo_real_min > (tiempo_estimado * 3)
+                    
+                    # Crear registro de TiempoOperacion para ML
+                    TiempoOperacion.objects.create(
+                        cd=programacion.cd,
+                        conductor=programacion.driver,
+                        container=programacion.container,
+                        tipo_operacion='descarga_cd',
+                        tiempo_estimado_min=tiempo_estimado,
+                        tiempo_real_min=tiempo_real_min,
+                        hora_inicio=programacion.container.fecha_entrega,
+                        hora_fin=timezone.now(),
+                        anomalia=anomalia,
+                        observaciones='Registrado automáticamente al marcar vacío'
+                    )
+                    
+                    import logging
+                    logger = logging.getLogger(__name__)
+                    logger.info(f'ML: TiempoOperacion registrado - CD: {programacion.cd.nombre}, Real: {tiempo_real_min}min, Estimado: {tiempo_estimado}min, Anomalía: {anomalia}')
+                
+                except Exception as e:
+                    import logging
+                    logger = logging.getLogger(__name__)
+                    logger.warning(f'Error registrando TiempoOperacion para ML: {str(e)}')
         
         # Cambiar estado del contenedor a 'vacio'
         usuario = request.user.username if request.user.is_authenticated else None
@@ -810,4 +913,61 @@ class ProgramacionViewSet(viewsets.ModelViewSet):
                 'lat': str(driver.ultima_posicion_lat),
                 'lng': str(driver.ultima_posicion_lng)
             }
+        })
+    
+    @action(detail=False, methods=['get'])
+    def ml_stats(self, request):
+        """
+        Estadísticas de Machine Learning
+        Muestra datos de aprendizaje del sistema
+        """
+        from apps.programaciones.models import TiempoOperacion, TiempoViaje
+        from django.db.models import Avg, Count
+        
+        # Estadísticas de TiempoViaje
+        viajes_stats = TiempoViaje.objects.filter(anomalia=False).aggregate(
+            total_viajes=Count('id'),
+            tiempo_mapbox_promedio=Avg('tiempo_mapbox_min'),
+            tiempo_real_promedio=Avg('tiempo_real_min')
+        )
+        
+        # Factor de corrección promedio
+        if viajes_stats['tiempo_mapbox_promedio'] and viajes_stats['tiempo_real_promedio']:
+            factor_correccion = viajes_stats['tiempo_real_promedio'] / viajes_stats['tiempo_mapbox_promedio']
+        else:
+            factor_correccion = 1.0
+        
+        # Estadísticas de TiempoOperacion
+        operaciones_stats = TiempoOperacion.objects.filter(anomalia=False).aggregate(
+            total_operaciones=Count('id'),
+            tiempo_estimado_promedio=Avg('tiempo_estimado_min'),
+            tiempo_real_promedio=Avg('tiempo_real_min')
+        )
+        
+        # Precisión del sistema (% de no anomalías)
+        total_viajes = TiempoViaje.objects.count()
+        viajes_normales = TiempoViaje.objects.filter(anomalia=False).count()
+        precision_viajes = (viajes_normales / total_viajes * 100) if total_viajes > 0 else 0
+        
+        total_operaciones = TiempoOperacion.objects.count()
+        operaciones_normales = TiempoOperacion.objects.filter(anomalia=False).count()
+        precision_operaciones = (operaciones_normales / total_operaciones * 100) if total_operaciones > 0 else 0
+        
+        return Response({
+            'success': True,
+            'ml_activo': True,
+            'viajes': {
+                'total_registros': viajes_stats['total_viajes'] or 0,
+                'tiempo_mapbox_promedio': round(viajes_stats['tiempo_mapbox_promedio'] or 0, 1),
+                'tiempo_real_promedio': round(viajes_stats['tiempo_real_promedio'] or 0, 1),
+                'factor_correccion': round(factor_correccion, 2),
+                'precision': round(precision_viajes, 1)
+            },
+            'operaciones': {
+                'total_registros': operaciones_stats['total_operaciones'] or 0,
+                'tiempo_estimado_promedio': round(operaciones_stats['tiempo_estimado_promedio'] or 0, 1),
+                'tiempo_real_promedio': round(operaciones_stats['tiempo_real_promedio'] or 0, 1),
+                'precision': round(precision_operaciones, 1)
+            },
+            'mensaje': f'Sistema ML con {viajes_stats["total_viajes"] or 0} viajes y {operaciones_stats["total_operaciones"] or 0} operaciones registradas'
         })

@@ -16,9 +16,53 @@
                         Sistema automático de asignación de conductores basado en Machine Learning
                     </p>
                     
+                    <!-- ML Stats Panel -->
+                    <div class="row mb-4">
+                        <div class="col-md-12">
+                            <div class="alert alert-success">
+                                <div class="d-flex justify-content-between align-items-center">
+                                    <div>
+                                        <i class="fas fa-brain"></i>
+                                        <strong>Machine Learning Activo</strong>
+                                        <span class="ms-2 badge bg-success" id="ml-status">Cargando...</span>
+                                    </div>
+                                    <button class="btn btn-sm btn-outline-success" onclick="loadMLStats()">
+                                        <i class="fas fa-sync-alt"></i> Actualizar Stats
+                                    </button>
+                                </div>
+                                <div class="row mt-3">
+                                    <div class="col-md-3">
+                                        <div class="text-center">
+                                            <h4 class="mb-0" id="ml-viajes-total">-</h4>
+                                            <small class="text-muted">Viajes Registrados</small>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-3">
+                                        <div class="text-center">
+                                            <h4 class="mb-0" id="ml-operaciones-total">-</h4>
+                                            <small class="text-muted">Operaciones Registradas</small>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-3">
+                                        <div class="text-center">
+                                            <h4 class="mb-0" id="ml-factor-correccion">-</h4>
+                                            <small class="text-muted">Factor Corrección ML</small>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-3">
+                                        <div class="text-center">
+                                            <h4 class="mb-0" id="ml-precision">-</h4>
+                                            <small class="text-muted">Precisión (%)</small>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
                     <div class="alert alert-ubuntu">
                         <i class="fas fa-info-circle"></i>
-                        <strong>Funcionalidad:</strong> El sistema evalúa múltiples factores para asignar el mejor conductor disponible a cada programación.
+                        <strong>Funcionalidad:</strong> El sistema evalúa múltiples factores usando Machine Learning para asignar el mejor conductor. Los tiempos se ajustan automáticamente basándose en datos históricos reales.
                     </div>
 
                     <h5 class="mt-4">Criterios de Asignación:</h5>
@@ -152,4 +196,46 @@
         </div>
     </div>
 </div>
+
+<script>
+// Cargar estadísticas de ML
+function loadMLStats() {
+    fetch('/api/programaciones/ml_stats/')
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                // Actualizar badge de estado
+                document.getElementById('ml-status').textContent = data.ml_activo ? 'Activo ✓' : 'Inactivo';
+                document.getElementById('ml-status').className = data.ml_activo ? 'ms-2 badge bg-success' : 'ms-2 badge bg-warning';
+                
+                // Actualizar stats de viajes
+                document.getElementById('ml-viajes-total').textContent = data.viajes.total_registros;
+                
+                // Actualizar stats de operaciones
+                document.getElementById('ml-operaciones-total').textContent = data.operaciones.total_registros;
+                
+                // Factor de corrección
+                const factor = data.viajes.factor_correccion;
+                document.getElementById('ml-factor-correccion').textContent = factor.toFixed(2) + 'x';
+                
+                // Precisión promedio
+                const precision = (data.viajes.precision + data.operaciones.precision) / 2;
+                document.getElementById('ml-precision').textContent = precision.toFixed(1) + '%';
+            }
+        })
+        .catch(error => {
+            console.error('Error cargando ML stats:', error);
+            document.getElementById('ml-status').textContent = 'Error';
+            document.getElementById('ml-status').className = 'ms-2 badge bg-danger';
+        });
+}
+
+// Cargar al iniciar
+document.addEventListener('DOMContentLoaded', function() {
+    loadMLStats();
+    
+    // Actualizar cada 60 segundos
+    setInterval(loadMLStats, 60000);
+});
+</script>
 {% endblock %}
