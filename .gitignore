@@ -151,13 +151,17 @@ mobile-app/ios/build
 ~$*.xlsx
 
 # Excel files (except fixtures and test data)
-# Uncomment if you don't want to track Excel files
-# *.xlsx
-# *.xls
-# *.csv
+# Root level Excel files should be excluded (test files)
+/*.xlsx
+/*.xls
+/*.csv
+# Allow Excel files in specific directories
 !**/fixtures/*.xlsx
 !**/test_data/*.xlsx
-!apps/*.xlsx
+
+# Documentation - only keep README.md
+/*.md
+!README.md
 
 # Temporary uploads
 /uploads/temp/
