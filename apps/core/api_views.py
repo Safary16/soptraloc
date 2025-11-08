@@ -7,7 +7,7 @@ from rest_framework.permissions import IsAuthenticatedOrReadOnly
 from rest_framework.response import Response
 from django.utils import timezone
 from datetime import timedelta
-from django.db.models import Avg, Count, Q
+from django.db.models import Avg, Count, Q, F
 
 from apps.containers.models import Container
 from apps.drivers.models import Driver
@@ -27,7 +27,10 @@ def dashboard_stats(request):
         # Métricas principales
         'contenedores_total': Container.objects.count(),
         'conductores': Driver.objects.count(),
-        'conductores_disponibles': Driver.objects.filter(esta_disponible=True).count(),
+        'conductores_disponibles': Driver.objects.filter(
+            activo=True,
+            presente=True
+        ).filter(num_entregas_dia__lt=F('max_entregas_dia')).count(),
         
         # Métricas específicas requeridas
         'programados_hoy': Container.objects.filter(
@@ -43,10 +46,10 @@ def dashboard_stats(request):
         'liberados': Container.objects.filter(estado='liberado').count(),
         'en_ruta': Container.objects.filter(estado='en_ruta').count(),
         
-        # Alertas de no asignados
-        'sin_asignar': Container.objects.filter(
-            estado='programado',
-            fecha_programacion__lte=timezone.now() + timedelta(hours=48)
+        # Alertas de no asignados (programaciones sin conductor asignado)
+        'sin_asignar': Programacion.objects.filter(
+            driver__isnull=True,
+            fecha_programada__lte=timezone.now() + timedelta(hours=48)
         ).count(),
         
         # Totales por estado (excluyendo devueltos)
