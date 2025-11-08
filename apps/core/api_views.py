@@ -43,10 +43,10 @@ def dashboard_stats(request):
         'liberados': Container.objects.filter(estado='liberado').count(),
         'en_ruta': Container.objects.filter(estado='en_ruta').count(),
         
-        # Alertas de no asignados
-        'sin_asignar': Container.objects.filter(
-            estado='programado',
-            fecha_programacion__lte=timezone.now() + timedelta(hours=48)
+        # Alertas de no asignados (programaciones sin conductor asignado)
+        'sin_asignar': Programacion.objects.filter(
+            driver__isnull=True,
+            fecha_programada__lte=timezone.now() + timedelta(hours=48)
         ).count(),
         
         # Totales por estado (excluyendo devueltos)
