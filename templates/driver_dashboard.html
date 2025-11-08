@@ -619,8 +619,6 @@
                             <h6><i class="fas fa-map-marker-alt"></i> Presentarse en:</h6>
                             <p><strong>${prog.cd}</strong></p>
                             <p><i class="fas fa-map"></i> ${prog.cd_direccion || 'N/A'}</p>
-                            ${prog.cd_telefono ? `<p><i class="fas fa-phone"></i> ${prog.cd_telefono}</p>` : ''}
-                            ${prog.cd_horario ? `<p><i class="fas fa-clock"></i> ${prog.cd_horario}</p>` : ''}
                             
                             ${prog.cd_direccion ? `
                             <a href="https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(prog.cd_direccion)}" 
