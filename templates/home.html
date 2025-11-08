@@ -44,13 +44,15 @@
             </a>
         </div>
         <div class="col-lg-3 col-md-6 mb-3">
-            <div class="card stat-card {% if stats.sin_asignar > 0 %}bg-warning{% else %}dark{% endif %} fade-in">
-                <div class="stat-icon">
-                    <i class="fas fa-exclamation-triangle"></i>
+            <a href="/operaciones/" class="text-decoration-none">
+                <div class="card stat-card {% if stats.sin_asignar > 0 %}bg-warning{% else %}dark{% endif %} fade-in" style="cursor: pointer; transition: transform 0.2s;" onmouseover="this.style.transform='scale(1.05)'" onmouseout="this.style.transform='scale(1)'">
+                    <div class="stat-icon">
+                        <i class="fas fa-exclamation-triangle"></i>
+                    </div>
+                    <div class="stat-number">{{ stats.sin_asignar }}</div>
+                    <div class="stat-label">Sin Asignar (48h)</div>
                 </div>
-                <div class="stat-number">{{ stats.sin_asignar }}</div>
-                <div class="stat-label">Sin Asignar (48h)</div>
-            </div>
+            </a>
         </div>
         <div class="col-lg-3 col-md-6 mb-3">
             <a href="/containers/" class="text-decoration-none">

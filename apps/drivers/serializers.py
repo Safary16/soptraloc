@@ -72,6 +72,8 @@ class DriverDetailSerializer(DriverSerializer):
                     'estado': estado,
                     'fecha_asignacion': prog.fecha_asignacion,
                     'fecha_programada': prog.fecha_programada,
+                    'aceptada_por_conductor': prog.aceptada_por_conductor,
+                    'fecha_aceptacion': prog.fecha_aceptacion,
                 }
                 resultado.append(item)
         
