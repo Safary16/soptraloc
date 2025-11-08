@@ -13,6 +13,7 @@ import os
 from apps.drivers.views import DriverViewSet, driver_login, driver_logout, driver_dashboard, monitoring
 from apps.containers.views import ContainerViewSet
 from apps.programaciones.views import ProgramacionViewSet
+from apps.cds.views import CDViewSet
 
 # Import frontend views
 from apps.core.views import (
@@ -26,6 +27,7 @@ router = DefaultRouter()
 router.register(r'drivers', DriverViewSet, basename='driver')
 router.register(r'containers', ContainerViewSet, basename='container')
 router.register(r'programaciones', ProgramacionViewSet, basename='programacion')
+router.register(r'cds', CDViewSet, basename='cd')
 
 urlpatterns = [
     # Frontend pages

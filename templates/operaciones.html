@@ -53,65 +53,26 @@
     <!-- Tabs -->
     <ul class="nav nav-tabs mb-4" id="operacionesTabs" role="tablist">
         <li class="nav-item" role="presentation">
-            <button class="nav-link active" id="asignacion-tab" data-bs-toggle="tab" data-bs-target="#asignacion" type="button">
-                <i class="fas fa-user-plus"></i> Asignación
-            </button>
-        </li>
-        <li class="nav-item" role="presentation">
-            <button class="nav-link" id="ciclo-tab" data-bs-toggle="tab" data-bs-target="#ciclo" type="button">
+            <button class="nav-link active" id="ciclo-tab" data-bs-toggle="tab" data-bs-target="#ciclo" type="button">
                 <i class="fas fa-sync-alt"></i> Ciclo de Vida
             </button>
         </li>
         <li class="nav-item" role="presentation">
-            <button class="nav-link" id="preAsignacion-tab" data-bs-toggle="tab" data-bs-target="#preAsignacion" type="button">
-                <i class="fas fa-calendar-plus"></i> Pre-Asignación
+            <button class="nav-link" id="liberacion-tab" data-bs-toggle="tab" data-bs-target="#liberacion" type="button">
+                <i class="fas fa-unlock"></i> Liberación
+            </button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link" id="programacion-tab" data-bs-toggle="tab" data-bs-target="#programacion" type="button">
+                <i class="fas fa-calendar-alt"></i> Programación
             </button>
         </li>
     </ul>
 
     <!-- Tab Content -->
     <div class="tab-content" id="operacionesTabContent">
-        <!-- Asignación Tab -->
-        <div class="tab-pane fade show active" id="asignacion" role="tabpanel">
-            <div class="row">
-                <!-- Contenedores sin asignar -->
-                <div class="col-md-6 mb-4">
-                    <div class="card">
-                        <div class="card-header bg-warning text-dark">
-                            <i class="fas fa-exclamation-triangle"></i> Contenedores Sin Asignar
-                        </div>
-                        <div class="card-body" style="max-height: 600px; overflow-y: auto;">
-                            <div id="containers-sin-asignar">
-                                <div class="text-center py-4">
-                                    <div class="spinner-border text-primary"></div>
-                                    <p class="mt-2">Cargando...</p>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Conductores disponibles -->
-                <div class="col-md-6 mb-4">
-                    <div class="card">
-                        <div class="card-header bg-success text-white">
-                            <i class="fas fa-users"></i> Conductores Disponibles
-                        </div>
-                        <div class="card-body" style="max-height: 600px; overflow-y: auto;">
-                            <div id="conductores-disponibles">
-                                <div class="text-center py-4">
-                                    <div class="spinner-border text-primary"></div>
-                                    <p class="mt-2">Cargando...</p>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-
         <!-- Ciclo de Vida Tab -->
-        <div class="tab-pane fade" id="ciclo" role="tabpanel">
+        <div class="tab-pane fade show active" id="ciclo" role="tabpanel">
             <div class="row">
                 <div class="col-12 mb-3">
                     <div class="card">
@@ -151,71 +112,119 @@
             </div>
         </div>
 
-        <!-- Pre-Asignación Tab -->
-        <div class="tab-pane fade" id="preAsignacion" role="tabpanel">
+        <!-- Liberación Tab -->
+        <div class="tab-pane fade" id="liberacion" role="tabpanel">
             <div class="card">
-                <div class="card-header bg-secondary text-white">
-                    <i class="fas fa-calendar-plus"></i> Pre-Asignación de Conductores (Asignación Futura)
+                <div class="card-header bg-success text-white">
+                    <i class="fas fa-unlock"></i> Liberar Contenedores
                 </div>
                 <div class="card-body">
                     <div class="alert alert-info">
                         <i class="fas fa-info-circle"></i>
-                        <strong>Pre-Asignación:</strong> Permite asignar conductores para rutas futuras. El sistema validará que el conductor esté disponible considerando tiempos de desplazamiento y operaciones previas.
+                        <strong>Liberación:</strong> Cambia el estado de contenedores "Por Arribar" a "Liberado" cuando son liberados por aduana/naviera.
                     </div>
                     
-                    <!-- Formulario de Pre-Asignación -->
-                    <div class="row mb-4">
-                        <div class="col-md-6">
-                            <div class="card">
-                                <div class="card-header bg-light">
-                                    <h6 class="mb-0"><i class="fas fa-box"></i> Seleccionar Contenedor</h6>
-                                </div>
-                                <div class="card-body">
-                                    <div class="mb-3">
-                                        <label class="form-label">Contenedor Programado</label>
-                                        <select class="form-select" id="pre-container-select">
-                                            <option value="">Cargando contenedores...</option>
-                                        </select>
-                                    </div>
-                                    <div id="pre-container-info" class="alert alert-secondary d-none">
-                                        <!-- Info del contenedor seleccionado -->
-                                    </div>
-                                </div>
-                            </div>
+                    <div class="row mb-3">
+                        <div class="col-md-8">
+                            <input type="text" class="form-control" id="search-liberar" placeholder="Buscar contenedor por ID...">
                         </div>
-                        <div class="col-md-6">
-                            <div class="card">
-                                <div class="card-header bg-light">
-                                    <h6 class="mb-0"><i class="fas fa-user"></i> Seleccionar Conductor</h6>
-                                </div>
-                                <div class="card-body">
-                                    <div class="mb-3">
-                                        <label class="form-label">Conductor Disponible</label>
-                                        <select class="form-select" id="pre-driver-select">
-                                            <option value="">Cargando conductores...</option>
-                                        </select>
-                                    </div>
-                                    <div id="pre-driver-info" class="alert alert-secondary d-none">
-                                        <!-- Info del conductor seleccionado -->
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                    
-                    <div class="row">
-                        <div class="col-12 text-center">
-                            <button class="btn btn-ubuntu btn-lg" onclick="crearPreAsignacion()" id="btn-pre-asignar" disabled>
-                                <i class="fas fa-calendar-check"></i> Crear Pre-Asignación
+                        <div class="col-md-4">
+                            <button class="btn btn-primary w-100" onclick="buscarParaLiberar()">
+                                <i class="fas fa-search"></i> Buscar
                             </button>
+                        </div>
+                    </div>
+                    
+                    <div id="contenedor-liberar-info" class="d-none">
+                        <div class="card">
+                            <div class="card-body">
+                                <h5 id="liberar-container-id"></h5>
+                                <p id="liberar-container-details"></p>
+                                <div class="mb-3">
+                                    <label class="form-label">Posición Física (opcional)</label>
+                                    <input type="text" class="form-control" id="liberar-posicion" placeholder="ej: TPS, STI, ZEAL, etc.">
+                                </div>
+                                <button class="btn btn-success" onclick="confirmarLiberacion()">
+                                    <i class="fas fa-unlock"></i> Liberar Contenedor
+                                </button>
+                            </div>
                         </div>
                     </div>
                     
                     <hr class="my-4">
                     
-                    <!-- Lista de Pre-Asignaciones -->
-                    <h5><i class="fas fa-list"></i> Pre-Asignaciones Programadas</h5>
-                    <div id="pre-asignaciones-list" class="mt-3">
+                    <h5><i class="fas fa-list"></i> Contenedores Por Arribar</h5>
+                    <div id="containers-por-arribar" class="mt-3">
+                        <div class="text-center py-4">
+                            <div class="spinner-border text-primary"></div>
+                            <p class="mt-2">Cargando...</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Programación Tab -->
+        <div class="tab-pane fade" id="programacion" role="tabpanel">
+            <div class="card">
+                <div class="card-header bg-primary text-white">
+                    <i class="fas fa-calendar-alt"></i> Programar Entregas
+                </div>
+                <div class="card-body">
+                    <div class="alert alert-info">
+                        <i class="fas fa-info-circle"></i>
+                        <strong>Programación:</strong> Asigna fecha y CD de entrega a contenedores liberados.
+                    </div>
+                    
+                    <div class="row mb-3">
+                        <div class="col-md-8">
+                            <input type="text" class="form-control" id="search-programar" placeholder="Buscar contenedor por ID...">
+                        </div>
+                        <div class="col-md-4">
+                            <button class="btn btn-primary w-100" onclick="buscarParaProgramar()">
+                                <i class="fas fa-search"></i> Buscar
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <div id="contenedor-programar-form" class="d-none">
+                        <div class="card">
+                            <div class="card-body">
+                                <h5 id="programar-container-id"></h5>
+                                <p id="programar-container-details"></p>
+                                
+                                <div class="row">
+                                    <div class="col-md-6 mb-3">
+                                        <label class="form-label">Centro de Distribución *</label>
+                                        <select class="form-select" id="programar-cd">
+                                            <option value="">Seleccione CD...</option>
+                                        </select>
+                                    </div>
+                                    <div class="col-md-6 mb-3">
+                                        <label class="form-label">Fecha y Hora Programada *</label>
+                                        <input type="datetime-local" class="form-control" id="programar-fecha">
+                                    </div>
+                                    <div class="col-md-12 mb-3">
+                                        <label class="form-label">Cliente *</label>
+                                        <input type="text" class="form-control" id="programar-cliente" placeholder="Nombre del cliente">
+                                    </div>
+                                    <div class="col-md-12 mb-3">
+                                        <label class="form-label">Observaciones</label>
+                                        <textarea class="form-control" id="programar-obs" rows="2"></textarea>
+                                    </div>
+                                </div>
+                                
+                                <button class="btn btn-primary" onclick="confirmarProgramacion()">
+                                    <i class="fas fa-calendar-check"></i> Programar Entrega
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <hr class="my-4">
+                    
+                    <h5><i class="fas fa-list"></i> Contenedores Liberados</h5>
+                    <div id="containers-liberados" class="mt-3">
                         <div class="text-center py-4">
                             <div class="spinner-border text-primary"></div>
                             <p class="mt-2">Cargando...</p>
@@ -227,226 +236,11 @@
     </div>
 </div>
 
-<!-- Modal para Asignación Manual -->
-<div class="modal fade" id="asignacionModal" tabindex="-1">
-    <div class="modal-dialog modal-lg">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title">Asignar Conductor</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-            </div>
-            <div class="modal-body">
-                <div id="modal-content">
-                    <!-- Contenido dinámico -->
-                </div>
-            </div>
-        </div>
-    </div>
-</div>
+
 
 <script>
 let selectedContainer = null;
-let selectedDriver = null;
-
-// Cargar contenedores sin asignar
-function loadContainersSinAsignar() {
-    fetch('/api/containers/?estado=programado')
-        .then(response => response.json())
-        .then(data => {
-            const container = document.getElementById('containers-sin-asignar');
-            container.innerHTML = '';
-            
-            if (data.results.length === 0) {
-                container.innerHTML = '<p class="text-center text-muted py-4">✅ No hay contenedores sin asignar</p>';
-                return;
-            }
-            
-            data.results.forEach(cont => {
-                const card = `
-                    <div class="container-card card mb-3">
-                        <div class="card-body">
-                            <div class="d-flex justify-content-between align-items-start">
-                                <div>
-                                    <h6 class="mb-1"><strong>${cont.container_id}</strong></h6>
-                                    <p class="mb-1 small text-muted">
-                                        <i class="fas fa-ship"></i> ${cont.nave || 'N/A'}<br>
-                                        <i class="fas fa-calendar"></i> ${cont.fecha_programacion ? new Date(cont.fecha_programacion).toLocaleDateString('es-CL') : 'Sin fecha'}
-                                    </p>
-                                    ${cont.dias_para_demurrage !== null ? 
-                                        `<span class="badge bg-${cont.dias_para_demurrage <= 1 ? 'danger' : cont.dias_para_demurrage <= 2 ? 'warning' : 'info'}">
-                                            ${cont.dias_para_demurrage} días demurrage
-                                        </span>` : ''}
-                                </div>
-                                <div>
-                                    <button class="btn btn-sm btn-success action-btn" onclick="asignarAutomatico(${cont.id})">
-                                        <i class="fas fa-robot"></i> Auto
-                                    </button>
-                                    <button class="btn btn-sm btn-primary action-btn" onclick="asignarManual(${cont.id})">
-                                        <i class="fas fa-user-plus"></i> Manual
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                `;
-                container.innerHTML += card;
-            });
-        })
-        .catch(error => {
-            console.error('Error:', error);
-            document.getElementById('containers-sin-asignar').innerHTML = 
-                '<p class="text-danger text-center">Error al cargar contenedores</p>';
-        });
-}
-
-// Cargar conductores disponibles
-function loadConductoresDisponibles() {
-    fetch('/api/drivers/?activo=true&presente=true')
-        .then(response => response.json())
-        .then(data => {
-            const container = document.getElementById('conductores-disponibles');
-            container.innerHTML = '';
-            
-            if (data.results.length === 0) {
-                container.innerHTML = '<p class="text-center text-muted py-4">⚠️ No hay conductores disponibles</p>';
-                return;
-            }
-            
-            data.results.forEach(driver => {
-                const ocupacion = driver.max_entregas_dia > 0 ? 
-                    ((driver.num_entregas_dia / driver.max_entregas_dia) * 100).toFixed(0) : 0;
-                
-                const card = `
-                    <div class="card mb-2">
-                        <div class="card-body py-2">
-                            <div class="d-flex justify-content-between align-items-center">
-                                <div>
-                                    <strong>${driver.nombre}</strong><br>
-                                    <small class="text-muted">
-                                        Entregas: ${driver.num_entregas_dia}/${driver.max_entregas_dia} 
-                                        | Cumpl: ${driver.cumplimiento_porcentaje}%
-                                    </small>
-                                </div>
-                                <div class="text-end">
-                                    <div class="progress" style="width: 100px; height: 20px;">
-                                        <div class="progress-bar ${ocupacion >= 100 ? 'bg-danger' : ocupacion >= 80 ? 'bg-warning' : 'bg-success'}" 
-                                             style="width: ${Math.min(ocupacion, 100)}%;">
-                                            ${ocupacion}%
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                `;
-                container.innerHTML += card;
-            });
-        })
-        .catch(error => {
-            console.error('Error:', error);
-            document.getElementById('conductores-disponibles').innerHTML = 
-                '<p class="text-danger text-center">Error al cargar conductores</p>';
-        });
-}
-
-// Asignación automática
-function asignarAutomatico(containerId) {
-    if (!confirm('¿Asignar automáticamente el mejor conductor disponible?')) {
-        return;
-    }
-    
-    // Necesitamos buscar la programación asociada
-    fetch(`/api/programaciones/?container=${containerId}`)
-        .then(response => response.json())
-        .then(data => {
-            if (data.results.length === 0) {
-                alert('⚠️ No se encontró programación para este contenedor');
-                return;
-            }
-            
-            const progId = data.results[0].id;
-            
-            fetch(`/api/programaciones/${progId}/asignar_automatico/`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-CSRFToken': getCookie('csrftoken')
-                }
-            })
-            .then(response => response.json())
-            .then(result => {
-                if (result.success) {
-                    alert(`✅ Conductor asignado: ${result.mensaje}`);
-                    loadContainersSinAsignar();
-                    loadConductoresDisponibles();
-                } else {
-                    alert(`❌ Error: ${result.error}`);
-                }
-            });
-        });
-}
-
-// Asignación manual
-function asignarManual(containerId) {
-    selectedContainer = containerId;
-    const modal = new bootstrap.Modal(document.getElementById('asignacionModal'));
-    
-    fetch(`/api/drivers/?activo=true&presente=true`)
-        .then(response => response.json())
-        .then(data => {
-            let content = '<h6>Seleccione un conductor:</h6><div class="list-group">';
-            
-            data.results.forEach(driver => {
-                content += `
-                    <button class="list-group-item list-group-item-action" 
-                            onclick="confirmarAsignacionManual(${driver.id}, '${driver.nombre}')">
-                        <strong>${driver.nombre}</strong><br>
-                        <small>Entregas: ${driver.num_entregas_dia}/${driver.max_entregas_dia} | 
-                        Cumplimiento: ${driver.cumplimiento_porcentaje}%</small>
-                    </button>
-                `;
-            });
-            
-            content += '</div>';
-            document.getElementById('modal-content').innerHTML = content;
-            modal.show();
-        });
-}
-
-// Confirmar asignación manual
-function confirmarAsignacionManual(driverId, driverNombre) {
-    // Buscar programación y asignar
-    fetch(`/api/programaciones/?container=${selectedContainer}`)
-        .then(response => response.json())
-        .then(data => {
-            if (data.results.length === 0) {
-                alert('⚠️ No se encontró programación para este contenedor');
-                return;
-            }
-            
-            const progId = data.results[0].id;
-            
-            fetch(`/api/programaciones/${progId}/asignar_driver/`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-CSRFToken': getCookie('csrftoken')
-                },
-                body: JSON.stringify({ driver_id: driverId })
-            })
-            .then(response => response.json())
-            .then(result => {
-                if (result.success) {
-                    alert(`✅ ${driverNombre} asignado exitosamente`);
-                    bootstrap.Modal.getInstance(document.getElementById('asignacionModal')).hide();
-                    loadContainersSinAsignar();
-                    loadConductoresDisponibles();
-                } else {
-                    alert(`❌ Error: ${result.error || result.mensaje}`);
-                }
-            });
-        });
-}
+let selectedContainerData = null;
 
 // Buscar contenedor para ciclo de vida
 function buscarContenedorCiclo() {
@@ -583,123 +377,361 @@ function getCookie(name) {
     return cookieValue;
 }
 
-// Cargar al inicio
-document.addEventListener('DOMContentLoaded', function() {
-    loadContainersSinAsignar();
-    loadConductoresDisponibles();
-    loadPreAsignacionData();
-    
-    // Actualizar cada 30 segundos
-    setInterval(() => {
-        loadContainersSinAsignar();
-        loadConductoresDisponibles();
-    }, 30000);
-});
-
 // ============================================
-// PRE-ASIGNACIÓN (ASIGNACIÓN FUTURA)
+// LIBERACIÓN
 // ============================================
 
-function loadPreAsignacionData() {
-    // Cargar contenedores programados para pre-asignación
-    fetch('/api/containers/?estado=programado')
-        .then(response => response.json())
+function loadContainersPorArribar() {
+    fetch('/api/containers/?estado=por_arribar')
+        .then(response => {
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            return response.json();
+        })
         .then(data => {
-            const select = document.getElementById('pre-container-select');
-            if (!select) return;
-            select.innerHTML = '<option value="">Seleccione un contenedor...</option>';
+            const container = document.getElementById('containers-por-arribar');
+            if (!container) return;
+            container.innerHTML = '';
             
-            data.results.forEach(container => {
-                const option = document.createElement('option');
-                option.value = container.id;
-                option.textContent = `${container.container_id} - ${container.nave || 'Sin nave'} - ${container.cd_entrega_nombre || 'Sin CD'}`;
-                option.dataset.container = JSON.stringify(container);
-                select.appendChild(option);
-            });
-        });
-    
-    // Cargar conductores disponibles
-    fetch('/api/drivers/?activo=true')
-        .then(response => response.json())
-        .then(data => {
-            const select = document.getElementById('pre-driver-select');
-            if (!select) return;
-            select.innerHTML = '<option value="">Seleccione un conductor...</option>';
+            if (!data.results || data.results.length === 0) {
+                container.innerHTML = '<p class="text-center text-muted py-4">✅ No hay contenedores por arribar</p>';
+                return;
+            }
             
-            data.results.forEach(driver => {
-                const option = document.createElement('option');
-                option.value = driver.id;
-                option.textContent = `${driver.nombre} ${driver.apellido} - ${driver.patente || 'Sin patente'}`;
-                option.dataset.driver = JSON.stringify(driver);
-                select.appendChild(option);
+            let html = '<div class="table-responsive"><table class="table table-striped"><thead><tr>';
+            html += '<th>Contenedor</th><th>Nave</th><th>ETA</th><th>Acciones</th></tr></thead><tbody>';
+            
+            data.results.forEach(cont => {
+                html += `<tr>
+                    <td><strong>${cont.container_id}</strong></td>
+                    <td>${cont.nave || 'N/A'}</td>
+                    <td>${cont.fecha_eta ? new Date(cont.fecha_eta).toLocaleDateString('es-CL') : 'N/A'}</td>
+                    <td>
+                        <button class="btn btn-sm btn-success" onclick="liberarRapido(${cont.id}, '${cont.container_id}')">
+                            <i class="fas fa-unlock"></i> Liberar
+                        </button>
+                    </td>
+                </tr>`;
             });
+            
+            html += '</tbody></table></div>';
+            container.innerHTML = html;
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            const container = document.getElementById('containers-por-arribar');
+            if (container) {
+                container.innerHTML = '<div class="alert alert-danger">Error al cargar contenedores</div>';
+            }
         });
-    
-    // Cargar lista de programaciones
-    loadProgramacionesList();
 }
 
-// Listener para selección de contenedor y conductor en pre-asignación
-document.addEventListener('change', function(e) {
-    if (e.target.id === 'pre-container-select') {
-        const option = e.target.selectedOptions[0];
-        if (option && option.dataset.container) {
-            const container = JSON.parse(option.dataset.container);
-            const infoDiv = document.getElementById('pre-container-info');
-            if (!infoDiv) return;
-            infoDiv.classList.remove('d-none');
-            infoDiv.innerHTML = `
-                <h6>${container.container_id}</h6>
-                <p class="mb-1"><i class="fas fa-ship"></i> ${container.nave || 'N/A'}</p>
-                <p class="mb-1"><i class="fas fa-box"></i> ${container.tipo || 'N/A'}</p>
-                <p class="mb-1"><i class="fas fa-building"></i> ${container.cd_entrega_nombre || 'Sin CD'}</p>
-                ${container.fecha_programacion ? `<p class="mb-0"><i class="fas fa-calendar"></i> ${new Date(container.fecha_programacion).toLocaleString('es-CL')}</p>` : ''}
-            `;
-        }
-        checkPreAsignacionReady();
-    }
-    
-    if (e.target.id === 'pre-driver-select') {
-        const option = e.target.selectedOptions[0];
-        if (option && option.dataset.driver) {
-            const driver = JSON.parse(option.dataset.driver);
-            const infoDiv = document.getElementById('pre-driver-info');
-            if (!infoDiv) return;
-            infoDiv.classList.remove('d-none');
-            infoDiv.innerHTML = `
-                <h6>${driver.nombre} ${driver.apellido}</h6>
-                <p class="mb-1"><i class="fas fa-phone"></i> ${driver.telefono || 'N/A'}</p>
-                <p class="mb-0"><i class="fas fa-car"></i> ${driver.patente || 'Sin patente'}</p>
-            `;
-        }
-        checkPreAsignacionReady();
-    }
-});
-
-function checkPreAsignacionReady() {
-    const containerSelect = document.getElementById('pre-container-select');
-    const driverSelect = document.getElementById('pre-driver-select');
-    const btnPreAsignar = document.getElementById('btn-pre-asignar');
-    if (!containerSelect || !driverSelect || !btnPreAsignar) return;
-    
-    const containerId = containerSelect.value;
-    const driverId = driverSelect.value;
-    btnPreAsignar.disabled = !(containerId && driverId);
-}
-
-function crearPreAsignacion() {
-    const containerId = document.getElementById('pre-container-select').value;
-    const driverId = document.getElementById('pre-driver-select').value;
-    
-    if (!containerId || !driverId) {
-        alert('❌ Debe seleccionar un contenedor y un conductor');
+function buscarParaLiberar() {
+    const containerId = document.getElementById('search-liberar').value.trim();
+    if (!containerId) {
+        alert('❌ Ingrese un ID de contenedor');
         return;
     }
     
-    if (!confirm('¿Crear pre-asignación (asignación futura) para este contenedor y conductor?')) {
+    fetch(`/api/containers/?search=${containerId}`)
+        .then(response => {
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            return response.json();
+        })
+        .then(data => {
+            if (!data.results || data.results.length === 0) {
+                alert('❌ Contenedor no encontrado');
+                return;
+            }
+            
+            const container = data.results[0];
+            if (container.estado !== 'por_arribar') {
+                alert(`❌ Contenedor está en estado "${container.estado_display}", no se puede liberar. Solo contenedores "Por Arribar" pueden ser liberados.`);
+                return;
+            }
+            
+            selectedContainer = container.id;
+            selectedContainerData = container;
+            
+            document.getElementById('liberar-container-id').textContent = container.container_id;
+            document.getElementById('liberar-container-details').innerHTML = `
+                <strong>Nave:</strong> ${container.nave || 'N/A'}<br>
+                <strong>Estado:</strong> ${container.estado_display}
+            `;
+            document.getElementById('contenedor-liberar-info').classList.remove('d-none');
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('❌ Error al buscar contenedor');
+        });
+}
+
+function liberarRapido(containerId, containerIdStr) {
+    if (!confirm(`¿Liberar el contenedor ${containerIdStr}?`)) {
         return;
     }
     
+    fetch(`/api/containers/${containerId}/cambiar_estado/`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': getCookie('csrftoken')
+        },
+        body: JSON.stringify({ estado: 'liberado' })
+    })
+    .then(response => response.json())
+    .then(result => {
+        if (result.success) {
+            alert('✅ Contenedor liberado exitosamente');
+            loadContainersPorArribar();
+        } else {
+            alert(`❌ Error: ${result.error || result.mensaje}`);
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        alert('❌ Error al liberar contenedor');
+    });
+}
+
+function confirmarLiberacion() {
+    const posicion = document.getElementById('liberar-posicion').value.trim();
+    
+    if (!confirm(`¿Liberar el contenedor ${selectedContainerData.container_id}?`)) {
+        return;
+    }
+    
+    // Primero cambiar el estado
+    fetch(`/api/containers/${selectedContainer}/cambiar_estado/`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': getCookie('csrftoken')
+        },
+        body: JSON.stringify({ estado: 'liberado' })
+    })
+    .then(response => response.json())
+    .then(result => {
+        if (result.success) {
+            // Si hay posición, actualizarla
+            if (posicion) {
+                return fetch(`/api/containers/${selectedContainer}/`, {
+                    method: 'PATCH',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': getCookie('csrftoken')
+                    },
+                    body: JSON.stringify({ posicion_fisica: posicion })
+                });
+            }
+            return result;
+        } else {
+            throw new Error(result.error || result.mensaje);
+        }
+    })
+    .then(() => {
+        alert('✅ Contenedor liberado exitosamente');
+        document.getElementById('contenedor-liberar-info').classList.add('d-none');
+        document.getElementById('search-liberar').value = '';
+        document.getElementById('liberar-posicion').value = '';
+        loadContainersPorArribar();
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        alert(`❌ Error: ${error.message || 'Error al liberar contenedor'}`);
+    });
+}
+
+// ============================================
+// PROGRAMACIÓN
+// ============================================
+
+function loadContainersLiberados() {
+    fetch('/api/containers/?estado=liberado')
+        .then(response => {
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            return response.json();
+        })
+        .then(data => {
+            const container = document.getElementById('containers-liberados');
+            if (!container) return;
+            container.innerHTML = '';
+            
+            if (!data.results || data.results.length === 0) {
+                container.innerHTML = '<p class="text-center text-muted py-4">✅ No hay contenedores liberados</p>';
+                return;
+            }
+            
+            let html = '<div class="table-responsive"><table class="table table-striped"><thead><tr>';
+            html += '<th>Contenedor</th><th>Nave</th><th>Posición</th><th>Demurrage</th><th>Acciones</th></tr></thead><tbody>';
+            
+            data.results.forEach(cont => {
+                const demurrageDias = cont.dias_para_demurrage !== null ? cont.dias_para_demurrage : 'N/A';
+                const badgeClass = cont.dias_para_demurrage <= 1 ? 'bg-danger' : cont.dias_para_demurrage <= 2 ? 'bg-warning' : 'bg-info';
+                
+                html += `<tr>
+                    <td><strong>${cont.container_id}</strong></td>
+                    <td>${cont.nave || 'N/A'}</td>
+                    <td>${cont.posicion_fisica || 'N/A'}</td>
+                    <td>${demurrageDias !== 'N/A' ? `<span class="badge ${badgeClass}">${demurrageDias} días</span>` : 'N/A'}</td>
+                    <td>
+                        <button class="btn btn-sm btn-primary" onclick="iniciarProgramacion(${cont.id})">
+                            <i class="fas fa-calendar-check"></i> Programar
+                        </button>
+                    </td>
+                </tr>`;
+            });
+            
+            html += '</tbody></table></div>';
+            container.innerHTML = html;
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            const container = document.getElementById('containers-liberados');
+            if (container) {
+                container.innerHTML = '<div class="alert alert-danger">Error al cargar contenedores</div>';
+            }
+        });
+}
+
+function buscarParaProgramar() {
+    const containerId = document.getElementById('search-programar').value.trim();
+    if (!containerId) {
+        alert('❌ Ingrese un ID de contenedor');
+        return;
+    }
+    
+    fetch(`/api/containers/?search=${containerId}`)
+        .then(response => {
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            return response.json();
+        })
+        .then(data => {
+            if (!data.results || data.results.length === 0) {
+                alert('❌ Contenedor no encontrado');
+                return;
+            }
+            
+            const container = data.results[0];
+            if (container.estado !== 'liberado') {
+                alert(`❌ Contenedor está en estado "${container.estado_display}", debe estar liberado para programar. Primero libere el contenedor desde el tab de Liberación.`);
+                return;
+            }
+            
+            iniciarProgramacion(container.id);
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('❌ Error al buscar contenedor');
+        });
+}
+
+function iniciarProgramacion(containerId) {
+    fetch(`/api/containers/${containerId}/`)
+        .then(response => response.json())
+        .then(container => {
+            selectedContainer = container.id;
+            selectedContainerData = container;
+            
+            document.getElementById('programar-container-id').textContent = container.container_id;
+            document.getElementById('programar-container-details').innerHTML = `
+                <strong>Nave:</strong> ${container.nave || 'N/A'}<br>
+                <strong>Posición:</strong> ${container.posicion_fisica || 'N/A'}<br>
+                <strong>Estado:</strong> ${container.estado_display}
+            `;
+            
+            // Cargar CDs
+            loadCDsForProgramacion();
+            
+            // Establecer fecha por defecto (mañana a las 9 AM)
+            const tomorrow = new Date();
+            tomorrow.setDate(tomorrow.getDate() + 1);
+            tomorrow.setHours(9, 0, 0, 0);
+            document.getElementById('programar-fecha').value = tomorrow.toISOString().slice(0, 16);
+            
+            // Prellenar cliente si existe
+            if (container.cliente) {
+                document.getElementById('programar-cliente').value = container.cliente;
+            }
+            
+            document.getElementById('contenedor-programar-form').classList.remove('d-none');
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('❌ Error al cargar contenedor');
+        });
+}
+
+function loadCDsForProgramacion() {
+    fetch('/api/cds/')
+        .then(response => {
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            return response.json();
+        })
+        .then(data => {
+            const select = document.getElementById('programar-cd');
+            if (!select) return;
+            
+            select.innerHTML = '<option value="">Seleccione CD...</option>';
+            
+            if (!data.results || data.results.length === 0) {
+                select.innerHTML = '<option value="">No hay CDs disponibles</option>';
+                alert('⚠️ No hay Centros de Distribución registrados. Por favor registre CDs en el panel de administración.');
+                return;
+            }
+            
+            data.results.forEach(cd => {
+                const option = document.createElement('option');
+                option.value = cd.id;
+                option.textContent = `${cd.nombre} - ${cd.direccion || cd.comuna || ''}`;
+                select.appendChild(option);
+            });
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('❌ Error al cargar Centros de Distribución: ' + error.message);
+        });
+}
+
+function confirmarProgramacion() {
+    const cdId = document.getElementById('programar-cd').value;
+    const fecha = document.getElementById('programar-fecha').value;
+    const cliente = document.getElementById('programar-cliente').value.trim();
+    const observaciones = document.getElementById('programar-obs').value.trim();
+    
+    // Validación de campos
+    if (!cdId || !fecha || !cliente) {
+        alert('❌ Complete todos los campos requeridos:\n• Centro de Distribución\n• Fecha y Hora\n• Cliente');
+        return;
+    }
+    
+    // Validar que la fecha no sea en el pasado
+    const fechaSeleccionada = new Date(fecha);
+    const ahora = new Date();
+    if (fechaSeleccionada < ahora) {
+        alert('❌ La fecha programada no puede ser en el pasado');
+        return;
+    }
+    
+    if (!selectedContainer || !selectedContainerData) {
+        alert('❌ Error: No hay contenedor seleccionado');
+        return;
+    }
+    
+    if (!confirm(`¿Programar entrega del contenedor ${selectedContainerData.container_id}?\n\nCD: ${document.getElementById('programar-cd').selectedOptions[0].text}\nFecha: ${new Date(fecha).toLocaleString('es-CL')}\nCliente: ${cliente}`)) {
+        return;
+    }
+    
+    // Crear la programación
     fetch(`/api/programaciones/`, {
         method: 'POST',
         headers: {
@@ -707,9 +739,11 @@ function crearPreAsignacion() {
             'X-CSRFToken': getCookie('csrftoken')
         },
         body: JSON.stringify({
-            container: containerId,
-            driver: driverId,
-            tipo: 'manual'
+            container: selectedContainer,
+            cd: parseInt(cdId),
+            fecha_programada: fecha,
+            cliente: cliente,
+            observaciones: observaciones
         })
     })
     .then(response => {
@@ -719,87 +753,49 @@ function crearPreAsignacion() {
         return response.json();
     })
     .then(data => {
-        alert('✅ Pre-asignación creada exitosamente');
-        // Limpiar formulario
-        document.getElementById('pre-container-select').value = '';
-        document.getElementById('pre-driver-select').value = '';
-        document.getElementById('pre-container-info').classList.add('d-none');
-        document.getElementById('pre-driver-info').classList.add('d-none');
-        document.getElementById('btn-pre-asignar').disabled = true;
+        alert(`✅ Entrega programada exitosamente\n\nContenedor: ${selectedContainerData.container_id}\nSiguiente paso: Asignar conductor en /asignacion/`);
         
-        // Recargar datos
-        loadPreAsignacionData();
-        loadContainersSinAsignar();
+        // Limpiar formulario
+        document.getElementById('contenedor-programar-form').classList.add('d-none');
+        document.getElementById('search-programar').value = '';
+        document.getElementById('programar-cd').value = '';
+        document.getElementById('programar-fecha').value = '';
+        document.getElementById('programar-cliente').value = '';
+        document.getElementById('programar-obs').value = '';
+        
+        loadContainersLiberados();
     })
     .catch(error => {
         console.error('Error:', error);
-        alert('❌ Error al crear pre-asignación: ' + (error.detail || error.message || 'Error desconocido'));
-    });
-}
-
-function loadProgramacionesList() {
-    const listDiv = document.getElementById('pre-asignaciones-list');
-    if (!listDiv) return;
-    
-    fetch('/api/programaciones/')
-        .then(response => response.json())
-        .then(data => {
-            if (!data.results || data.results.length === 0) {
-                listDiv.innerHTML = '<div class="alert alert-secondary text-center">No hay pre-asignaciones programadas</div>';
-                return;
-            }
-            
-            let html = '<div class="table-responsive"><table class="table table-striped"><thead class="table-dark"><tr>';
-            html += '<th>Contenedor</th><th>Conductor</th><th>Fecha Programada</th><th>Estado</th><th>Acciones</th>';
-            html += '</tr></thead><tbody>';
-            
-            data.results.forEach(prog => {
-                html += `<tr>
-                    <td><strong>${prog.container_id || 'N/A'}</strong></td>
-                    <td>${prog.driver_nombre || 'Sin asignar'}</td>
-                    <td>${prog.fecha_programada ? new Date(prog.fecha_programada).toLocaleString('es-CL') : 'Sin fecha'}</td>
-                    <td><span class="badge bg-${prog.estado === 'completado' ? 'success' : 'warning'}">${prog.estado || 'Pendiente'}</span></td>
-                    <td>
-                        <button class="btn btn-sm btn-danger" onclick="eliminarPreAsignacion(${prog.id})" title="Eliminar">
-                            <i class="fas fa-trash"></i>
-                        </button>
-                    </td>
-                </tr>`;
-            });
-            
-            html += '</tbody></table></div>';
-            listDiv.innerHTML = html;
-        })
-        .catch(error => {
-            console.error('Error:', error);
-            listDiv.innerHTML = '<div class="alert alert-danger">Error al cargar pre-asignaciones</div>';
-        });
-}
-
-function eliminarPreAsignacion(id) {
-    if (!confirm('¿Eliminar esta pre-asignación?')) {
-        return;
-    }
-    
-    fetch(`/api/programaciones/${id}/`, {
-        method: 'DELETE',
-        headers: {
-            'X-CSRFToken': getCookie('csrftoken')
-        }
-    })
-    .then(response => {
-        if (response.ok) {
-            alert('✅ Pre-asignación eliminada');
-            loadProgramacionesList();
-            loadContainersSinAsignar();
+        let errorMsg = '❌ Error al programar entrega:\n';
+        if (error.container) {
+            errorMsg += error.container[0] || 'Error en contenedor';
+        } else if (error.cd) {
+            errorMsg += error.cd[0] || 'Error en CD';
+        } else if (error.detail) {
+            errorMsg += error.detail;
+        } else if (error.message) {
+            errorMsg += error.message;
         } else {
-            throw new Error('Error al eliminar');
+            errorMsg += JSON.stringify(error);
         }
-    })
-    .catch(error => {
-        console.error('Error:', error);
-        alert('❌ Error al eliminar pre-asignación');
+        alert(errorMsg);
     });
 }
+
+// Cargar al inicio
+document.addEventListener('DOMContentLoaded', function() {
+    buscarContenedorCiclo();
+    loadContainersPorArribar();
+    loadContainersLiberados();
+    
+    // Actualizar cada 30 segundos
+    setInterval(() => {
+        loadContainersPorArribar();
+        loadContainersLiberados();
+    }, 30000);
+});
+
+
 </script>
 {% endblock %}
