@@ -58,6 +58,11 @@
             </button>
         </li>
         <li class="nav-item" role="presentation">
+            <button class="nav-link" id="programacion-tab" data-bs-toggle="tab" data-bs-target="#programacion" type="button">
+                <i class="fas fa-calendar-alt"></i> Programación
+            </button>
+        </li>
+        <li class="nav-item" role="presentation">
             <button class="nav-link" id="ciclo-tab" data-bs-toggle="tab" data-bs-target="#ciclo" type="button">
                 <i class="fas fa-sync-alt"></i> Ciclo de Vida
             </button>
@@ -102,6 +107,89 @@
                                 <div class="text-center py-4">
                                     <div class="spinner-border text-primary"></div>
                                     <p class="mt-2">Cargando...</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Programación Tab -->
+        <div class="tab-pane fade" id="programacion" role="tabpanel">
+            <div class="card">
+                <div class="card-header bg-primary text-white">
+                    <i class="fas fa-calendar-alt"></i> Programar Contenedores Liberados
+                </div>
+                <div class="card-body">
+                    <div class="alert alert-info">
+                        <i class="fas fa-info-circle"></i>
+                        <strong>Programación:</strong> Asigne una fecha y CD de entrega a contenedores liberados. Después podrá asignar conductores en la pestaña "Asignación".
+                    </div>
+                    
+                    <div class="row mb-4">
+                        <div class="col-md-6">
+                            <div class="card">
+                                <div class="card-header bg-light">
+                                    <h6 class="mb-0"><i class="fas fa-box"></i> Contenedores Liberados</h6>
+                                </div>
+                                <div class="card-body" style="max-height: 500px; overflow-y: auto;">
+                                    <div id="containers-liberados">
+                                        <div class="text-center py-4">
+                                            <div class="spinner-border text-primary"></div>
+                                            <p class="mt-2">Cargando...</p>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="col-md-6">
+                            <div class="card">
+                                <div class="card-header bg-light">
+                                    <h6 class="mb-0"><i class="fas fa-calendar-check"></i> Programar Container</h6>
+                                </div>
+                                <div class="card-body">
+                                    <div id="form-programar-container" class="d-none">
+                                        <h6 id="prog-container-nombre"></h6>
+                                        <input type="hidden" id="prog-container-id">
+                                        
+                                        <div class="mb-3">
+                                            <label class="form-label">Centro de Distribución *</label>
+                                            <select class="form-select" id="prog-cd-select" required>
+                                                <option value="">Cargando CDs...</option>
+                                            </select>
+                                        </div>
+                                        
+                                        <div class="mb-3">
+                                            <label class="form-label">Fecha y Hora Programada *</label>
+                                            <input type="datetime-local" class="form-control" id="prog-fecha" required>
+                                        </div>
+                                        
+                                        <div class="mb-3">
+                                            <label class="form-label">Cliente</label>
+                                            <input type="text" class="form-control" id="prog-cliente" placeholder="Nombre del cliente">
+                                        </div>
+                                        
+                                        <div class="mb-3">
+                                            <label class="form-label">Observaciones</label>
+                                            <textarea class="form-control" id="prog-observaciones" rows="2" placeholder="Información adicional"></textarea>
+                                        </div>
+                                        
+                                        <div class="d-grid gap-2">
+                                            <button class="btn btn-ubuntu btn-lg" onclick="guardarProgramacion()">
+                                                <i class="fas fa-save"></i> Programar Contenedor
+                                            </button>
+                                            <button class="btn btn-secondary" onclick="cancelarProgramacion()">
+                                                <i class="fas fa-times"></i> Cancelar
+                                            </button>
+                                        </div>
+                                    </div>
+                                    
+                                    <div id="msg-seleccionar-container" class="text-center text-muted py-5">
+                                        <i class="fas fa-hand-pointer fa-3x mb-3"></i>
+                                        <p>Seleccione un contenedor liberado para programar</p>
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -801,5 +889,185 @@ function eliminarPreAsignacion(id) {
         alert('❌ Error al eliminar pre-asignación');
     });
 }
+
+// ============================================
+// PROGRAMACIÓN DE CONTENEDORES
+// ============================================
+
+let selectedContainerForProg = null;
+
+// Cargar contenedores liberados
+function loadContainersLiberados() {
+    fetch('/api/containers/?estado=liberado')
+        .then(response => response.json())
+        .then(data => {
+            const container = document.getElementById('containers-liberados');
+            if (!container) return;
+            container.innerHTML = '';
+            
+            if (data.results.length === 0) {
+                container.innerHTML = '<p class="text-center text-muted py-4">✅ No hay contenedores liberados sin programar</p>';
+                return;
+            }
+            
+            data.results.forEach(cont => {
+                // Solo mostrar contenedores que NO tienen programación
+                fetch(`/api/programaciones/?container=${cont.id}`)
+                    .then(r => r.json())
+                    .then(progData => {
+                        if (progData.results.length > 0) {
+                            // Ya tiene programación, no mostrar
+                            return;
+                        }
+                        
+                        const card = `
+                            <div class="card mb-2 container-card" style="cursor: pointer;" onclick="seleccionarContainerParaProgramar(${cont.id}, '${cont.container_id_formatted || cont.container_id}')">
+                                <div class="card-body py-2">
+                                    <div class="d-flex justify-content-between align-items-center">
+                                        <div>
+                                            <strong>${cont.container_id_formatted || cont.container_id}</strong><br>
+                                            <small class="text-muted">
+                                                <i class="fas fa-ship"></i> ${cont.nave || 'N/A'}
+                                                ${cont.fecha_demurrage ? ` | <i class="fas fa-exclamation-circle text-danger"></i> ${cont.dias_para_demurrage}d demurrage` : ''}
+                                            </small>
+                                        </div>
+                                        <div>
+                                            <i class="fas fa-chevron-right"></i>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        `;
+                        container.innerHTML += card;
+                    });
+            });
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            const container = document.getElementById('containers-liberados');
+            if (container) {
+                container.innerHTML = '<p class="text-danger text-center">Error al cargar contenedores</p>';
+            }
+        });
+}
+
+// Cargar CDs disponibles
+function loadCDsForProgramacion() {
+    fetch('/api/cds/')
+        .then(response => response.json())
+        .then(data => {
+            const select = document.getElementById('prog-cd-select');
+            if (!select) return;
+            select.innerHTML = '<option value="">Seleccione un CD...</option>';
+            
+            data.results.forEach(cd => {
+                const option = document.createElement('option');
+                option.value = cd.id;
+                option.textContent = `${cd.nombre} - ${cd.comuna || 'N/A'}`;
+                select.appendChild(option);
+            });
+        })
+        .catch(error => {
+            console.error('Error loading CDs:', error);
+        });
+}
+
+// Seleccionar container para programar
+function seleccionarContainerParaProgramar(containerId, containerName) {
+    selectedContainerForProg = containerId;
+    
+    // Ocultar mensaje y mostrar formulario
+    document.getElementById('msg-seleccionar-container').classList.add('d-none');
+    document.getElementById('form-programar-container').classList.remove('d-none');
+    
+    // Actualizar información del container
+    document.getElementById('prog-container-id').value = containerId;
+    document.getElementById('prog-container-nombre').textContent = `Programando: ${containerName}`;
+    
+    // Limpiar formulario
+    document.getElementById('prog-cd-select').value = '';
+    document.getElementById('prog-fecha').value = '';
+    document.getElementById('prog-cliente').value = '';
+    document.getElementById('prog-observaciones').value = '';
+    
+    // Establecer fecha mínima como ahora
+    const now = new Date();
+    now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
+    document.getElementById('prog-fecha').min = now.toISOString().slice(0, 16);
+}
+
+// Cancelar programación
+function cancelarProgramacion() {
+    selectedContainerForProg = null;
+    document.getElementById('form-programar-container').classList.add('d-none');
+    document.getElementById('msg-seleccionar-container').classList.remove('d-none');
+}
+
+// Guardar programación
+function guardarProgramacion() {
+    const containerId = document.getElementById('prog-container-id').value;
+    const cdId = document.getElementById('prog-cd-select').value;
+    const fecha = document.getElementById('prog-fecha').value;
+    const cliente = document.getElementById('prog-cliente').value;
+    const observaciones = document.getElementById('prog-observaciones').value;
+    
+    // Validar campos requeridos
+    if (!containerId || !cdId || !fecha) {
+        alert('❌ Por favor complete todos los campos requeridos (CD y Fecha)');
+        return;
+    }
+    
+    if (!confirm('¿Programar este contenedor con los datos ingresados?')) {
+        return;
+    }
+    
+    // Llamar API para programar
+    fetch('/api/programaciones/programar-container/', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': getCookie('csrftoken')
+        },
+        body: JSON.stringify({
+            container_id: containerId,
+            cd_id: cdId,
+            fecha_programada: fecha,
+            cliente: cliente,
+            observaciones: observaciones
+        })
+    })
+    .then(response => {
+        if (!response.ok) {
+            return response.json().then(err => { throw err; });
+        }
+        return response.json();
+    })
+    .then(data => {
+        if (data.success) {
+            alert(`✅ ${data.mensaje}`);
+            cancelarProgramacion();
+            loadContainersLiberados();
+            loadContainersSinAsignar(); // Actualizar tab de asignación también
+        } else {
+            alert(`❌ Error: ${data.error || 'Error desconocido'}`);
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        alert(`❌ Error al programar contenedor: ${error.error || error.message || 'Error desconocido'}`);
+    });
+}
+
+// Inicializar al cargar página
+document.addEventListener('DOMContentLoaded', function() {
+    // Cargar CDs cuando se muestre el tab de programación
+    const progTab = document.getElementById('programacion-tab');
+    if (progTab) {
+        progTab.addEventListener('shown.bs.tab', function() {
+            loadContainersLiberados();
+            loadCDsForProgramacion();
+        });
+    }
+});
 </script>
 {% endblock %}

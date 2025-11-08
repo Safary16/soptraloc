@@ -270,6 +270,118 @@ class ProgramacionViewSet(viewsets.ModelViewSet):
             }
         })
     
+    @action(detail=False, methods=['post'], url_path='programar-container')
+    def programar_container(self, request):
+        """
+        Crea una programación para un contenedor sin asignar conductor todavía
+        
+        Payload:
+        {
+            "container_id": 1,
+            "cd_id": 1,
+            "fecha_programada": "2025-10-15T10:00:00",
+            "cliente": "Cliente XYZ",
+            "observaciones": "..."
+        }
+        """
+        from apps.containers.models import Container
+        from apps.cds.models import CD
+        
+        container_id = request.data.get('container_id')
+        cd_id = request.data.get('cd_id')
+        fecha_programada = request.data.get('fecha_programada')
+        cliente = request.data.get('cliente', '')
+        observaciones = request.data.get('observaciones', '')
+        
+        # Validar campos requeridos
+        if not all([container_id, cd_id, fecha_programada]):
+            return Response(
+                {'error': 'container_id, cd_id y fecha_programada son requeridos'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Buscar container
+        try:
+            container = Container.objects.get(id=container_id)
+        except Container.DoesNotExist:
+            return Response(
+                {'error': f'Container con ID {container_id} no encontrado'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        
+        # Verificar que el container está en estado válido para programar
+        if container.estado not in ['liberado', 'por_arribar', 'secuenciado']:
+            return Response(
+                {'error': f'Container debe estar liberado, por arribar o secuenciado. Estado actual: {container.get_estado_display()}'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Verificar que no tenga ya una programación
+        if hasattr(container, 'programacion') and container.programacion:
+            return Response(
+                {'error': 'Container ya tiene una programación. Edítela en lugar de crear una nueva.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Buscar CD
+        try:
+            cd = CD.objects.get(id=cd_id)
+        except CD.DoesNotExist:
+            return Response(
+                {'error': f'CD con ID {cd_id} no encontrado'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        
+        # Parsear fecha
+        from dateutil import parser as date_parser
+        try:
+            fecha_programada_dt = date_parser.parse(fecha_programada)
+            if timezone.is_naive(fecha_programada_dt):
+                fecha_programada_dt = timezone.make_aware(fecha_programada_dt)
+        except Exception as e:
+            return Response(
+                {'error': f'Formato de fecha inválido: {str(e)}'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Actualizar CD de entrega en el container
+        container.cd_entrega = cd
+        container.save(update_fields=['cd_entrega'])
+        
+        # Crear programación
+        programacion = Programacion.objects.create(
+            container=container,
+            cd=cd,
+            fecha_programada=fecha_programada_dt,
+            cliente=cliente or container.cliente or 'N/A',
+            direccion_entrega=cd.direccion,
+            observaciones=observaciones
+        )
+        
+        # Cambiar estado del contenedor a programado
+        usuario = request.user.username if request.user.is_authenticated else None
+        container.cambiar_estado('programado', usuario)
+        
+        # Verificar si requiere alerta
+        if programacion.verificar_alerta():
+            from apps.events.models import Event
+            Event.objects.create(
+                container=container,
+                event_type='alerta_48h',
+                detalles={
+                    'fecha_programada': fecha_programada_dt.isoformat(),
+                    'horas_restantes': programacion.horas_hasta_programacion,
+                },
+                usuario=usuario
+            )
+        
+        serializer = self.get_serializer(programacion)
+        return Response({
+            'success': True,
+            'mensaje': f'Contenedor programado exitosamente para {cd.nombre}',
+            'programacion': serializer.data
+        }, status=status.HTTP_201_CREATED)
+    
     @action(detail=False, methods=['post'])
     def crear_ruta_manual(self, request):
         """
