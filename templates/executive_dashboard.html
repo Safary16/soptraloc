@@ -350,7 +350,7 @@ function loadOperacionesData() {
                 
                 tableHtml += `
                     <tr>
-                        <td>${p.container_id}</td>
+                        <td>${p.container_id_formatted || p.container_id}</td>
                         <td>${p.conductor || 'Sin asignar'}</td>
                         <td>${p.cd}</td>
                         <td>${new Date(p.fecha_programada).toLocaleString('es-CL')}</td>
@@ -456,7 +456,7 @@ function loadAlertasData() {
                             <small>${new Date(n.created_at).toLocaleString('es-CL')}</small>
                         </div>
                         <p class="mb-1">${n.mensaje}</p>
-                        <small>Contenedor: ${n.container_id}</small>
+                        <small>Contenedor: ${n.container_id_formatted || n.container_id}</small>
                     </div>
                 `;
             });
