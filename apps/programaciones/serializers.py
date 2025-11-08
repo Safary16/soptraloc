@@ -21,6 +21,7 @@ class ProgramacionSerializer(serializers.ModelSerializer):
 class ProgramacionListSerializer(serializers.ModelSerializer):
     """Serializer simplificado para listas"""
     container_id = serializers.CharField(source='container.container_id', read_only=True)
+    container_id_formatted = serializers.CharField(source='container.container_id_formatted', read_only=True)
     driver_nombre = serializers.CharField(source='driver.nombre', read_only=True, allow_null=True)
     cd_nombre = serializers.CharField(source='cd.nombre', read_only=True)
     horas_hasta_programacion = serializers.FloatField(read_only=True)
@@ -28,7 +29,7 @@ class ProgramacionListSerializer(serializers.ModelSerializer):
     class Meta:
         model = Programacion
         fields = [
-            'id', 'container_id', 'fecha_programada', 'cliente', 'cd_nombre',
+            'id', 'container_id', 'container_id_formatted', 'fecha_programada', 'cliente', 'cd_nombre',
             'driver_nombre', 'requiere_alerta', 'horas_hasta_programacion'
         ]
 

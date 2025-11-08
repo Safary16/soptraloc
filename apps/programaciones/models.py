@@ -71,7 +71,7 @@ class Programacion(models.Model):
         ]
     
     def __str__(self):
-        return f"{self.container.numero_contenedor if self.container else 'N/A'} - {self.cliente}"
+        return f"{self.container.container_id if self.container else 'N/A'} - {self.cliente}"
     
     @property
     def estado(self):
@@ -86,10 +86,9 @@ class Programacion(models.Model):
         self.fecha_asignacion = timezone.now()
         self.save()
         
-        # Actualizar estado del contenedor si existe
+        # Actualizar estado del contenedor si existe usando cambiar_estado
         if self.container:
-            self.container.estado = 'asignado'
-            self.container.save()
+            self.container.cambiar_estado('asignado', usuario)
         
         # Incrementar contador de entregas del conductor
         driver.num_entregas_dia += 1
@@ -123,6 +122,33 @@ class Programacion(models.Model):
         return horas < 48
     requiere_conductor_urgente.boolean = True
     requiere_conductor_urgente.short_description = 'Urgente'
+    
+    def verificar_alerta(self):
+        """
+        Verifica si requiere alerta de 48h sin conductor
+        Actualiza el flag requiere_alerta si aplica
+        
+        Returns:
+            bool: True si se generó/actualizó la alerta
+        """
+        horas = self.horas_hasta_programacion
+        if horas is None:
+            return False
+        
+        # Si quedan menos de 48 horas y no tiene conductor
+        if horas < 48 and not self.driver:
+            if not self.requiere_alerta:
+                self.requiere_alerta = True
+                self.save(update_fields=['requiere_alerta'])
+                return True
+            return False
+        
+        # Si ya tiene conductor o quedan más de 48h, desmarcar alerta
+        elif self.requiere_alerta:
+            self.requiere_alerta = False
+            self.save(update_fields=['requiere_alerta'])
+        
+        return False
 
 
 class TiempoOperacion(models.Model):
