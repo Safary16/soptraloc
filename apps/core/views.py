@@ -14,7 +14,8 @@ def home(request):
     two_days_from_now = today + timedelta(days=2)
     
     # Calculate stats for dashboard
-    from apps.programaciones.models import Programacion
+    from apps.programaciones.models import Programacion, TiempoViaje, TiempoOperacion
+    from django.db.models import Count
     
     stats = {
         'programados_hoy': Container.objects.filter(
@@ -36,6 +37,10 @@ def home(request):
             fecha_programada__lte=timezone.now() + timedelta(hours=48),
             driver__isnull=True
         ).count(),
+        # ML Stats
+        'ml_viajes': TiempoViaje.objects.filter(anomalia=False).count(),
+        'ml_operaciones': TiempoOperacion.objects.filter(anomalia=False).count(),
+        'ml_activo': True,
     }
     
     return render(request, 'home.html', {'stats': stats})
