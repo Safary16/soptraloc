@@ -418,9 +418,9 @@ class ContainerViewSet(viewsets.ModelViewSet):
         from dateutil import parser as date_parser
         try:
             fecha_programada_dt = date_parser.parse(fecha_programada)
-        except Exception as e:
+        except Exception:
             return Response(
-                {'error': f'Formato de fecha inválido: {str(e)}'},
+                {'error': 'Formato de fecha inválido. Use formato ISO 8601: YYYY-MM-DDTHH:MM:SSZ'},
                 status=status.HTTP_400_BAD_REQUEST
             )
         
