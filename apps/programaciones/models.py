@@ -123,6 +123,34 @@ class Programacion(models.Model):
         return horas < 48
     requiere_conductor_urgente.boolean = True
     requiere_conductor_urgente.short_description = 'Urgente'
+    
+    def verificar_alerta(self):
+        """
+        Verifica si la programación requiere alerta (< 48h sin conductor) y actualiza el campo
+        
+        Returns:
+            bool: True si se debe generar alerta, False en caso contrario
+        """
+        if self.driver:
+            # Si ya tiene conductor, no requiere alerta
+            if self.pk:  # Solo guardar si el objeto ya existe en la DB
+                self.requiere_alerta = False
+                self.save(update_fields=['requiere_alerta'])
+            return False
+        
+        horas = self.horas_hasta_programacion
+        if horas is None:
+            return False
+        
+        # Requiere alerta si faltan menos de 48 horas y no tiene conductor
+        requiere = horas < 48 and horas > 0
+        
+        # Actualizar el campo si cambió (solo si el objeto existe en la DB)
+        if self.pk and self.requiere_alerta != requiere:
+            self.requiere_alerta = requiere
+            self.save(update_fields=['requiere_alerta'])
+        
+        return requiere
 
 
 class TiempoOperacion(models.Model):
@@ -168,6 +196,17 @@ class TiempoOperacion(models.Model):
     
     def __str__(self):
         return f"{self.get_tipo_operacion_display()} - {self.cd.nombre} ({self.fecha})"
+    
+    def calcular_desviacion(self):
+        """
+        Calcula el porcentaje de desviación entre el tiempo estimado y el real
+        
+        Returns:
+            float: Porcentaje de desviación (positivo = más lento que estimado, negativo = más rápido)
+        """
+        if self.tiempo_estimado_min == 0:
+            return 0
+        return ((self.tiempo_real_min - self.tiempo_estimado_min) / self.tiempo_estimado_min) * 100
     
     @classmethod
     def obtener_tiempo_aprendido(cls, cd, tipo_operacion, conductor=None):
@@ -280,6 +319,17 @@ class TiempoViaje(models.Model):
     
     def __str__(self):
         return f"{self.origen_nombre} → {self.destino_nombre} ({self.fecha})"
+    
+    def calcular_factor_correccion(self):
+        """
+        Calcula el factor de corrección entre el tiempo de Mapbox y el tiempo real
+        
+        Returns:
+            float: Factor de corrección (>1 = más lento que Mapbox, <1 = más rápido)
+        """
+        if self.tiempo_mapbox_min == 0:
+            return 1.0
+        return self.tiempo_real_min / self.tiempo_mapbox_min
     
     @classmethod
     def obtener_tiempo_aprendido(cls, origen_coords, destino_coords, tiempo_mapbox, hora_salida, conductor=None):
