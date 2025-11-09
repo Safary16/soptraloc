@@ -264,6 +264,96 @@ def analytics_tendencias(request):
 
 @api_view(['GET'])
 @permission_classes([IsAuthenticatedOrReadOnly])
+def operaciones_diarias(request):
+    """
+    Vista completa de operaciones del día con horarios detallados
+    
+    Muestra:
+    - Contenedores programados para hoy
+    - Horarios de programación, inicio de viaje, y vacío
+    - ETAs calculados por ML y Mapbox
+    - Estado actual de cada operación
+    """
+    today = timezone.now().date()
+    
+    # Obtener programaciones del día
+    programaciones_hoy = Programacion.objects.filter(
+        fecha_programada__date=today
+    ).select_related('container', 'driver', 'cd').order_by('fecha_programada')
+    
+    operaciones = []
+    for prog in programaciones_hoy:
+        container = prog.container
+        
+        # Calcular tiempos y ETAs
+        tiempo_transcurrido = None
+        if prog.fecha_inicio_ruta:
+            tiempo_transcurrido = int((timezone.now() - prog.fecha_inicio_ruta).total_seconds() / 60)
+        
+        eta_restante = None
+        if prog.eta_minutos and tiempo_transcurrido:
+            eta_restante = max(0, prog.eta_minutos - tiempo_transcurrido)
+        
+        operaciones.append({
+            'programacion_id': prog.id,
+            'container_id': container.container_id,
+            'container_tipo': container.get_tipo_display(),
+            
+            # Información del conductor
+            'conductor': prog.driver.nombre if prog.driver else None,
+            'patente': prog.patente_confirmada or (prog.driver.patente if prog.driver else None),
+            
+            # Horarios clave
+            'fecha_programada': prog.fecha_programada.isoformat(),
+            'fecha_asignacion': prog.fecha_asignacion.isoformat() if prog.fecha_asignacion else None,
+            'fecha_inicio_viaje': prog.fecha_inicio_ruta.isoformat() if prog.fecha_inicio_ruta else None,
+            'fecha_arribo': container.fecha_entrega.isoformat() if container.fecha_entrega else None,
+            'fecha_vacio': container.fecha_vacio.isoformat() if container.fecha_vacio else None,
+            
+            # ETAs y tiempos estimados
+            'eta_minutos_original': prog.eta_minutos,
+            'eta_minutos_restante': eta_restante,
+            'distancia_km': float(prog.distancia_km) if prog.distancia_km else None,
+            'tiempo_transcurrido_min': tiempo_transcurrido,
+            
+            # Ubicación
+            'cd_nombre': prog.cd.nombre,
+            'cd_direccion': prog.cd.direccion,
+            'cd_tipo': prog.cd.tipo,
+            
+            # Estado
+            'estado_container': container.estado,
+            'estado_display': container.get_estado_display(),
+            
+            # Cliente
+            'cliente': prog.cliente,
+            
+            # Observaciones
+            'observaciones': prog.observaciones,
+        })
+    
+    # Estadísticas del día
+    stats_hoy = {
+        'total_programadas': programaciones_hoy.count(),
+        'sin_asignar': programaciones_hoy.filter(driver__isnull=True).count(),
+        'asignadas': programaciones_hoy.filter(driver__isnull=False, container__estado='asignado').count(),
+        'en_ruta': programaciones_hoy.filter(container__estado='en_ruta').count(),
+        'entregadas': programaciones_hoy.filter(container__estado__in=['entregado', 'descargado']).count(),
+        'completadas': programaciones_hoy.filter(container__estado__in=['vacio', 'vacio_en_ruta', 'devuelto']).count(),
+    }
+    
+    return Response({
+        'success': True,
+        'fecha': today.isoformat(),
+        'total_operaciones': len(operaciones),
+        'stats': stats_hoy,
+        'operaciones': operaciones,
+        'ultima_actualizacion': timezone.now().isoformat()
+    })
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticatedOrReadOnly])
 def ml_learning_stats(request):
     """
     Estadísticas de aprendizaje del sistema de Machine Learning

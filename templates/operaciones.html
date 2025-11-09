@@ -713,14 +713,18 @@ function loadContaineresAsignados() {
             }
             
             // Also fetch programaciones to get ETA data
-            return fetch('/api/programaciones/')
+            return fetch('/api/programaciones/?format=json')
                 .then(progResponse => progResponse.json())
                 .then(progData => {
                     // Create a map of container_id to programacion
                     const progMap = {};
                     if (progData.results) {
                         progData.results.forEach(prog => {
-                            progMap[prog.container_id] = prog;
+                            // Handle both container_id (list serializer) and container object (detail serializer)
+                            const containerId = prog.container_id || (prog.container && prog.container.container_id) || (prog.container_detail && prog.container_detail.container_id);
+                            if (containerId) {
+                                progMap[containerId] = prog;
+                            }
                         });
                     }
                     

@@ -42,8 +42,8 @@ def home(request):
 
 
 def asignacion(request):
-    """Sistema de asignación de conductores - redirige a operaciones"""
-    return redirect('operaciones')
+    """Sistema de asignación de conductores"""
+    return render(request, 'asignacion.html')
 
 
 def estados(request):
@@ -125,3 +125,8 @@ def drivers_list(request):
 def executive_dashboard(request):
     """Dashboard ejecutivo con métricas y análisis"""
     return render(request, 'executive_dashboard.html')
+
+
+def operaciones_diarias(request):
+    """Vista de operaciones diarias con horarios completos"""
+    return render(request, 'operaciones_diarias.html')

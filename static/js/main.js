@@ -82,26 +82,82 @@ function updateProgramacionesTable(programaciones) {
     
     tbody.innerHTML = '';
     
-    programaciones.slice(0, 10).forEach(prog => {
-        const row = document.createElement('tr');
-        
-        // Badge de urgencia
-        let badgeClass = 'badge-urgencia-baja';
-        if (prog.urgencia === 'CRÍTICA') badgeClass = 'badge-urgencia-critica';
-        else if (prog.urgencia === 'ALTA') badgeClass = 'badge-urgencia-alta';
-        else if (prog.urgencia === 'MEDIA') badgeClass = 'badge-urgencia-media';
-        
-        row.innerHTML = `
-            <td><strong>${prog.container_id}</strong></td>
-            <td>${prog.cd}</td>
-            <td>${prog.conductor || '<span class="text-muted">Sin asignar</span>'}</td>
-            <td>${prog.dias_hasta_programacion.toFixed(1)}d</td>
-            <td>${prog.dias_hasta_demurrage ? prog.dias_hasta_demurrage.toFixed(1) + 'd' : 'N/A'}</td>
-            <td><span class="badge ${badgeClass}">${prog.urgencia}</span></td>
-        `;
-        
-        tbody.appendChild(row);
-    });
+    // Fetch ETA data from programaciones API
+    fetch('/api/programaciones/?format=json')
+        .then(response => response.json())
+        .then(progData => {
+            // Create map of container_id to programacion with ETA
+            const etaMap = {};
+            if (progData.results) {
+                progData.results.forEach(p => {
+                    const containerId = p.container_id || (p.container && p.container.container_id) || (p.container_detail && p.container_detail.container_id);
+                    if (containerId) {
+                        etaMap[containerId] = p;
+                    }
+                });
+            }
+            
+            programaciones.slice(0, 10).forEach(prog => {
+                const row = document.createElement('tr');
+                
+                // Badge de urgencia
+                let badgeClass = 'badge-urgencia-baja';
+                if (prog.urgencia === 'CRÍTICA') badgeClass = 'badge-urgencia-critica';
+                else if (prog.urgencia === 'ALTA') badgeClass = 'badge-urgencia-alta';
+                else if (prog.urgencia === 'MEDIA') badgeClass = 'badge-urgencia-media';
+                
+                // Get ETA info for this container
+                const etaInfo = etaMap[prog.container_id];
+                let etaDisplay = '<span class="text-muted">-</span>';
+                if (etaInfo) {
+                    if (etaInfo.eta_minutos && prog.estado_container === 'en_ruta') {
+                        etaDisplay = `<span class="badge bg-info"><i class="fas fa-clock"></i> ${etaInfo.eta_minutos} min</span>`;
+                    } else if (prog.estado_container === 'entregado') {
+                        etaDisplay = '<span class="badge bg-success"><i class="fas fa-check"></i> Entregado</span>';
+                    } else if (prog.estado_container === 'asignado') {
+                        etaDisplay = '<span class="badge bg-warning"><i class="fas fa-user-check"></i> Asignado</span>';
+                    } else if (prog.estado_container === 'programado') {
+                        etaDisplay = '<span class="badge bg-primary"><i class="fas fa-calendar"></i> Programado</span>';
+                    }
+                }
+                
+                row.innerHTML = `
+                    <td><strong>${prog.container_id}</strong></td>
+                    <td>${prog.cd}</td>
+                    <td>${prog.conductor || '<span class="text-muted">Sin asignar</span>'}</td>
+                    <td>${prog.dias_hasta_programacion.toFixed(1)}d</td>
+                    <td>${prog.dias_hasta_demurrage ? prog.dias_hasta_demurrage.toFixed(1) + 'd' : 'N/A'}</td>
+                    <td>${etaDisplay}</td>
+                    <td><span class="badge ${badgeClass}">${prog.urgencia}</span></td>
+                `;
+                
+                tbody.appendChild(row);
+            });
+        })
+        .catch(error => {
+            console.error('Error fetching ETA data:', error);
+            // Fallback to display without ETA
+            programaciones.slice(0, 10).forEach(prog => {
+                const row = document.createElement('tr');
+                
+                let badgeClass = 'badge-urgencia-baja';
+                if (prog.urgencia === 'CRÍTICA') badgeClass = 'badge-urgencia-critica';
+                else if (prog.urgencia === 'ALTA') badgeClass = 'badge-urgencia-alta';
+                else if (prog.urgencia === 'MEDIA') badgeClass = 'badge-urgencia-media';
+                
+                row.innerHTML = `
+                    <td><strong>${prog.container_id}</strong></td>
+                    <td>${prog.cd}</td>
+                    <td>${prog.conductor || '<span class="text-muted">Sin asignar</span>'}</td>
+                    <td>${prog.dias_hasta_programacion.toFixed(1)}d</td>
+                    <td>${prog.dias_hasta_demurrage ? prog.dias_hasta_demurrage.toFixed(1) + 'd' : 'N/A'}</td>
+                    <td><span class="text-muted">-</span></td>
+                    <td><span class="badge ${badgeClass}">${prog.urgencia}</span></td>
+                `;
+                
+                tbody.appendChild(row);
+            });
+        });
 }
 
 // Auto-refresh cada 30 segundos

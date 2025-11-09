@@ -19,13 +19,15 @@ from apps.cds.views import CDViewSet
 from apps.core.views import (
     home, asignacion, estados, importar, 
     containers_list, container_detail,
-    operaciones, drivers_list, executive_dashboard
+    operaciones, drivers_list, executive_dashboard,
+    operaciones_diarias as operaciones_diarias_view
 )
 
 # Import API views
 from apps.core.api_views import (
     dashboard_stats, dashboard_alertas, analytics_conductores,
-    analytics_eficiencia, analytics_tendencias, ml_learning_stats
+    analytics_eficiencia, analytics_tendencias, ml_learning_stats,
+    operaciones_diarias
 )
 
 # Setup API router
@@ -46,6 +48,7 @@ urlpatterns = [
     path('operaciones/', operaciones, name='operaciones'),
     path('drivers/', drivers_list, name='drivers_list'),
     path('executive/', executive_dashboard, name='executive_dashboard'),
+    path('operaciones-diarias/', operaciones_diarias_view, name='operaciones_diarias_view'),
     
     # Admin
     path('admin/', admin.site.urls),
@@ -68,6 +71,7 @@ urlpatterns = [
     path('api/analytics/eficiencia/', analytics_eficiencia, name='analytics_eficiencia'),
     path('api/analytics/tendencias/', analytics_tendencias, name='analytics_tendencias'),
     path('api/ml/learning-stats/', ml_learning_stats, name='ml_learning_stats'),
+    path('api/operaciones/diarias/', operaciones_diarias, name='operaciones_diarias'),
     
     # API Authentication
     path('api-auth/', include('rest_framework.urls')),

@@ -317,6 +317,26 @@
         </div>
     </div>
 
+    <!-- Información de Programación y ETAs -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card detail-card">
+                <div class="card-header" style="background: linear-gradient(135deg, #E95420, #772953); color: white;">
+                    <h5 class="mb-0"><i class="fas fa-clock"></i> Horarios y ETAs de Programación</h5>
+                </div>
+                <div class="card-body">
+                    <div id="programacion-info-loading" class="text-center py-4">
+                        <div class="spinner-border text-primary"></div>
+                        <p class="mt-2">Cargando información de programación...</p>
+                    </div>
+                    <div id="programacion-info-content" style="display: none;">
+                        <!-- Content will be loaded dynamically -->
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- Información Técnica -->
     <div class="row">
         <div class="col-12">
@@ -350,4 +370,115 @@
         </div>
     </div>
 </div>
+
+<script>
+// Load programming information
+document.addEventListener('DOMContentLoaded', function() {
+    const containerId = '{{ container.container_id }}';
+    
+    // Fetch programming information
+    fetch('/api/programaciones/?format=json')
+        .then(response => response.json())
+        .then(data => {
+            const programacion = data.results ? data.results.find(prog => {
+                return prog.container_id === containerId || 
+                       (prog.container && prog.container.container_id === containerId) ||
+                       (prog.container_detail && prog.container_detail.container_id === containerId);
+            }) : null;
+            
+            const loadingDiv = document.getElementById('programacion-info-loading');
+            const contentDiv = document.getElementById('programacion-info-content');
+            
+            if (programacion) {
+                loadingDiv.style.display = 'none';
+                contentDiv.style.display = 'block';
+                
+                const formatDate = (dateStr) => {
+                    if (!dateStr) return 'No registrado';
+                    return new Date(dateStr).toLocaleString('es-CL', {
+                        year: 'numeric', month: '2-digit', day: '2-digit',
+                        hour: '2-digit', minute: '2-digit'
+                    });
+                };
+                
+                let html = '<div class="row">';
+                
+                // Programación
+                html += '<div class="col-md-6 mb-3">';
+                html += '<h6><i class="fas fa-calendar-check text-primary"></i> Información de Programación</h6>';
+                html += '<table class="table table-sm">';
+                html += '<tr><td><strong>Fecha Programada:</strong></td><td>' + formatDate(programacion.fecha_programada) + '</td></tr>';
+                html += '<tr><td><strong>Cliente:</strong></td><td>' + (programacion.cliente || 'N/A') + '</td></tr>';
+                html += '<tr><td><strong>CD Destino:</strong></td><td>' + (programacion.cd_nombre || 'N/A') + '</td></tr>';
+                html += '<tr><td><strong>Conductor:</strong></td><td>' + (programacion.driver_nombre || 'No asignado') + '</td></tr>';
+                if (programacion.fecha_asignacion) {
+                    html += '<tr><td><strong>Fecha Asignación:</strong></td><td>' + formatDate(programacion.fecha_asignacion) + '</td></tr>';
+                }
+                html += '</table>';
+                html += '</div>';
+                
+                // ETAs y tiempos de viaje
+                html += '<div class="col-md-6 mb-3">';
+                html += '<h6><i class="fas fa-route text-success"></i> ETAs y Tiempos (ML + Mapbox)</h6>';
+                html += '<table class="table table-sm">';
+                
+                if (programacion.fecha_inicio_ruta) {
+                    html += '<tr><td><strong>Inicio de Viaje:</strong></td><td>' + formatDate(programacion.fecha_inicio_ruta) + '</td></tr>';
+                }
+                
+                if (programacion.eta_minutos) {
+                    html += '<tr><td><strong>ETA (Tiempo Estimado):</strong></td><td><span class="badge bg-info">' + programacion.eta_minutos + ' minutos</span></td></tr>';
+                    
+                    // Calculate estimated arrival time
+                    if (programacion.fecha_inicio_ruta) {
+                        const inicioRuta = new Date(programacion.fecha_inicio_ruta);
+                        const etaDate = new Date(inicioRuta.getTime() + programacion.eta_minutos * 60000);
+                        html += '<tr><td><strong>Hora Estimada de Llegada:</strong></td><td>' + etaDate.toLocaleString('es-CL', {
+                            year: 'numeric', month: '2-digit', day: '2-digit',
+                            hour: '2-digit', minute: '2-digit'
+                        }) + '</td></tr>';
+                    }
+                }
+                
+                if (programacion.distancia_km) {
+                    html += '<tr><td><strong>Distancia:</strong></td><td>' + parseFloat(programacion.distancia_km).toFixed(2) + ' km</td></tr>';
+                }
+                
+                if (programacion.patente_confirmada) {
+                    html += '<tr><td><strong>Patente Vehículo:</strong></td><td>' + programacion.patente_confirmada + '</td></tr>';
+                }
+                
+                if (!programacion.eta_minutos && !programacion.fecha_inicio_ruta) {
+                    html += '<tr><td colspan="2"><em class="text-muted">No hay datos de ETA disponibles aún. Los datos se generan cuando el conductor inicia la ruta.</em></td></tr>';
+                }
+                
+                html += '</table>';
+                html += '</div>';
+                
+                html += '</div>';
+                
+                // Show current day schedule if programmed for today
+                const hoy = new Date().toDateString();
+                const fechaProg = new Date(programacion.fecha_programada);
+                if (fechaProg.toDateString() === hoy) {
+                    html += '<div class="alert alert-warning mt-3">';
+                    html += '<h6><i class="fas fa-calendar-day"></i> Programado para HOY</h6>';
+                    html += '<p class="mb-0">Este contenedor está programado para ser entregado hoy. Asegúrese de que esté asignado y en ruta a tiempo.</p>';
+                    html += '</div>';
+                }
+                
+                contentDiv.innerHTML = html;
+            } else {
+                loadingDiv.style.display = 'none';
+                contentDiv.style.display = 'block';
+                contentDiv.innerHTML = '<p class="text-muted text-center py-3"><i class="fas fa-info-circle"></i> Este contenedor no tiene programación asignada aún.</p>';
+            }
+        })
+        .catch(error => {
+            console.error('Error loading programacion:', error);
+            document.getElementById('programacion-info-loading').innerHTML = 
+                '<p class="text-danger text-center"><i class="fas fa-exclamation-triangle"></i> Error al cargar información de programación</p>';
+        });
+});
+</script>
 {% endblock %}
