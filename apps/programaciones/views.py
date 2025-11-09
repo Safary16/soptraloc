@@ -92,10 +92,11 @@ class ProgramacionViewSet(viewsets.ModelViewSet):
             'mensaje': f'{len(resultados)} contenedores con demurrage próximo a vencer o vencido'
         })
     
-    @action(detail=True, methods=['post'])
+    @action(detail=True, methods=['post'], permission_classes=[AllowAny])
     def asignar_conductor(self, request, pk=None):
         """
         Asigna un conductor específico a una programación
+        Permite acceso anónimo para operaciones manuales desde el panel.
         """
         programacion = self.get_object()
         driver_id = request.data.get('driver_id')
@@ -121,7 +122,7 @@ class ProgramacionViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST
             )
         
-        usuario = request.user.username if request.user.is_authenticated else None
+        usuario = request.user.username if request.user.is_authenticated else 'operador_manual'
         programacion.asignar_conductor(driver, usuario)
         
         serializer = self.get_serializer(programacion)
@@ -131,13 +132,14 @@ class ProgramacionViewSet(viewsets.ModelViewSet):
             'programacion': serializer.data
         })
     
-    @action(detail=True, methods=['post'])
+    @action(detail=True, methods=['post'], permission_classes=[AllowAny])
     def asignar_automatico(self, request, pk=None):
         """
         Asigna automáticamente el mejor conductor disponible
+        Permite acceso anónimo para operaciones automáticas desde el panel.
         """
         programacion = self.get_object()
-        usuario = request.user.username if request.user.is_authenticated else None
+        usuario = request.user.username if request.user.is_authenticated else 'operador_manual'
         
         resultado = AssignmentService.asignar_mejor_conductor(programacion, usuario)
         
@@ -179,10 +181,11 @@ class ProgramacionViewSet(viewsets.ModelViewSet):
             'conductores': resultados
         })
     
-    @action(detail=False, methods=['post'])
+    @action(detail=False, methods=['post'], permission_classes=[AllowAny])
     def asignar_multiples(self, request):
         """
         Asigna conductores automáticamente a múltiples programaciones
+        Permite acceso anónimo para operaciones masivas desde el panel.
         """
         programacion_ids = request.data.get('programacion_ids', [])
         
@@ -193,7 +196,7 @@ class ProgramacionViewSet(viewsets.ModelViewSet):
             )
         
         programaciones = self.queryset.filter(id__in=programacion_ids, driver__isnull=True)
-        usuario = request.user.username if request.user.is_authenticated else None
+        usuario = request.user.username if request.user.is_authenticated else 'operador_manual'
         
         resultados = AssignmentService.asignar_multiples(programaciones, usuario)
         
@@ -269,10 +272,11 @@ class ProgramacionViewSet(viewsets.ModelViewSet):
             }
         })
     
-    @action(detail=False, methods=['post'])
+    @action(detail=False, methods=['post'], permission_classes=[AllowAny])
     def crear_ruta_manual(self, request):
         """
         Crea una ruta manual para retiro desde puerto
+        Permite acceso anónimo para operaciones manuales desde el panel.
         
         Casos de uso:
         1. retiro_ccti: CCTI va a buscar contenedor al puerto y lo lleva a CCTI
