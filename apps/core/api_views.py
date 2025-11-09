@@ -2,6 +2,7 @@
 API Views para el core del sistema
 Endpoints de dashboard y estadísticas
 """
+from rest_framework import status
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticatedOrReadOnly
 from rest_framework.response import Response
@@ -269,20 +270,36 @@ def operaciones_diarias(request):
     Vista completa de operaciones del día con horarios detallados
     
     Muestra:
-    - Contenedores programados para hoy
+    - Contenedores programados para una fecha específica (hoy por defecto)
     - Horarios de programación, inicio de viaje, y vacío
     - ETAs calculados por ML y Mapbox
     - Estado actual de cada operación
-    """
-    today = timezone.now().date()
     
-    # Obtener programaciones del día
-    programaciones_hoy = Programacion.objects.filter(
-        fecha_programada__date=today
+    Parámetros:
+    - fecha: YYYY-MM-DD (opcional, default: hoy)
+    """
+    # Obtener fecha desde query params, o usar hoy por defecto
+    fecha_str = request.query_params.get('fecha', None)
+    
+    if fecha_str:
+        try:
+            from datetime import datetime
+            fecha_seleccionada = datetime.strptime(fecha_str, '%Y-%m-%d').date()
+        except ValueError:
+            return Response({
+                'success': False,
+                'error': 'Formato de fecha inválido. Use YYYY-MM-DD'
+            }, status=status.HTTP_400_BAD_REQUEST)
+    else:
+        fecha_seleccionada = timezone.now().date()
+    
+    # Obtener programaciones del día seleccionado
+    programaciones_dia = Programacion.objects.filter(
+        fecha_programada__date=fecha_seleccionada
     ).select_related('container', 'driver', 'cd').order_by('fecha_programada')
     
     operaciones = []
-    for prog in programaciones_hoy:
+    for prog in programaciones_dia:
         container = prog.container
         
         # Calcular tiempos y ETAs
@@ -333,20 +350,20 @@ def operaciones_diarias(request):
         })
     
     # Estadísticas del día
-    stats_hoy = {
-        'total_programadas': programaciones_hoy.count(),
-        'sin_asignar': programaciones_hoy.filter(driver__isnull=True).count(),
-        'asignadas': programaciones_hoy.filter(driver__isnull=False, container__estado='asignado').count(),
-        'en_ruta': programaciones_hoy.filter(container__estado='en_ruta').count(),
-        'entregadas': programaciones_hoy.filter(container__estado__in=['entregado', 'descargado']).count(),
-        'completadas': programaciones_hoy.filter(container__estado__in=['vacio', 'vacio_en_ruta', 'devuelto']).count(),
+    stats_dia = {
+        'total_programadas': programaciones_dia.count(),
+        'sin_asignar': programaciones_dia.filter(driver__isnull=True).count(),
+        'asignadas': programaciones_dia.filter(driver__isnull=False, container__estado='asignado').count(),
+        'en_ruta': programaciones_dia.filter(container__estado='en_ruta').count(),
+        'entregadas': programaciones_dia.filter(container__estado__in=['entregado', 'descargado']).count(),
+        'completadas': programaciones_dia.filter(container__estado__in=['vacio', 'vacio_en_ruta', 'devuelto']).count(),
     }
     
     return Response({
         'success': True,
-        'fecha': today.isoformat(),
+        'fecha': fecha_seleccionada.isoformat(),
         'total_operaciones': len(operaciones),
-        'stats': stats_hoy,
+        'stats': stats_dia,
         'operaciones': operaciones,
         'ultima_actualizacion': timezone.now().isoformat()
     })
