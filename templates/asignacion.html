@@ -221,11 +221,25 @@ function getCookie(name) {
     return cookieValue;
 }
 
+// Función auxiliar para parsear JSON de forma segura
+async function parseJsonSafely(response) {
+    const text = await response.text();
+    try {
+        return JSON.parse(text);
+    } catch (e) {
+        // Si no es JSON, probablemente es una página HTML de error
+        throw new Error(`Error ${response.status}: El servidor respondió con un formato inesperado. Verifique que el servidor esté funcionando correctamente.`);
+    }
+}
+
 // Cargar programaciones pendientes
 async function cargarProgramaciones() {
     try {
         const response = await fetch('/api/programaciones/?driver__isnull=true&ordering=fecha_programada');
-        const data = await response.json();
+        if (!response.ok) {
+            throw new Error(`Error ${response.status}: No se pudieron cargar las programaciones`);
+        }
+        const data = await parseJsonSafely(response);
         
         programaciones = data.results || [];
         
@@ -324,7 +338,10 @@ function renderizarProgramaciones() {
 async function cargarConductoresGlobal() {
     try {
         const response = await fetch('/api/drivers/?activo=true&presente=true');
-        const data = await response.json();
+        if (!response.ok) {
+            throw new Error(`Error ${response.status}: No se pudieron cargar conductores`);
+        }
+        const data = await parseJsonSafely(response);
         document.getElementById('stat-conductores').textContent = data.results ? data.results.length : 0;
     } catch (error) {
         console.error('Error cargando conductores:', error);
@@ -336,7 +353,10 @@ async function cargarAsignadosHoy() {
     try {
         const hoy = new Date().toISOString().split('T')[0];
         const response = await fetch(`/api/programaciones/?fecha_asignacion__gte=${hoy}T00:00:00Z&driver__isnull=false`);
-        const data = await response.json();
+        if (!response.ok) {
+            throw new Error(`Error ${response.status}: No se pudieron cargar asignados`);
+        }
+        const data = await parseJsonSafely(response);
         document.getElementById('stat-asignados').textContent = data.results ? data.results.length : 0;
     } catch (error) {
         console.error('Error cargando asignados:', error);
@@ -359,7 +379,10 @@ async function seleccionarProgramacion(progId) {
     
     try {
         const response = await fetch(`/api/programaciones/${progId}/conductores_disponibles/`);
-        const data = await response.json();
+        if (!response.ok) {
+            throw new Error(`Error ${response.status}: No se pudieron cargar conductores disponibles`);
+        }
+        const data = await parseJsonSafely(response);
         
         if (data.success) {
             conductoresDisponibles = data.conductores || [];
@@ -451,7 +474,12 @@ async function asignarAutomatico(progId) {
             }
         });
         
-        const result = await response.json();
+        if (!response.ok) {
+            const errorData = await parseJsonSafely(response);
+            throw new Error(errorData.error || errorData.detail || `Error ${response.status}`);
+        }
+        
+        const result = await parseJsonSafely(response);
         
         if (result.success) {
             alert(`✅ Conductor asignado: ${result.mensaje}`);
@@ -464,7 +492,7 @@ async function asignarAutomatico(progId) {
         }
     } catch (error) {
         console.error('Error en asignación automática:', error);
-        alert('❌ Error al asignar conductor');
+        alert(`❌ Error al asignar conductor: ${error.message}`);
     }
 }
 
@@ -484,7 +512,12 @@ async function asignarManual(progId, driverId, driverNombre) {
             body: JSON.stringify({ driver_id: driverId })
         });
         
-        const result = await response.json();
+        if (!response.ok) {
+            const errorData = await parseJsonSafely(response);
+            throw new Error(errorData.error || errorData.detail || `Error ${response.status}`);
+        }
+        
+        const result = await parseJsonSafely(response);
         
         if (result.success) {
             alert(`✅ ${result.mensaje}`);
@@ -497,7 +530,7 @@ async function asignarManual(progId, driverId, driverNombre) {
         }
     } catch (error) {
         console.error('Error en asignación manual:', error);
-        alert('❌ Error al asignar conductor');
+        alert(`❌ Error al asignar conductor: ${error.message}`);
     }
 }
 
@@ -524,7 +557,12 @@ async function asignarTodosAutomatico() {
             body: JSON.stringify({ programacion_ids: progIds })
         });
         
-        const result = await response.json();
+        if (!response.ok) {
+            const errorData = await parseJsonSafely(response);
+            throw new Error(errorData.error || errorData.detail || `Error ${response.status}`);
+        }
+        
+        const result = await parseJsonSafely(response);
         
         if (result.success) {
             alert(`✅ Asignación completada:\n- Asignadas: ${result.asignadas}\n- Fallidas: ${result.fallidas}`);

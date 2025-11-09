@@ -591,8 +591,15 @@ function confirmarProgramacion() {
     })
     .then(response => {
         if (!response.ok) {
-            return response.json().then(err => {
-                throw new Error(err.detail || err.error || 'Error al programar contenedor');
+            // Try to parse JSON error, but handle HTML responses
+            return response.text().then(text => {
+                try {
+                    const err = JSON.parse(text);
+                    throw new Error(err.detail || err.error || 'Error al programar contenedor');
+                } catch (e) {
+                    // If not JSON, show a generic error
+                    throw new Error(`Error ${response.status}: No se pudo programar el contenedor. Verifique que el servidor esté funcionando correctamente.`);
+                }
             });
         }
         return response.json();
@@ -1095,6 +1102,17 @@ function getCookie(name) {
     return cookieValue;
 }
 
+// Función auxiliar para parsear JSON de forma segura
+async function parseJsonSafely(response) {
+    const text = await response.text();
+    try {
+        return JSON.parse(text);
+    } catch (e) {
+        // Si no es JSON, probablemente es una página HTML de error
+        throw new Error(`Error ${response.status}: El servidor respondió con un formato inesperado. Verifique que el servidor esté funcionando correctamente.`);
+    }
+}
+
 // Cargar al inicio
 document.addEventListener('DOMContentLoaded', function() {
     // Cargar datos iniciales
@@ -1233,7 +1251,15 @@ function crearPreAsignacion() {
     })
     .then(response => {
         if (!response.ok) {
-            return response.json().then(err => { throw err; });
+            // Try to parse JSON error, but handle HTML responses
+            return response.text().then(text => {
+                try {
+                    const err = JSON.parse(text);
+                    throw new Error(err.detail || err.error || err.mensaje || 'Error en la operación');
+                } catch (e) {
+                    throw new Error(`Error ${response.status}: La operación falló. Verifique que el servidor esté funcionando correctamente.`);
+                }
+            });
         }
         return response.json();
     })

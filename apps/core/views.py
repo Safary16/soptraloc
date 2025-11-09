@@ -46,8 +46,10 @@ def home(request):
 
 
 def asignacion(request):
-    """Sistema de asignación de conductores - redirige a operaciones"""
-    return redirect('operaciones')
+    """Sistema inteligente de asignación de conductores"""
+    from django.middleware.csrf import get_token
+    get_token(request)
+    return render(request, 'asignacion.html')
 
 
 def estados(request):
