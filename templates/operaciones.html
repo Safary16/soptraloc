@@ -426,7 +426,7 @@ function confirmarAsignacionManual(driverId, driverNombre) {
             
             const progId = data.results[0].id;
             
-            fetch(`/api/programaciones/${progId}/asignar_driver/`, {
+            fetch(`/api/programaciones/${progId}/asignar_conductor/`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -527,6 +527,8 @@ function mostrarCicloVida(container) {
 // Generar botones de acción según estado
 function generarBotonesAccion(container, estado) {
     const actions = {
+        'por_arribar': `<button class="btn btn-sm btn-success" onclick="cambiarEstado(${container.id}, 'liberado')">Liberar</button>`,
+        'liberado': `<button class="btn btn-sm btn-primary" onclick="cambiarEstado(${container.id}, 'programado')">Programar</button>`,
         'programado': `<button class="btn btn-sm btn-success" onclick="cambiarEstado(${container.id}, 'asignado')">Asignar</button>`,
         'asignado': `<button class="btn btn-sm btn-primary" onclick="cambiarEstado(${container.id}, 'en_ruta')">Iniciar Ruta</button>`,
         'en_ruta': `<button class="btn btn-sm btn-info" onclick="cambiarEstado(${container.id}, 'entregado')">Marcar Entregado</button>`,
