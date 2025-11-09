@@ -1,5 +1,5 @@
 # Core views for frontend pages
-from django.shortcuts import render, get_object_or_404
+from django.shortcuts import render, get_object_or_404, redirect
 from django.utils import timezone
 from datetime import timedelta
 from apps.containers.models import Container
@@ -42,8 +42,8 @@ def home(request):
 
 
 def asignacion(request):
-    """Sistema de asignación de conductores"""
-    return render(request, 'asignacion.html')
+    """Sistema de asignación de conductores - redirige a operaciones"""
+    return redirect('operaciones')
 
 
 def estados(request):
