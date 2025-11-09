@@ -392,7 +392,7 @@ function loadContaineresLiberados() {
                         <div class="card-body">
                             <div class="d-flex justify-content-between align-items-start">
                                 <div>
-                                    <h6 class="mb-1"><strong>${cont.container_id}</strong></h6>
+                                    <h6 class="mb-1"><strong>${cont.container_id_formatted || cont.container_id}</strong></h6>
                                     <p class="mb-1 small text-muted">
                                         <i class="fas fa-ship"></i> ${cont.nave || 'N/A'}<br>
                                         <i class="fas fa-map-marker-alt"></i> ${cont.posicion_fisica || 'Sin ubicación'}<br>
@@ -401,7 +401,7 @@ function loadContaineresLiberados() {
                                     ${demurrageBadge}
                                 </div>
                                 <div>
-                                    <button class="btn btn-sm btn-primary action-btn" onclick="abrirModalProgramar(${cont.id}, '${cont.container_id}')">
+                                    <button class="btn btn-sm btn-primary action-btn" onclick="abrirModalProgramar(${cont.id}, '${cont.container_id_formatted || cont.container_id}')">
                                         <i class="fas fa-calendar-plus"></i> Programar
                                     </button>
                                 </div>
@@ -438,14 +438,14 @@ function loadContaineresPorArribar() {
                         <div class="card-body">
                             <div class="d-flex justify-content-between align-items-start">
                                 <div>
-                                    <h6 class="mb-1"><strong>${cont.container_id}</strong></h6>
+                                    <h6 class="mb-1"><strong>${cont.container_id_formatted || cont.container_id}</strong></h6>
                                     <p class="mb-1 small text-muted">
                                         <i class="fas fa-ship"></i> ${cont.nave || 'N/A'}<br>
                                         <i class="fas fa-calendar"></i> ETA: ${cont.fecha_eta ? new Date(cont.fecha_eta).toLocaleDateString('es-CL') : 'N/A'}
                                     </p>
                                 </div>
                                 <div>
-                                    <button class="btn btn-sm btn-success action-btn" onclick="liberarContenedor(${cont.id}, '${cont.container_id}')">
+                                    <button class="btn btn-sm btn-success action-btn" onclick="liberarContenedor(${cont.id}, '${cont.container_id_formatted || cont.container_id}')">
                                         <i class="fas fa-unlock"></i> Liberar
                                     </button>
                                 </div>
@@ -501,7 +501,7 @@ function abrirModalProgramar(containerId, containerIdStr) {
         .then(response => response.json())
         .then(container => {
             document.getElementById('programar-container-info').innerHTML = `
-                <h6><i class="fas fa-box"></i> ${container.container_id}</h6>
+                <h6><i class="fas fa-box"></i> ${container.container_id_formatted || container.container_id}</h6>
                 <p class="mb-1"><i class="fas fa-ship"></i> Nave: ${container.nave || 'N/A'}</p>
                 <p class="mb-1"><i class="fas fa-weight"></i> Peso: ${container.peso_total ? (container.peso_total/1000).toFixed(2) + ' ton' : 'N/A'}</p>
                 <p class="mb-0"><i class="fas fa-map-marker-alt"></i> Ubicación: ${container.posicion_fisica || 'Sin ubicación'}</p>
@@ -617,7 +617,7 @@ function loadContainersSinAsignar() {
                         <div class="card-body">
                             <div class="d-flex justify-content-between align-items-start">
                                 <div>
-                                    <h6 class="mb-1"><strong>${cont.container_id}</strong></h6>
+                                    <h6 class="mb-1"><strong>${cont.container_id_formatted || cont.container_id}</strong></h6>
                                     <p class="mb-1 small text-muted">
                                         <i class="fas fa-ship"></i> ${cont.nave || 'N/A'}<br>
                                         <i class="fas fa-calendar"></i> ${cont.fecha_programacion ? new Date(cont.fecha_programacion).toLocaleDateString('es-CL') : 'Sin fecha'}
@@ -742,7 +742,7 @@ function loadContaineresAsignados() {
                                 <div class="card-body">
                                     <div class="row">
                                         <div class="col-md-6">
-                                            <h5><i class="fas fa-box"></i> ${cont.container_id}</h5>
+                                            <h5><i class="fas fa-box"></i> ${cont.container_id_formatted || cont.container_id}</h5>
                                             <p class="mb-1"><i class="fas fa-ship"></i> <strong>Nave:</strong> ${cont.nave || 'N/A'}</p>
                                             <p class="mb-1"><i class="fas fa-building"></i> <strong>CD:</strong> ${cont.cd_entrega_nombre || 'N/A'}</p>
                                             <p class="mb-0"><span class="badge bg-${cont.estado === 'asignado' ? 'warning' : 'info'}">${cont.estado_display}</span></p>
@@ -961,7 +961,7 @@ function mostrarCicloVida(container) {
     
     // Mostrar info
     document.getElementById('container-info').innerHTML = `
-        <h6><strong>${container.container_id}</strong></h6>
+        <h6><strong>${container.container_id_formatted || container.container_id}</strong></h6>
         <p class="mb-2"><i class="fas fa-ship"></i> ${container.nave || 'N/A'}</p>
         <p class="mb-2"><i class="fas fa-box"></i> ${container.tipo || 'N/A'}</p>
         <p class="mb-2"><span class="badge bg-primary">${container.estado_display}</span></p>
@@ -1065,7 +1065,7 @@ function loadPreAsignacionData() {
             data.results.forEach(container => {
                 const option = document.createElement('option');
                 option.value = container.id;
-                option.textContent = `${container.container_id} - ${container.nave || 'Sin nave'} - ${container.cd_entrega_nombre || 'Sin CD'}`;
+                option.textContent = `${container.container_id_formatted || container.container_id} - ${container.nave || 'Sin nave'} - ${container.cd_entrega_nombre || 'Sin CD'}`;
                 option.dataset.container = JSON.stringify(container);
                 select.appendChild(option);
             });
@@ -1102,7 +1102,7 @@ document.addEventListener('change', function(e) {
             if (!infoDiv) return;
             infoDiv.classList.remove('d-none');
             infoDiv.innerHTML = `
-                <h6>${container.container_id}</h6>
+                <h6>${container.container_id_formatted || container.container_id}</h6>
                 <p class="mb-1"><i class="fas fa-ship"></i> ${container.nave || 'N/A'}</p>
                 <p class="mb-1"><i class="fas fa-box"></i> ${container.tipo || 'N/A'}</p>
                 <p class="mb-1"><i class="fas fa-building"></i> ${container.cd_entrega_nombre || 'Sin CD'}</p>
@@ -1207,8 +1207,12 @@ function loadProgramacionesList() {
             html += '</tr></thead><tbody>';
             
             data.results.forEach(prog => {
+                // Get formatted container ID - try different fields based on serializer
+                const containerId = prog.container_id_formatted || prog.container_id || 
+                    (prog.container && (prog.container.container_id_formatted || prog.container.container_id)) || 'N/A';
+                
                 html += `<tr>
-                    <td><strong>${prog.container_id || 'N/A'}</strong></td>
+                    <td><strong>${containerId}</strong></td>
                     <td>${prog.driver_nombre || 'Sin asignar'}</td>
                     <td>${prog.fecha_programada ? new Date(prog.fecha_programada).toLocaleString('es-CL') : 'Sin fecha'}</td>
                     <td><span class="badge bg-${prog.estado === 'completado' ? 'success' : 'warning'}">${prog.estado || 'Pendiente'}</span></td>
