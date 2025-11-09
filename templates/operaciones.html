@@ -158,6 +158,28 @@
                     </div>
                 </div>
             </div>
+            
+            <!-- Contenedores Asignados con Información Detallada -->
+            <div class="row">
+                <div class="col-12 mb-4">
+                    <div class="card">
+                        <div class="card-header bg-primary text-white">
+                            <i class="fas fa-truck"></i> Contenedores Asignados - Información de Tiempos
+                            <button class="btn btn-sm btn-light float-end" onclick="loadContaineresAsignados()">
+                                <i class="fas fa-sync"></i>
+                            </button>
+                        </div>
+                        <div class="card-body" style="max-height: 600px; overflow-y: auto;">
+                            <div id="containers-asignados">
+                                <div class="text-center py-4">
+                                    <div class="spinner-border text-primary"></div>
+                                    <p class="mt-2">Cargando...</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
         </div>
 
         <!-- Ciclo de Vida Tab -->
@@ -677,6 +699,96 @@ function loadConductoresDisponibles() {
         });
 }
 
+// Cargar contenedores asignados con información de tiempos
+function loadContaineresAsignados() {
+    fetch('/api/containers/?estado=asignado,en_ruta')
+        .then(response => response.json())
+        .then(data => {
+            const container = document.getElementById('containers-asignados');
+            container.innerHTML = '';
+            
+            if (!data.results || data.results.length === 0) {
+                container.innerHTML = '<p class="text-center text-muted py-4">No hay contenedores asignados</p>';
+                return;
+            }
+            
+            // Also fetch programaciones to get ETA data
+            return fetch('/api/programaciones/')
+                .then(progResponse => progResponse.json())
+                .then(progData => {
+                    // Create a map of container_id to programacion
+                    const progMap = {};
+                    if (progData.results) {
+                        progData.results.forEach(prog => {
+                            progMap[prog.container_id] = prog;
+                        });
+                    }
+                    
+                    data.results.forEach(cont => {
+                        const prog = progMap[cont.container_id];
+                        
+                        // Format dates
+                        const formatDate = (dateStr) => dateStr ? new Date(dateStr).toLocaleString('es-CL', {
+                            year: 'numeric', month: '2-digit', day: '2-digit',
+                            hour: '2-digit', minute: '2-digit'
+                        }) : 'N/A';
+                        
+                        const card = `
+                            <div class="container-card card mb-3">
+                                <div class="card-body">
+                                    <div class="row">
+                                        <div class="col-md-6">
+                                            <h5><i class="fas fa-box"></i> ${cont.container_id}</h5>
+                                            <p class="mb-1"><i class="fas fa-ship"></i> <strong>Nave:</strong> ${cont.nave || 'N/A'}</p>
+                                            <p class="mb-1"><i class="fas fa-building"></i> <strong>CD:</strong> ${cont.cd_entrega_nombre || 'N/A'}</p>
+                                            <p class="mb-0"><span class="badge bg-${cont.estado === 'asignado' ? 'warning' : 'info'}">${cont.estado_display}</span></p>
+                                        </div>
+                                        <div class="col-md-6">
+                                            <h6><i class="fas fa-clock"></i> Información de Tiempos</h6>
+                                            <table class="table table-sm table-borderless">
+                                                <tr>
+                                                    <td><i class="fas fa-calendar-check"></i> <strong>Programación:</strong></td>
+                                                    <td>${formatDate(cont.fecha_programacion)}</td>
+                                                </tr>
+                                                <tr>
+                                                    <td><i class="fas fa-user-check"></i> <strong>Asignación:</strong></td>
+                                                    <td>${formatDate(cont.fecha_asignacion)}</td>
+                                                </tr>
+                                                ${cont.estado === 'en_ruta' ? `
+                                                <tr>
+                                                    <td><i class="fas fa-route"></i> <strong>Inicio Ruta:</strong></td>
+                                                    <td>${formatDate(cont.fecha_inicio_ruta)}</td>
+                                                </tr>
+                                                ${prog && prog.eta_minutos ? `
+                                                <tr>
+                                                    <td><i class="fas fa-map-marker-alt"></i> <strong>ETA:</strong></td>
+                                                    <td>${prog.eta_minutos} minutos</td>
+                                                </tr>
+                                                ` : ''}
+                                                ` : ''}
+                                                ${cont.fecha_entrega ? `
+                                                <tr>
+                                                    <td><i class="fas fa-box-open"></i> <strong>Arribo:</strong></td>
+                                                    <td>${formatDate(cont.fecha_entrega)}</td>
+                                                </tr>
+                                                ` : ''}
+                                            </table>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        `;
+                        container.innerHTML += card;
+                    });
+                });
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            document.getElementById('containers-asignados').innerHTML = 
+                '<p class="text-danger text-center">Error al cargar contenedores</p>';
+        });
+}
+
 // Asignación automática
 function asignarAutomatico(containerId) {
     if (!confirm('¿Asignar automáticamente el mejor conductor disponible?')) {
@@ -919,6 +1031,7 @@ document.addEventListener('DOMContentLoaded', function() {
     loadContaineresLiberados();
     loadContaineresPorArribar();
     loadContainersSinAsignar();
+    loadContaineresAsignados();
     loadConductoresDisponibles();
     loadPreAsignacionData();
     
@@ -927,6 +1040,7 @@ document.addEventListener('DOMContentLoaded', function() {
         loadContaineresLiberados();
         loadContaineresPorArribar();
         loadContainersSinAsignar();
+        loadContaineresAsignados();
         loadConductoresDisponibles();
     }, 30000);
 });
