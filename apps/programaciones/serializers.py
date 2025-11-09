@@ -23,13 +23,18 @@ class ProgramacionListSerializer(serializers.ModelSerializer):
     container_id = serializers.CharField(source='container.container_id', read_only=True)
     driver_nombre = serializers.CharField(source='driver.nombre', read_only=True, allow_null=True)
     cd_nombre = serializers.CharField(source='cd.nombre', read_only=True)
+    cd_lat = serializers.DecimalField(source='cd.lat', max_digits=9, decimal_places=6, read_only=True)
+    cd_lng = serializers.DecimalField(source='cd.lng', max_digits=9, decimal_places=6, read_only=True)
     horas_hasta_programacion = serializers.FloatField(read_only=True)
+    estado_container = serializers.CharField(source='container.estado', read_only=True)
     
     class Meta:
         model = Programacion
         fields = [
-            'id', 'container_id', 'fecha_programada', 'cliente', 'cd_nombre',
-            'driver_nombre', 'requiere_alerta', 'horas_hasta_programacion'
+            'id', 'container_id', 'fecha_programada', 'cliente', 'cd_nombre', 'cd_lat', 'cd_lng',
+            'driver_nombre', 'requiere_alerta', 'horas_hasta_programacion',
+            'estado_container', 'fecha_asignacion', 'fecha_inicio_ruta',
+            'eta_minutos', 'distancia_km', 'patente_confirmada'
         ]
 
 

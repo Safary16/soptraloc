@@ -363,6 +363,129 @@ class ContainerViewSet(viewsets.ModelViewSet):
         })
     
     @action(detail=True, methods=['post'])
+    def programar(self, request, pk=None):
+        """
+        Programa un contenedor manualmente desde operaciones
+        Crea la programación y actualiza el estado del contenedor
+        
+        Payload:
+        {
+            "cd_id": 1,
+            "fecha_programada": "2025-11-10T14:00:00Z",
+            "cliente": "Cliente XYZ",
+            "observaciones": "..."
+        }
+        """
+        from apps.programaciones.models import Programacion
+        from apps.cds.models import CD
+        from apps.events.models import Event
+        
+        container = self.get_object()
+        
+        # Validar que esté liberado
+        if container.estado not in ['liberado', 'secuenciado']:
+            return Response(
+                {'error': f'Contenedor debe estar liberado o secuenciado. Estado actual: {container.get_estado_display()}'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Validar datos requeridos
+        cd_id = request.data.get('cd_id')
+        fecha_programada = request.data.get('fecha_programada')
+        
+        if not cd_id:
+            return Response(
+                {'error': 'cd_id es requerido'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        if not fecha_programada:
+            return Response(
+                {'error': 'fecha_programada es requerida'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Obtener CD
+        try:
+            cd = CD.objects.get(id=cd_id, activo=True)
+        except CD.DoesNotExist:
+            return Response(
+                {'error': f'CD con ID {cd_id} no encontrado o inactivo'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        
+        # Parsear fecha
+        from dateutil import parser as date_parser
+        try:
+            fecha_programada_dt = date_parser.parse(fecha_programada)
+        except Exception as e:
+            return Response(
+                {'error': f'Formato de fecha inválido: {str(e)}'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Verificar si ya existe una programación
+        if hasattr(container, 'programacion') and container.programacion:
+            return Response(
+                {'error': 'Este contenedor ya tiene una programación asociada'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Crear programación
+        programacion = Programacion.objects.create(
+            container=container,
+            cd=cd,
+            fecha_programada=fecha_programada_dt,
+            cliente=request.data.get('cliente', container.cliente or ''),
+            direccion_entrega=cd.direccion,
+            observaciones=request.data.get('observaciones', '')
+        )
+        
+        # Actualizar contenedor
+        container.cd_entrega = cd
+        container.fecha_programacion = timezone.now()
+        container.cambiar_estado('programado', request.user.username if request.user.is_authenticated else None)
+        
+        # Crear evento de auditoría
+        Event.objects.create(
+            container=container,
+            event_type='programacion_manual',
+            detalles={
+                'cd': cd.nombre,
+                'fecha_programada': fecha_programada_dt.isoformat(),
+                'cliente': programacion.cliente,
+                'programacion_id': programacion.id
+            },
+            usuario=request.user.username if request.user.is_authenticated else None
+        )
+        
+        serializer = self.get_serializer(container)
+        return Response({
+            'success': True,
+            'mensaje': f'Contenedor {container.container_id} programado para {cd.nombre}',
+            'container': serializer.data,
+            'programacion_id': programacion.id,
+            'fecha_programada': fecha_programada_dt.isoformat()
+        }, status=status.HTTP_201_CREATED)
+    
+    @action(detail=False, methods=['get'], url_path='liberados')
+    def liberados(self, request):
+        """
+        Lista contenedores liberados disponibles para programar
+        """
+        containers = Container.objects.filter(
+            estado='liberado'
+        ).select_related('cd_entrega').order_by('-fecha_liberacion')
+        
+        serializer = ContainerListSerializer(containers, many=True)
+        
+        return Response({
+            'success': True,
+            'total': containers.count(),
+            'containers': serializer.data
+        })
+    
+    @action(detail=True, methods=['post'])
     def marcar_vacio(self, request, pk=None):
         """Marca contenedor como vacío (descargado, esperando retiro)"""
         container = self.get_object()
