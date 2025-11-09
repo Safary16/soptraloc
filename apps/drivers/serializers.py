@@ -48,8 +48,10 @@ class DriverDetailSerializer(DriverSerializer):
         fields = DriverSerializer.Meta.fields + ['programaciones_asignadas']
     
     def get_programaciones_asignadas(self, obj):
-        """Retorna programaciones asignadas al conductor"""
+        """Retorna programaciones asignadas al conductor con información de ETA"""
         from apps.programaciones.models import Programacion
+        from django.utils import timezone
+        from datetime import timedelta
         
         # Get all programaciones for this driver
         programaciones = Programacion.objects.filter(
@@ -70,7 +72,19 @@ class DriverDetailSerializer(DriverSerializer):
                     'estado': estado,
                     'fecha_asignacion': prog.fecha_asignacion,
                     'fecha_programada': prog.fecha_programada,
+                    'fecha_inicio_ruta': prog.fecha_inicio_ruta,
+                    # Información de ETA
+                    'eta_minutos': prog.eta_minutos,
+                    'distancia_km': float(prog.distancia_km) if prog.distancia_km else None,
                 }
+                
+                # Calcular ETA timestamp si está en ruta y tenemos ETA
+                if estado == 'en_ruta' and prog.eta_minutos:
+                    eta_timestamp = timezone.now() + timedelta(minutes=prog.eta_minutos)
+                    item['eta_timestamp'] = eta_timestamp
+                else:
+                    item['eta_timestamp'] = None
+                
                 resultado.append(item)
         
         return resultado

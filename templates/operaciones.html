@@ -53,7 +53,12 @@
     <!-- Tabs -->
     <ul class="nav nav-tabs mb-4" id="operacionesTabs" role="tablist">
         <li class="nav-item" role="presentation">
-            <button class="nav-link active" id="asignacion-tab" data-bs-toggle="tab" data-bs-target="#asignacion" type="button">
+            <button class="nav-link active" id="liberacion-tab" data-bs-toggle="tab" data-bs-target="#liberacion" type="button">
+                <i class="fas fa-unlock-alt"></i> Liberación y Programación
+            </button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link" id="asignacion-tab" data-bs-toggle="tab" data-bs-target="#asignacion" type="button">
                 <i class="fas fa-user-plus"></i> Asignación
             </button>
         </li>
@@ -71,8 +76,53 @@
 
     <!-- Tab Content -->
     <div class="tab-content" id="operacionesTabContent">
+        <!-- Liberación y Programación Tab -->
+        <div class="tab-pane fade show active" id="liberacion" role="tabpanel">
+            <div class="row">
+                <!-- Contenedores Liberados -->
+                <div class="col-md-6 mb-4">
+                    <div class="card">
+                        <div class="card-header bg-info text-white">
+                            <i class="fas fa-unlock"></i> Contenedores Liberados
+                            <button class="btn btn-sm btn-light float-end" onclick="loadContaineresLiberados()">
+                                <i class="fas fa-sync"></i>
+                            </button>
+                        </div>
+                        <div class="card-body" style="max-height: 600px; overflow-y: auto;">
+                            <div id="containers-liberados">
+                                <div class="text-center py-4">
+                                    <div class="spinner-border text-primary"></div>
+                                    <p class="mt-2">Cargando...</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Contenedores Por Arribar -->
+                <div class="col-md-6 mb-4">
+                    <div class="card">
+                        <div class="card-header bg-secondary text-white">
+                            <i class="fas fa-ship"></i> Contenedores Por Arribar
+                            <button class="btn btn-sm btn-light float-end" onclick="loadContaineresPorArribar()">
+                                <i class="fas fa-sync"></i>
+                            </button>
+                        </div>
+                        <div class="card-body" style="max-height: 600px; overflow-y: auto;">
+                            <div id="containers-por-arribar">
+                                <div class="text-center py-4">
+                                    <div class="spinner-border text-primary"></div>
+                                    <p class="mt-2">Cargando...</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
         <!-- Asignación Tab -->
-        <div class="tab-pane fade show active" id="asignacion" role="tabpanel">
+        <div class="tab-pane fade" id="asignacion" role="tabpanel">
             <div class="row">
                 <!-- Contenedores sin asignar -->
                 <div class="col-md-6 mb-4">
@@ -99,6 +149,28 @@
                         </div>
                         <div class="card-body" style="max-height: 600px; overflow-y: auto;">
                             <div id="conductores-disponibles">
+                                <div class="text-center py-4">
+                                    <div class="spinner-border text-primary"></div>
+                                    <p class="mt-2">Cargando...</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Contenedores Asignados con Información Detallada -->
+            <div class="row">
+                <div class="col-12 mb-4">
+                    <div class="card">
+                        <div class="card-header bg-primary text-white">
+                            <i class="fas fa-truck"></i> Contenedores Asignados - Información de Tiempos
+                            <button class="btn btn-sm btn-light float-end" onclick="loadContaineresAsignados()">
+                                <i class="fas fa-sync"></i>
+                            </button>
+                        </div>
+                        <div class="card-body" style="max-height: 600px; overflow-y: auto;">
+                            <div id="containers-asignados">
                                 <div class="text-center py-4">
                                     <div class="spinner-border text-primary"></div>
                                     <p class="mt-2">Cargando...</p>
@@ -244,9 +316,287 @@
     </div>
 </div>
 
+<!-- Modal para Programar Contenedor -->
+<div class="modal fade" id="programarModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title"><i class="fas fa-calendar-alt"></i> Programar Contenedor</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div id="programar-container-info" class="alert alert-info mb-3">
+                    <!-- Info del contenedor -->
+                </div>
+                <form id="programar-form">
+                    <div class="mb-3">
+                        <label class="form-label">Centro de Distribución *</label>
+                        <select class="form-select" id="programar-cd" required>
+                            <option value="">Seleccione un CD...</option>
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Fecha y Hora Programada *</label>
+                        <input type="datetime-local" class="form-control" id="programar-fecha" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Cliente</label>
+                        <input type="text" class="form-control" id="programar-cliente" placeholder="Nombre del cliente">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Observaciones</label>
+                        <textarea class="form-control" id="programar-observaciones" rows="3"></textarea>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-primary" onclick="confirmarProgramacion()">
+                    <i class="fas fa-check"></i> Programar
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
 <script>
 let selectedContainer = null;
 let selectedDriver = null;
+let selectedContainerForProgramming = null;
+
+// ============================================
+// LIBERACIÓN Y PROGRAMACIÓN
+// ============================================
+
+// Cargar contenedores liberados
+function loadContaineresLiberados() {
+    fetch('/api/containers/liberados/')
+        .then(response => response.json())
+        .then(data => {
+            const container = document.getElementById('containers-liberados');
+            container.innerHTML = '';
+            
+            if (!data.containers || data.containers.length === 0) {
+                container.innerHTML = '<p class="text-center text-muted py-4">No hay contenedores liberados</p>';
+                return;
+            }
+            
+            data.containers.forEach(cont => {
+                const demurrageBadge = cont.dias_para_demurrage !== null ? 
+                    `<span class="badge bg-${cont.dias_para_demurrage <= 1 ? 'danger' : cont.dias_para_demurrage <= 2 ? 'warning' : 'info'}">
+                        ${cont.dias_para_demurrage} días demurrage
+                    </span>` : '';
+                
+                const card = `
+                    <div class="container-card card mb-3">
+                        <div class="card-body">
+                            <div class="d-flex justify-content-between align-items-start">
+                                <div>
+                                    <h6 class="mb-1"><strong>${cont.container_id}</strong></h6>
+                                    <p class="mb-1 small text-muted">
+                                        <i class="fas fa-ship"></i> ${cont.nave || 'N/A'}<br>
+                                        <i class="fas fa-map-marker-alt"></i> ${cont.posicion_fisica || 'Sin ubicación'}<br>
+                                        <i class="fas fa-calendar"></i> Liberado: ${cont.fecha_liberacion ? new Date(cont.fecha_liberacion).toLocaleDateString('es-CL') : 'N/A'}
+                                    </p>
+                                    ${demurrageBadge}
+                                </div>
+                                <div>
+                                    <button class="btn btn-sm btn-primary action-btn" onclick="abrirModalProgramar(${cont.id}, '${cont.container_id}')">
+                                        <i class="fas fa-calendar-plus"></i> Programar
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+                container.innerHTML += card;
+            });
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            document.getElementById('containers-liberados').innerHTML = 
+                '<p class="text-danger text-center">Error al cargar contenedores</p>';
+        });
+}
+
+// Cargar contenedores por arribar
+function loadContaineresPorArribar() {
+    fetch('/api/containers/?estado=por_arribar')
+        .then(response => response.json())
+        .then(data => {
+            const container = document.getElementById('containers-por-arribar');
+            container.innerHTML = '';
+            
+            if (!data.results || data.results.length === 0) {
+                container.innerHTML = '<p class="text-center text-muted py-4">No hay contenedores por arribar</p>';
+                return;
+            }
+            
+            data.results.forEach(cont => {
+                const card = `
+                    <div class="container-card card mb-3">
+                        <div class="card-body">
+                            <div class="d-flex justify-content-between align-items-start">
+                                <div>
+                                    <h6 class="mb-1"><strong>${cont.container_id}</strong></h6>
+                                    <p class="mb-1 small text-muted">
+                                        <i class="fas fa-ship"></i> ${cont.nave || 'N/A'}<br>
+                                        <i class="fas fa-calendar"></i> ETA: ${cont.fecha_eta ? new Date(cont.fecha_eta).toLocaleDateString('es-CL') : 'N/A'}
+                                    </p>
+                                </div>
+                                <div>
+                                    <button class="btn btn-sm btn-success action-btn" onclick="liberarContenedor(${cont.id}, '${cont.container_id}')">
+                                        <i class="fas fa-unlock"></i> Liberar
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+                container.innerHTML += card;
+            });
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            document.getElementById('containers-por-arribar').innerHTML = 
+                '<p class="text-danger text-center">Error al cargar contenedores</p>';
+        });
+}
+
+// Liberar contenedor
+function liberarContenedor(containerId, containerIdStr) {
+    if (!confirm(`¿Liberar contenedor ${containerIdStr}?`)) {
+        return;
+    }
+    
+    fetch(`/api/containers/${containerId}/marcar_liberado/`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': getCookie('csrftoken')
+        }
+    })
+    .then(response => response.json())
+    .then(result => {
+        if (result.success) {
+            alert(`✅ ${result.mensaje}`);
+            loadContaineresPorArribar();
+            loadContaineresLiberados();
+        } else {
+            alert(`❌ Error: ${result.error || result.mensaje}`);
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        alert('❌ Error al liberar contenedor');
+    });
+}
+
+// Abrir modal de programación
+function abrirModalProgramar(containerId, containerIdStr) {
+    selectedContainerForProgramming = containerId;
+    
+    // Cargar información del contenedor
+    fetch(`/api/containers/${containerId}/`)
+        .then(response => response.json())
+        .then(container => {
+            document.getElementById('programar-container-info').innerHTML = `
+                <h6><i class="fas fa-box"></i> ${container.container_id}</h6>
+                <p class="mb-1"><i class="fas fa-ship"></i> Nave: ${container.nave || 'N/A'}</p>
+                <p class="mb-1"><i class="fas fa-weight"></i> Peso: ${container.peso_total ? (container.peso_total/1000).toFixed(2) + ' ton' : 'N/A'}</p>
+                <p class="mb-0"><i class="fas fa-map-marker-alt"></i> Ubicación: ${container.posicion_fisica || 'Sin ubicación'}</p>
+            `;
+            
+            // Pre-llenar cliente si existe
+            if (container.cliente) {
+                document.getElementById('programar-cliente').value = container.cliente;
+            }
+        });
+    
+    // Cargar CDs disponibles
+    fetch('/api/cds/?activo=true&tipo=cliente')
+        .then(response => response.json())
+        .then(data => {
+            const select = document.getElementById('programar-cd');
+            select.innerHTML = '<option value="">Seleccione un CD...</option>';
+            
+            if (data.results) {
+                data.results.forEach(cd => {
+                    const option = document.createElement('option');
+                    option.value = cd.id;
+                    option.textContent = `${cd.nombre} - ${cd.comuna}`;
+                    select.appendChild(option);
+                });
+            }
+        });
+    
+    // Establecer fecha por defecto (mañana a las 9am)
+    const tomorrow = new Date();
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    tomorrow.setHours(9, 0, 0, 0);
+    document.getElementById('programar-fecha').value = tomorrow.toISOString().slice(0, 16);
+    
+    // Mostrar modal
+    const modal = new bootstrap.Modal(document.getElementById('programarModal'));
+    modal.show();
+}
+
+// Confirmar programación
+function confirmarProgramacion() {
+    const cdId = document.getElementById('programar-cd').value;
+    const fecha = document.getElementById('programar-fecha').value;
+    const cliente = document.getElementById('programar-cliente').value;
+    const observaciones = document.getElementById('programar-observaciones').value;
+    
+    if (!cdId || !fecha) {
+        alert('❌ Por favor complete los campos requeridos');
+        return;
+    }
+    
+    if (!selectedContainerForProgramming) {
+        alert('❌ Error: No hay contenedor seleccionado');
+        return;
+    }
+    
+    // Convertir fecha local a ISO 8601
+    const fechaISO = new Date(fecha).toISOString();
+    
+    fetch(`/api/containers/${selectedContainerForProgramming}/programar/`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': getCookie('csrftoken')
+        },
+        body: JSON.stringify({
+            cd_id: parseInt(cdId),
+            fecha_programada: fechaISO,
+            cliente: cliente,
+            observaciones: observaciones
+        })
+    })
+    .then(response => response.json())
+    .then(result => {
+        if (result.success) {
+            alert(`✅ ${result.mensaje}`);
+            bootstrap.Modal.getInstance(document.getElementById('programarModal')).hide();
+            loadContaineresLiberados();
+            loadContainersSinAsignar();
+            // Limpiar formulario
+            document.getElementById('programar-form').reset();
+            selectedContainerForProgramming = null;
+        } else {
+            alert(`❌ Error: ${result.error || result.mensaje}`);
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        alert('❌ Error al programar contenedor');
+    });
+}
+
+// ============================================
+// ASIGNACIÓN
+// ============================================
 
 // Cargar contenedores sin asignar
 function loadContainersSinAsignar() {
@@ -346,6 +696,96 @@ function loadConductoresDisponibles() {
             console.error('Error:', error);
             document.getElementById('conductores-disponibles').innerHTML = 
                 '<p class="text-danger text-center">Error al cargar conductores</p>';
+        });
+}
+
+// Cargar contenedores asignados con información de tiempos
+function loadContaineresAsignados() {
+    fetch('/api/containers/?estado=asignado,en_ruta')
+        .then(response => response.json())
+        .then(data => {
+            const container = document.getElementById('containers-asignados');
+            container.innerHTML = '';
+            
+            if (!data.results || data.results.length === 0) {
+                container.innerHTML = '<p class="text-center text-muted py-4">No hay contenedores asignados</p>';
+                return;
+            }
+            
+            // Also fetch programaciones to get ETA data
+            return fetch('/api/programaciones/')
+                .then(progResponse => progResponse.json())
+                .then(progData => {
+                    // Create a map of container_id to programacion
+                    const progMap = {};
+                    if (progData.results) {
+                        progData.results.forEach(prog => {
+                            progMap[prog.container_id] = prog;
+                        });
+                    }
+                    
+                    data.results.forEach(cont => {
+                        const prog = progMap[cont.container_id];
+                        
+                        // Format dates
+                        const formatDate = (dateStr) => dateStr ? new Date(dateStr).toLocaleString('es-CL', {
+                            year: 'numeric', month: '2-digit', day: '2-digit',
+                            hour: '2-digit', minute: '2-digit'
+                        }) : 'N/A';
+                        
+                        const card = `
+                            <div class="container-card card mb-3">
+                                <div class="card-body">
+                                    <div class="row">
+                                        <div class="col-md-6">
+                                            <h5><i class="fas fa-box"></i> ${cont.container_id}</h5>
+                                            <p class="mb-1"><i class="fas fa-ship"></i> <strong>Nave:</strong> ${cont.nave || 'N/A'}</p>
+                                            <p class="mb-1"><i class="fas fa-building"></i> <strong>CD:</strong> ${cont.cd_entrega_nombre || 'N/A'}</p>
+                                            <p class="mb-0"><span class="badge bg-${cont.estado === 'asignado' ? 'warning' : 'info'}">${cont.estado_display}</span></p>
+                                        </div>
+                                        <div class="col-md-6">
+                                            <h6><i class="fas fa-clock"></i> Información de Tiempos</h6>
+                                            <table class="table table-sm table-borderless">
+                                                <tr>
+                                                    <td><i class="fas fa-calendar-check"></i> <strong>Programación:</strong></td>
+                                                    <td>${formatDate(cont.fecha_programacion)}</td>
+                                                </tr>
+                                                <tr>
+                                                    <td><i class="fas fa-user-check"></i> <strong>Asignación:</strong></td>
+                                                    <td>${formatDate(cont.fecha_asignacion)}</td>
+                                                </tr>
+                                                ${cont.estado === 'en_ruta' ? `
+                                                <tr>
+                                                    <td><i class="fas fa-route"></i> <strong>Inicio Ruta:</strong></td>
+                                                    <td>${formatDate(cont.fecha_inicio_ruta)}</td>
+                                                </tr>
+                                                ${prog && prog.eta_minutos ? `
+                                                <tr>
+                                                    <td><i class="fas fa-map-marker-alt"></i> <strong>ETA:</strong></td>
+                                                    <td>${prog.eta_minutos} minutos</td>
+                                                </tr>
+                                                ` : ''}
+                                                ` : ''}
+                                                ${cont.fecha_entrega ? `
+                                                <tr>
+                                                    <td><i class="fas fa-box-open"></i> <strong>Arribo:</strong></td>
+                                                    <td>${formatDate(cont.fecha_entrega)}</td>
+                                                </tr>
+                                                ` : ''}
+                                            </table>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        `;
+                        container.innerHTML += card;
+                    });
+                });
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            document.getElementById('containers-asignados').innerHTML = 
+                '<p class="text-danger text-center">Error al cargar contenedores</p>';
         });
 }
 
@@ -587,13 +1027,20 @@ function getCookie(name) {
 
 // Cargar al inicio
 document.addEventListener('DOMContentLoaded', function() {
+    // Cargar datos iniciales
+    loadContaineresLiberados();
+    loadContaineresPorArribar();
     loadContainersSinAsignar();
+    loadContaineresAsignados();
     loadConductoresDisponibles();
     loadPreAsignacionData();
     
     // Actualizar cada 30 segundos
     setInterval(() => {
+        loadContaineresLiberados();
+        loadContaineresPorArribar();
         loadContainersSinAsignar();
+        loadContaineresAsignados();
         loadConductoresDisponibles();
     }, 30000);
 });

@@ -623,6 +623,22 @@
                                   prog.estado === 'descargado' ? 'primary' :
                                   prog.estado === 'vacio' ? 'success' : 'secondary';
                 
+                // Calcular si está a tiempo o retrasado
+                const fechaProgramada = prog.fecha_programada ? new Date(prog.fecha_programada) : null;
+                const etaTimestamp = prog.eta_timestamp ? new Date(prog.eta_timestamp) : null;
+                const ahora = new Date();
+                
+                let estadoTiempo = '';
+                let colorTiempo = '';
+                if (prog.estado === 'en_ruta' && fechaProgramada && etaTimestamp) {
+                    const minutosRestantes = Math.floor((fechaProgramada - etaTimestamp) / 60000);
+                    if (minutosRestantes >= 0) {
+                        estadoTiempo = `<span class="badge bg-success"><i class="fas fa-check"></i> A tiempo (${minutosRestantes}min de margen)</span>`;
+                    } else {
+                        estadoTiempo = `<span class="badge bg-danger"><i class="fas fa-exclamation-triangle"></i> Retrasado (${Math.abs(minutosRestantes)}min)</span>`;
+                    }
+                }
+                
                 html += `
                     <div class="container-item" data-prog-id="${prog.id}">
                         <div class="d-flex justify-content-between align-items-center">
@@ -635,6 +651,20 @@
                         <div class="mt-2">
                             <strong>Cliente:</strong> ${prog.cliente || 'N/A'}
                         </div>
+                        
+                        ${fechaProgramada ? `
+                        <div class="mt-2">
+                            <strong><i class="fas fa-calendar-check"></i> Hora de Citación:</strong> ${fechaProgramada.toLocaleString('es-CL')}
+                        </div>
+                        ` : ''}
+                        
+                        ${prog.estado === 'en_ruta' && prog.eta_minutos ? `
+                        <div class="mt-2 alert alert-info py-2">
+                            <strong><i class="fas fa-clock"></i> ETA (Mapbox):</strong> ${prog.eta_minutos} minutos<br>
+                            ${etaTimestamp ? `<strong>Llegada estimada:</strong> ${etaTimestamp.toLocaleString('es-CL')}<br>` : ''}
+                            ${estadoTiempo}
+                        </div>
+                        ` : ''}
                         
                         ${prog.cd ? `
                         <div class="cd-info">
