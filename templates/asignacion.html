@@ -407,7 +407,7 @@ function renderizarConductores() {
                             ${esMejor ? '<div class="mt-1"><span class="badge bg-success"><i class="fas fa-star"></i> Mejor</span></div>' : ''}
                         </div>
                         <div class="col-md-6">
-                            <h6 class="mb-1">${conductor.nombre || 'N/A'} ${conductor.apellido || ''}</h6>
+                            <h6 class="mb-1">${conductor.nombre || 'N/A'}</h6>
                             <small class="text-muted">
                                 <i class="fas fa-car"></i> ${conductor.patente || 'Sin patente'}<br>
                                 <i class="fas fa-tasks"></i> ${conductor.num_entregas_dia || 0}/${conductor.max_entregas_dia || 0} entregas

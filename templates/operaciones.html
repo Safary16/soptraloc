@@ -1082,7 +1082,7 @@ function loadPreAsignacionData() {
             data.results.forEach(driver => {
                 const option = document.createElement('option');
                 option.value = driver.id;
-                option.textContent = `${driver.nombre} ${driver.apellido} - ${driver.patente || 'Sin patente'}`;
+                option.textContent = `${driver.nombre} - ${driver.patente || 'Sin patente'}`;
                 option.dataset.driver = JSON.stringify(driver);
                 select.appendChild(option);
             });
@@ -1120,7 +1120,7 @@ document.addEventListener('change', function(e) {
             if (!infoDiv) return;
             infoDiv.classList.remove('d-none');
             infoDiv.innerHTML = `
-                <h6>${driver.nombre} ${driver.apellido}</h6>
+                <h6>${driver.nombre}</h6>
                 <p class="mb-1"><i class="fas fa-phone"></i> ${driver.telefono || 'N/A'}</p>
                 <p class="mb-0"><i class="fas fa-car"></i> ${driver.patente || 'Sin patente'}</p>
             `;
