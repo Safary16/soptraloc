@@ -381,7 +381,15 @@ function loadContaineresLiberados() {
                 return;
             }
             
-            data.containers.forEach(cont => {
+            // Filtrar contenedores que NO tienen programación
+            const containersSinProgramacion = data.containers.filter(cont => !cont.tiene_programacion);
+            
+            if (containersSinProgramacion.length === 0) {
+                container.innerHTML = '<p class="text-center text-muted py-4">✅ Todos los contenedores liberados ya están programados</p>';
+                return;
+            }
+            
+            containersSinProgramacion.forEach(cont => {
                 const demurrageBadge = cont.dias_para_demurrage !== null ? 
                     `<span class="badge bg-${cont.dias_para_demurrage <= 1 ? 'danger' : cont.dias_para_demurrage <= 2 ? 'warning' : 'info'}">
                         ${cont.dias_para_demurrage} días demurrage
@@ -595,8 +603,21 @@ function confirmarProgramacion() {
             return response.text().then(text => {
                 try {
                     const err = JSON.parse(text);
-                    throw new Error(err.detail || err.error || 'Error al programar contenedor');
+                    // Handle specific error cases with better messages
+                    if (err.programacion_existente) {
+                        const prog = err.programacion_existente;
+                        const detalles = `\nDetalles de la programación existente:\n` +
+                            `- ID: ${prog.id}\n` +
+                            `- Fecha: ${new Date(prog.fecha_programada).toLocaleString('es-CL')}\n` +
+                            `- CD: ${prog.cd || 'N/A'}\n` +
+                            `- ${prog.tiene_conductor ? 'Ya tiene conductor asignado' : 'Sin conductor asignado'}`;
+                        throw new Error(err.error + detalles);
+                    }
+                    throw new Error(err.error || err.detail || 'Error al programar contenedor');
                 } catch (e) {
+                    if (e.message && !e.message.startsWith('Error')) {
+                        throw e;  // Re-throw our custom error
+                    }
                     // If not JSON, show a generic error
                     throw new Error(`Error ${response.status}: No se pudo programar el contenedor. Verifique que el servidor esté funcionando correctamente.`);
                 }
@@ -632,7 +653,7 @@ function confirmarProgramacion() {
     })
     .catch(error => {
         console.error('Error:', error);
-        alert(`❌ Error al programar contenedor: ${error.message}`);
+        alert(`❌ ${error.message}`);
     });
 }
 

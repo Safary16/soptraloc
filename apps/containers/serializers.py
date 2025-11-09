@@ -23,6 +23,7 @@ class ContainerListSerializer(serializers.ModelSerializer):
     peso_total = serializers.ReadOnlyField()
     dias_para_demurrage = serializers.ReadOnlyField()
     urgencia_demurrage = serializers.ReadOnlyField()
+    tiene_programacion = serializers.SerializerMethodField()
     
     class Meta:
         model = Container
@@ -35,8 +36,13 @@ class ContainerListSerializer(serializers.ModelSerializer):
             'deposito_devolucion', 'tipo_movimiento', 'tipo_movimiento_display',
             'cd_entrega', 'cd_entrega_nombre', 'fecha_descarga',
             # Timestamps del ciclo de vida (para operaciones)
-            'fecha_asignacion', 'fecha_inicio_ruta', 'fecha_entrega', 'fecha_arribo'
+            'fecha_asignacion', 'fecha_inicio_ruta', 'fecha_entrega', 'fecha_arribo',
+            'tiene_programacion'
         ]
+    
+    def get_tiene_programacion(self, obj):
+        """Indica si el contenedor tiene una programación asociada"""
+        return obj.tiene_programacion()
 
 
 class ContainerStockExportSerializer(serializers.ModelSerializer):

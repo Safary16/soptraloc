@@ -248,3 +248,28 @@ class Container(models.Model):
         )
         
         return self
+    
+    def tiene_programacion(self):
+        """
+        Verifica de forma segura si el contenedor tiene una programación
+        
+        Returns:
+            bool: True si tiene programación, False si no
+        """
+        try:
+            return self.programacion is not None
+        except Exception:
+            # Si hay cualquier error (DoesNotExist, AttributeError, etc.)
+            return False
+    
+    def get_programacion_safe(self):
+        """
+        Obtiene la programación del contenedor de forma segura
+        
+        Returns:
+            Programacion|None: La programación si existe, None si no
+        """
+        try:
+            return self.programacion
+        except Exception:
+            return None

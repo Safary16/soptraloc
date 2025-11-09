@@ -443,10 +443,11 @@ class ContainerViewSet(viewsets.ModelViewSet):
         from apps.programaciones.models import Programacion
         from apps.cds.models import CD
         from apps.events.models import Event
+        from django.db import transaction, IntegrityError
         
         container = self.get_object()
         
-        # Validar que esté liberado
+        # Validar que esté liberado o secuenciado
         if container.estado not in ['liberado', 'secuenciado']:
             return Response(
                 {'error': f'Contenedor debe estar liberado o secuenciado. Estado actual: {container.get_estado_display()}'},
@@ -482,46 +483,81 @@ class ContainerViewSet(viewsets.ModelViewSet):
         from dateutil import parser as date_parser
         try:
             fecha_programada_dt = date_parser.parse(fecha_programada)
-        except Exception:
+        except Exception as e:
             return Response(
-                {'error': 'Formato de fecha inválido. Use formato ISO 8601: YYYY-MM-DDTHH:MM:SSZ'},
+                {'error': f'Formato de fecha inválido: {str(e)}. Use formato ISO 8601: YYYY-MM-DDTHH:MM:SSZ'},
                 status=status.HTTP_400_BAD_REQUEST
             )
         
-        # Verificar si ya existe una programación
-        if hasattr(container, 'programacion') and container.programacion:
+        # Verificar si ya existe una programación (manejo correcto de OneToOneField)
+        try:
+            existing_prog = container.programacion
+            if existing_prog:
+                return Response(
+                    {
+                        'error': f'Este contenedor ya tiene una programación asociada (ID: {existing_prog.id})',
+                        'programacion_existente': {
+                            'id': existing_prog.id,
+                            'fecha_programada': existing_prog.fecha_programada.isoformat(),
+                            'cd': existing_prog.cd.nombre if existing_prog.cd else None,
+                            'tiene_conductor': existing_prog.driver is not None
+                        }
+                    },
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+        except Programacion.DoesNotExist:
+            # No existe programación, podemos continuar
+            pass
+        
+        # Usar transacción para evitar condiciones de carrera
+        try:
+            with transaction.atomic():
+                # Crear programación
+                programacion = Programacion.objects.create(
+                    container=container,
+                    cd=cd,
+                    fecha_programada=fecha_programada_dt,
+                    cliente=request.data.get('cliente', container.cliente or ''),
+                    direccion_entrega=cd.direccion,
+                    observaciones=request.data.get('observaciones', '')
+                )
+                
+                # Actualizar contenedor
+                container.cd_entrega = cd
+                container.fecha_programacion = timezone.now()
+                container.cambiar_estado('programado', request.user.username if request.user.is_authenticated else None)
+                
+                # Crear evento de auditoría
+                Event.objects.create(
+                    container=container,
+                    event_type='programacion_manual',
+                    detalles={
+                        'cd': cd.nombre,
+                        'fecha_programada': fecha_programada_dt.isoformat(),
+                        'cliente': programacion.cliente,
+                        'programacion_id': programacion.id
+                    },
+                    usuario=request.user.username if request.user.is_authenticated else None
+                )
+                
+        except IntegrityError as e:
+            # Manejar violación de constraint de unicidad (OneToOne)
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.error(f"IntegrityError al programar contenedor {container.container_id}: {str(e)}")
             return Response(
-                {'error': 'Este contenedor ya tiene una programación asociada'},
-                status=status.HTTP_400_BAD_REQUEST
+                {'error': 'Este contenedor ya tiene una programación asociada. Por favor, recargue la página.'},
+                status=status.HTTP_409_CONFLICT
             )
-        
-        # Crear programación
-        programacion = Programacion.objects.create(
-            container=container,
-            cd=cd,
-            fecha_programada=fecha_programada_dt,
-            cliente=request.data.get('cliente', container.cliente or ''),
-            direccion_entrega=cd.direccion,
-            observaciones=request.data.get('observaciones', '')
-        )
-        
-        # Actualizar contenedor
-        container.cd_entrega = cd
-        container.fecha_programacion = timezone.now()
-        container.cambiar_estado('programado', request.user.username if request.user.is_authenticated else None)
-        
-        # Crear evento de auditoría
-        Event.objects.create(
-            container=container,
-            event_type='programacion_manual',
-            detalles={
-                'cd': cd.nombre,
-                'fecha_programada': fecha_programada_dt.isoformat(),
-                'cliente': programacion.cliente,
-                'programacion_id': programacion.id
-            },
-            usuario=request.user.username if request.user.is_authenticated else None
-        )
+        except Exception as e:
+            # Manejar otros errores inesperados
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.error(f"Error inesperado al programar contenedor {container.container_id}: {str(e)}", exc_info=True)
+            return Response(
+                {'error': f'Error al crear programación: {str(e)}'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
         
         serializer = self.get_serializer(container)
         return Response({

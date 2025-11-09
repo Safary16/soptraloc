@@ -151,6 +151,20 @@ class Programacion(models.Model):
             self.save(update_fields=['requiere_alerta'])
         
         return requiere
+    
+    @classmethod
+    def container_tiene_programacion(cls, container):
+        """
+        Verifica de forma segura si un contenedor tiene una programación existente
+        
+        Returns:
+            tuple: (tiene_programacion: bool, programacion: Programacion|None)
+        """
+        try:
+            prog = container.programacion
+            return (True, prog)
+        except cls.DoesNotExist:
+            return (False, None)
 
 
 class TiempoOperacion(models.Model):
