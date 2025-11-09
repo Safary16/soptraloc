@@ -46,8 +46,8 @@ def home(request):
 
 
 def asignacion(request):
-    """Sistema de asignación de conductores"""
-    return render(request, 'asignacion.html')
+    """Sistema de asignación de conductores - redirige a operaciones"""
+    return redirect('operaciones')
 
 
 def estados(request):
