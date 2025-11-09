@@ -41,6 +41,9 @@ class ContainerViewSet(viewsets.ModelViewSet):
         """
         Importa contenedores desde Excel de embarque
         Crea contenedores con estado 'por_arribar'
+        
+        NOTA: Este endpoint permite AllowAny por compatibilidad con sistemas externos.
+        TODO: Cambiar a IsAuthenticated en producción para mayor seguridad.
         """
         if 'file' not in request.FILES:
             return Response(
@@ -49,6 +52,22 @@ class ContainerViewSet(viewsets.ModelViewSet):
             )
         
         archivo = request.FILES['file']
+        
+        # Validar extensión de archivo
+        if not archivo.name.endswith(('.xlsx', '.xls')):
+            return Response(
+                {'error': 'Formato de archivo inválido. Solo se permiten archivos .xlsx o .xls'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Validar tamaño de archivo (máximo 10MB)
+        max_size = 10 * 1024 * 1024  # 10MB en bytes
+        if archivo.size > max_size:
+            return Response(
+                {'error': f'Archivo demasiado grande. Tamaño máximo: 10MB'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
         usuario = request.user.username if request.user.is_authenticated else None
         
         # Guardar temporalmente
@@ -72,8 +91,11 @@ class ContainerViewSet(viewsets.ModelViewSet):
             })
         
         except Exception as e:
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.error(f"Error importando embarque: {str(e)}", exc_info=True)
             return Response(
-                {'error': str(e)},
+                {'error': 'Error procesando el archivo. Verifique el formato y vuelva a intentar.'},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
         finally:
@@ -86,6 +108,9 @@ class ContainerViewSet(viewsets.ModelViewSet):
         """
         Importa liberaciones desde Excel
         Actualiza contenedores a estado 'liberado' y asigna posición física
+        
+        NOTA: Este endpoint permite AllowAny por compatibilidad con sistemas externos.
+        TODO: Cambiar a IsAuthenticated en producción para mayor seguridad.
         """
         if 'file' not in request.FILES:
             return Response(
@@ -94,6 +119,22 @@ class ContainerViewSet(viewsets.ModelViewSet):
             )
         
         archivo = request.FILES['file']
+        
+        # Validar extensión de archivo
+        if not archivo.name.endswith(('.xlsx', '.xls')):
+            return Response(
+                {'error': 'Formato de archivo inválido. Solo se permiten archivos .xlsx o .xls'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Validar tamaño de archivo (máximo 10MB)
+        max_size = 10 * 1024 * 1024  # 10MB en bytes
+        if archivo.size > max_size:
+            return Response(
+                {'error': f'Archivo demasiado grande. Tamaño máximo: 10MB'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
         usuario = request.user.username if request.user.is_authenticated else None
         
         with tempfile.NamedTemporaryFile(delete=False, suffix='.xlsx') as tmp:
@@ -129,6 +170,9 @@ class ContainerViewSet(viewsets.ModelViewSet):
         """
         Importa programaciones desde Excel
         Crea programaciones y actualiza contenedores a 'programado'
+        
+        NOTA: Este endpoint permite AllowAny por compatibilidad con sistemas externos.
+        TODO: Cambiar a IsAuthenticated en producción para mayor seguridad.
         """
         if 'file' not in request.FILES:
             return Response(
@@ -137,6 +181,22 @@ class ContainerViewSet(viewsets.ModelViewSet):
             )
         
         archivo = request.FILES['file']
+        
+        # Validar extensión de archivo
+        if not archivo.name.endswith(('.xlsx', '.xls')):
+            return Response(
+                {'error': 'Formato de archivo inválido. Solo se permiten archivos .xlsx o .xls'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Validar tamaño de archivo (máximo 10MB)
+        max_size = 10 * 1024 * 1024  # 10MB en bytes
+        if archivo.size > max_size:
+            return Response(
+                {'error': f'Archivo demasiado grande. Tamaño máximo: 10MB'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
         usuario = request.user.username if request.user.is_authenticated else None
         
         with tempfile.NamedTemporaryFile(delete=False, suffix='.xlsx') as tmp:

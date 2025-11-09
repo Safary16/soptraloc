@@ -93,19 +93,57 @@
         </div>
     </div>
 
-    <!-- Filtros -->
+    <!-- Selector de Fecha y Filtros -->
     <div class="row mb-3">
         <div class="col-12">
             <div class="card">
                 <div class="card-body py-2">
-                    <div class="d-flex gap-2 align-items-center">
-                        <label class="mb-0"><i class="fas fa-filter"></i> Filtrar:</label>
-                        <button class="btn btn-sm btn-outline-primary" onclick="filtrarEstado('all')">Todos</button>
-                        <button class="btn btn-sm btn-outline-warning" onclick="filtrarEstado('sin_asignar')">Sin Asignar</button>
-                        <button class="btn btn-sm btn-outline-info" onclick="filtrarEstado('asignado')">Asignados</button>
-                        <button class="btn btn-sm btn-outline-success" onclick="filtrarEstado('en_ruta')">En Ruta</button>
-                        <button class="btn btn-sm btn-outline-danger" onclick="filtrarEstado('entregado')">Entregados</button>
-                        <div class="ms-auto">
+                    <div class="row g-2 align-items-center">
+                        <!-- Selector de Fecha -->
+                        <div class="col-auto">
+                            <label class="mb-0 me-2"><i class="fas fa-calendar"></i> Fecha:</label>
+                        </div>
+                        <div class="col-auto">
+                            <input 
+                                type="date" 
+                                id="fecha-selector" 
+                                class="form-control form-control-sm"
+                                onchange="cambiarFecha()"
+                            >
+                        </div>
+                        <div class="col-auto">
+                            <button class="btn btn-sm btn-outline-secondary" onclick="seleccionarHoy()">
+                                <i class="fas fa-calendar-day"></i> Hoy
+                            </button>
+                        </div>
+                        
+                        <!-- Separador -->
+                        <div class="col-auto">
+                            <div style="border-left: 2px solid #dee2e6; height: 30px;"></div>
+                        </div>
+                        
+                        <!-- Filtros de Estado -->
+                        <div class="col-auto">
+                            <label class="mb-0"><i class="fas fa-filter"></i> Filtrar:</label>
+                        </div>
+                        <div class="col-auto">
+                            <button class="btn btn-sm btn-outline-primary active" onclick="filtrarEstado('all')">Todos</button>
+                        </div>
+                        <div class="col-auto">
+                            <button class="btn btn-sm btn-outline-warning" onclick="filtrarEstado('sin_asignar')">Sin Asignar</button>
+                        </div>
+                        <div class="col-auto">
+                            <button class="btn btn-sm btn-outline-info" onclick="filtrarEstado('asignado')">Asignados</button>
+                        </div>
+                        <div class="col-auto">
+                            <button class="btn btn-sm btn-outline-success" onclick="filtrarEstado('en_ruta')">En Ruta</button>
+                        </div>
+                        <div class="col-auto">
+                            <button class="btn btn-sm btn-outline-danger" onclick="filtrarEstado('entregado')">Entregados</button>
+                        </div>
+                        
+                        <!-- Botón Actualizar -->
+                        <div class="col-auto ms-auto">
                             <button class="btn btn-sm btn-ubuntu" onclick="recargarOperaciones()">
                                 <i class="fas fa-sync-alt"></i> Actualizar
                             </button>
@@ -137,6 +175,32 @@
 <script>
 let operacionesData = [];
 let filtroActual = 'all';
+let fechaSeleccionada = null;
+
+// Inicializar fecha al cargar la página
+function inicializarFecha() {
+    const hoy = new Date();
+    const fechaStr = hoy.toISOString().split('T')[0];
+    document.getElementById('fecha-selector').value = fechaStr;
+    fechaSeleccionada = fechaStr;
+}
+
+// Seleccionar fecha de hoy
+function seleccionarHoy() {
+    const hoy = new Date();
+    const fechaStr = hoy.toISOString().split('T')[0];
+    document.getElementById('fecha-selector').value = fechaStr;
+    fechaSeleccionada = fechaStr;
+    cargarOperaciones();
+}
+
+// Cambiar fecha seleccionada
+function cambiarFecha() {
+    fechaSeleccionada = document.getElementById('fecha-selector').value;
+    if (fechaSeleccionada) {
+        cargarOperaciones();
+    }
+}
 
 // Formatear fecha
 function formatearFecha(dateStr) {
@@ -177,7 +241,13 @@ function getEstadoBadge(estado) {
 
 // Cargar operaciones
 function cargarOperaciones() {
-    fetch('/api/operaciones/diarias/?format=json')
+    // Construir URL con fecha seleccionada
+    let url = '/api/operaciones/diarias/?format=json';
+    if (fechaSeleccionada) {
+        url += `&fecha=${fechaSeleccionada}`;
+    }
+    
+    fetch(url)
         .then(response => response.json())
         .then(data => {
             if (data.success) {
@@ -327,7 +397,10 @@ function recargarOperaciones() {
 }
 
 // Cargar al inicio
-document.addEventListener('DOMContentLoaded', cargarOperaciones);
+document.addEventListener('DOMContentLoaded', function() {
+    inicializarFecha();
+    cargarOperaciones();
+});
 
 // Auto-refresh cada 2 minutos
 setInterval(cargarOperaciones, 120000);
