@@ -335,10 +335,11 @@ class ProgramacionViewSet(viewsets.ModelViewSet):
         from apps.events.models import Event
         Event.objects.create(
             container=container,
-            tipo_evento='ruta_manual_creada',
-            descripcion=f'Ruta manual creada: {tipo_movimiento}',
+            event_type='import_programacion',
             usuario=request.user.username if request.user.is_authenticated else None,
             detalles={
+                'accion': 'ruta_manual_creada',
+                'descripcion': f'Ruta manual creada: {tipo_movimiento}',
                 'tipo_movimiento': tipo_movimiento,
                 'origen': container.posicion_fisica,
                 'destino': cd_destino.nombre,
