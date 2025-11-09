@@ -260,3 +260,142 @@ def analytics_tendencias(request):
         'entregas_por_dia': entregas_por_dia,
         'entregas_por_dia_semana': entregas_semana
     })
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticatedOrReadOnly])
+def ml_learning_stats(request):
+    """
+    Estadísticas de aprendizaje del sistema de Machine Learning
+    
+    Muestra:
+    - Datos recolectados para entrenamiento
+    - Precisión del modelo
+    - Estadísticas de asignación automática
+    - Progreso del aprendizaje
+    """
+    from apps.cds.models import CD
+    
+    # Estadísticas de datos de entrenamiento
+    fecha_30_dias = timezone.now() - timedelta(days=30)
+    fecha_7_dias = timezone.now() - timedelta(days=7)
+    
+    # Tiempos de operación
+    total_tiempos_operacion = TiempoOperacion.objects.count()
+    tiempos_operacion_recientes = TiempoOperacion.objects.filter(
+        fecha__gte=fecha_30_dias
+    ).count()
+    tiempos_operacion_validos = TiempoOperacion.objects.filter(
+        anomalia=False
+    ).count()
+    
+    # Tiempos de viaje
+    total_tiempos_viaje = TiempoViaje.objects.count()
+    tiempos_viaje_recientes = TiempoViaje.objects.filter(
+        fecha__gte=fecha_30_dias
+    ).count()
+    tiempos_viaje_validos = TiempoViaje.objects.filter(
+        anomalia=False
+    ).count()
+    
+    # Estadísticas por CD
+    cds_con_datos = []
+    for cd in CD.objects.all():
+        tiempos_cd = TiempoOperacion.objects.filter(
+            cd=cd,
+            anomalia=False
+        ).count()
+        
+        if tiempos_cd > 0:
+            # Calcular precisión promedio (diferencia entre estimado y real)
+            tiempos_cd_obj = TiempoOperacion.objects.filter(
+                cd=cd,
+                anomalia=False,
+                fecha__gte=fecha_30_dias
+            )
+            
+            if tiempos_cd_obj.exists():
+                total_diff = 0
+                count = 0
+                for tiempo in tiempos_cd_obj:
+                    diff_abs = abs(tiempo.tiempo_real_min - tiempo.tiempo_estimado_min)
+                    total_diff += diff_abs
+                    count += 1
+                
+                error_promedio_min = total_diff / count if count > 0 else 0
+                precision = max(0, 100 - (error_promedio_min / 60 * 100))  # Precisión basada en error
+            else:
+                precision = 0
+            
+            cds_con_datos.append({
+                'cd_nombre': cd.nombre,
+                'datos_recolectados': tiempos_cd,
+                'precision_porcentaje': round(precision, 1),
+                'estado_aprendizaje': 'Excelente' if tiempos_cd > 50 else 'Bueno' if tiempos_cd > 20 else 'Inicial'
+            })
+    
+    # Estadísticas de asignación automática
+    total_programaciones = Programacion.objects.count()
+    programaciones_asignadas = Programacion.objects.filter(
+        driver__isnull=False
+    ).count()
+    
+    programaciones_recientes = Programacion.objects.filter(
+        created_at__gte=fecha_7_dias
+    )
+    asignaciones_recientes = programaciones_recientes.filter(
+        driver__isnull=False
+    ).count()
+    
+    tasa_asignacion = (asignaciones_recientes / programaciones_recientes.count() * 100) if programaciones_recientes.count() > 0 else 0
+    
+    # Resumen del estado del ML
+    datos_minimos_operacion = 20  # Mínimo de datos para considerar el ML "entrenado"
+    datos_minimos_viaje = 10
+    
+    ml_operacion_estado = 'Entrenado' if tiempos_operacion_validos >= datos_minimos_operacion else 'En entrenamiento'
+    ml_viaje_estado = 'Entrenado' if tiempos_viaje_validos >= datos_minimos_viaje else 'En entrenamiento'
+    
+    # Calcular progreso general
+    progreso_operacion = min(100, (tiempos_operacion_validos / datos_minimos_operacion * 100))
+    progreso_viaje = min(100, (tiempos_viaje_validos / datos_minimos_viaje * 100))
+    progreso_general = (progreso_operacion + progreso_viaje) / 2
+    
+    return Response({
+        'success': True,
+        'resumen': {
+            'estado_general': 'Activo' if progreso_general > 50 else 'Inicial',
+            'progreso_porcentaje': round(progreso_general, 1),
+            'datos_total': total_tiempos_operacion + total_tiempos_viaje,
+            'datos_ultimos_30_dias': tiempos_operacion_recientes + tiempos_viaje_recientes,
+        },
+        'tiempos_operacion': {
+            'total': total_tiempos_operacion,
+            'validos': tiempos_operacion_validos,
+            'recientes_30d': tiempos_operacion_recientes,
+            'anomalos': total_tiempos_operacion - tiempos_operacion_validos,
+            'estado': ml_operacion_estado,
+            'progreso_porcentaje': round(progreso_operacion, 1)
+        },
+        'tiempos_viaje': {
+            'total': total_tiempos_viaje,
+            'validos': tiempos_viaje_validos,
+            'recientes_30d': tiempos_viaje_recientes,
+            'anomalos': total_tiempos_viaje - tiempos_viaje_validos,
+            'estado': ml_viaje_estado,
+            'progreso_porcentaje': round(progreso_viaje, 1)
+        },
+        'asignacion_automatica': {
+            'total_programaciones': total_programaciones,
+            'total_asignadas': programaciones_asignadas,
+            'asignaciones_ultimos_7d': asignaciones_recientes,
+            'tasa_asignacion_porcentaje': round(tasa_asignacion, 1)
+        },
+        'aprendizaje_por_cd': cds_con_datos,
+        'recomendaciones': [
+            'Sistema aprendiendo continuamente de operaciones reales',
+            f'Se han recolectado {tiempos_operacion_recientes} datos de operación en los últimos 30 días',
+            f'Se han recolectado {tiempos_viaje_recientes} datos de viaje en los últimos 30 días',
+            'Continúa operando normalmente para mejorar la precisión del sistema'
+        ]
+    })

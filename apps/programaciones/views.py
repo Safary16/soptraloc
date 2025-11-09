@@ -308,7 +308,7 @@ class ProgramacionViewSet(viewsets.ModelViewSet):
         if tipo_movimiento == 'retiro_ccti':
             # Buscar el primer CCTI
             from apps.cds.models import CD
-            cd_destino = CD.objects.filter(tipo='CCTI').first()
+            cd_destino = CD.objects.filter(tipo='ccti').first()
             if not cd_destino:
                 return Response(
                     {'error': 'No se encontró ningún CCTI en el sistema'},
@@ -536,6 +536,24 @@ class ProgramacionViewSet(viewsets.ModelViewSet):
             usuario=usuario
         )
         
+        # Calcular y guardar ETA en la programación
+        from apps.core.services.mapbox import MapboxService
+        try:
+            resultado = MapboxService.calcular_ruta(
+                float(lng),
+                float(lat),
+                float(programacion.cd.lng),
+                float(programacion.cd.lat)
+            )
+            if resultado.get('success'):
+                programacion.eta_minutos = int(resultado['duration_minutes'])
+                programacion.distancia_km = resultado['distance_km']
+                programacion.save(update_fields=['eta_minutos', 'distancia_km'])
+        except Exception as e:
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.warning(f"Error calculando ETA para programación: {str(e)}")
+        
         # Crear notificación con ETA
         try:
             notificacion = NotificationService.crear_notificacion_inicio_ruta(
@@ -692,6 +710,80 @@ class ProgramacionViewSet(viewsets.ModelViewSet):
             'mensaje': f'Contenedor marcado como vacío. Listo para retiro.',
             'programacion': serializer.data,
             'nuevo_estado': 'vacio'
+        })
+    
+    @action(detail=True, methods=['post'])
+    def soltar_contenedor(self, request, pk=None):
+        """
+        Permite al conductor soltar el contenedor y quedar libre inmediatamente (Drop & Hook)
+        Solo disponible si el CD permite soltar contenedor
+        
+        Payload opcional:
+        {
+            "lat": -33.4372,
+            "lng": -70.6506
+        }
+        """
+        programacion = self.get_object()
+        
+        if not programacion.driver:
+            return Response(
+                {'error': 'Programación no tiene conductor asignado'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Verificar que el CD permita soltar contenedor
+        if not programacion.cd.permite_soltar_contenedor:
+            return Response(
+                {'error': f'El CD {programacion.cd.nombre} no permite Drop & Hook. El conductor debe esperar la descarga.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Solo permitir soltar desde 'entregado'
+        if programacion.container.estado != 'entregado':
+            return Response(
+                {'error': f'Solo se puede soltar el contenedor después de haberlo entregado. Estado actual: {programacion.container.get_estado_display()}'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Actualizar posición del conductor si se proporciona
+        lat = request.data.get('lat')
+        lng = request.data.get('lng')
+        if lat and lng:
+            programacion.driver.actualizar_posicion(lat, lng)
+        
+        # Cambiar estado del contenedor a 'descargado' (conductor ya no está esperando)
+        usuario = request.user.username if request.user.is_authenticated else None
+        programacion.container.cambiar_estado('descargado', usuario)
+        
+        # Crear evento de contenedor soltado
+        from apps.events.models import Event
+        Event.objects.create(
+            container=programacion.container,
+            event_type='contenedor_soltado',
+            detalles={
+                'conductor': programacion.driver.nombre,
+                'cd': programacion.cd.nombre,
+                'tipo': 'drop_and_hook',
+                'gps_lat': str(lat) if lat else None,
+                'gps_lng': str(lng) if lng else None,
+                'timestamp': timezone.now().isoformat()
+            },
+            usuario=usuario
+        )
+        
+        # Liberar al conductor (decrementar entregas del día)
+        if programacion.driver.num_entregas_dia > 0:
+            programacion.driver.num_entregas_dia -= 1
+            programacion.driver.save(update_fields=['num_entregas_dia'])
+        
+        serializer = self.get_serializer(programacion)
+        return Response({
+            'success': True,
+            'mensaje': f'Contenedor soltado en {programacion.cd.nombre}. Conductor libre para nueva asignación.',
+            'programacion': serializer.data,
+            'nuevo_estado': 'descargado',
+            'conductor_liberado': True
         })
     
     @action(detail=True, methods=['post'])

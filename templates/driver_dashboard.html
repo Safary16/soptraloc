@@ -696,9 +696,21 @@
                                     <i class="fas fa-map-pin"></i> Notificar Arribo
                                 </button>
                             ` : prog.estado === 'entregado' ? `
-                                <button class="btn btn-success w-100" onclick="notificarVacio(${prog.id})">
-                                    <i class="fas fa-check-circle"></i> Notificar Vacío
-                                </button>
+                                ${prog.cd_permite_soltar ? `
+                                    <div class="alert alert-info mb-2">
+                                        <strong><i class="fas fa-info-circle"></i> Opciones de descarga:</strong>
+                                    </div>
+                                    <button class="btn btn-primary w-100 mb-2" onclick="soltarContenedor(${prog.id})">
+                                        <i class="fas fa-truck-loading"></i> Soltar Contenedor (Drop & Hook)
+                                    </button>
+                                    <button class="btn btn-warning w-100" onclick="notificarVacio(${prog.id})">
+                                        <i class="fas fa-hourglass-half"></i> Esperar a que Esté Vacío
+                                    </button>
+                                ` : `
+                                    <button class="btn btn-success w-100" onclick="notificarVacio(${prog.id})">
+                                        <i class="fas fa-check-circle"></i> Notificar Vacío
+                                    </button>
+                                `}
                             ` : prog.estado === 'descargado' ? `
                                 <button class="btn btn-success w-100" onclick="notificarVacio(${prog.id})">
                                     <i class="fas fa-check-circle"></i> Marcar como Vacío
@@ -829,9 +841,64 @@
             });
         }
         
+        // Soltar contenedor (Drop & Hook)
+        function soltarContenedor(progId) {
+            if (!confirm('🚛 ¿Confirma que desea SOLTAR el contenedor y quedar LIBRE inmediatamente?\n\nEl contenedor quedará en el CD para su descarga y usted estará disponible para nuevas asignaciones.')) {
+                return;
+            }
+            
+            if (!navigator.geolocation) {
+                // Si no hay GPS, aún permitir soltar
+                enviarSoltarContenedor(progId, null, null);
+                return;
+            }
+            
+            // Obtener posición GPS
+            navigator.geolocation.getCurrentPosition(
+                (position) => {
+                    enviarSoltarContenedor(progId, position.coords.latitude, position.coords.longitude);
+                },
+                (error) => {
+                    console.warn('No se pudo obtener GPS, enviando sin coordenadas');
+                    enviarSoltarContenedor(progId, null, null);
+                }
+            );
+        }
+        
+        function enviarSoltarContenedor(progId, lat, lng) {
+            const payload = {};
+            if (lat && lng) {
+                payload.lat = lat;
+                payload.lng = lng;
+            }
+            
+            fetch(`/api/programaciones/${progId}/soltar_contenedor/`, {
+                method: 'POST',
+                credentials: 'include',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': getCookie('csrftoken')
+                },
+                body: JSON.stringify(payload)
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    alert('✅ Contenedor soltado exitosamente. ¡Está libre para nueva asignación!');
+                    loadAsignaciones(); // Recargar lista
+                } else {
+                    alert('❌ Error: ' + (data.error || 'No se pudo soltar el contenedor'));
+                }
+            })
+            .catch(error => {
+                console.error('Error soltando contenedor:', error);
+                alert('❌ Error de conexión al soltar contenedor');
+            });
+        }
+        
         // Notificar contenedor vacío
         function notificarVacio(progId) {
-            if (!confirm('📦 ¿Confirma que el contenedor está VACÍO y listo para retiro?')) {
+            if (!confirm('📦 ¿Confirma que va a ESPERAR hasta que el contenedor esté VACÍO?\n\nUsted no estará disponible para nuevas asignaciones hasta que el contenedor esté vacío.')) {
                 return;
             }
             

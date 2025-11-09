@@ -121,16 +121,42 @@
         <div class="col-md-6 mb-3">
             <div class="card card-ubuntu h-100">
                 <div class="card-body">
-                    <h5><i class="fas fa-brain text-primary"></i> Machine Learning</h5>
-                    <p>El sistema aprende de operaciones pasadas para mejorar las predicciones:</p>
-                    <ul>
-                        <li><strong>Tiempos de Operación:</strong> Aprende tiempos reales de carga/descarga por CD</li>
-                        <li><strong>Tiempos de Viaje:</strong> Ajusta predicciones de Mapbox con tráfico real</li>
-                        <li><strong>Rendimiento:</strong> Evalúa historial de cada conductor</li>
-                    </ul>
-                    <a href="/api/programaciones/" class="btn btn-ubuntu-outline" target="_blank">
-                        Ver Endpoints ML
-                    </a>
+                    <h5><i class="fas fa-brain text-primary"></i> Machine Learning - Estado del Aprendizaje</h5>
+                    <div id="ml-stats-loading" class="text-center py-3">
+                        <div class="spinner-border text-primary" role="status">
+                            <span class="visually-hidden">Cargando...</span>
+                        </div>
+                        <p class="mt-2">Cargando estadísticas de ML...</p>
+                    </div>
+                    <div id="ml-stats-content" style="display: none;">
+                        <div class="alert alert-info mb-3">
+                            <strong><i class="fas fa-info-circle"></i> Estado:</strong> <span id="ml-estado">Cargando...</span><br>
+                            <strong>Progreso General:</strong> <span id="ml-progreso">0</span>%
+                        </div>
+                        
+                        <h6 class="mt-3">Datos de Entrenamiento:</h6>
+                        <ul class="list-unstyled">
+                            <li><i class="fas fa-database text-primary"></i> <strong>Operaciones:</strong> <span id="ml-operaciones-total">0</span> registros (<span id="ml-operaciones-validos">0</span> válidos)</li>
+                            <li><i class="fas fa-route text-success"></i> <strong>Viajes:</strong> <span id="ml-viajes-total">0</span> registros (<span id="ml-viajes-validos">0</span> válidos)</li>
+                            <li><i class="fas fa-calendar-alt text-warning"></i> <strong>Últimos 30 días:</strong> <span id="ml-datos-recientes">0</span> nuevos datos</li>
+                        </ul>
+                        
+                        <h6 class="mt-3">Asignación Automática:</h6>
+                        <ul class="list-unstyled">
+                            <li><i class="fas fa-check-circle text-success"></i> <strong>Tasa de asignación:</strong> <span id="ml-tasa-asignacion">0</span>% (últimos 7 días)</li>
+                            <li><i class="fas fa-truck text-primary"></i> <strong>Total asignadas:</strong> <span id="ml-total-asignadas">0</span> programaciones</li>
+                        </ul>
+                        
+                        <div class="progress mt-3" style="height: 25px;">
+                            <div id="ml-progress-bar" class="progress-bar bg-primary" role="progressbar" style="width: 0%;" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100">
+                                <span id="ml-progress-text">0%</span>
+                            </div>
+                        </div>
+                        
+                        <a href="/api/ml/learning-stats/" class="btn btn-ubuntu-outline mt-3" target="_blank">
+                            <i class="fas fa-chart-line"></i> Ver Estadísticas Completas
+                        </a>
+                    </div>
                 </div>
             </div>
         </div>
@@ -144,12 +170,92 @@
                         <li><strong>Tiempos:</strong> ETAs considerando tráfico actual</li>
                         <li><strong>Optimización:</strong> Selección de mejor conductor por proximidad</li>
                     </ul>
-                    <a href="/admin/cds/cd/" class="btn btn-ubuntu-outline">
+                    
+                    <h6 class="mt-3">Aprendizaje por Centro de Distribución:</h6>
+                    <div id="ml-cd-stats" class="mt-2">
+                        <p class="text-muted">Cargando datos por CD...</p>
+                    </div>
+                    
+                    <a href="/admin/cds/cd/" class="btn btn-ubuntu-outline mt-3">
                         Gestionar CDs
                     </a>
                 </div>
             </div>
         </div>
     </div>
+    
+    <script>
+        // Cargar estadísticas de ML al cargar la página
+        document.addEventListener('DOMContentLoaded', function() {
+            fetch('/api/ml/learning-stats/')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        // Ocultar loading y mostrar contenido
+                        document.getElementById('ml-stats-loading').style.display = 'none';
+                        document.getElementById('ml-stats-content').style.display = 'block';
+                        
+                        // Actualizar resumen
+                        document.getElementById('ml-estado').textContent = data.resumen.estado_general;
+                        document.getElementById('ml-progreso').textContent = data.resumen.progreso_porcentaje;
+                        
+                        // Actualizar progreso visual
+                        const progreso = data.resumen.progreso_porcentaje;
+                        const progressBar = document.getElementById('ml-progress-bar');
+                        const progressText = document.getElementById('ml-progress-text');
+                        progressBar.style.width = progreso + '%';
+                        progressBar.setAttribute('aria-valuenow', progreso);
+                        progressText.textContent = progreso + '%';
+                        
+                        // Cambiar color según progreso
+                        if (progreso >= 75) {
+                            progressBar.className = 'progress-bar bg-success';
+                        } else if (progreso >= 50) {
+                            progressBar.className = 'progress-bar bg-primary';
+                        } else if (progreso >= 25) {
+                            progressBar.className = 'progress-bar bg-warning';
+                        } else {
+                            progressBar.className = 'progress-bar bg-danger';
+                        }
+                        
+                        // Actualizar datos de entrenamiento
+                        document.getElementById('ml-operaciones-total').textContent = data.tiempos_operacion.total;
+                        document.getElementById('ml-operaciones-validos').textContent = data.tiempos_operacion.validos;
+                        document.getElementById('ml-viajes-total').textContent = data.tiempos_viaje.total;
+                        document.getElementById('ml-viajes-validos').textContent = data.tiempos_viaje.validos;
+                        document.getElementById('ml-datos-recientes').textContent = data.resumen.datos_ultimos_30_dias;
+                        
+                        // Actualizar asignación automática
+                        document.getElementById('ml-tasa-asignacion').textContent = data.asignacion_automatica.tasa_asignacion_porcentaje;
+                        document.getElementById('ml-total-asignadas').textContent = data.asignacion_automatica.total_asignadas;
+                        
+                        // Mostrar aprendizaje por CD
+                        const cdStats = document.getElementById('ml-cd-stats');
+                        if (data.aprendizaje_por_cd && data.aprendizaje_por_cd.length > 0) {
+                            let html = '<div class="table-responsive"><table class="table table-sm">';
+                            html += '<thead><tr><th>CD</th><th>Datos</th><th>Estado</th></tr></thead><tbody>';
+                            data.aprendizaje_por_cd.forEach(cd => {
+                                const badgeClass = cd.estado_aprendizaje === 'Excelente' ? 'success' : 
+                                                  cd.estado_aprendizaje === 'Bueno' ? 'primary' : 'warning';
+                                html += `<tr>
+                                    <td>${cd.cd_nombre}</td>
+                                    <td>${cd.datos_recolectados}</td>
+                                    <td><span class="badge bg-${badgeClass}">${cd.estado_aprendizaje}</span></td>
+                                </tr>`;
+                            });
+                            html += '</tbody></table></div>';
+                            cdStats.innerHTML = html;
+                        } else {
+                            cdStats.innerHTML = '<p class="text-muted">No hay datos de CD disponibles aún.</p>';
+                        }
+                    }
+                })
+                .catch(error => {
+                    console.error('Error cargando estadísticas ML:', error);
+                    document.getElementById('ml-stats-loading').innerHTML = 
+                        '<div class="alert alert-danger"><i class="fas fa-exclamation-triangle"></i> Error al cargar estadísticas</div>';
+                });
+        });
+    </script>
 </div>
 {% endblock %}
