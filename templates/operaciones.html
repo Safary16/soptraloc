@@ -701,7 +701,8 @@ function loadConductoresDisponibles() {
 
 // Cargar contenedores asignados con información de tiempos
 function loadContaineresAsignados() {
-    fetch('/api/containers/?estado=asignado,en_ruta')
+    // Use estado__in for multiple states
+    fetch('/api/containers/?estado__in=asignado,en_ruta')
         .then(response => response.json())
         .then(data => {
             const container = document.getElementById('containers-asignados');

@@ -14,6 +14,7 @@ from .serializers import (
     ContainerListSerializer,
     ContainerStockExportSerializer
 )
+from .filters import ContainerFilter
 from .importers.embarque import EmbarqueImporter
 from .importers.liberacion import LiberacionImporter
 from .importers.programacion import ProgramacionImporter
@@ -25,7 +26,7 @@ class ContainerViewSet(viewsets.ModelViewSet):
     """
     queryset = Container.objects.all()
     serializer_class = ContainerSerializer
-    filterset_fields = ['estado', 'tipo', 'secuenciado', 'puerto', 'posicion_fisica']
+    filterset_class = ContainerFilter
     search_fields = ['container_id', 'nave', 'vendor', 'comuna']
     ordering_fields = ['created_at', 'fecha_programacion', 'fecha_liberacion']
     ordering = ['-created_at']
