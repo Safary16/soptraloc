@@ -69,6 +69,7 @@ class DriverDetailSerializer(DriverSerializer):
                     'cliente': prog.cliente,
                     'cd': prog.cd.nombre if prog.cd else None,
                     'cd_direccion': prog.cd.direccion if prog.cd else None,
+                    'cd_permite_soltar': prog.cd.permite_soltar_contenedor if prog.cd else False,
                     'estado': estado,
                     'fecha_asignacion': prog.fecha_asignacion,
                     'fecha_programada': prog.fecha_programada,
