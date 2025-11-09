@@ -661,40 +661,45 @@ function confirmarProgramacion() {
 // ASIGNACIÓN
 // ============================================
 
-// Cargar contenedores sin asignar
+// Cargar contenedores sin asignar (programados pero sin conductor)
 function loadContainersSinAsignar() {
-    fetch('/api/containers/?estado=programado')
+    // Usar la API de programaciones con filtro driver__isnull=true para asegurar
+    // que solo mostramos contenedores programados SIN conductor asignado
+    fetch('/api/programaciones/?driver__isnull=true&ordering=fecha_programada')
         .then(response => response.json())
         .then(data => {
             const container = document.getElementById('containers-sin-asignar');
             container.innerHTML = '';
             
-            if (data.results.length === 0) {
+            if (!data.results || data.results.length === 0) {
                 container.innerHTML = '<p class="text-center text-muted py-4">✅ No hay contenedores sin asignar</p>';
                 return;
             }
             
-            data.results.forEach(cont => {
+            data.results.forEach(prog => {
+                // Obtener información del contenedor desde la programación
+                const containerId = prog.container_id || (prog.container && prog.container.container_id);
+                const containerIdFormatted = prog.container_id_formatted || containerId;
+                const nave = prog.nave || (prog.container && prog.container.nave) || 'N/A';
+                const fechaProg = prog.fecha_programada;
+                
                 const card = `
                     <div class="container-card card mb-3">
                         <div class="card-body">
                             <div class="d-flex justify-content-between align-items-start">
                                 <div>
-                                    <h6 class="mb-1"><strong>${cont.container_id_formatted || cont.container_id}</strong></h6>
+                                    <h6 class="mb-1"><strong>${containerIdFormatted || containerId}</strong></h6>
                                     <p class="mb-1 small text-muted">
-                                        <i class="fas fa-ship"></i> ${cont.nave || 'N/A'}<br>
-                                        <i class="fas fa-calendar"></i> ${cont.fecha_programacion ? new Date(cont.fecha_programacion).toLocaleDateString('es-CL') : 'Sin fecha'}
+                                        <i class="fas fa-ship"></i> ${nave}<br>
+                                        <i class="fas fa-calendar"></i> ${fechaProg ? new Date(fechaProg).toLocaleDateString('es-CL') : 'Sin fecha'}<br>
+                                        <i class="fas fa-building"></i> ${prog.cd_nombre || 'Sin CD'}
                                     </p>
-                                    ${cont.dias_para_demurrage !== null ? 
-                                        `<span class="badge bg-${cont.dias_para_demurrage <= 1 ? 'danger' : cont.dias_para_demurrage <= 2 ? 'warning' : 'info'}">
-                                            ${cont.dias_para_demurrage} días demurrage
-                                        </span>` : ''}
                                 </div>
                                 <div>
-                                    <button class="btn btn-sm btn-success action-btn" onclick="asignarAutomatico(${cont.id})">
+                                    <button class="btn btn-sm btn-success action-btn" onclick="asignarAutomaticoProg(${prog.id})">
                                         <i class="fas fa-robot"></i> Auto
                                     </button>
-                                    <button class="btn btn-sm btn-primary action-btn" onclick="asignarManual(${cont.id})">
+                                    <button class="btn btn-sm btn-primary action-btn" onclick="asignarManualProg(${prog.id})">
                                         <i class="fas fa-user-plus"></i> Manual
                                     </button>
                                 </div>
@@ -857,7 +862,36 @@ function loadContaineresAsignados() {
         });
 }
 
-// Asignación automática
+// Asignación automática desde programación
+function asignarAutomaticoProg(progId) {
+    if (!confirm('¿Asignar automáticamente el mejor conductor disponible?')) {
+        return;
+    }
+    
+    fetch(`/api/programaciones/${progId}/asignar_automatico/`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': getCookie('csrftoken')
+        }
+    })
+    .then(response => response.json())
+    .then(result => {
+        if (result.success) {
+            alert(`✅ Conductor asignado: ${result.mensaje}`);
+            loadContainersSinAsignar();
+            loadConductoresDisponibles();
+        } else {
+            alert(`❌ Error: ${result.error}`);
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        alert('❌ Error al asignar conductor');
+    });
+}
+
+// Asignación automática (backward compatibility - busca programación por container ID)
 function asignarAutomatico(containerId) {
     if (!confirm('¿Asignar automáticamente el mejor conductor disponible?')) {
         return;
@@ -873,30 +907,17 @@ function asignarAutomatico(containerId) {
             }
             
             const progId = data.results[0].id;
-            
-            fetch(`/api/programaciones/${progId}/asignar_automatico/`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-CSRFToken': getCookie('csrftoken')
-                }
-            })
-            .then(response => response.json())
-            .then(result => {
-                if (result.success) {
-                    alert(`✅ Conductor asignado: ${result.mensaje}`);
-                    loadContainersSinAsignar();
-                    loadConductoresDisponibles();
-                } else {
-                    alert(`❌ Error: ${result.error}`);
-                }
-            });
+            asignarAutomaticoProg(progId);
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('❌ Error al buscar programación');
         });
 }
 
-// Asignación manual
-function asignarManual(containerId) {
-    selectedContainer = containerId;
+// Asignación manual desde programación
+function asignarManualProg(progId) {
+    selectedContainer = progId;  // Store progId instead
     
     fetch(`/api/drivers/?activo=true&presente=true`)
         .then(response => response.json())
@@ -906,7 +927,7 @@ function asignarManual(containerId) {
             data.results.forEach(driver => {
                 content += `
                     <button class="list-group-item list-group-item-action" 
-                            onclick="confirmarAsignacionManual(${driver.id}, '${driver.nombre}')">
+                            onclick="confirmarAsignacionManualProg(${progId}, ${driver.id}, '${driver.nombre}')">
                         <strong>${driver.nombre}</strong><br>
                         <small>Entregas: ${driver.num_entregas_dia}/${driver.max_entregas_dia} | 
                         Cumplimiento: ${driver.cumplimiento_porcentaje}%</small>
@@ -938,10 +959,10 @@ function asignarManual(containerId) {
         });
 }
 
-// Confirmar asignación manual
-function confirmarAsignacionManual(driverId, driverNombre) {
-    // Buscar programación y asignar
-    fetch(`/api/programaciones/?container=${selectedContainer}`)
+// Asignación manual (backward compatibility)
+function asignarManual(containerId) {
+    // Buscar programación y llamar a asignarManualProg
+    fetch(`/api/programaciones/?container=${containerId}`)
         .then(response => response.json())
         .then(data => {
             if (data.results.length === 0) {
@@ -950,39 +971,82 @@ function confirmarAsignacionManual(driverId, driverNombre) {
             }
             
             const progId = data.results[0].id;
-            
-            fetch(`/api/programaciones/${progId}/asignar_conductor/`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-CSRFToken': getCookie('csrftoken')
-                },
-                body: JSON.stringify({ driver_id: driverId })
-            })
-            .then(response => response.json())
-            .then(result => {
-                if (result.success) {
-                    alert(`✅ ${driverNombre} asignado exitosamente`);
-                    // Cerrar modal - verificar Bootstrap
-                    if (typeof bootstrap !== 'undefined') {
-                        bootstrap.Modal.getInstance(document.getElementById('asignacionModal')).hide();
-                    } else {
-                        // Fallback: cerrar manualmente
-                        const modalElement = document.getElementById('asignacionModal');
-                        modalElement.classList.remove('show');
-                        modalElement.style.display = 'none';
-                        modalElement.removeAttribute('aria-modal');
-                        modalElement.removeAttribute('role');
-                        const backdrop = document.getElementById('modal-backdrop-asignacion');
-                        if (backdrop) backdrop.remove();
-                        document.body.classList.remove('modal-open');
-                    }
-                    loadContainersSinAsignar();
-                    loadConductoresDisponibles();
-                } else {
-                    alert(`❌ Error: ${result.error || result.mensaje}`);
-                }
-            });
+            asignarManualProg(progId);
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('❌ Error al buscar programación');
+        });
+}
+
+// Confirmar asignación manual desde programación
+function confirmarAsignacionManualProg(progId, driverId, driverNombre) {
+    fetch(`/api/programaciones/${progId}/asignar_conductor/`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': getCookie('csrftoken')
+        },
+        body: JSON.stringify({ driver_id: driverId })
+    })
+    .then(response => response.json())
+    .then(result => {
+        if (result.success) {
+            alert(`✅ ${driverNombre} asignado exitosamente`);
+            // Cerrar modal - verificar Bootstrap
+            if (typeof bootstrap !== 'undefined') {
+                bootstrap.Modal.getInstance(document.getElementById('asignacionModal')).hide();
+            } else {
+                // Fallback: cerrar manualmente
+                const modalElement = document.getElementById('asignacionModal');
+                modalElement.classList.remove('show');
+                modalElement.style.display = 'none';
+                modalElement.removeAttribute('aria-modal');
+                modalElement.removeAttribute('role');
+                const backdrop = document.getElementById('modal-backdrop-asignacion');
+                if (backdrop) backdrop.remove();
+                document.body.classList.remove('modal-open');
+            }
+            loadContainersSinAsignar();
+            loadConductoresDisponibles();
+        } else {
+            alert(`❌ Error: ${result.error || result.mensaje}`);
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        alert('❌ Error al asignar conductor');
+    });
+}
+
+// Confirmar asignación manual (backward compatibility)
+function confirmarAsignacionManual(driverId, driverNombre) {
+    // selectedContainer ahora contiene progId si viene de asignarManualProg
+    // o containerId si viene de asignarManual
+    
+    // Verificar si selectedContainer es un ID de programación o contenedor
+    fetch(`/api/programaciones/${selectedContainer}/`)
+        .then(response => {
+            if (response.ok) {
+                // Es un progId válido
+                return confirmarAsignacionManualProg(selectedContainer, driverId, driverNombre);
+            } else {
+                // Probablemente sea un containerId, buscar programación
+                return fetch(`/api/programaciones/?container=${selectedContainer}`)
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.results.length === 0) {
+                            alert('⚠️ No se encontró programación para este contenedor');
+                            return;
+                        }
+                        const progId = data.results[0].id;
+                        confirmarAsignacionManualProg(progId, driverId, driverNombre);
+                    });
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('❌ Error al asignar conductor');
         });
 }
 
