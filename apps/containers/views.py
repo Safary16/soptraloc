@@ -484,8 +484,12 @@ class ContainerViewSet(viewsets.ModelViewSet):
         try:
             fecha_programada_dt = date_parser.parse(fecha_programada)
         except Exception as e:
+            # Log the detailed error internally but show generic message to user
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.warning(f"Error parseando fecha '{fecha_programada}': {str(e)}")
             return Response(
-                {'error': f'Formato de fecha inválido: {str(e)}. Use formato ISO 8601: YYYY-MM-DDTHH:MM:SSZ'},
+                {'error': 'Formato de fecha inválido. Use formato ISO 8601: YYYY-MM-DDTHH:MM:SSZ (ej: 2025-11-10T14:00:00Z)'},
                 status=status.HTTP_400_BAD_REQUEST
             )
         
@@ -551,11 +555,12 @@ class ContainerViewSet(viewsets.ModelViewSet):
             )
         except Exception as e:
             # Manejar otros errores inesperados
+            # Log detallado internamente pero mensaje genérico al usuario por seguridad
             import logging
             logger = logging.getLogger(__name__)
             logger.error(f"Error inesperado al programar contenedor {container.container_id}: {str(e)}", exc_info=True)
             return Response(
-                {'error': f'Error al crear programación: {str(e)}'},
+                {'error': 'Error interno al crear programación. Por favor, contacte al administrador del sistema.'},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
         
