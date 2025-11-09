@@ -292,7 +292,7 @@ function renderizarProgramaciones() {
                 <div class="card-body py-2">
                     <div class="row align-items-center">
                         <div class="col-md-3">
-                            <strong class="text-primary">${prog.container_id || 'N/A'}</strong><br>
+                            <strong class="text-primary">${prog.container_id_formatted || prog.container_id || 'N/A'}</strong><br>
                             <small class="text-muted"><i class="fas fa-building"></i> ${prog.cd_nombre || 'N/A'}</small>
                         </div>
                         <div class="col-md-3">

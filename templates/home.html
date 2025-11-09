@@ -218,7 +218,7 @@ async function cargarProgramacionesPrioritarias() {
             
             html += `
                 <tr>
-                    <td><strong>${prog.container_id}</strong></td>
+                    <td><strong>${prog.container_id_formatted || prog.container_id}</strong></td>
                     <td>${prog.cd || 'N/A'}</td>
                     <td>${prog.conductor || '<span class="text-muted">Sin asignar</span>'}</td>
                     <td>
