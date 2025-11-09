@@ -44,13 +44,16 @@
             </a>
         </div>
         <div class="col-lg-3 col-md-6 mb-3">
-            <div class="card stat-card {% if stats.sin_asignar > 0 %}bg-warning{% else %}dark{% endif %} fade-in">
-                <div class="stat-icon">
-                    <i class="fas fa-exclamation-triangle"></i>
+            <a href="/asignacion/" class="text-decoration-none">
+                <div class="card stat-card {% if stats.sin_asignar > 0 %}bg-warning text-dark{% else %}dark{% endif %} fade-in" style="cursor: pointer; transition: transform 0.2s;" onmouseover="this.style.transform='scale(1.05)'" onmouseout="this.style.transform='scale(1)'">
+                    <div class="stat-icon">
+                        <i class="fas fa-{% if stats.sin_asignar > 0 %}exclamation-triangle{% else %}check-circle{% endif %}"></i>
+                    </div>
+                    <div class="stat-number">{{ stats.sin_asignar }}</div>
+                    <div class="stat-label">Requieren Asignación</div>
+                    <small class="d-block mt-1" style="font-size: 0.75rem;">Próximas 72 horas</small>
                 </div>
-                <div class="stat-number">{{ stats.sin_asignar }}</div>
-                <div class="stat-label">Sin Asignar (48h)</div>
-            </div>
+            </a>
         </div>
         <div class="col-lg-3 col-md-6 mb-3">
             <a href="/containers/" class="text-decoration-none">
@@ -183,4 +186,100 @@
         </div>
     </div>
 </div>
+
+<script>
+// Función para cargar programaciones prioritarias
+async function cargarProgramacionesPrioritarias() {
+    try {
+        const response = await fetch('/api/programaciones/dashboard/');
+        const data = await response.json();
+        
+        if (!data.success || !data.programaciones || data.programaciones.length === 0) {
+            document.getElementById('programaciones-tbody').innerHTML = `
+                <tr><td colspan="7" class="text-center text-success py-4">
+                    <i class="fas fa-check-circle fa-2x mb-2 d-block"></i>
+                    No hay programaciones prioritarias
+                </td></tr>
+            `;
+            return;
+        }
+        
+        let html = '';
+        data.programaciones.slice(0, 10).forEach(prog => {
+            const urgenciaClass = prog.urgencia === 'CRÍTICA' ? 'danger' : 
+                                 prog.urgencia === 'ALTA' ? 'warning' : 
+                                 prog.urgencia === 'MEDIA' ? 'info' : 'secondary';
+            
+            const estadoClass = prog.estado_container === 'asignado' ? 'success' : 
+                               prog.estado_container === 'programado' ? 'warning' : 'info';
+            
+            const fechaProg = new Date(prog.fecha_programada);
+            const fechaDemurrage = prog.fecha_demurrage ? new Date(prog.fecha_demurrage) : null;
+            
+            html += `
+                <tr>
+                    <td><strong>${prog.container_id}</strong></td>
+                    <td>${prog.cd || 'N/A'}</td>
+                    <td>${prog.conductor || '<span class="text-muted">Sin asignar</span>'}</td>
+                    <td>
+                        ${prog.dias_hasta_programacion !== null ? 
+                          (prog.dias_hasta_programacion > 0 ? 
+                            `<span class="badge bg-info">${prog.dias_hasta_programacion.toFixed(1)}d</span>` : 
+                            '<span class="badge bg-danger">Vencido</span>') : 
+                          'N/A'}
+                    </td>
+                    <td>
+                        ${prog.dias_hasta_demurrage !== null ? 
+                          (prog.dias_hasta_demurrage > 0 ? 
+                            `<span class="badge bg-${prog.dias_hasta_demurrage < 2 ? 'danger' : 'warning'}">${prog.dias_hasta_demurrage.toFixed(1)}d</span>` : 
+                            '<span class="badge bg-danger">Vencido</span>') : 
+                          '<span class="text-muted">N/A</span>'}
+                    </td>
+                    <td>
+                        ${prog.conductor ? 
+                          (prog.estado_container === 'en_ruta' && prog.dias_hasta_programacion ? 
+                            `<span class="badge bg-primary">En ruta</span>` : 
+                            `<span class="badge bg-${estadoClass}">${prog.estado_container || 'N/A'}</span>`) :
+                          '<span class="badge bg-warning">Pendiente</span>'}
+                    </td>
+                    <td><span class="badge badge-urgencia-${urgenciaClass}">${prog.urgencia}</span></td>
+                </tr>
+            `;
+        });
+        
+        document.getElementById('programaciones-tbody').innerHTML = html;
+    } catch (error) {
+        console.error('Error cargando programaciones:', error);
+        document.getElementById('programaciones-tbody').innerHTML = `
+            <tr><td colspan="7" class="text-center text-danger py-4">
+                Error al cargar programaciones
+            </td></tr>
+        `;
+    }
+}
+
+// Reloj en tiempo real
+function actualizarReloj() {
+    const ahora = new Date();
+    const opciones = { 
+        weekday: 'long', 
+        year: 'numeric', 
+        month: 'long', 
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit'
+    };
+    document.getElementById('realtime-clock').textContent = 
+        ahora.toLocaleDateString('es-CL', opciones);
+}
+
+// Cargar datos al inicio
+document.addEventListener('DOMContentLoaded', () => {
+    cargarProgramacionesPrioritarias();
+    actualizarReloj();
+    setInterval(actualizarReloj, 1000);
+    setInterval(cargarProgramacionesPrioritarias, 30000); // Actualizar cada 30s
+});
+</script>
 {% endblock %}

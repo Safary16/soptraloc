@@ -12,10 +12,13 @@ def home(request):
     today = timezone.now().date()
     tomorrow = today + timedelta(days=1)
     two_days_from_now = today + timedelta(days=2)
+    ahora = timezone.now()
     
     # Calculate stats for dashboard
     from apps.programaciones.models import Programacion
     
+    # Mejorar cálculo de sin_asignar: programaciones sin conductor donde la fecha programada está en las próximas 72 horas
+    # Esto da más tiempo para preparar pero sigue siendo urgente
     stats = {
         'programados_hoy': Container.objects.filter(
             estado='programado',
@@ -31,10 +34,11 @@ def home(request):
         'por_arribar': Container.objects.filter(estado='por_arribar').count(),
         'programados': Container.objects.filter(estado='programado').count(),
         'vacios': Container.objects.filter(estado__in=['vacio', 'vacio_en_ruta']).count(),
-        # Programaciones sin conductor asignado con fecha en las próximas 48 horas
+        # Programaciones sin conductor asignado que requieren atención urgente (< 72h)
         'sin_asignar': Programacion.objects.filter(
-            fecha_programada__lte=timezone.now() + timedelta(hours=48),
-            driver__isnull=True
+            fecha_programada__gt=ahora,  # Solo futuras
+            fecha_programada__lte=ahora + timedelta(hours=72),  # Dentro de 72 horas
+            driver__isnull=True  # Sin conductor asignado
         ).count(),
     }
     
