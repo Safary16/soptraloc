@@ -305,7 +305,7 @@
         <div class="modal-content">
             <div class="modal-header">
                 <h5 class="modal-title">Asignar Conductor</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" onclick="cerrarModalAsignacion()"></button>
             </div>
             <div class="modal-body">
                 <div id="modal-content">
@@ -322,7 +322,7 @@
         <div class="modal-content">
             <div class="modal-header bg-primary text-white">
                 <h5 class="modal-title"><i class="fas fa-calendar-alt"></i> Programar Contenedor</h5>
-                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" onclick="cerrarModalProgramar()"></button>
             </div>
             <div class="modal-body">
                 <div id="programar-container-info" class="alert alert-info mb-3">
@@ -350,7 +350,7 @@
                 </form>
             </div>
             <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal" onclick="cerrarModalProgramar()">Cancelar</button>
                 <button type="button" class="btn btn-primary" onclick="confirmarProgramacion()">
                     <i class="fas fa-check"></i> Programar
                 </button>
@@ -536,9 +536,24 @@ function abrirModalProgramar(containerId, containerIdStr) {
     tomorrow.setHours(9, 0, 0, 0);
     document.getElementById('programar-fecha').value = tomorrow.toISOString().slice(0, 16);
     
-    // Mostrar modal
-    const modal = new bootstrap.Modal(document.getElementById('programarModal'));
-    modal.show();
+    // Mostrar modal - verificar que Bootstrap esté cargado
+    if (typeof bootstrap !== 'undefined') {
+        const modal = new bootstrap.Modal(document.getElementById('programarModal'));
+        modal.show();
+    } else {
+        // Fallback: mostrar modal manualmente
+        const modalElement = document.getElementById('programarModal');
+        modalElement.classList.add('show');
+        modalElement.style.display = 'block';
+        modalElement.setAttribute('aria-modal', 'true');
+        modalElement.setAttribute('role', 'dialog');
+        // Agregar backdrop
+        const backdrop = document.createElement('div');
+        backdrop.className = 'modal-backdrop fade show';
+        backdrop.id = 'modal-backdrop-programar';
+        document.body.appendChild(backdrop);
+        document.body.classList.add('modal-open');
+    }
 }
 
 // Confirmar programación
@@ -574,11 +589,31 @@ function confirmarProgramacion() {
             observaciones: observaciones
         })
     })
-    .then(response => response.json())
+    .then(response => {
+        if (!response.ok) {
+            return response.json().then(err => {
+                throw new Error(err.detail || err.error || 'Error al programar contenedor');
+            });
+        }
+        return response.json();
+    })
     .then(result => {
         if (result.success) {
             alert(`✅ ${result.mensaje}`);
-            bootstrap.Modal.getInstance(document.getElementById('programarModal')).hide();
+            // Cerrar modal - verificar Bootstrap
+            if (typeof bootstrap !== 'undefined') {
+                bootstrap.Modal.getInstance(document.getElementById('programarModal')).hide();
+            } else {
+                // Fallback: cerrar manualmente
+                const modalElement = document.getElementById('programarModal');
+                modalElement.classList.remove('show');
+                modalElement.style.display = 'none';
+                modalElement.removeAttribute('aria-modal');
+                modalElement.removeAttribute('role');
+                const backdrop = document.getElementById('modal-backdrop-programar');
+                if (backdrop) backdrop.remove();
+                document.body.classList.remove('modal-open');
+            }
             loadContaineresLiberados();
             loadContainersSinAsignar();
             // Limpiar formulario
@@ -590,7 +625,7 @@ function confirmarProgramacion() {
     })
     .catch(error => {
         console.error('Error:', error);
-        alert('❌ Error al programar contenedor');
+        alert(`❌ Error al programar contenedor: ${error.message}`);
     });
 }
 
@@ -834,7 +869,6 @@ function asignarAutomatico(containerId) {
 // Asignación manual
 function asignarManual(containerId) {
     selectedContainer = containerId;
-    const modal = new bootstrap.Modal(document.getElementById('asignacionModal'));
     
     fetch(`/api/drivers/?activo=true&presente=true`)
         .then(response => response.json())
@@ -854,7 +888,25 @@ function asignarManual(containerId) {
             
             content += '</div>';
             document.getElementById('modal-content').innerHTML = content;
-            modal.show();
+            
+            // Mostrar modal - verificar Bootstrap
+            if (typeof bootstrap !== 'undefined') {
+                const modal = new bootstrap.Modal(document.getElementById('asignacionModal'));
+                modal.show();
+            } else {
+                // Fallback: mostrar modal manualmente
+                const modalElement = document.getElementById('asignacionModal');
+                modalElement.classList.add('show');
+                modalElement.style.display = 'block';
+                modalElement.setAttribute('aria-modal', 'true');
+                modalElement.setAttribute('role', 'dialog');
+                // Agregar backdrop
+                const backdrop = document.createElement('div');
+                backdrop.className = 'modal-backdrop fade show';
+                backdrop.id = 'modal-backdrop-asignacion';
+                document.body.appendChild(backdrop);
+                document.body.classList.add('modal-open');
+            }
         });
 }
 
@@ -883,7 +935,20 @@ function confirmarAsignacionManual(driverId, driverNombre) {
             .then(result => {
                 if (result.success) {
                     alert(`✅ ${driverNombre} asignado exitosamente`);
-                    bootstrap.Modal.getInstance(document.getElementById('asignacionModal')).hide();
+                    // Cerrar modal - verificar Bootstrap
+                    if (typeof bootstrap !== 'undefined') {
+                        bootstrap.Modal.getInstance(document.getElementById('asignacionModal')).hide();
+                    } else {
+                        // Fallback: cerrar manualmente
+                        const modalElement = document.getElementById('asignacionModal');
+                        modalElement.classList.remove('show');
+                        modalElement.style.display = 'none';
+                        modalElement.removeAttribute('aria-modal');
+                        modalElement.removeAttribute('role');
+                        const backdrop = document.getElementById('modal-backdrop-asignacion');
+                        if (backdrop) backdrop.remove();
+                        document.body.classList.remove('modal-open');
+                    }
                     loadContainersSinAsignar();
                     loadConductoresDisponibles();
                 } else {
@@ -1258,6 +1323,49 @@ function eliminarPreAsignacion(id) {
         console.error('Error:', error);
         alert('❌ Error al eliminar pre-asignación');
     });
+}
+
+// Funciones para cerrar modales manualmente
+function cerrarModalProgramar() {
+    if (typeof bootstrap !== 'undefined') {
+        const modalInstance = bootstrap.Modal.getInstance(document.getElementById('programarModal'));
+        if (modalInstance) {
+            modalInstance.hide();
+        }
+    } else {
+        // Fallback: cerrar manualmente
+        const modalElement = document.getElementById('programarModal');
+        modalElement.classList.remove('show');
+        modalElement.style.display = 'none';
+        modalElement.removeAttribute('aria-modal');
+        modalElement.removeAttribute('role');
+        const backdrop = document.getElementById('modal-backdrop-programar');
+        if (backdrop) backdrop.remove();
+        document.body.classList.remove('modal-open');
+    }
+    // Limpiar formulario
+    document.getElementById('programar-form').reset();
+    selectedContainerForProgramming = null;
+}
+
+function cerrarModalAsignacion() {
+    if (typeof bootstrap !== 'undefined') {
+        const modalInstance = bootstrap.Modal.getInstance(document.getElementById('asignacionModal'));
+        if (modalInstance) {
+            modalInstance.hide();
+        }
+    } else {
+        // Fallback: cerrar manualmente
+        const modalElement = document.getElementById('asignacionModal');
+        modalElement.classList.remove('show');
+        modalElement.style.display = 'none';
+        modalElement.removeAttribute('aria-modal');
+        modalElement.removeAttribute('role');
+        const backdrop = document.getElementById('modal-backdrop-asignacion');
+        if (backdrop) backdrop.remove();
+        document.body.classList.remove('modal-open');
+    }
+    selectedContainer = null;
 }
 </script>
 {% endblock %}

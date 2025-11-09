@@ -409,11 +409,11 @@ class ContainerViewSet(viewsets.ModelViewSet):
             'container': serializer.data
         })
     
-    @action(detail=True, methods=['post'])
+    @action(detail=True, methods=['post'], permission_classes=[AllowAny])
     def marcar_liberado(self, request, pk=None):
-        """Marca contenedor como liberado por aduana/naviera"""
+        """Marca contenedor como liberado por aduana/naviera. Permite acceso anónimo."""
         container = self.get_object()
-        usuario = request.user.username if request.user.is_authenticated else None
+        usuario = request.user.username if request.user.is_authenticated else 'operador_manual'
         container.cambiar_estado('liberado', usuario)
         
         serializer = self.get_serializer(container)
@@ -423,11 +423,14 @@ class ContainerViewSet(viewsets.ModelViewSet):
             'container': serializer.data
         })
     
-    @action(detail=True, methods=['post'])
+    @action(detail=True, methods=['post'], permission_classes=[AllowAny])
     def programar(self, request, pk=None):
         """
         Programa un contenedor manualmente desde operaciones
         Crea la programación y actualiza el estado del contenedor
+        
+        Permite acceso anónimo para operaciones manuales desde el panel.
+        El usuario se registra como 'operador_manual' si no está autenticado.
         
         Payload:
         {

@@ -118,6 +118,9 @@ def container_detail(request, container_id):
 
 def operaciones(request):
     """Panel de operaciones para asignación y gestión de ciclo de vida"""
+    # Ensure CSRF token is in context for the template
+    from django.middleware.csrf import get_token
+    get_token(request)
     return render(request, 'operaciones.html')
 
 
