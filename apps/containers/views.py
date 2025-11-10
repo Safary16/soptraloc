@@ -447,12 +447,27 @@ class ContainerViewSet(viewsets.ModelViewSet):
         
         container = self.get_object()
         
-        # Validar que esté liberado o secuenciado
+        # Validar que esté liberado o secuenciado (no ya programado)
         if container.estado not in ['liberado', 'secuenciado']:
-            return Response(
-                {'error': f'Contenedor debe estar liberado o secuenciado. Estado actual: {container.get_estado_display()}'},
-                status=status.HTTP_400_BAD_REQUEST
-            )
+            # Proporcionar mensaje específico según el estado
+            if container.estado in ['programado', 'asignado', 'en_ruta', 'entregado', 'descargado']:
+                return Response(
+                    {
+                        'error': f'Contenedor ya está {container.get_estado_display()}. No se puede programar nuevamente.',
+                        'estado_actual': container.estado,
+                        'container_id': container.container_id
+                    },
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            else:
+                return Response(
+                    {
+                        'error': f'Contenedor debe estar liberado o secuenciado. Estado actual: {container.get_estado_display()}',
+                        'estado_actual': container.estado,
+                        'container_id': container.container_id
+                    },
+                    status=status.HTTP_400_BAD_REQUEST
+                )
         
         # Validar datos requeridos
         cd_id = request.data.get('cd_id')
@@ -493,25 +508,22 @@ class ContainerViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST
             )
         
-        # Verificar si ya existe una programación (manejo correcto de OneToOneField)
-        try:
-            existing_prog = container.programacion
-            if existing_prog:
-                return Response(
-                    {
-                        'error': f'Este contenedor ya tiene una programación asociada (ID: {existing_prog.id})',
-                        'programacion_existente': {
-                            'id': existing_prog.id,
-                            'fecha_programada': existing_prog.fecha_programada.isoformat(),
-                            'cd': existing_prog.cd.nombre if existing_prog.cd else None,
-                            'tiene_conductor': existing_prog.driver is not None
-                        }
-                    },
-                    status=status.HTTP_400_BAD_REQUEST
-                )
-        except Programacion.DoesNotExist:
-            # No existe programación, podemos continuar
-            pass
+        # Verificar si ya existe una programación usando el método seguro del modelo
+        tiene_prog, existing_prog = Programacion.container_tiene_programacion(container)
+        if tiene_prog and existing_prog:
+            return Response(
+                {
+                    'error': f'Este contenedor ya tiene una programación asociada (ID: {existing_prog.id})',
+                    'programacion_existente': {
+                        'id': existing_prog.id,
+                        'fecha_programada': existing_prog.fecha_programada.isoformat(),
+                        'cd': existing_prog.cd.nombre if existing_prog.cd else None,
+                        'tiene_conductor': existing_prog.driver is not None,
+                        'estado_container': container.estado
+                    }
+                },
+                status=status.HTTP_400_BAD_REQUEST
+            )
         
         # Usar transacción para evitar condiciones de carrera
         try:
@@ -526,10 +538,14 @@ class ContainerViewSet(viewsets.ModelViewSet):
                     observaciones=request.data.get('observaciones', '')
                 )
                 
-                # Actualizar contenedor
-                container.cd_entrega = cd
-                container.fecha_programacion = timezone.now()
-                container.cambiar_estado('programado', request.user.username if request.user.is_authenticated else None)
+                # Actualizar contenedor - solo si está en estado válido
+                if container.estado in ['liberado', 'secuenciado']:
+                    container.cd_entrega = cd
+                    container.fecha_programacion = timezone.now()
+                    container.cambiar_estado('programado', request.user.username if request.user.is_authenticated else None)
+                else:
+                    # Esto no debería pasar por las validaciones previas, pero lo manejamos
+                    raise ValueError(f"Estado del contenedor inválido para programar: {container.estado}")
                 
                 # Crear evento de auditoría
                 Event.objects.create(
