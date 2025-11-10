@@ -61,6 +61,9 @@ class ProgramacionViewSet(viewsets.ModelViewSet):
         
         Lógica: Demurrage vence el día indicado, día siguiente ya se paga.
         Alertamos si quedan menos de 2 días para el vencimiento.
+        
+        ACTUALIZADO: Muestra contenedores en todos los estados activos (no solo liberados)
+        para dar visibilidad completa del riesgo de demurrage.
         """
         from apps.containers.models import Container
         from apps.containers.serializers import ContainerListSerializer
@@ -69,11 +72,12 @@ class ProgramacionViewSet(viewsets.ModelViewSet):
         fecha_limite = timezone.now() + timedelta(days=2)
         
         # Contenedores con fecha_demurrage próxima a vencer
-        # Estados relevantes: liberado, programado, asignado (no entregados ni descargados)
+        # Estados activos: liberado, programado, asignado, en_ruta, entregado
+        # Excluir: descargado, vacio, vacio_en_ruta, devuelto (ya completaron el ciclo)
         containers_riesgo = Container.objects.filter(
             fecha_demurrage__isnull=False,
             fecha_demurrage__lte=fecha_limite,
-            estado__in=['liberado', 'programado', 'asignado']
+            estado__in=['liberado', 'programado', 'asignado', 'en_ruta', 'entregado']
         ).select_related('cd_entrega').order_by('fecha_demurrage')
         
         # Calcular días restantes para cada contenedor
@@ -83,6 +87,8 @@ class ProgramacionViewSet(viewsets.ModelViewSet):
             container_data = ContainerListSerializer(container).data
             container_data['dias_hasta_demurrage'] = dias_restantes
             container_data['vencido'] = dias_restantes < 0
+            container_data['estado'] = container.estado
+            container_data['tiene_programacion'] = container.tiene_programacion()
             resultados.append(container_data)
         
         return Response({
@@ -213,9 +219,19 @@ class ProgramacionViewSet(viewsets.ModelViewSet):
         Dashboard con priorización inteligente
         Score = 50% días_hasta_programacion + 50% días_hasta_demurrage
         Ordena por urgencia (score más bajo = más urgente)
+        
+        SOLO muestra programaciones activas (pendientes de completar):
+        - Estados válidos: programado, asignado, en_ruta, entregado, descargado
+        - Excluye: vacio, vacio_en_ruta, devuelto (ya completados)
         """
         ahora = timezone.now()
-        programaciones = self.queryset.select_related('container', 'driver', 'cd')
+        
+        # Filtrar solo programaciones con contenedores en estados activos
+        # Excluir contenedores que ya están vacíos o devueltos (completados)
+        estados_activos = ['programado', 'secuenciado', 'asignado', 'en_ruta', 'entregado', 'descargado']
+        programaciones = self.queryset.filter(
+            container__estado__in=estados_activos
+        ).select_related('container', 'driver', 'cd')
         
         resultados = []
         for prog in programaciones:

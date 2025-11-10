@@ -78,15 +78,19 @@ def dashboard_stats(request):
 def dashboard_alertas(request):
     """
     Lista de alertas activas para el dashboard
+    
+    SOLO muestra alertas para contenedores que:
+    - Tienen demurrage próximo a vencer Y están liberados (sin programar todavía)
+    - Tienen programación sin conductor asignado
     """
     alertas = []
     
-    # Alertas de demurrage
+    # Alertas de demurrage - SOLO para contenedores liberados (sin programar)
     fecha_limite = timezone.now() + timedelta(days=2)
     containers_riesgo = Container.objects.filter(
         fecha_demurrage__isnull=False,
         fecha_demurrage__lte=fecha_limite,
-        estado__in=['liberado', 'programado', 'asignado']
+        estado='liberado'  # Solo liberados, no programados ni asignados
     ).select_related('cd_entrega')
     
     for container in containers_riesgo:
@@ -96,13 +100,16 @@ def dashboard_alertas(request):
             'prioridad': 'critica' if dias_restantes < 0 else 'alta',
             'container_id': container.container_id,
             'mensaje': f'Demurrage vence en {dias_restantes} días' if dias_restantes >= 0 else 'Demurrage vencido',
-            'dias_restantes': dias_restantes
+            'dias_restantes': dias_restantes,
+            'estado': container.estado
         })
     
-    # Alertas de programaciones sin conductor
+    # Alertas de programaciones sin conductor (contenedores programados o asignados sin conductor)
+    # Filtrar solo programaciones donde el contenedor NO está en ruta o entregado
     programaciones_sin_conductor = Programacion.objects.filter(
         driver__isnull=True,
-        fecha_programada__lte=timezone.now() + timedelta(hours=48)
+        fecha_programada__lte=timezone.now() + timedelta(hours=48),
+        container__estado__in=['programado', 'secuenciado']  # Solo si está pendiente de asignación
     ).select_related('container')
     
     for prog in programaciones_sin_conductor:
@@ -112,7 +119,9 @@ def dashboard_alertas(request):
             'prioridad': 'critica' if horas_restantes < 24 else 'alta',
             'container_id': prog.container.container_id,
             'mensaje': f'Sin conductor asignado - Faltan {int(horas_restantes)} horas',
-            'horas_restantes': int(horas_restantes)
+            'horas_restantes': int(horas_restantes),
+            'estado': prog.container.estado,
+            'programacion_id': prog.id
         })
     
     # Ordenar por prioridad
