@@ -45,10 +45,11 @@ def sincronizar_estado_con_programacion(sender, instance, created, **kwargs):
         from apps.events.models import Event
         Event.objects.create(
             container=instance,
-            tipo_evento='asignacion_removida',
-            descripcion='Asignación de conductor removida al volver a estado programado',
+            event_type='cambio_estado',
             detalles={
                 'estado_nuevo': 'programado',
+                'accion': 'asignacion_removida',
+                'descripcion': 'Asignación de conductor removida al volver a estado programado',
                 'automatico': True
             }
         )
@@ -94,12 +95,12 @@ def manejar_vacios_automaticamente(sender, instance, created, **kwargs):
         from apps.events.models import Event
         Event.objects.create(
             container=instance,
-            tipo_evento='container_vacio_recibido',
-            descripcion=f'Contenedor vacío recibido automáticamente en {instance.cd_entrega.nombre}',
+            event_type='contenedor_vacio',
             detalles={
                 'cd_id': instance.cd_entrega.id,
                 'cd_nombre': instance.cd_entrega.nombre,
                 'vacios_actual': instance.cd_entrega.vacios_actual,
+                'descripcion': f'Contenedor vacío recibido automáticamente en {instance.cd_entrega.nombre}',
                 'automatico': True
             }
         )
@@ -191,12 +192,12 @@ def crear_programacion_automatica(sender, instance, created, **kwargs):
         from apps.events.models import Event
         Event.objects.create(
             container=instance,
-            tipo_evento='programacion_auto_creada',
-            descripcion=f'Programación creada automáticamente para {cd.nombre}',
+            event_type='import_programacion',
             detalles={
                 'cd_id': cd.id,
                 'cd_nombre': cd.nombre,
                 'fecha_programada': fecha_programada.isoformat(),
+                'descripcion': f'Programación creada automáticamente para {cd.nombre}',
                 'automatico': True
             }
         )
@@ -244,12 +245,12 @@ def alertar_demurrage_cercano(sender, instance, created, **kwargs):
                 from apps.events.models import Event
                 Event.objects.create(
                     container=instance,
-                    tipo_evento='alerta_demurrage',
-                    descripcion=f'Alerta: Demurrage vence en {round(dias_hasta_demurrage, 1)} días',
+                    event_type='alerta_48h',
                     detalles={
                         'fecha_demurrage': instance.fecha_demurrage.isoformat(),
                         'dias_restantes': round(dias_hasta_demurrage, 1),
-                        'tiene_conductor': False
+                        'tiene_conductor': False,
+                        'descripcion': f'Alerta: Demurrage vence en {round(dias_hasta_demurrage, 1)} días'
                     }
                 )
         except Programacion.DoesNotExist:
