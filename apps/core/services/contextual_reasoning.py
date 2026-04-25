@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from typing import List
 from django.db.models import Q
 
 from apps.programaciones.models import Programacion
@@ -12,6 +13,14 @@ class SimilarCase:
 
 
 class ContextualReasoningService:
+    @staticmethod
+    def infer_outcome_from_container_state(item: Programacion) -> str:
+        if item.estado_final:
+            return item.estado_final
+        if item.container.estado in ['entregado', 'descargado', 'devuelto']:
+            return 'ENTREGADO'
+        return 'FALLIDO'
+
     @classmethod
     def dynamic_weights(cls, base_weights: dict, programacion: Programacion) -> dict:
         weights = dict(base_weights)
@@ -37,7 +46,7 @@ class ContextualReasoningService:
         return {k: round(v / total, 4) for k, v in weights.items()}
 
     @classmethod
-    def similar_cases(cls, programacion: Programacion, top_n: int = 5) -> list[SimilarCase]:
+    def similar_cases(cls, programacion: Programacion, top_n: int = 5) -> List[SimilarCase]:
         base_qs = Programacion.objects.filter(
             container__estado__in=['entregado', 'descargado', 'devuelto']
         ).exclude(pk=programacion.pk).select_related('container', 'cd', 'driver')
@@ -62,16 +71,14 @@ class ContextualReasoningService:
             if bool(item.driver_id) == bool(programacion.driver_id):
                 sim += 0.10
 
-            outcome = item.estado_final or (
-                'ENTREGADO' if item.container.estado in ['entregado', 'descargado', 'devuelto'] else 'FALLIDO'
-            )
+            outcome = cls.infer_outcome_from_container_state(item)
             scored.append(SimilarCase(item.id, round(sim, 3), outcome))
 
         scored.sort(key=lambda x: x.similarity, reverse=True)
         return scored[:top_n]
 
     @classmethod
-    def confidence(cls, similar_cases: list[SimilarCase]) -> float:
+    def confidence(cls, similar_cases: List[SimilarCase]) -> float:
         if not similar_cases:
             return 0.25
 

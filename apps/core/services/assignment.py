@@ -1,4 +1,5 @@
 from decimal import Decimal
+from datetime import timedelta
 from django.conf import settings
 from django.utils import timezone
 
@@ -10,9 +11,13 @@ from apps.core.services.anomaly_detector import (
     AnomalyDetector, DelayRiskScorer, CapacityChecker, ETAEstimator, RouteFeasibilityValidator
 )
 from apps.core.services.contextual_reasoning import ContextualReasoningService
+from apps.events.models import Event
 
 
 class AssignmentService:
+    # Capacidad operacional por defecto (toneladas) cuando no existe metadata del vehículo.
+    DEFAULT_VEHICLE_CAPACITY_TON = 28
+
     DEFAULT_WEIGHTS = {
         'disponibilidad_confirmada': 0.30,
         'riesgo_de_atraso': 0.25,
@@ -41,7 +46,7 @@ class AssignmentService:
 
     @classmethod
     def _score_adecuacion(cls, programacion: Programacion, driver: Driver) -> float:
-        capacidad_base_ton = float(getattr(settings, 'VEHICLE_DEFAULT_CAPACITY_TON', 28))
+        capacidad_base_ton = float(getattr(settings, 'VEHICLE_DEFAULT_CAPACITY_TON', cls.DEFAULT_VEHICLE_CAPACITY_TON))
         peso = float(programacion.container.peso_total_tons)
         if peso <= 0:
             return 0.7
@@ -150,7 +155,7 @@ class AssignmentService:
     @classmethod
     def _persist_operation_log(cls, programacion: Programacion, candidate: dict, decision_operador='PENDIENTE', motivo_override=''):
         driver = candidate['driver']
-        RegistroOperacion.objects.create(
+        registro = RegistroOperacion.objects.create(
             programacion=programacion,
             service_id=str(programacion.id),
             recurso_asignado=driver.nombre,
@@ -162,6 +167,47 @@ class AssignmentService:
             similitud_historica_usada=candidate['similar_cases'],
             timestamp_despacho=timezone.now(),
             eta_estimado_min=candidate.get('eta_estimado_min'),
+        )
+        cls._evaluate_learning_triggers(programacion, registro)
+
+    @classmethod
+    def _evaluate_learning_triggers(cls, programacion: Programacion, registro: RegistroOperacion):
+        cadence = int(getattr(settings, 'LEARNING_CADENCE_SERVICES', 100))
+        total = RegistroOperacion.objects.count()
+        if total == 0 or (total % cadence) != 0:
+            return
+
+        last_30d = RegistroOperacion.objects.filter(created_at__gte=timezone.now() - timedelta(days=30))
+        eta_error_pct = 0.0
+        eta_with_data = last_30d.filter(eta_real_min__isnull=False, eta_estimado_min__isnull=False)
+        if eta_with_data.exists():
+            diffs = [
+                abs((r.eta_real_min - r.eta_estimado_min) / r.eta_estimado_min) * 100
+                for r in eta_with_data if r.eta_estimado_min and r.eta_estimado_min > 0
+            ]
+            eta_error_pct = round(sum(diffs) / len(diffs), 2) if diffs else 0.0
+
+        overrides_14d = RegistroOperacion.objects.filter(
+            created_at__gte=timezone.now() - timedelta(days=14),
+            decision_operador__in=['RECHAZAR', 'MODIFICAR', 'ESCALAR']
+        )
+        total_14d = RegistroOperacion.objects.filter(created_at__gte=timezone.now() - timedelta(days=14)).count()
+        override_rate = round((overrides_14d.count() / total_14d) * 100, 2) if total_14d else 0.0
+
+        review_required = eta_error_pct > 20 or override_rate > 30
+        if not review_required:
+            return
+
+        Event.objects.create(
+            container=programacion.container,
+            event_type='alerta_48h',
+            detalles={
+                'tipo': 'MODEL_REVIEW_TRIGGER',
+                'eta_error_pct_30d': eta_error_pct,
+                'override_rate_14d': override_rate,
+                'accion': 'Revisión humana de pesos/contexto requerida (sin autoaplicar cambios)',
+            },
+            usuario='system_learning'
         )
 
     @classmethod
@@ -191,8 +237,7 @@ class AssignmentService:
             'anomalias_detectadas', 'similitud_historica_usada', 'eta_recalculado_min', 'timestamp_despacho'
         ])
 
-        has_blocking = any(a['severity'] in ('P0', 'P1') for a in mejor['anomalies'])
-        if mejor['classification'] != 'DESPACHO_DIRECTO' or has_blocking:
+        if mejor['classification'] != 'DESPACHO_DIRECTO':
             cls._persist_operation_log(programacion, mejor, decision_operador='PENDIENTE')
             return {
                 'success': False,
@@ -243,6 +288,7 @@ class AssignmentService:
         resultados = {'asignadas': 0, 'fallidas': 0, 'detalles': []}
         for programacion in programaciones:
             resultado = cls.asignar_mejor_conductor(programacion, usuario)
+            selected_driver = resultado.get('driver')
             if resultado['success']:
                 resultados['asignadas'] += 1
             else:
@@ -251,7 +297,7 @@ class AssignmentService:
                 'programacion_id': programacion.id,
                 'container_id': programacion.container.container_id,
                 'success': resultado['success'],
-                'driver': resultado.get('driver').nombre if resultado.get('driver') else None,
+                'driver': selected_driver.nombre if selected_driver else None,
                 'score': float(resultado['score']) if resultado.get('score') else None,
                 'classification': resultado.get('classification'),
                 'reason': resultado.get('reason') or resultado.get('error'),

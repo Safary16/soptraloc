@@ -1,5 +1,6 @@
 from dataclasses import dataclass, asdict
 from datetime import timedelta
+from typing import Optional
 from django.conf import settings
 from django.utils import timezone
 
@@ -78,8 +79,14 @@ class RouteFeasibilityValidator:
 
 
 class AnomalyDetector:
+    @staticmethod
+    def _has_tracking_coverage(programacion: Programacion, driver: Optional[Driver]) -> bool:
+        has_cd_coords = bool(programacion.cd and programacion.cd.lat and programacion.cd.lng)
+        has_driver_coords = bool(driver and driver.ultima_posicion_lat and driver.ultima_posicion_lng)
+        return has_cd_coords and has_driver_coords
+
     @classmethod
-    def detect(cls, programacion: Programacion, driver: Driver | None) -> list[dict]:
+    def detect(cls, programacion: Programacion, driver: Optional[Driver]) -> list[dict]:
         anomalies: list[OperationalAnomaly] = []
         now = timezone.now()
         delay_threshold = float(getattr(settings, "DELAY_RISK_THRESHOLD", 0.65))
@@ -143,7 +150,7 @@ class AnomalyDetector:
                 "Escalar y renegociar ventana o recurso."
             ))
 
-        if not (programacion.cd and programacion.cd.lat and programacion.cd.lng and driver and driver.ultima_posicion_lat and driver.ultima_posicion_lng):
+        if not cls._has_tracking_coverage(programacion, driver):
             anomalies.append(OperationalAnomaly(
                 "ANOM_OPS_007", "P1",
                 "Ruta sin cobertura de tracking activa.",
@@ -191,7 +198,7 @@ class AnomalyDetector:
 
         active = Programacion.objects.filter(container__estado__in=['asignado', 'en_ruta']).count()
         available = Driver.objects.filter(activo=True, presente=True).count()
-        if available and (active / available) > 0.9:
+        if available > 0 and (active / available) > 0.9:
             anomalies.append(OperationalAnomaly(
                 "ANOM_OPS_015", "P2",
                 "Flota al límite de capacidad operativa.",
@@ -205,12 +212,12 @@ class AnomalyDetector:
                 "Asignar recurso alternativo."
             ))
 
-        # API externa de clima no integrada, se deja criterio degradado
-        anomalies.append(OperationalAnomaly(
-            "ANOM_OPS_012", "P2",
-            "Condición adversa en ruta no verificable (sin API externa activa).",
-            "Continuar con confianza reducida y monitoreo reforzado."
-        ))
+        if bool(getattr(settings, "ENABLE_WEATHER_API", False)) and bool(getattr(programacion, "condicion_ruta_adversa", False)):
+            anomalies.append(OperationalAnomaly(
+                "ANOM_OPS_012", "P2",
+                "Condición adversa en ruta detectada por API externa.",
+                "Monitoreo reforzado y reevaluación dinámica de ETA."
+            ))
 
         anomalies.sort(key=lambda x: SEVERITY_ORDER.get(x.severity, 99))
         return [a.to_dict() for a in anomalies]

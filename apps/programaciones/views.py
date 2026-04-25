@@ -3,9 +3,11 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.parsers import MultiPartParser, FormParser
 from rest_framework.permissions import AllowAny, IsAuthenticatedOrReadOnly
+from django.conf import settings
 from django.db.models import Q
 from django.utils import timezone
 from datetime import timedelta
+from dateutil import parser as date_parser
 
 from .models import Programacion
 from .serializers import (
@@ -902,7 +904,10 @@ class ProgramacionViewSet(viewsets.ModelViewSet):
             NotificationService.crear_alerta_arribo_proximo(programacion)
 
         programacion.eta_recalculado_min = resultado['eta_minutos']
-        if programacion.eta_minutos and (resultado['eta_minutos'] - programacion.eta_minutos) > int(request.query_params.get('eta_delay_alert_min', 15)):
+        configured_delay_threshold = int(getattr(settings, 'ETA_DELAY_ALERT_MIN', 15))
+        request_override_threshold = request.query_params.get('eta_delay_alert_min')
+        eta_delay_threshold = int(request_override_threshold) if request_override_threshold else configured_delay_threshold
+        if programacion.eta_minutos and (resultado['eta_minutos'] - programacion.eta_minutos) > eta_delay_threshold:
             desvio = {
                 'tipo': 'ETA_DELAY',
                 'mensaje': 'ETA recalculado supera lo prometido',
@@ -967,7 +972,6 @@ class ProgramacionViewSet(viewsets.ModelViewSet):
     def reevaluar(self, request, pk=None):
         """Permite modificar parámetros operativos y recalcular recomendación."""
         programacion = self.get_object()
-        from dateutil import parser as date_parser
         urgencia = request.data.get('urgencia_servicio')
         seguimiento = request.data.get('requiere_seguimiento_especial')
         if urgencia in ['NORMAL', 'URGENTE', 'CRITICO']:
@@ -975,9 +979,15 @@ class ProgramacionViewSet(viewsets.ModelViewSet):
         if isinstance(seguimiento, bool):
             programacion.requiere_seguimiento_especial = seguimiento
         if request.data.get('ventana_horaria_inicio'):
-            programacion.ventana_horaria_inicio = date_parser.parse(request.data.get('ventana_horaria_inicio'))
+            try:
+                programacion.ventana_horaria_inicio = date_parser.parse(request.data.get('ventana_horaria_inicio'))
+            except Exception:
+                return Response({'error': 'ventana_horaria_inicio inválida (usar ISO 8601)'}, status=status.HTTP_400_BAD_REQUEST)
         if request.data.get('ventana_horaria_fin'):
-            programacion.ventana_horaria_fin = date_parser.parse(request.data.get('ventana_horaria_fin'))
+            try:
+                programacion.ventana_horaria_fin = date_parser.parse(request.data.get('ventana_horaria_fin'))
+            except Exception:
+                return Response({'error': 'ventana_horaria_fin inválida (usar ISO 8601)'}, status=status.HTTP_400_BAD_REQUEST)
         programacion.decision_operador = 'MODIFICAR'
         programacion.save()
 
