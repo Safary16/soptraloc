@@ -7,6 +7,32 @@ from apps.cds.models import CD
 
 class Programacion(models.Model):
     """Modelo de programación de entregas"""
+
+    URGENCIA_CHOICES = [
+        ('NORMAL', 'Normal'),
+        ('URGENTE', 'Urgente'),
+        ('CRITICO', 'Crítico'),
+    ]
+
+    CLASIFICACION_CHOICES = [
+        ('DESPACHO_DIRECTO', '🟢 Despacho Directo'),
+        ('REVISION_OPERADOR', '🟡 Revisión Operador'),
+        ('INTERVENCION', '🔴 Intervención'),
+    ]
+
+    DECISION_OPERADOR_CHOICES = [
+        ('PENDIENTE', 'Pendiente'),
+        ('CONFIRMAR', 'Confirmar'),
+        ('RECHAZAR', 'Rechazar'),
+        ('MODIFICAR', 'Modificar'),
+        ('ESCALAR', 'Escalar'),
+    ]
+
+    ESTADO_FINAL_CHOICES = [
+        ('ENTREGADO', 'Entregado'),
+        ('PARCIAL', 'Parcial'),
+        ('FALLIDO', 'Fallido'),
+    ]
     
     # Relaciones
     container = models.OneToOneField(
@@ -35,6 +61,15 @@ class Programacion(models.Model):
     cliente = models.CharField(max_length=200, verbose_name='Cliente')
     direccion_entrega = models.TextField(blank=True, verbose_name='Dirección Entrega')
     observaciones = models.TextField(blank=True, verbose_name='Observaciones')
+    urgencia_servicio = models.CharField(
+        max_length=10,
+        choices=URGENCIA_CHOICES,
+        default='NORMAL',
+        verbose_name='Urgencia del Servicio'
+    )
+    requiere_seguimiento_especial = models.BooleanField(default=False, verbose_name='Requiere Seguimiento Especial')
+    ventana_horaria_inicio = models.DateTimeField(null=True, blank=True, verbose_name='Ventana Horaria Inicio')
+    ventana_horaria_fin = models.DateTimeField(null=True, blank=True, verbose_name='Ventana Horaria Fin')
     
     # Datos de ruta
     eta_minutos = models.IntegerField(null=True, blank=True, verbose_name='ETA (minutos)')
@@ -50,10 +85,43 @@ class Programacion(models.Model):
     fecha_inicio_ruta = models.DateTimeField(null=True, blank=True, verbose_name='Fecha Inicio Ruta', help_text='Timestamp cuando el conductor inició la ruta')
     gps_inicio_lat = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True, verbose_name='GPS Inicio Latitud')
     gps_inicio_lng = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True, verbose_name='GPS Inicio Longitud')
+    posicion_actual_lat = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True, verbose_name='Posición Actual Lat')
+    posicion_actual_lng = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True, verbose_name='Posición Actual Lng')
+    ultima_actualizacion_tracking = models.DateTimeField(null=True, blank=True, verbose_name='Última Actualización Tracking')
+    eta_recalculado_min = models.IntegerField(null=True, blank=True, verbose_name='ETA Recalculado (min)')
+    desviaciones_detectadas = models.JSONField(default=list, blank=True, verbose_name='Desviaciones Detectadas')
+    incidentes_registrados = models.JSONField(default=list, blank=True, verbose_name='Incidentes Registrados')
     
     # Alertas
     alerta_48h_enviada = models.BooleanField(default=False, verbose_name='Alerta 48h Enviada')
     requiere_alerta = models.BooleanField(default=False, verbose_name='Requiere Alerta')
+    score_por_dimension = models.JSONField(default=dict, blank=True, verbose_name='Score por Dimensión')
+    clasificacion_sistema = models.CharField(
+        max_length=20,
+        choices=CLASIFICACION_CHOICES,
+        default='REVISION_OPERADOR',
+        verbose_name='Clasificación del Sistema'
+    )
+    nivel_confianza = models.DecimalField(max_digits=5, decimal_places=2, default=0.00, verbose_name='Nivel de Confianza')
+    decision_operador = models.CharField(
+        max_length=12,
+        choices=DECISION_OPERADOR_CHOICES,
+        default='PENDIENTE',
+        verbose_name='Decisión Operador'
+    )
+    motivo_override = models.TextField(blank=True, verbose_name='Motivo Override')
+    anomalias_detectadas = models.JSONField(default=list, blank=True, verbose_name='Anomalías Detectadas')
+    similitud_historica_usada = models.JSONField(default=list, blank=True, verbose_name='Similitud Histórica Usada')
+    timestamp_despacho = models.DateTimeField(null=True, blank=True, verbose_name='Timestamp Despacho')
+    eta_estimado_cierre_min = models.IntegerField(null=True, blank=True, verbose_name='ETA Estimado al Cierre (min)')
+    eta_real_cierre_min = models.IntegerField(null=True, blank=True, verbose_name='ETA Real al Cierre (min)')
+    estado_final = models.CharField(
+        max_length=10,
+        choices=ESTADO_FINAL_CHOICES,
+        null=True,
+        blank=True,
+        verbose_name='Estado Final'
+    )
     
     # Timestamps
     fecha_asignacion = models.DateTimeField(null=True, blank=True, verbose_name='Fecha Asignación')
@@ -433,3 +501,31 @@ class TiempoViaje(models.Model):
         
         # Fallback final: usar Mapbox directo
         return tiempo_mapbox
+
+
+class RegistroOperacion(models.Model):
+    """Bitácora auditable de cada ciclo de asignación y despacho."""
+
+    programacion = models.ForeignKey(Programacion, on_delete=models.CASCADE, related_name='registros_operacion')
+    service_id = models.CharField(max_length=100)
+    recurso_asignado = models.CharField(max_length=200, blank=True)
+    score_por_dimension = models.JSONField(default=dict, blank=True)
+    clasificacion_sistema = models.CharField(max_length=20, choices=Programacion.CLASIFICACION_CHOICES)
+    decision_operador = models.CharField(max_length=12, choices=Programacion.DECISION_OPERADOR_CHOICES, default='PENDIENTE')
+    motivo_override = models.TextField(blank=True)
+    anomalias_detectadas = models.JSONField(default=list, blank=True)
+    similitud_historica_usada = models.JSONField(default=list, blank=True)
+    timestamp_despacho = models.DateTimeField(default=timezone.now)
+    eta_estimado_min = models.IntegerField(null=True, blank=True)
+    eta_real_min = models.IntegerField(null=True, blank=True)
+    incidentes_ejecucion = models.JSONField(default=list, blank=True)
+    estado_final = models.CharField(max_length=10, choices=Programacion.ESTADO_FINAL_CHOICES, null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at']
+        verbose_name = 'Registro Operación'
+        verbose_name_plural = 'Registros Operación'
+
+    def __str__(self):
+        return f"{self.service_id} - {self.clasificacion_sistema}"

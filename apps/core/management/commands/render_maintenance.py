@@ -79,7 +79,7 @@ class Command(BaseCommand):
             # Clear old GPS positions from drivers
             with transaction.atomic():
                 drivers_updated = Driver.objects.filter(
-                    ultima_actualizacion_gps__lt=cutoff_date
+                    ultima_actualizacion_posicion__lt=cutoff_date
                 ).update(
                     ultima_posicion_lat=None,
                     ultima_posicion_lng=None

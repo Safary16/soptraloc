@@ -35,7 +35,9 @@ class ProgramacionListSerializer(serializers.ModelSerializer):
             'id', 'container_id', 'container_id_formatted', 'fecha_programada', 'cliente', 'cd_nombre', 'cd_lat', 'cd_lng',
             'driver_nombre', 'requiere_alerta', 'horas_hasta_programacion',
             'estado_container', 'fecha_asignacion', 'fecha_inicio_ruta',
-            'eta_minutos', 'distancia_km', 'patente_confirmada'
+            'eta_minutos', 'distancia_km', 'patente_confirmada',
+            'urgencia_servicio', 'requiere_seguimiento_especial',
+            'clasificacion_sistema', 'nivel_confianza', 'decision_operador'
         ]
 
 
@@ -44,7 +46,11 @@ class ProgramacionCreateSerializer(serializers.ModelSerializer):
     
     class Meta:
         model = Programacion
-        fields = ['container', 'cd', 'fecha_programada', 'cliente', 'direccion_entrega', 'observaciones']
+        fields = [
+            'container', 'cd', 'fecha_programada', 'cliente', 'direccion_entrega', 'observaciones',
+            'urgencia_servicio', 'requiere_seguimiento_especial',
+            'ventana_horaria_inicio', 'ventana_horaria_fin'
+        ]
 
 
 class RutaManualSerializer(serializers.Serializer):

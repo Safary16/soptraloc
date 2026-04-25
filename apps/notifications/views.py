@@ -3,6 +3,7 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticatedOrReadOnly
 from django.utils import timezone
+from datetime import timedelta
 
 from apps.notifications.models import Notification, NotificationPreference
 from apps.notifications.serializers import (
@@ -51,7 +52,7 @@ class NotificationViewSet(viewsets.ModelViewSet):
         """
         Lista notificaciones recientes (últimos 30 minutos)
         """
-        limite_tiempo = timezone.now() - timezone.timedelta(minutes=30)
+        limite_tiempo = timezone.now() - timedelta(minutes=30)
         notificaciones = self.queryset.filter(
             created_at__gte=limite_tiempo,
             estado__in=['pendiente', 'enviada']
