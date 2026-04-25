@@ -156,9 +156,30 @@ class ProgramacionViewSet(viewsets.ModelViewSet):
                 'mensaje': f'Conductor {resultado["driver"].nombre} asignado automáticamente',
                 'score': float(resultado['score']),
                 'desglose': {k: float(v) for k, v in resultado['desglose'].items()},
+                'clasificacion': resultado.get('classification'),
+                'confianza': resultado.get('confidence'),
+                'anomalias': resultado.get('anomalies', []),
+                'similitud_historica': resultado.get('similar_cases', []),
+                'razon': resultado.get('reason'),
+                'alternativas': resultado.get('alternatives', []),
                 'programacion': serializer.data
             })
         else:
+            if resultado.get('requires_operator'):
+                return Response({
+                    'success': False,
+                    'requires_operator': True,
+                    'mensaje': 'Se requiere revisión humana antes de despacho',
+                    'driver_recomendado': resultado['driver'].nombre if resultado.get('driver') else None,
+                    'score': float(resultado['score']) if resultado.get('score') else None,
+                    'desglose': {k: float(v) for k, v in (resultado.get('desglose') or {}).items()},
+                    'clasificacion': resultado.get('classification'),
+                    'confianza': resultado.get('confidence'),
+                    'anomalias': resultado.get('anomalies', []),
+                    'similitud_historica': resultado.get('similar_cases', []),
+                    'razon': resultado.get('reason'),
+                    'alternativas': resultado.get('alternatives', []),
+                }, status=status.HTTP_409_CONFLICT)
             return Response(
                 {'error': resultado['error']},
                 status=status.HTTP_400_BAD_REQUEST
@@ -179,6 +200,10 @@ class ProgramacionViewSet(viewsets.ModelViewSet):
             driver_data = DriverDisponibleSerializer(item['driver']).data
             driver_data['score'] = float(item['score'])
             driver_data['desglose'] = {k: float(v) for k, v in item['desglose'].items()}
+            driver_data['clasificacion'] = item.get('classification')
+            driver_data['confianza'] = item.get('confidence')
+            driver_data['anomalias'] = item.get('anomalies', [])
+            driver_data['razon'] = item.get('reason')
             resultados.append(driver_data)
         
         return Response({
@@ -384,7 +409,6 @@ class ProgramacionViewSet(viewsets.ModelViewSet):
         Crea programaciones y actualiza contenedores a 'programado'
         
         NOTA: Este endpoint permite AllowAny por compatibilidad con sistemas externos.
-        TODO: Cambiar a IsAuthenticated en producción para mayor seguridad.
         """
         if 'file' not in request.FILES:
             return Response(
@@ -549,6 +573,9 @@ class ProgramacionViewSet(viewsets.ModelViewSet):
         
         # Actualizar posición del conductor
         programacion.driver.actualizar_posicion(lat, lng)
+        programacion.posicion_actual_lat = lat
+        programacion.posicion_actual_lng = lng
+        programacion.ultima_actualizacion_tracking = timezone.now()
         
         # Guardar datos de inicio de ruta en la programación
         programacion.patente_confirmada = patente_ingresada
@@ -873,6 +900,20 @@ class ProgramacionViewSet(viewsets.ModelViewSet):
         # Verificar si debe crear alerta de arribo próximo
         if resultado['eta_minutos'] <= 15:
             NotificationService.crear_alerta_arribo_proximo(programacion)
+
+        programacion.eta_recalculado_min = resultado['eta_minutos']
+        if programacion.eta_minutos and (resultado['eta_minutos'] - programacion.eta_minutos) > int(request.query_params.get('eta_delay_alert_min', 15)):
+            desvio = {
+                'tipo': 'ETA_DELAY',
+                'mensaje': 'ETA recalculado supera lo prometido',
+                'valor_min': int(resultado['eta_minutos'] - programacion.eta_minutos),
+                'timestamp': timezone.now().isoformat(),
+            }
+            programacion.desviaciones_detectadas = (programacion.desviaciones_detectadas or []) + [desvio]
+        programacion.save(update_fields=[
+            'posicion_actual_lat', 'posicion_actual_lng', 'ultima_actualizacion_tracking',
+            'eta_recalculado_min', 'desviaciones_detectadas'
+        ])
         
         response_data = {
             'success': True,
@@ -890,6 +931,59 @@ class ProgramacionViewSet(viewsets.ModelViewSet):
             }
         
         return Response(response_data)
+
+    @action(detail=True, methods=['post'])
+    def confirmar_recomendacion(self, request, pk=None):
+        """Confirma recomendación del sistema y permite despacho según clasificación."""
+        programacion = self.get_object()
+        programacion.decision_operador = 'CONFIRMAR'
+        programacion.motivo_override = ''
+        programacion.save(update_fields=['decision_operador', 'motivo_override'])
+        return Response({'success': True, 'mensaje': 'Recomendación confirmada por operador.'})
+
+    @action(detail=True, methods=['post'])
+    def rechazar_recomendacion(self, request, pk=None):
+        """Rechaza recomendación con motivo obligatorio."""
+        programacion = self.get_object()
+        motivo = (request.data.get('motivo') or '').strip()
+        if not motivo:
+            return Response({'error': 'motivo es obligatorio para rechazar'}, status=status.HTTP_400_BAD_REQUEST)
+        programacion.decision_operador = 'RECHAZAR'
+        programacion.motivo_override = motivo
+        programacion.save(update_fields=['decision_operador', 'motivo_override'])
+        return Response({'success': True, 'mensaje': 'Recomendación rechazada y registrada.'})
+
+    @action(detail=True, methods=['post'])
+    def escalar_supervisor(self, request, pk=None):
+        """Escala la operación a supervisor."""
+        programacion = self.get_object()
+        motivo = (request.data.get('motivo') or 'Escalado manual por operador').strip()
+        programacion.decision_operador = 'ESCALAR'
+        programacion.motivo_override = motivo
+        programacion.save(update_fields=['decision_operador', 'motivo_override'])
+        return Response({'success': True, 'mensaje': 'Caso escalado a supervisor.'})
+
+    @action(detail=True, methods=['post'])
+    def reevaluar(self, request, pk=None):
+        """Permite modificar parámetros operativos y recalcular recomendación."""
+        programacion = self.get_object()
+        from dateutil import parser as date_parser
+        urgencia = request.data.get('urgencia_servicio')
+        seguimiento = request.data.get('requiere_seguimiento_especial')
+        if urgencia in ['NORMAL', 'URGENTE', 'CRITICO']:
+            programacion.urgencia_servicio = urgencia
+        if isinstance(seguimiento, bool):
+            programacion.requiere_seguimiento_especial = seguimiento
+        if request.data.get('ventana_horaria_inicio'):
+            programacion.ventana_horaria_inicio = date_parser.parse(request.data.get('ventana_horaria_inicio'))
+        if request.data.get('ventana_horaria_fin'):
+            programacion.ventana_horaria_fin = date_parser.parse(request.data.get('ventana_horaria_fin'))
+        programacion.decision_operador = 'MODIFICAR'
+        programacion.save()
+
+        usuario = request.user.username if request.user.is_authenticated else 'operador_manual'
+        resultado = AssignmentService.asignar_mejor_conductor(programacion, usuario)
+        return Response({'success': True, 'resultado': resultado})
     
     @action(detail=True, methods=['get'])
     def eta(self, request, pk=None):

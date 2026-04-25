@@ -44,7 +44,6 @@ class ContainerViewSet(viewsets.ModelViewSet):
         Crea contenedores con estado 'por_arribar'
         
         NOTA: Este endpoint permite AllowAny por compatibilidad con sistemas externos.
-        TODO: Cambiar a IsAuthenticated en producción para mayor seguridad.
         """
         if 'file' not in request.FILES:
             return Response(
@@ -111,7 +110,6 @@ class ContainerViewSet(viewsets.ModelViewSet):
         Actualiza contenedores a estado 'liberado' y asigna posición física
         
         NOTA: Este endpoint permite AllowAny por compatibilidad con sistemas externos.
-        TODO: Cambiar a IsAuthenticated en producción para mayor seguridad.
         """
         if 'file' not in request.FILES:
             return Response(
@@ -173,7 +171,6 @@ class ContainerViewSet(viewsets.ModelViewSet):
         Crea programaciones y actualiza contenedores a 'programado'
         
         NOTA: Este endpoint permite AllowAny por compatibilidad con sistemas externos.
-        TODO: Cambiar a IsAuthenticated en producción para mayor seguridad.
         """
         if 'file' not in request.FILES:
             return Response(
@@ -722,7 +719,6 @@ class ContainerViewSet(viewsets.ModelViewSet):
         
         # Registrar hora de descarga
         hora_fin = timezone.now()
-        container.hora_descarga = hora_fin
         usuario = request.user.username if request.user.is_authenticated else None
         container.cambiar_estado('descargado', usuario)
         
@@ -775,7 +771,7 @@ class ContainerViewSet(viewsets.ModelViewSet):
             'success': True,
             'mensaje': f'Descarga registrada para {container.container_id}{mensaje_adicional}',
             'container': serializer.data,
-            'hora_descarga': container.hora_descarga.isoformat() if container.hora_descarga else None
+            'hora_descarga': hora_fin.isoformat()
         })
     
     @action(detail=True, methods=['post'])
@@ -809,7 +805,7 @@ class ContainerViewSet(viewsets.ModelViewSet):
             )
         
         # Soltar contenedor
-        container.hora_descarga = timezone.now()
+        hora_descarga = timezone.now()
         usuario = request.user.username if request.user.is_authenticated else None
         container.cambiar_estado('descargado', usuario)
         
@@ -821,5 +817,6 @@ class ContainerViewSet(viewsets.ModelViewSet):
             'success': True,
             'mensaje': f'Contenedor soltado en {cd.nombre}. Conductor liberado inmediatamente.',
             'container': serializer.data,
-            'conductor_libre': True
+            'conductor_libre': True,
+            'hora_descarga': hora_descarga.isoformat()
         })

@@ -8,7 +8,7 @@ from rest_framework.permissions import IsAuthenticatedOrReadOnly
 from rest_framework.response import Response
 from django.utils import timezone
 from datetime import timedelta
-from django.db.models import Avg, Count, Q
+from django.db.models import Avg, Count, Q, F
 
 from apps.containers.models import Container
 from apps.drivers.models import Driver
@@ -28,7 +28,11 @@ def dashboard_stats(request):
         # Métricas principales
         'contenedores_total': Container.objects.count(),
         'conductores': Driver.objects.count(),
-        'conductores_disponibles': Driver.objects.filter(esta_disponible=True).count(),
+        'conductores_disponibles': Driver.objects.filter(
+            activo=True,
+            presente=True,
+            num_entregas_dia__lt=F('max_entregas_dia')
+        ).count(),
         
         # Métricas específicas requeridas
         'programados_hoy': Container.objects.filter(

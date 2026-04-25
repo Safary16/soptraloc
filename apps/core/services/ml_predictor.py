@@ -84,9 +84,12 @@ class MLTimePredictor:
         """
         try:
             # 1. Obtener tiempo base de Mapbox
+            origen_lat, origen_lng = float(origen_coords[0]), float(origen_coords[1])
+            destino_lat, destino_lng = float(destino_coords[0]), float(destino_coords[1])
+
             mapbox_resultado = MapboxService.calcular_ruta(
-                origen_coords[0], origen_coords[1],
-                destino_coords[0], destino_coords[1]
+                origen_lng, origen_lat,
+                destino_lng, destino_lat
             )
             
             if not mapbox_resultado or 'duration_minutes' not in mapbox_resultado:
@@ -177,8 +180,8 @@ class MLTimePredictor:
             # Asumimos origen = última posición del conductor o CCTI
             if driver.ultima_posicion_lat and driver.ultima_posicion_lng:
                 origen_coords = (driver.ultima_posicion_lat, driver.ultima_posicion_lng)
-            elif container.ccti_actual:
-                origen_coords = (container.ccti_actual.lat, container.ccti_actual.lng)
+            elif container.cd_entrega:
+                origen_coords = (container.cd_entrega.lat, container.cd_entrega.lng)
             else:
                 # Sin origen conocido, usar estimación conservadora
                 tiempo_viaje = 60  # 1 hora default

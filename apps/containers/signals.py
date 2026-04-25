@@ -89,7 +89,7 @@ def manejar_vacios_automaticamente(sender, instance, created, **kwargs):
     
     # Intentar recibir el vacío en el CD
     try:
-        instance.cd_entrega.recibir_vacio(instance)
+        instance.cd_entrega.recibir_vacio()
         
         # Crear evento de auditoría
         from apps.events.models import Event
@@ -108,7 +108,7 @@ def manejar_vacios_automaticamente(sender, instance, created, **kwargs):
         # Marcar como procesado para evitar loops
         instance._vacio_ya_procesado = True
         
-    except ValueError as e:
+    except Exception as e:
         # CD lleno, registrar en logs
         import logging
         logger = logging.getLogger(__name__)
@@ -152,7 +152,7 @@ def crear_programacion_automatica(sender, instance, created, **kwargs):
     if not cd:
         # Si no hay CD asignado, buscar el primer CD disponible tipo Cliente
         from apps.cds.models import CD
-        cd = CD.objects.filter(tipo='Cliente').first()
+        cd = CD.objects.filter(tipo='cliente').first()
         
         if not cd:
             # Si aún no hay CD, buscar cualquier CD

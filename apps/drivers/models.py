@@ -85,6 +85,18 @@ class Driver(models.Model):
     def esta_disponible(self):
         """Verifica si el conductor está disponible para asignaciones"""
         return self.activo and self.presente and self.num_entregas_dia < self.max_entregas_dia
+
+    @property
+    def ocupacion_porcentaje(self):
+        """Porcentaje de ocupación diaria del conductor (0-100)."""
+        if not self.max_entregas_dia or self.max_entregas_dia <= 0:
+            return Decimal('100.00')
+        porcentaje = (Decimal(str(self.num_entregas_dia)) / Decimal(str(self.max_entregas_dia))) * Decimal('100')
+        if porcentaje < 0:
+            return Decimal('0.00')
+        if porcentaje > 100:
+            return Decimal('100.00')
+        return porcentaje.quantize(Decimal('0.01'))
     
     def actualizar_posicion(self, lat, lng, accuracy=None):
         """Actualiza la posición GPS del conductor"""
