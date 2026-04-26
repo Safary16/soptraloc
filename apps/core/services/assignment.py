@@ -11,6 +11,7 @@ from apps.core.services.anomaly_detector import (
     AnomalyDetector, DelayRiskScorer, CapacityChecker, ETAEstimator, RouteFeasibilityValidator
 )
 from apps.core.services.contextual_reasoning import ContextualReasoningService
+from apps.core.services.openclaw import OpenClawService
 from apps.events.models import Event
 
 
@@ -112,6 +113,11 @@ class AssignmentService:
         final_score = round((deterministic * 0.8) + (similar_boost * 0.2), 3)
 
         anomalies = AnomalyDetector.detect(programacion, driver)
+        
+        # Notificar anomalías críticas vía OpenClaw
+        if anomalies:
+            OpenClawService.notify_anomaly(programacion, anomalies)
+
         classification = cls._classify(final_score, anomalies, confidence)
         reason = cls._build_reason(driver, final_score, classification, anomalies, confidence)
 
@@ -239,6 +245,10 @@ class AssignmentService:
 
         if mejor['classification'] != 'DESPACHO_DIRECTO':
             cls._persist_operation_log(programacion, mejor, decision_operador='PENDIENTE')
+            
+            # Solicitar revisión vía OpenClaw para casos amarillos o rojos
+            OpenClawService.request_review(programacion, mejor)
+            
             return {
                 'success': False,
                 'requires_operator': True,

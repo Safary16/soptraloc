@@ -5,11 +5,16 @@ Verifica si requieren alerta de 48h sin conductor
 """
 import pandas as pd
 from django.utils import timezone
+from django.db import transaction
 from datetime import datetime, timedelta
+import logging
 from apps.containers.models import Container
 from apps.programaciones.models import Programacion
 from apps.cds.models import CD
 from apps.events.models import Event
+
+
+logger = logging.getLogger(__name__)
 
 
 class ProgramacionImporter:
@@ -136,12 +141,18 @@ class ProgramacionImporter:
                 return cd
         
         # Buscar por código exacto
-        cd = CD.objects.filter(codigo__iexact=cd_str, activo=True).first()
+        cds_codigo = CD.objects.filter(codigo__iexact=cd_str, activo=True)
+        if cds_codigo.count() > 1:
+            raise ValueError(f"CD ambiguo por código: {cd_str}")
+        cd = cds_codigo.first()
         if cd:
             return cd
         
         # Buscar por nombre (contiene)
-        cd = CD.objects.filter(nombre__icontains=cd_str, activo=True).first()
+        cds_nombre = CD.objects.filter(nombre__icontains=cd_str, activo=True)
+        if cds_nombre.count() > 1:
+            raise ValueError(f"CD ambiguo por nombre: {cd_str}")
+        cd = cds_nombre.first()
         if cd:
             return cd
         
@@ -163,183 +174,192 @@ class ProgramacionImporter:
             df = df[df['container_id'].notna()]
             df = df[df['container_id'].astype(str).str.strip() != '']
             df = df.reset_index(drop=True)
+
+            logger.info(
+                'import_programacion_start',
+                extra={'archivo': self.archivo_path, 'filas': len(df), 'usuario': self.usuario}
+            )
             
             # Procesar cada fila
             for idx, row in df.iterrows():
                 try:
-                    # Normalizar container_id (eliminar espacios y guiones)
-                    container_id_raw = str(row['container_id']).strip().upper()
-                    container_id = Container.normalize_container_id(container_id_raw)
-                    
-                    if not container_id or container_id == 'NAN':
-                        self.resultados['errores'] += 1
-                        self.resultados['detalles'].append({
-                            'fila': idx + 2,
-                            'error': 'Container ID vacío'
-                        })
-                        continue
-                    
-                    # Buscar contenedor
-                    try:
-                        container = Container.objects.get(container_id=container_id)
-                    except Container.DoesNotExist:
-                        self.resultados['no_encontrados'] += 1
-                        self.resultados['detalles'].append({
-                            'fila': idx + 2,
-                            'container_id': container_id,
-                            'error': 'Contenedor no encontrado en el sistema'
-                        })
-                        continue
-                    
-                    # Parsear fecha y combinar con hora si está disponible
-                    fecha_programada = self.parsear_fecha(row['fecha_programada'])
-                    if not fecha_programada:
-                        self.resultados['errores'] += 1
-                        self.resultados['detalles'].append({
-                            'fila': idx + 2,
-                            'container_id': container_id,
-                            'error': 'Fecha programada inválida'
-                        })
-                        continue
-                    
-                    # Combinar con hora si está disponible
-                    if 'hora_programada' in df.columns and pd.notna(row.get('hora_programada')):
+                    with transaction.atomic():
+                        # Normalizar container_id (eliminar espacios y guiones)
+                        container_id_raw = str(row['container_id']).strip().upper()
+                        container_id = Container.normalize_container_id(container_id_raw)
+
+                        if not container_id or container_id == 'NAN':
+                            self.resultados['errores'] += 1
+                            self.resultados['detalles'].append({
+                                'fila': idx + 2,
+                                'error': 'Container ID vacío'
+                            })
+                            continue
+
+                        # Buscar contenedor
                         try:
-                            # Intentar parsear hora (puede venir como datetime, time, o string)
-                            hora_prog = row['hora_programada']
-                            if isinstance(hora_prog, str):
-                                # Si es string, intentar parsear
-                                hora_time = pd.to_datetime(hora_prog, format='%H:%M:%S').time()
-                            elif hasattr(hora_prog, 'time'):
-                                # Si es datetime, extraer time
-                                hora_time = hora_prog.time()
-                            else:
-                                # Si es time object, usar directamente
-                                hora_time = hora_prog
-                            
-                            # Combinar fecha con hora
-                            fecha_programada = timezone.make_aware(
-                                datetime.combine(fecha_programada.date(), hora_time)
-                            )
-                        except Exception:
-                            # Si falla, mantener fecha_programada original (sin hora)
-                            pass
-                    
-                    # Buscar CD
-                    cd = self.buscar_cd(row['cd'])
-                    if not cd:
-                        self.resultados['cd_no_encontrado'] += 1
-                        self.resultados['detalles'].append({
-                            'fila': idx + 2,
-                            'container_id': container_id,
-                            'error': f"CD no encontrado: {row['cd']}"
-                        })
-                        continue
-                    
-                    # Cliente (puede venir de Programacion pero actualizar Container)
-                    cliente = str(row.get('cliente', 'N/A')).strip() if pd.notna(row.get('cliente')) else 'N/A'
-                    
-                    # Actualizar datos del contenedor desde programación
-                    if 'contenido' in df.columns and pd.notna(row.get('contenido')):
-                        container.contenido = str(row['contenido']).strip()
-                    
-                    if 'referencia' in df.columns and pd.notna(row.get('referencia')):
-                        container.referencia = str(row['referencia']).strip()
-                    
-                    # Actualizar nave si viene en el Excel de programación
-                    if 'nave' in df.columns and pd.notna(row.get('nave')):
-                        nave_prog = str(row['nave']).strip()
-                        if nave_prog:
-                            container.nave = nave_prog
-                    
-                    # Combinar MED y TIPO para obtener tipo completo (ej: 40H = 40HC)
-                    if 'medida' in df.columns and 'tipo_contenedor' in df.columns:
-                        medida = str(row.get('medida', '')).strip()
-                        tipo = str(row.get('tipo_contenedor', '')).strip().upper()
-                        if medida and tipo:
-                            tipo_completo = f"{medida}{tipo}"
-                            if 'H' in tipo and medida == '40':
-                                container.tipo = '40HC'
-                            elif medida == '20':
-                                container.tipo = '20'
-                            elif medida == '45':
-                                container.tipo = '45'
-                    
-                    container.save()
-                    
-                    # Crear o actualizar programación
-                    programacion, created = Programacion.objects.update_or_create(
-                        container=container,
-                        defaults={
-                            'cd': cd,
-                            'fecha_programada': fecha_programada,
-                            'cliente': cliente,
-                            'direccion_entrega': str(row.get('direccion_entrega', '')).strip() if pd.notna(row.get('direccion_entrega')) else '',
-                            'observaciones': str(row.get('observaciones', '')).strip() if pd.notna(row.get('observaciones')) else '',
-                        }
-                    )
-                    
-                    # Actualizar estado del contenedor
-                    if container.estado in ['por_arribar', 'liberado', 'secuenciado']:
-                        container.cambiar_estado('programado', self.usuario)
-                    
-                    # Actualizar fecha_demurrage si está disponible en el Excel
-                    if 'fecha_demurrage' in df.columns and pd.notna(row.get('fecha_demurrage')):
-                        try:
+                            container = Container.objects.get(container_id=container_id)
+                        except Container.DoesNotExist:
+                            self.resultados['no_encontrados'] += 1
+                            self.resultados['detalles'].append({
+                                'fila': idx + 2,
+                                'container_id': container_id,
+                                'error': 'Contenedor no encontrado en el sistema'
+                            })
+                            continue
+
+                        # Parsear fecha y combinar con hora si está disponible
+                        fecha_programada = self.parsear_fecha(row['fecha_programada'])
+                        if not fecha_programada:
+                            self.resultados['errores'] += 1
+                            self.resultados['detalles'].append({
+                                'fila': idx + 2,
+                                'container_id': container_id,
+                                'error': 'Fecha programada inválida'
+                            })
+                            continue
+
+                        # Combinar con hora si está disponible
+                        if 'hora_programada' in df.columns and pd.notna(row.get('hora_programada')):
+                            try:
+                                # Intentar parsear hora (puede venir como datetime, time, o string)
+                                hora_prog = row['hora_programada']
+                                if isinstance(hora_prog, str):
+                                    # Si es string, intentar parsear
+                                    hora_time = pd.to_datetime(hora_prog, format='%H:%M:%S').time()
+                                elif hasattr(hora_prog, 'time'):
+                                    # Si es datetime, extraer time
+                                    hora_time = hora_prog.time()
+                                else:
+                                    # Si es time object, usar directamente
+                                    hora_time = hora_prog
+
+                                # Combinar fecha con hora
+                                fecha_programada = timezone.make_aware(
+                                    datetime.combine(fecha_programada.date(), hora_time)
+                                )
+                            except Exception as hora_error:
+                                raise ValueError(
+                                    f"Hora programada inválida '{row.get('hora_programada')}': {str(hora_error)}"
+                                )
+
+                        # Buscar CD
+                        cd = self.buscar_cd(row['cd'])
+                        if not cd:
+                            self.resultados['cd_no_encontrado'] += 1
+                            self.resultados['detalles'].append({
+                                'fila': idx + 2,
+                                'container_id': container_id,
+                                'error': f"CD no encontrado: {row['cd']}"
+                            })
+                            continue
+
+                        # Cliente (puede venir de Programacion pero actualizar Container)
+                        cliente = str(row.get('cliente', 'N/A')).strip() if pd.notna(row.get('cliente')) else 'N/A'
+
+                        # Actualizar datos del contenedor desde programación
+                        if 'contenido' in df.columns and pd.notna(row.get('contenido')):
+                            container.contenido = str(row['contenido']).strip()
+
+                        if 'referencia' in df.columns and pd.notna(row.get('referencia')):
+                            container.referencia = str(row['referencia']).strip()
+
+                        # Actualizar nave si viene en el Excel de programación
+                        if 'nave' in df.columns and pd.notna(row.get('nave')):
+                            nave_prog = str(row['nave']).strip()
+                            if nave_prog:
+                                container.nave = nave_prog
+
+                        # Combinar MED y TIPO para obtener tipo completo (ej: 40H = 40HC)
+                        if 'medida' in df.columns and 'tipo_contenedor' in df.columns:
+                            medida = str(row.get('medida', '')).strip()
+                            tipo = str(row.get('tipo_contenedor', '')).strip().upper()
+                            if medida and tipo:
+                                if 'H' in tipo and medida == '40':
+                                    container.tipo = '40HC'
+                                elif medida == '20':
+                                    container.tipo = '20'
+                                elif medida == '45':
+                                    container.tipo = '45'
+
+                        container.save()
+
+                        # Crear o actualizar programación
+                        programacion, created = Programacion.objects.update_or_create(
+                            container=container,
+                            defaults={
+                                'cd': cd,
+                                'fecha_programada': fecha_programada,
+                                'cliente': cliente,
+                                'direccion_entrega': str(row.get('direccion_entrega', '')).strip() if pd.notna(row.get('direccion_entrega')) else '',
+                                'observaciones': str(row.get('observaciones', '')).strip() if pd.notna(row.get('observaciones')) else '',
+                            }
+                        )
+
+                        # Actualizar estado del contenedor
+                        if container.estado in ['por_arribar', 'liberado', 'secuenciado']:
+                            container.cambiar_estado('programado', self.usuario)
+
+                        # Actualizar fecha_demurrage si está disponible en el Excel
+                        if 'fecha_demurrage' in df.columns and pd.notna(row.get('fecha_demurrage')):
                             fecha_demurrage = self.parsear_fecha(row['fecha_demurrage'])
                             if fecha_demurrage:
                                 container.fecha_demurrage = fecha_demurrage
-                                container.save()
-                        except Exception:
-                            pass  # Si falla el parseo, continuar sin fecha_demurrage
-                    
-                    # Alternativamente, calcular desde WK DEMURRAGE (días)
-                    elif 'dias_demurrage' in df.columns and pd.notna(row.get('dias_demurrage')):
-                        try:
+                                container.save(update_fields=['fecha_demurrage', 'updated_at'])
+
+                        # Alternativamente, calcular desde WK DEMURRAGE (días)
+                        elif 'dias_demurrage' in df.columns and pd.notna(row.get('dias_demurrage')):
                             dias = int(str(row['dias_demurrage']).replace(' días', '').replace('días', '').strip())
                             if container.fecha_liberacion:
                                 container.fecha_demurrage = container.fecha_liberacion + timedelta(days=dias)
-                                container.save()
-                        except (ValueError, TypeError):
-                            pass  # Si falla la conversión, continuar sin fecha_demurrage
-                    
-                    # Verificar si requiere alerta 48h
-                    if programacion.verificar_alerta():
-                        self.resultados['alertas_generadas'] += 1
-                        Event.objects.create(
-                            container=container,
-                            event_type='alerta_48h',
-                            detalles={
-                                'fecha_programada': fecha_programada.isoformat(),
-                                'horas_restantes': programacion.horas_hasta_programacion,
-                            },
-                            usuario=self.usuario
-                        )
-                    
-                    # Registrar evento de importación
-                    if created:
-                        Event.objects.create(
-                            container=container,
-                            event_type='import_programacion',
-                            detalles={
-                                'fecha_programada': fecha_programada.isoformat(),
-                                'cliente': cliente,
-                                'cd': cd.nombre,
-                            },
-                            usuario=self.usuario
-                        )
-                    
-                    self.resultados['programados'] += 1
-                    self.resultados['detalles'].append({
-                        'fila': idx + 2,
-                        'container_id': container_id,
-                        'fecha': fecha_programada.strftime('%Y-%m-%d %H:%M'),
-                        'cd': cd.nombre,
-                        'alerta': programacion.requiere_alerta,
-                        'accion': 'creado' if created else 'actualizado'
-                    })
+                                container.save(update_fields=['fecha_demurrage', 'updated_at'])
+
+                        # Verificar si requiere alerta 48h
+                        if programacion.verificar_alerta():
+                            self.resultados['alertas_generadas'] += 1
+                            Event.objects.create(
+                                container=container,
+                                event_type='alerta_48h',
+                                detalles={
+                                    'fecha_programada': fecha_programada.isoformat(),
+                                    'horas_restantes': programacion.horas_hasta_programacion,
+                                },
+                                usuario=self.usuario
+                            )
+
+                        # Registrar evento de importación
+                        if created:
+                            Event.objects.create(
+                                container=container,
+                                event_type='import_programacion',
+                                detalles={
+                                    'fecha_programada': fecha_programada.isoformat(),
+                                    'cliente': cliente,
+                                    'cd': cd.nombre,
+                                },
+                                usuario=self.usuario
+                            )
+
+                        self.resultados['programados'] += 1
+                        self.resultados['detalles'].append({
+                            'fila': idx + 2,
+                            'container_id': container_id,
+                            'fecha': fecha_programada.strftime('%Y-%m-%d %H:%M'),
+                            'cd': cd.nombre,
+                            'alerta': programacion.requiere_alerta,
+                            'accion': 'creado' if created else 'actualizado'
+                        })
                 
                 except Exception as e:
+                    logger.warning(
+                        'import_programacion_row_error',
+                        extra={
+                            'fila': idx + 2,
+                            'container_id': container_id if 'container_id' in locals() else None,
+                            'error': str(e),
+                            'usuario': self.usuario,
+                        }
+                    )
                     self.resultados['errores'] += 1
                     self.resultados['detalles'].append({
                         'fila': idx + 2,
@@ -347,7 +367,20 @@ class ProgramacionImporter:
                         'error': str(e)
                     })
             
+            logger.info(
+                'import_programacion_finished',
+                extra={
+                    'programados': self.resultados['programados'],
+                    'no_encontrados': self.resultados['no_encontrados'],
+                    'cd_no_encontrado': self.resultados['cd_no_encontrado'],
+                    'errores': self.resultados['errores'],
+                    'alertas_generadas': self.resultados['alertas_generadas'],
+                    'usuario': self.usuario,
+                }
+            )
+
             return self.resultados
         
         except Exception as e:
-            raise Exception(f"Error al procesar archivo: {str(e)}")
+            logger.exception('import_programacion_failed', extra={'usuario': self.usuario})
+            raise Exception(f"Error al procesar archivo de programación: {str(e)}")

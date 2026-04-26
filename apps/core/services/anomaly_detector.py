@@ -6,6 +6,7 @@ from django.utils import timezone
 
 from apps.programaciones.models import Programacion
 from apps.drivers.models import Driver
+from apps.core.services.fleet import FleetStatusService
 
 
 SEVERITY_ORDER = {"P0": 0, "P1": 1, "P2": 2, "P3": 3}
@@ -59,14 +60,41 @@ class CapacityChecker:
 class ETAEstimator:
     @classmethod
     def estimate_minutes(cls, programacion: Programacion, driver: Driver | None) -> int:
-        base = 60
-        if programacion.cd and getattr(programacion.cd, "tiempo_promedio_descarga_min", None):
-            base += int(programacion.cd.tiempo_promedio_descarga_min)
+        from apps.core.services.ml_predictor import MLTimePredictor
+        
+        # 1. Tiempo de viaje (ML + Mapbox)
+        origen_coords = None
         if driver and driver.ultima_posicion_lat and driver.ultima_posicion_lng:
-            base -= 10
-        if programacion.urgencia_servicio == 'CRITICO':
-            base += 10
-        return max(20, base)
+            origen_coords = (driver.ultima_posicion_lat, driver.ultima_posicion_lng)
+        elif programacion.container.posicion_fisica:
+            # Fallback a coordenadas de puertos conocidos si no hay GPS del conductor
+            puertos = {
+                'ZEAL': (-33.05, -71.63),
+                'TPS': (-33.03, -71.63),
+                'STI': (-33.58, -71.61),
+                'CLEP': (-33.60, -71.58),
+            }
+            origen_coords = puertos.get(programacion.container.posicion_fisica)
+
+        if origen_coords and programacion.cd:
+            destino_coords = (programacion.cd.lat, programacion.cd.lng)
+            prediccion = MLTimePredictor.predecir_tiempo_viaje(
+                origen_coords=origen_coords,
+                destino_coords=destino_coords,
+                hora_salida=programacion.fecha_programada,
+                conductor=driver
+            )
+            tiempo_viaje = prediccion['tiempo_estimado_min']
+        else:
+            tiempo_viaje = 60 # Default si no hay coordenadas
+
+        # 2. Tiempo de operación en CD
+        tiempo_op = MLTimePredictor.predecir_tiempo_operacion(
+            cd=programacion.cd,
+            conductor=driver
+        )
+
+        return int(tiempo_viaje + tiempo_op)
 
 
 class RouteFeasibilityValidator:
@@ -196,22 +224,19 @@ class AnomalyDetector:
                 "Escalar a supervisor y activar protocolo de contingencia."
             ))
 
-        active = Programacion.objects.filter(container__estado__in=['asignado', 'en_ruta']).count()
-        available = Driver.objects.filter(activo=True, presente=True).count()
-        if available > 0 and (active / available) > 0.9:
+        if FleetStatusService.is_fleet_at_limit():
             anomalies.append(OperationalAnomaly(
                 "ANOM_OPS_015", "P2",
                 "Flota al límite de capacidad operativa.",
                 "Priorizar servicios críticos y planificar refuerzo."
             ))
 
-        if driver and driver.max_entregas_dia - driver.num_entregas_dia <= 0:
+        if driver and driver.max_entregas_dia is not None and driver.num_entregas_dia is not None and driver.max_entregas_dia - driver.num_entregas_dia <= 0:
             anomalies.append(OperationalAnomaly(
                 "ANOM_OPS_004", "P1",
-                "Vehículo/conductor con ventana de mantención operacional próxima o saturación diaria.",
-                "Asignar recurso alternativo."
+                "Vehículo/conductor con saturación diaria o posible mantención próxima.",
+                "Asignar recurso alternativo o evaluar planificación."
             ))
-
         if bool(getattr(settings, "ENABLE_WEATHER_API", False)) and bool(getattr(programacion, "condicion_ruta_adversa", False)):
             anomalies.append(OperationalAnomaly(
                 "ANOM_OPS_012", "P2",

@@ -7,9 +7,14 @@ Asigna posición física según reglas:
 """
 import pandas as pd
 from django.utils import timezone
+from django.db import transaction
 from datetime import datetime
+import logging
 from apps.containers.models import Container
 from apps.events.models import Event
+
+
+logger = logging.getLogger(__name__)
 
 
 class LiberacionImporter:
@@ -118,116 +123,124 @@ class LiberacionImporter:
             df = df[df['container_id'].notna()]
             df = df[df['container_id'].astype(str).str.strip() != '']
             df = df.reset_index(drop=True)
+
+            logger.info(
+                'import_liberacion_start',
+                extra={'archivo': self.archivo_path, 'filas': len(df), 'usuario': self.usuario}
+            )
             
             # Procesar cada fila
             for idx, row in df.iterrows():
                 try:
-                    # Normalizar container_id (eliminar espacios y guiones)
-                    container_id_raw = str(row['container_id']).strip().upper()
-                    container_id = Container.normalize_container_id(container_id_raw)
-                    
-                    if not container_id or container_id == 'NAN':
-                        self.resultados['errores'] += 1
-                        self.resultados['detalles'].append({
-                            'fila': idx + 2,
-                            'error': 'Container ID vacío'
-                        })
-                        continue
-                    
-                    # Buscar contenedor
-                    try:
-                        container = Container.objects.get(container_id=container_id)
-                    except Container.DoesNotExist:
-                        self.resultados['no_encontrados'] += 1
-                        self.resultados['detalles'].append({
-                            'fila': idx + 2,
-                            'container_id': container_id,
-                            'error': 'Contenedor no encontrado en el sistema'
-                        })
-                        continue
-                    
-                    # Mapear posición física
-                    posicion_original = row.get('posicion_fisica')
-                    posicion_mapeada = self.mapear_posicion(posicion_original)
-                    
-                    # Parsear fecha y hora de liberación desde el Excel
-                    fecha_liberacion = None
-                    if 'fecha_liberacion' in df.columns and pd.notna(row.get('fecha_liberacion')):
+                    with transaction.atomic():
+                        # Normalizar container_id (eliminar espacios y guiones)
+                        container_id_raw = str(row['container_id']).strip().upper()
+                        container_id = Container.normalize_container_id(container_id_raw)
+
+                        if not container_id or container_id == 'NAN':
+                            self.resultados['errores'] += 1
+                            self.resultados['detalles'].append({
+                                'fila': idx + 2,
+                                'error': 'Container ID vacío'
+                            })
+                            continue
+
+                        # Buscar contenedor
                         try:
-                            fecha_lib = pd.to_datetime(row['fecha_liberacion'])
-                            # Combinar con hora si está disponible
-                            if 'hora_liberacion' in df.columns and pd.notna(row.get('hora_liberacion')):
-                                try:
-                                    # Intentar parsear hora (puede venir como datetime o string)
-                                    if isinstance(row['hora_liberacion'], str):
-                                        hora_lib = pd.to_datetime(row['hora_liberacion'], format='%H:%M:%S').time()
-                                    else:
-                                        hora_lib = pd.to_datetime(row['hora_liberacion']).time()
-                                    fecha_liberacion = timezone.make_aware(datetime.combine(fecha_lib.date(), hora_lib))
-                                except Exception:
-                                    # Si falla el parseo de hora, usar solo fecha
+                            container = Container.objects.get(container_id=container_id)
+                        except Container.DoesNotExist:
+                            self.resultados['no_encontrados'] += 1
+                            self.resultados['detalles'].append({
+                                'fila': idx + 2,
+                                'container_id': container_id,
+                                'error': 'Contenedor no encontrado en el sistema'
+                            })
+                            continue
+
+                        # Mapear posición física
+                        posicion_original = row.get('posicion_fisica')
+                        posicion_mapeada = self.mapear_posicion(posicion_original)
+                        if not posicion_mapeada:
+                            raise ValueError('Posición física vacía o inválida')
+
+                        # Parsear fecha y hora de liberación desde el Excel
+                        fecha_liberacion = None
+                        if 'fecha_liberacion' in df.columns and pd.notna(row.get('fecha_liberacion')):
+                            try:
+                                fecha_lib = pd.to_datetime(row['fecha_liberacion'])
+                                # Combinar con hora si está disponible
+                                if 'hora_liberacion' in df.columns and pd.notna(row.get('hora_liberacion')):
+                                    try:
+                                        # Intentar parsear hora (puede venir como datetime o string)
+                                        if isinstance(row['hora_liberacion'], str):
+                                            hora_lib = pd.to_datetime(row['hora_liberacion'], format='%H:%M:%S').time()
+                                        else:
+                                            hora_lib = pd.to_datetime(row['hora_liberacion']).time()
+                                        fecha_liberacion = timezone.make_aware(datetime.combine(fecha_lib.date(), hora_lib))
+                                    except Exception:
+                                        # Si falla el parseo de hora, usar solo fecha
+                                        fecha_liberacion = timezone.make_aware(fecha_lib) if timezone.is_naive(fecha_lib) else fecha_lib
+                                else:
                                     fecha_liberacion = timezone.make_aware(fecha_lib) if timezone.is_naive(fecha_lib) else fecha_lib
-                            else:
-                                fecha_liberacion = timezone.make_aware(fecha_lib) if timezone.is_naive(fecha_lib) else fecha_lib
-                        except Exception:
-                            # Si falla el parseo, no tiene fecha de liberación válida
-                            pass
-                    
-                    # Si no hay fecha de liberación en el Excel, usar la fecha actual
-                    if not fecha_liberacion:
-                        fecha_liberacion = timezone.now()
-                    
-                    # Determinar el estado basado en la fecha de liberación
-                    # Solo marcar como 'liberado' si la fecha es hoy o anterior
-                    # Si la fecha es futura, mantener en 'por_arribar' o estado actual
-                    now = timezone.now()
-                    if fecha_liberacion <= now:
-                        nuevo_estado = 'liberado'
-                    else:
-                        # Fecha futura: mantener en por_arribar
-                        nuevo_estado = 'por_arribar'
-                    
-                    # Actualizar contenedor
-                    container.estado = nuevo_estado
-                    container.posicion_fisica = posicion_mapeada
-                    container.fecha_liberacion = fecha_liberacion
-                    
-                    # Comuna si viene en el Excel
-                    if 'comuna' in df.columns and pd.notna(row.get('comuna')):
-                        container.comuna = str(row['comuna']).strip()
-                    
-                    # Depósito de devolución si viene en el Excel
-                    if 'deposito_devolucion' in df.columns and pd.notna(row.get('deposito_devolucion')):
-                        container.deposito_devolucion = str(row['deposito_devolucion']).strip()
-                    
-                    # Actualizar peso_carga si viene en el Excel (puede ser más preciso que el inicial)
-                    if 'peso' in df.columns and pd.notna(row.get('peso')):
-                        try:
-                            container.peso_carga = float(row['peso'])
-                        except (ValueError, TypeError):
-                            pass
-                    
-                    # Cliente y referencia
-                    if 'cliente' in df.columns and pd.notna(row.get('cliente')):
-                        container.cliente = str(row['cliente']).strip()
-                    
-                    if 'referencia' in df.columns and pd.notna(row.get('referencia')):
-                        container.referencia = str(row['referencia']).strip()
-                    
-                    # Fecha salida puede usarse para calcular fecha_demurrage
-                    # Nota: La fecha_demurrage real vendrá del Excel de programación
-                    # Aquí solo la guardamos si está disponible en este Excel
-                    if 'fecha_salida' in df.columns and pd.notna(row.get('fecha_salida')):
-                        try:
-                            if isinstance(row['fecha_salida'], str):
-                                fecha_salida = pd.to_datetime(row['fecha_salida'])
-                            else:
-                                fecha_salida = row['fecha_salida']
-                            # Por ahora no calculamos demurrage aquí, esperamos el Excel de programación
-                        except Exception:
-                            pass
-                    
-                    container.save()
+                            except Exception as fecha_error:
+                                raise ValueError(
+                                    f"Fecha de liberación inválida '{row.get('fecha_liberacion')}': {str(fecha_error)}"
+                                )
+
+                        # Si no hay fecha de liberación en el Excel, usar la fecha actual
+                        if not fecha_liberacion:
+                            fecha_liberacion = timezone.now()
+
+                        # Determinar el estado basado en la fecha de liberación
+                        now = timezone.now()
+                        if fecha_liberacion <= now:
+                            nuevo_estado = 'liberado'
+                        else:
+                            nuevo_estado = 'por_arribar'
+
+                        if container.estado != nuevo_estado:
+                            container.cambiar_estado(nuevo_estado, self.usuario)
+
+                        container.posicion_fisica = posicion_mapeada
+                        # Respetar fecha de Excel por trazabilidad operativa
+                        container.fecha_liberacion = fecha_liberacion
+
+                        # Comuna si viene en el Excel
+                        if 'comuna' in df.columns and pd.notna(row.get('comuna')):
+                            container.comuna = str(row['comuna']).strip()
+
+                        # Depósito de devolución si viene en el Excel
+                        if 'deposito_devolucion' in df.columns and pd.notna(row.get('deposito_devolucion')):
+                            container.deposito_devolucion = str(row['deposito_devolucion']).strip()
+
+                        # Actualizar peso_carga si viene en el Excel (puede ser más preciso que el inicial)
+                        if 'peso' in df.columns and pd.notna(row.get('peso')):
+                            peso = float(row['peso'])
+                            if peso <= 0:
+                                raise ValueError('Peso inválido: debe ser mayor a 0')
+                            container.peso_carga = peso
+
+                        # Cliente y referencia
+                        if 'cliente' in df.columns and pd.notna(row.get('cliente')):
+                            container.cliente = str(row['cliente']).strip()
+
+                        if 'referencia' in df.columns and pd.notna(row.get('referencia')):
+                            container.referencia = str(row['referencia']).strip()
+
+                        # Fecha salida puede usarse para calcular fecha_demurrage
+                        # Nota: La fecha_demurrage real vendrá del Excel de programación
+                        if 'fecha_salida' in df.columns and pd.notna(row.get('fecha_salida')):
+                            try:
+                                if isinstance(row['fecha_salida'], str):
+                                    pd.to_datetime(row['fecha_salida'])
+                                else:
+                                    pd.to_datetime(row['fecha_salida'])
+                            except Exception as salida_error:
+                                raise ValueError(
+                                    f"Fecha salida inválida '{row.get('fecha_salida')}': {str(salida_error)}"
+                                )
+
+                        container.save()
                     
                     # Registrar evento
                     Event.objects.create(
@@ -259,6 +272,15 @@ class LiberacionImporter:
                     })
                 
                 except Exception as e:
+                    logger.warning(
+                        'import_liberacion_row_error',
+                        extra={
+                            'fila': idx + 2,
+                            'container_id': container_id if 'container_id' in locals() else None,
+                            'error': str(e),
+                            'usuario': self.usuario,
+                        }
+                    )
                     self.resultados['errores'] += 1
                     self.resultados['detalles'].append({
                         'fila': idx + 2,
@@ -266,7 +288,19 @@ class LiberacionImporter:
                         'error': str(e)
                     })
             
+            logger.info(
+                'import_liberacion_finished',
+                extra={
+                    'liberados': self.resultados['liberados'],
+                    'por_liberar': self.resultados['por_liberar'],
+                    'no_encontrados': self.resultados['no_encontrados'],
+                    'errores': self.resultados['errores'],
+                    'usuario': self.usuario,
+                }
+            )
+
             return self.resultados
         
         except Exception as e:
-            raise Exception(f"Error al procesar archivo: {str(e)}")
+            logger.exception('import_liberacion_failed', extra={'usuario': self.usuario})
+            raise Exception(f"Error al procesar archivo de liberación: {str(e)}")

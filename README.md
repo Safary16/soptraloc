@@ -4,11 +4,8 @@
 [![Django 5.1.4](https://img.shields.io/badge/Django-5.1.4-green.svg)](https://www.djangoproject.com/)
 [![Python 3.12+](https://img.shields.io/badge/Python-3.12+-blue.svg)](https://www.python.org/)
 [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-Ready-blue.svg)](https://www.postgresql.org/)
-[![Stable Checkpoint](https://img.shields.io/badge/Checkpoint-v1.0.0--stable-brightgreen.svg)](CHECKPOINT_ESTABLE.md)
 
 Sistema profesional de gestión de contenedores para CCTi con **integración Mapbox**, **asignación inteligente de conductores** y **seguimiento en tiempo real**.
-
-> 🔖 **Checkpoint Estable**: Este proyecto tiene un punto de referencia estable marcado como `v1.0.0-stable`. [Ver detalles del checkpoint →](CHECKPOINT_ESTABLE.md)
 
 ---
 
@@ -17,7 +14,7 @@ Sistema profesional de gestión de contenedores para CCTi con **integración Map
 ### 📦 Gestión Completa de Contenedores
 
 - **11 Estados del ciclo de vida**:
-  - `por_arribar` → `liberado` → `secuenciado` → `programado` → `asignado` → `en_ruta` → `entregado` → `descargado` → `en_almacen_ccti` → `vacio_en_ruta` → `devuelto`
+  - `por_arribar` → `liberado` → `secuenciado` → `programado` → `asignado` → `en_ruta` → `entregado` → `descargado` → `vacio` → `vacio_en_ruta` → `devuelto`
   
 - **Importación Excel** (3 tipos):
   - 📥 **Embarque**: Crea contenedores con estado `por_arribar`
@@ -562,34 +559,6 @@ Crea:
 - Documentación completa
 
 **¡Listo para deploy en Render!** 🚀
-
----
-
-## 🔖 Checkpoint Estable
-
-Este proyecto tiene un **punto de referencia estable** que puedes usar como base:
-
-- **Tag Git**: `v1.0.0-stable`
-- **Estado**: ✅ Sistema 100% funcional
-- **Fecha**: 13 de Octubre, 2025
-
-### Cómo usar el checkpoint:
-
-```bash
-# Ver el checkpoint
-git show v1.0.0-stable
-
-# Volver al checkpoint (crear nuevo branch)
-git checkout -b restaurar v1.0.0-stable
-
-# Comparar con el checkpoint
-git diff v1.0.0-stable
-```
-
-### Documentación del checkpoint:
-- 📄 [**CHECKPOINT_ESTABLE.md**](CHECKPOINT_ESTABLE.md) - Documentación completa del checkpoint
-- 📄 [**COMO_USAR_CHECKPOINT.md**](COMO_USAR_CHECKPOINT.md) - Guía rápida de uso
-- 📄 [**CHECKPOINT_VISUAL.md**](CHECKPOINT_VISUAL.md) - Guía visual con diagramas
 
 ---
 

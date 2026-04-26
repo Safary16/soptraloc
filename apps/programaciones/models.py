@@ -150,18 +150,38 @@ class Programacion(models.Model):
     
     def asignar_conductor(self, driver, usuario=None):
         """Asigna un conductor a la programación"""
+        from apps.events.models import Event
+
+        if self.driver:
+            logger.warning(f"La programación {self.id} ya tiene asignado al conductor {self.driver.nombre}. No se reasignará a {driver.nombre}.")
+            return
+
         self.driver = driver
         self.fecha_asignacion = timezone.now()
-        self.save()
         
         # Actualizar estado del contenedor si existe
         if self.container:
-            self.container.estado = 'asignado'
-            self.container.save()
+            self.container.cambiar_estado('asignado', usuario)
         
         # Incrementar contador de entregas del conductor
-        driver.num_entregas_dia += 1
-        driver.save(update_fields=['num_entregas_dia'])
+        if driver.num_entregas_dia is not None:
+            driver.num_entregas_dia += 1
+            driver.save(update_fields=['num_entregas_dia'])
+        
+        # Guardar la programación después de todas las modificaciones
+        self.save()
+
+        # Crear evento de asignación
+        Event.objects.create(
+            container=self.container,
+            event_type='asignacion_conductor',
+            detalles={
+                'driver_id': driver.id,
+                'driver_nombre': driver.nombre,
+                'asignado_por': usuario or 'system',
+            },
+            usuario=usuario or 'system'
+        )
         
         # Crear notificación para el conductor
         try:
@@ -171,7 +191,7 @@ class Programacion(models.Model):
             # Log error pero no fallar la asignación
             import logging
             logger = logging.getLogger(__name__)
-            logger.error(f"Error creando notificación de asignación: {str(e)}")
+            logger.error(f"Error creando notificación de asignación para la programación {self.id}: {str(e)}", exc_info=True)
     
     @property
     def horas_hasta_programacion(self):

@@ -4,8 +4,13 @@ Crea contenedores con estado 'por_arribar'
 """
 import pandas as pd
 from django.utils import timezone
+from django.db import transaction
+import logging
 from apps.containers.models import Container
 from apps.events.models import Event
+
+
+logger = logging.getLogger(__name__)
 
 
 class EmbarqueImporter:
@@ -90,6 +95,17 @@ class EmbarqueImporter:
             return '40HC'
         else:
             return '40'
+
+    def validar_peso(self, peso):
+        """Valida peso de carga y retorna float"""
+        if pd.isna(peso):
+            return None
+
+        peso_val = float(peso)
+        if peso_val <= 0:
+            raise ValueError('Peso inválido: debe ser mayor a 0')
+
+        return peso_val
     
     def procesar(self):
         """Procesa el archivo Excel y crea/actualiza contenedores"""
@@ -108,82 +124,108 @@ class EmbarqueImporter:
             df = df[df['container_id'].astype(str).str.strip() != '']
             df = df.reset_index(drop=True)
             
+            logger.info(
+                'import_embarque_start',
+                extra={'archivo': self.archivo_path, 'filas': len(df), 'usuario': self.usuario}
+            )
+
             # Procesar cada fila
             for idx, row in df.iterrows():
                 try:
-                    # Normalizar container_id (eliminar espacios y guiones)
-                    container_id_raw = str(row['container_id']).strip().upper()
-                    container_id = Container.normalize_container_id(container_id_raw)
-                    
-                    if not container_id or container_id == 'NAN':
-                        self.resultados['errores'] += 1
+                    with transaction.atomic():
+                        # Normalizar container_id (eliminar espacios y guiones)
+                        container_id_raw = str(row['container_id']).strip().upper()
+                        container_id = Container.normalize_container_id(container_id_raw)
+
+                        if not container_id or container_id == 'NAN':
+                            self.resultados['errores'] += 1
+                            self.resultados['detalles'].append({
+                                'fila': idx + 2,
+                                'error': 'Container ID vacío'
+                            })
+                            continue
+
+                        nave = str(row['nave']).strip() if pd.notna(row['nave']) else ''
+                        if not nave:
+                            raise ValueError('Nave vacía o inválida')
+
+                        # Datos del contenedor
+                        datos = {
+                            'tipo': self.validar_tipo(row.get('tipo')),
+                            'nave': nave,
+                            'viaje': str(row.get('viaje')).strip() if pd.notna(row.get('viaje')) else None,
+                            'booking': str(row.get('booking')).strip() if pd.notna(row.get('booking')) else None,
+                            'peso_carga': self.validar_peso(row.get('peso')),
+                            'vendor': str(row.get('vendor')).strip() if pd.notna(row.get('vendor')) else None,
+                            'sello': str(row.get('sello')).strip() if pd.notna(row.get('sello')) else None,
+                            'puerto': str(row.get('puerto')).strip() if pd.notna(row.get('puerto')) else 'San Antonio',
+                            'estado': 'por_arribar',
+                        }
+
+                        # Agregar fecha_eta si está disponible
+                        if 'fecha_eta' in row.index and pd.notna(row['fecha_eta']):
+                            try:
+                                # Convertir a datetime si no lo es ya
+                                if isinstance(row['fecha_eta'], str):
+                                    fecha_eta = pd.to_datetime(row['fecha_eta'])
+                                else:
+                                    fecha_eta = row['fecha_eta']
+                                datos['fecha_eta'] = fecha_eta
+                            except Exception as fecha_error:
+                                raise ValueError(
+                                    f"Fecha ETA inválida '{row['fecha_eta']}': {str(fecha_error)}"
+                                )
+
+                        # Crear o actualizar
+                        container, created = Container.objects.update_or_create(
+                            container_id=container_id,
+                            defaults=datos
+                        )
+
+                        if created:
+                            self.resultados['creados'] += 1
+                            # Registrar evento
+                            Event.objects.create(
+                                container=container,
+                                event_type='import_embarque',
+                                detalles={
+                                    'nave': datos['nave'],
+                                    'tipo': datos['tipo'],
+                                },
+                                usuario=self.usuario
+                            )
+                        else:
+                            self.resultados['actualizados'] += 1
+
                         self.resultados['detalles'].append({
                             'fila': idx + 2,
-                            'error': 'Container ID vacío'
+                            'container_id': container_id,
+                            'accion': 'creado' if created else 'actualizado',
+                            'nave': datos['nave']
                         })
-                        continue
-                    
-                    # Datos del contenedor
-                    datos = {
-                        'tipo': self.validar_tipo(row.get('tipo')),
-                        'nave': str(row['nave']).strip() if pd.notna(row['nave']) else 'N/A',
-                        'viaje': str(row.get('viaje')).strip() if pd.notna(row.get('viaje')) else None,
-                        'booking': str(row.get('booking')).strip() if pd.notna(row.get('booking')) else None,
-                        'peso_carga': float(row['peso']) if pd.notna(row.get('peso')) else None,
-                        'vendor': str(row.get('vendor')).strip() if pd.notna(row.get('vendor')) else None,
-                        'sello': str(row.get('sello')).strip() if pd.notna(row.get('sello')) else None,
-                        'puerto': str(row.get('puerto')).strip() if pd.notna(row.get('puerto')) else 'San Antonio',
-                        'estado': 'por_arribar',
-                    }
-                    
-                    # Agregar fecha_eta si está disponible
-                    if 'fecha_eta' in row.index and pd.notna(row['fecha_eta']):
-                        try:
-                            # Convertir a datetime si no lo es ya
-                            if isinstance(row['fecha_eta'], str):
-                                fecha_eta = pd.to_datetime(row['fecha_eta'])
-                            else:
-                                fecha_eta = row['fecha_eta']
-                            datos['fecha_eta'] = fecha_eta
-                        except Exception:
-                            pass  # Si falla la conversión, omitir fecha_eta
-                    
-                    # Crear o actualizar
-                    container, created = Container.objects.update_or_create(
-                        container_id=container_id,
-                        defaults=datos
-                    )
-                    
-                    if created:
-                        self.resultados['creados'] += 1
-                        # Registrar evento
-                        Event.objects.create(
-                            container=container,
-                            event_type='import_embarque',
-                            detalles={
-                                'nave': datos['nave'],
-                                'tipo': datos['tipo'],
-                            },
-                            usuario=self.usuario
-                        )
-                    else:
-                        self.resultados['actualizados'] += 1
-                    
-                    self.resultados['detalles'].append({
-                        'fila': idx + 2,
-                        'container_id': container_id,
-                        'accion': 'creado' if created else 'actualizado',
-                        'nave': datos['nave']
-                    })
                 
                 except Exception as e:
+                    logger.warning(
+                        'import_embarque_row_error',
+                        extra={'fila': idx + 2, 'error': str(e), 'usuario': self.usuario}
+                    )
                     self.resultados['errores'] += 1
                     self.resultados['detalles'].append({
                         'fila': idx + 2,
                         'error': str(e)
                     })
-            
+            logger.info(
+                'import_embarque_finished',
+                extra={
+                    'creados': self.resultados['creados'],
+                    'actualizados': self.resultados['actualizados'],
+                    'errores': self.resultados['errores'],
+                    'usuario': self.usuario,
+                }
+            )
+
             return self.resultados
         
         except Exception as e:
-            raise Exception(f"Error al procesar archivo: {str(e)}")
+            logger.exception('import_embarque_failed', extra={'usuario': self.usuario})
+            raise Exception(f"Error al procesar archivo de embarque: {str(e)}")

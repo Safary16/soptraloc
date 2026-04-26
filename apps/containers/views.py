@@ -7,6 +7,7 @@ from django.utils import timezone
 from django.db.models import Q
 import tempfile
 import os
+import logging
 
 from .models import Container
 from .serializers import (
@@ -18,6 +19,9 @@ from .filters import ContainerFilter
 from .importers.embarque import EmbarqueImporter
 from .importers.liberacion import LiberacionImporter
 from .importers.programacion import ProgramacionImporter
+
+
+logger = logging.getLogger(__name__)
 
 
 class ContainerViewSet(viewsets.ModelViewSet):
@@ -91,8 +95,6 @@ class ContainerViewSet(viewsets.ModelViewSet):
             })
         
         except Exception as e:
-            import logging
-            logger = logging.getLogger(__name__)
             logger.error(f"Error importando embarque: {str(e)}", exc_info=True)
             return Response(
                 {'error': 'Error procesando el archivo. Verifique el formato y vuelva a intentar.'},
@@ -156,8 +158,12 @@ class ContainerViewSet(viewsets.ModelViewSet):
             })
         
         except Exception as e:
+            logger.error(f"Error importando liberación: {str(e)}", exc_info=True)
             return Response(
-                {'error': str(e)},
+                {
+                    'error': 'No fue posible completar la importación de liberación',
+                    'detalle': str(e)
+                },
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
         finally:
@@ -218,8 +224,12 @@ class ContainerViewSet(viewsets.ModelViewSet):
             })
         
         except Exception as e:
+            logger.error(f"Error importando programación: {str(e)}", exc_info=True)
             return Response(
-                {'error': str(e)},
+                {
+                    'error': 'No fue posible completar la importación de programación',
+                    'detalle': str(e)
+                },
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
         finally:
@@ -505,7 +515,6 @@ class ContainerViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST
             )
         
-        # Verificar si ya existe una programación usando el método seguro del modelo
         tiene_prog, existing_prog = Programacion.container_tiene_programacion(container)
         if tiene_prog and existing_prog:
             return Response(
@@ -658,6 +667,18 @@ class ContainerViewSet(viewsets.ModelViewSet):
         
         usuario = request.user.username if request.user.is_authenticated else None
         container.cambiar_estado('devuelto', usuario)
+
+        # 🆕 Actualizar RegistroOperacion con estado final
+        try:
+            programacion = getattr(container, 'programacion', None)
+            if programacion:
+                from apps.programaciones.models import RegistroOperacion
+                registro = RegistroOperacion.objects.filter(programacion=programacion).order_by('-created_at').first()
+                if registro:
+                    registro.estado_final = 'FALLIDO' # O 'ENTREGADO' si se considera exitosa la devolución
+                    registro.save(update_fields=['estado_final'])
+        except Exception as e:
+            logger.error(f"Error actualizando RegistroOperacion para Contenedor {container.id}: {str(e)}", exc_info=True)
         
         serializer = self.get_serializer(container)
         return Response({
@@ -682,7 +703,26 @@ class ContainerViewSet(viewsets.ModelViewSet):
         
         usuario = request.user.username if request.user.is_authenticated else None
         container.cambiar_estado('entregado', usuario)
-        
+
+        # 🆕 Actualizar RegistroOperacion con estado final
+        try:
+            programacion = getattr(container, 'programacion', None)
+            if programacion:
+                from apps.programaciones.models import RegistroOperacion
+                registro = RegistroOperacion.objects.filter(programacion=programacion).order_by('-created_at').first()
+                if registro:
+                    # Calcular ETA real si es posible
+                    eta_real_min = None
+                    if programacion.fecha_inicio_ruta and container.fecha_entrega:
+                        duration = container.fecha_entrega - programacion.fecha_inicio_ruta
+                        eta_real_min = int(duration.total_seconds() / 60)
+
+                    registro.eta_real_min = eta_real_min
+                    registro.estado_final = 'ENTREGADO'
+                    registro.save(update_fields=['eta_real_min', 'estado_final'])
+        except Exception as e:
+            logger.error(f"Error actualizando RegistroOperacion para Contenedor {container.id}: {str(e)}", exc_info=True)
+
         serializer = self.get_serializer(container)
         return Response({
             'success': True,
@@ -721,6 +761,18 @@ class ContainerViewSet(viewsets.ModelViewSet):
         hora_fin = timezone.now()
         usuario = request.user.username if request.user.is_authenticated else None
         container.cambiar_estado('descargado', usuario)
+
+        # 🆕 Actualizar RegistroOperacion con estado final
+        try:
+            programacion = getattr(container, 'programacion', None)
+            if programacion:
+                from apps.programaciones.models import RegistroOperacion
+                registro = RegistroOperacion.objects.filter(programacion=programacion).order_by('-created_at').first()
+                if registro:
+                    registro.estado_final = 'DESCARTADO' # O 'ENTREGADO' si se considera el fin del ciclo de entrega
+                    registro.save(update_fields=['estado_final'])
+        except Exception as e:
+            logger.error(f"Error actualizando RegistroOperacion para Contenedor {container.id}: {str(e)}", exc_info=True)
         
         # Verificar configuración del CD
         cd = container.cd_entrega

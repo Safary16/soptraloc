@@ -8,6 +8,7 @@ from django.db.models import Q
 from django.utils import timezone
 from datetime import timedelta
 from dateutil import parser as date_parser
+import logging
 
 from .models import Programacion
 from .serializers import (
@@ -18,6 +19,9 @@ from .serializers import (
 )
 from apps.core.services.assignment import AssignmentService
 from apps.drivers.serializers import DriverDisponibleSerializer
+
+
+logger = logging.getLogger(__name__)
 
 
 class ProgramacionViewSet(viewsets.ModelViewSet):
@@ -374,9 +378,8 @@ class ProgramacionViewSet(viewsets.ModelViewSet):
             observaciones=data.get('observaciones', f'Retiro manual desde {container.posicion_fisica}')
         )
         
-        # Cambiar estado del contenedor a programado
-        container.estado = 'programado'
-        container.save(update_fields=['estado'])
+        usuario = request.user.username if request.user.is_authenticated else None
+        container.cambiar_estado('programado', usuario)
         
         # Crear evento de auditoría
         from apps.events.models import Event
@@ -462,8 +465,12 @@ class ProgramacionViewSet(viewsets.ModelViewSet):
             })
         
         except Exception as e:
+            logger.exception('import_programacion_endpoint_failed', extra={'usuario': usuario})
             return Response(
-                {'error': f'Error al importar: {str(e)}'},
+                {
+                    'error': 'No fue posible completar la importación de programación',
+                    'detalle': str(e)
+                },
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
         finally:
@@ -657,6 +664,34 @@ class ProgramacionViewSet(viewsets.ModelViewSet):
         
         return Response(response_data)
     
+    def _update_registro_operacion_on_completion(self, programacion: Programacion, estado_final: str):
+        from apps.programaciones.models import RegistroOperacion
+        from django.db.models import F
+        import logging
+
+        logger = logging.getLogger(__name__)
+
+        try:
+            registro = RegistroOperacion.objects.filter(programacion=programacion).order_by('-created_at').first()
+            if not registro:
+                logger.warning(f"No se encontró RegistroOperacion para Programacion ID {programacion.id}. No se actualizará al finalizar.")
+                return
+            
+            # Calcular ETA real
+            eta_real_min = None
+            if programacion.fecha_inicio_ruta and programacion.container.fecha_entrega:
+                duration = programacion.container.fecha_entrega - programacion.fecha_inicio_ruta
+                eta_real_min = int(duration.total_seconds() / 60)
+
+            registro.eta_real_min = eta_real_min
+            registro.estado_final = estado_final
+            registro.incidentes_ejecucion = programacion.incidentes_registrados # Copiar incidentes al log final
+            registro.save(update_fields=['eta_real_min', 'estado_final', 'incidentes_ejecucion'])
+            logger.info(f"RegistroOperacion {registro.id} actualizado al finalizar Programacion {programacion.id} con estado {estado_final}.")
+        except Exception as e:
+            logger.error(f"Error actualizando RegistroOperacion para Programacion {programacion.id}: {str(e)}", exc_info=True)
+
+
     @action(detail=True, methods=['post'])
     def notificar_arribo(self, request, pk=None):
         """
@@ -692,6 +727,9 @@ class ProgramacionViewSet(viewsets.ModelViewSet):
         # Cambiar estado del contenedor a 'entregado'
         usuario = request.user.username if request.user.is_authenticated else None
         programacion.container.cambiar_estado('entregado', usuario)
+        
+        # 🆕 Actualizar RegistroOperacion con ETA real y estado final
+        self._update_registro_operacion_on_completion(programacion, 'ENTREGADO')
         
         # Crear evento de arribo
         from apps.events.models import Event
@@ -757,6 +795,9 @@ class ProgramacionViewSet(viewsets.ModelViewSet):
         # Cambiar estado del contenedor a 'vacio'
         usuario = request.user.username if request.user.is_authenticated else None
         programacion.container.cambiar_estado('vacio', usuario)
+
+        # 🆕 Actualizar RegistroOperacion con estado final
+        self._update_registro_operacion_on_completion(programacion, 'PARCIAL') # Ojo: PARCIAL porque aún no se devuelve el vacío
         
         # Crear evento de vacío
         from apps.events.models import Event
@@ -824,6 +865,9 @@ class ProgramacionViewSet(viewsets.ModelViewSet):
         # Cambiar estado del contenedor a 'descargado' (conductor ya no está esperando)
         usuario = request.user.username if request.user.is_authenticated else None
         programacion.container.cambiar_estado('descargado', usuario)
+        
+        # 🆕 Actualizar RegistroOperacion con estado final
+        self._update_registro_operacion_on_completion(programacion, 'ENTREGADO') # Se asume entrega completa al soltar
         
         # Crear evento de contenedor soltado
         from apps.events.models import Event
@@ -995,6 +1039,98 @@ class ProgramacionViewSet(viewsets.ModelViewSet):
         resultado = AssignmentService.asignar_mejor_conductor(programacion, usuario)
         return Response({'success': True, 'resultado': resultado})
     
+    @action(detail=True, methods=['post'], permission_classes=[AllowAny])
+    def reportar_incidente(self, request, pk=None):
+        """
+        Permite al conductor o a un operador registrar un incidente durante un viaje.
+        Este incidente se añade al campo `incidentes_registrados` de la programación.
+
+        Payload:
+        {
+            "tipo_incidente": "ACCIDENTE" | "AVERIA" | "DEMORA_TRAFICO" | "OTRO",
+            "descripcion": "Descripción detallada del incidente",
+            "gravedad": "LEVE" | "MODERADA" | "ALTA" | "CRITICA",
+            "lat": -33.4372,      // Ubicación GPS actual (opcional)
+            "lng": -70.6506       // Ubicación GPS actual (opcional)
+        }
+        """
+        programacion = self.get_object()
+        
+        tipo_incidente = request.data.get('tipo_incidente')
+        descripcion = request.data.get('descripcion', '').strip()
+        gravedad = request.data.get('gravedad', 'MODERADA')
+        lat = request.data.get('lat')
+        lng = request.data.get('lng')
+
+        if not tipo_incidente or not descripcion:
+            return Response(
+                {'error': 'tipo_incidente y descripcion son campos obligatorios.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Validar tipo de incidente y gravedad (opcional, pero buena práctica)
+        tipos_validos = ["ACCIDENTE", "AVERIA", "DEMORA_TRAFICO", "OTRO"]
+        gravedades_validas = ["LEVE", "MODERADA", "ALTA", "CRITICA"]
+
+        if tipo_incidente not in tipos_validos:
+            return Response(
+                {'error': f'Tipo de incidente inválido. Tipos permitidos: {", ".join(tipos_validos)}'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        if gravedad not in gravedades_validas:
+            return Response(
+                {'error': f'Gravedad inválida. Gravedades permitidas: {", ".join(gravedades_validas)}'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        incidente_data = {
+            'tipo': tipo_incidente,
+            'descripcion': descripcion,
+            'gravedad': gravedad,
+            'timestamp': timezone.now().isoformat(),
+            'reportado_por': request.user.username if request.user.is_authenticated else 'anonimo',
+        }
+        if lat and lng:
+            incidente_data['gps_lat'] = str(lat)
+            incidente_data['gps_lng'] = str(lng)
+        
+        # Añadir a la lista de incidentes registrados
+        programacion.incidentes_registrados = (programacion.incidentes_registrados or []) + [incidente_data]
+        programacion.save(update_fields=['incidentes_registrados'])
+
+        # Crear evento de auditoría
+        from apps.events.models import Event
+        Event.objects.create(
+            container=programacion.container,
+            programacion=programacion,
+            event_type='incidente_reportado',
+            detalles=incidente_data,
+            usuario=request.user.username if request.user.is_authenticated else 'anonimo'
+        )
+
+        # Opcional: Notificar a operadores vía OpenClaw si es de alta gravedad
+        if gravedad in ['ALTA', 'CRITICA']:
+            from apps.core.services.openclaw import OpenClawService
+            OpenClawService.notify_anomaly(
+                programacion,
+                [
+                    {
+                        'code': f"INCIDENTE_{gravedad}",
+                        'severity': 'P0' if gravedad == 'CRITICA' else 'P1',
+                        'message': f"Incidente reportado: {tipo_incidente} - {descripcion}",
+                        'recommended_action': "Revisar de inmediato y coordinar asistencia."
+                    }
+                ]
+            )
+
+        serializer = self.get_serializer(programacion)
+        return Response({
+            'success': True,
+            'mensaje': 'Incidente registrado exitosamente.',
+            'incidente': incidente_data,
+            'programacion': serializer.data
+        }, status=status.HTTP_201_CREATED)
+
     @action(detail=True, methods=['get'])
     def eta(self, request, pk=None):
         """
