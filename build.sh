@@ -26,10 +26,6 @@ python manage.py render_migrate
 echo "👤 Creando superusuario admin..."
 python manage.py reset_admin --username=admin --password=1234
 
-# 6. Iniciar Gunicorn
-echo "🚀 Iniciando Gunicorn..."
-gunicorn config.wsgi:application --bind 0.0.0.0:$PORT
-
 echo "=========================================="
 echo "✅ Build completado exitosamente"
 echo "=========================================="
