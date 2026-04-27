@@ -32,7 +32,7 @@ class FleetStatusService:
             # Programaciones que ocupan activamente a un conductor
             active_assignments = Programacion.objects.filter(
                 container__estado__in=['asignado', 'en_ruta']
-            ).distinct('driver').count()
+            ).values_list('driver_id', flat=True).distinct().count()
             
             utilization_rate = active_assignments / available_drivers
             

@@ -1,8 +1,11 @@
+import logging
 from django.db import models
 from django.utils import timezone
 from apps.containers.models import Container
 from apps.drivers.models import Driver
 from apps.cds.models import CD
+
+logger = logging.getLogger(__name__)
 
 
 class Programacion(models.Model):

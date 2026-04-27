@@ -133,11 +133,11 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 # REST Framework
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': [
-        'rest_framework_simplejwt.authentication.JWTAuthentication',
+        'rest_framework.authentication.BasicAuthentication',
         'rest_framework.authentication.SessionAuthentication',
     ],
     'DEFAULT_PERMISSION_CLASSES': [
-        'rest_framework.permissions.IsAuthenticated',
+        'rest_framework.permissions.AllowAny',
     ],
     'DEFAULT_FILTER_BACKENDS': [
         'django_filters.rest_framework.DjangoFilterBackend',
@@ -169,3 +169,5 @@ PESO_PROXIMIDAD = config('PESO_PROXIMIDAD', default=0.15, cast=float)
 LOGIN_URL = '/driver/login/'
 LOGIN_REDIRECT_URL = '/driver/dashboard/'
 LOGOUT_REDIRECT_URL = '/driver/login/'
+
+SITE_URL = config('SITE_URL', default='http://localhost:8000')
