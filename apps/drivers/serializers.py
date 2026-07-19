@@ -74,6 +74,10 @@ class DriverDetailSerializer(DriverSerializer):
                     'fecha_asignacion': prog.fecha_asignacion,
                     'fecha_programada': prog.fecha_programada,
                     'fecha_inicio_ruta': prog.fecha_inicio_ruta,
+                    'fecha_arribo_cd': prog.fecha_arribo_cd,
+                    'gps_arribo_lat': prog.gps_arribo_lat,
+                    'gps_arribo_lng': prog.gps_arribo_lng,
+                    'origen_arribo': prog.origen_arribo,
                     # Información de ETA
                     'eta_minutos': prog.eta_minutos,
                     'distancia_km': float(prog.distancia_km) if prog.distancia_km else None,

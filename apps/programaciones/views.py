@@ -4,6 +4,7 @@ from rest_framework.response import Response
 from rest_framework.parsers import MultiPartParser, FormParser
 from rest_framework.permissions import AllowAny, IsAuthenticatedOrReadOnly
 from django.conf import settings
+from django.db import transaction
 from django.db.models import Q
 from django.utils import timezone
 from datetime import timedelta
@@ -730,6 +731,64 @@ class ProgramacionViewSet(viewsets.ModelViewSet):
         except Exception as e:
             logger.error(f"Error actualizando RegistroOperacion para Programacion {programacion.id}: {str(e)}", exc_info=True)
 
+    def _registrar_arribo(self, programacion, lat, lng, origen, usuario=None):
+        """Registra una sola vez el arribo, sea manual o disparado por geocerca."""
+        from apps.events.models import Event
+
+        with transaction.atomic():
+            locked = Programacion.objects.select_for_update().select_related(
+                'container', 'driver', 'cd'
+            ).get(pk=programacion.pk)
+
+            if locked.fecha_arribo_cd:
+                return locked, False
+            if locked.container.estado != 'en_ruta':
+                raise ValueError(
+                    f'Contenedor debe estar en ruta. Estado actual: {locked.container.get_estado_display()}'
+                )
+
+            arrived_at = timezone.now()
+            locked.driver.actualizar_posicion(lat, lng)
+            locked.fecha_arribo_cd = arrived_at
+            locked.gps_arribo_lat = lat
+            locked.gps_arribo_lng = lng
+            locked.origen_arribo = origen
+            locked.posicion_actual_lat = lat
+            locked.posicion_actual_lng = lng
+            locked.ultima_actualizacion_tracking = arrived_at
+            locked.save(update_fields=[
+                'fecha_arribo_cd', 'gps_arribo_lat', 'gps_arribo_lng', 'origen_arribo',
+                'posicion_actual_lat', 'posicion_actual_lng', 'ultima_actualizacion_tracking',
+                'updated_at',
+            ])
+            locked.container.cambiar_estado('entregado', usuario)
+
+            Event.objects.create(
+                container=locked.container,
+                event_type='arribo_cd',
+                detalles={
+                    'conductor': locked.driver.nombre,
+                    'cd': locked.cd.nombre,
+                    'gps_lat': str(lat),
+                    'gps_lng': str(lng),
+                    'timestamp': arrived_at.isoformat(),
+                    'origen': origen,
+                },
+                usuario=usuario or ('system_geocerca' if origen == 'geocerca' else 'conductor'),
+            )
+
+        self._update_registro_operacion_on_completion(locked, 'ENTREGADO')
+        return locked, True
+
+    @staticmethod
+    def _usuario_puede_operar_viaje(request, programacion):
+        """Un conductor solo puede operar su propio viaje; staff conserva acceso."""
+        if not request.user.is_authenticated:
+            return False
+        if request.user.is_staff:
+            return True
+        return programacion.driver_id and programacion.driver.user_id == request.user.id
+
 
     @action(detail=True, methods=['post'])
     def notificar_arribo(self, request, pk=None):
@@ -737,7 +796,7 @@ class ProgramacionViewSet(viewsets.ModelViewSet):
         Notifica que el conductor ha arribado al CD (llegó al destino)
         Cambia el estado del contenedor a 'entregado'
         
-        Payload opcional:
+        Payload requerido:
         {
             "lat": -33.4372,
             "lng": -70.6506
@@ -750,47 +809,38 @@ class ProgramacionViewSet(viewsets.ModelViewSet):
                 {'error': 'Programación no tiene conductor asignado'},
                 status=status.HTTP_400_BAD_REQUEST
             )
-        
-        if programacion.container.estado != 'en_ruta':
+        if not self._usuario_puede_operar_viaje(request, programacion):
             return Response(
-                {'error': f'Contenedor debe estar en ruta. Estado actual: {programacion.container.get_estado_display()}'},
-                status=status.HTTP_400_BAD_REQUEST
+                {'error': 'No puede registrar el arribo de otro conductor.'},
+                status=status.HTTP_403_FORBIDDEN,
             )
         
-        # Actualizar posición del conductor si se proporciona
         lat = request.data.get('lat')
         lng = request.data.get('lng')
-        if lat and lng:
-            programacion.driver.actualizar_posicion(lat, lng)
-        
-        # Cambiar estado del contenedor a 'entregado'
+        if lat is None or lng is None:
+            return Response(
+                {'error': 'Se requiere GPS para registrar el arribo manual.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
         usuario = request.user.username if request.user.is_authenticated else None
-        programacion.container.cambiar_estado('entregado', usuario)
-        
-        # 🆕 Actualizar RegistroOperacion con ETA real y estado final
-        self._update_registro_operacion_on_completion(programacion, 'ENTREGADO')
-        
-        # Crear evento de arribo
-        from apps.events.models import Event
-        Event.objects.create(
-            container=programacion.container,
-            event_type='arribo_cd',
-            detalles={
-                'conductor': programacion.driver.nombre,
-                'cd': programacion.cd.nombre,
-                'gps_lat': str(lat) if lat else None,
-                'gps_lng': str(lng) if lng else None,
-                'timestamp': timezone.now().isoformat()
-            },
-            usuario=usuario
-        )
+        try:
+            programacion, created = self._registrar_arribo(
+                programacion, lat, lng, 'manual', usuario
+            )
+        except ValueError as exc:
+            return Response({'error': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
         
         serializer = self.get_serializer(programacion)
         return Response({
             'success': True,
             'mensaje': f'Arribo registrado en {programacion.cd.nombre}',
             'programacion': serializer.data,
-            'nuevo_estado': 'entregado'
+            'nuevo_estado': 'entregado',
+            'fecha_arribo_cd': programacion.fecha_arribo_cd,
+            'gps_registrado': {'lat': str(programacion.gps_arribo_lat), 'lng': str(programacion.gps_arribo_lng)},
+            'origen_arribo': programacion.origen_arribo,
+            'ya_registrado': not created,
         })
     
     @action(detail=True, methods=['post'])
@@ -958,17 +1008,40 @@ class ProgramacionViewSet(viewsets.ModelViewSet):
                 {'error': 'Programación no tiene conductor asignado'},
                 status=status.HTTP_400_BAD_REQUEST
             )
+        if not self._usuario_puede_operar_viaje(request, programacion):
+            return Response(
+                {'error': 'No puede actualizar el viaje de otro conductor.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
         
         lat = request.data.get('lat')
         lng = request.data.get('lng')
         
-        if not lat or not lng:
+        if lat is None or lng is None:
             return Response(
                 {'error': 'lat y lng requeridos'},
                 status=status.HTTP_400_BAD_REQUEST
             )
         
-        # Actualizar posición del conductor
+        # Arribo automático: permanece dormido hasta que el CD tenga un radio.
+        # Se comprueba antes del tracking ordinario para registrar una sola muestra GPS.
+        if (
+            programacion.container.estado == 'en_ruta'
+            and programacion.cd.contiene_en_geocerca(lat, lng)
+        ):
+            programacion, created = self._registrar_arribo(
+                programacion, lat, lng, 'geocerca', 'system_geocerca'
+            )
+            return Response({
+                'success': True,
+                'mensaje': 'Arribo registrado automáticamente por geocerca',
+                'arribo_automatico': True,
+                'arribo_creado': created,
+                'fecha_arribo_cd': programacion.fecha_arribo_cd,
+                'nuevo_estado': 'entregado',
+            })
+
+        # Fuera de geocerca, guardar tracking y recalcular ETA normalmente.
         programacion.driver.actualizar_posicion(lat, lng)
         
         # Actualizar ETA y crear notificación si cambió significativamente

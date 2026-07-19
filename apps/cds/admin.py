@@ -14,7 +14,7 @@ class CDAdmin(admin.ModelAdmin):
             'fields': ('nombre', 'codigo', 'tipo', 'activo')
         }),
         ('Ubicación', {
-            'fields': ('direccion', 'comuna', 'lat', 'lng')
+            'fields': ('direccion', 'comuna', 'lat', 'lng', 'geocerca_radio_m')
         }),
         ('Gestión de Vacíos (CCTI)', {
             'fields': ('capacidad_vacios', 'vacios_actuales', 'espacios_disponibles'),

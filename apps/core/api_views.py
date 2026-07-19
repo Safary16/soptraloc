@@ -337,7 +337,12 @@ def operaciones_diarias(request):
             'fecha_programada': prog.fecha_programada.isoformat(),
             'fecha_asignacion': prog.fecha_asignacion.isoformat() if prog.fecha_asignacion else None,
             'fecha_inicio_viaje': prog.fecha_inicio_ruta.isoformat() if prog.fecha_inicio_ruta else None,
-            'fecha_arribo': container.fecha_entrega.isoformat() if container.fecha_entrega else None,
+            'fecha_arribo': prog.fecha_arribo_cd.isoformat() if prog.fecha_arribo_cd else None,
+            'origen_arribo': prog.origen_arribo,
+            'gps_arribo': {
+                'lat': float(prog.gps_arribo_lat),
+                'lng': float(prog.gps_arribo_lng),
+            } if prog.gps_arribo_lat is not None and prog.gps_arribo_lng is not None else None,
             'fecha_vacio': container.fecha_vacio.isoformat() if container.fecha_vacio else None,
             
             # ETAs y tiempos estimados

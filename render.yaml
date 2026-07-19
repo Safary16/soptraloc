@@ -6,7 +6,7 @@ services:
     env: python
     plan: free
     buildCommand: "./build.sh"
-    startCommand: "gunicorn config.wsgi:application"
+    startCommand: "./start.sh"
     envVars:
       - key: PYTHON_VERSION
         value: 3.12.0
@@ -21,7 +21,11 @@ services:
       - key: ALLOWED_HOSTS
         value: .onrender.com
       - key: PYTHONPATH
-        value: "." 
+        value: "."
+      - key: DB_STARTUP_MAX_ATTEMPTS
+        value: "12"
+      - key: DB_STARTUP_RETRY_SECONDS
+        value: "5"
 
 databases:
   - name: soptraloc-db

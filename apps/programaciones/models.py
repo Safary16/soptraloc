@@ -90,6 +90,14 @@ class Programacion(models.Model):
     fecha_inicio_ruta = models.DateTimeField(null=True, blank=True, verbose_name='Fecha Inicio Ruta', help_text='Timestamp cuando el conductor inició la ruta')
     gps_inicio_lat = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True, verbose_name='GPS Inicio Latitud')
     gps_inicio_lng = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True, verbose_name='GPS Inicio Longitud')
+    fecha_arribo_cd = models.DateTimeField(null=True, blank=True, verbose_name='Fecha Arribo CD')
+    gps_arribo_lat = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True, verbose_name='GPS Arribo Latitud')
+    gps_arribo_lng = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True, verbose_name='GPS Arribo Longitud')
+    origen_arribo = models.CharField(
+        max_length=20, null=True, blank=True,
+        choices=[('manual', 'Manual conductor'), ('geocerca', 'Geocerca')],
+        verbose_name='Origen Arribo',
+    )
     posicion_actual_lat = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True, verbose_name='Posición Actual Lat')
     posicion_actual_lng = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True, verbose_name='Posición Actual Lng')
     ultima_actualizacion_tracking = models.DateTimeField(null=True, blank=True, verbose_name='Última Actualización Tracking')
