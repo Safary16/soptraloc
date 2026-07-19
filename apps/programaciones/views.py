@@ -4,6 +4,7 @@ from rest_framework.response import Response
 from rest_framework.parsers import MultiPartParser, FormParser
 from rest_framework.permissions import AllowAny, IsAuthenticatedOrReadOnly
 from django.conf import settings
+from django.db import transaction
 from django.db.models import Q
 from django.utils import timezone
 from datetime import timedelta
@@ -79,7 +80,7 @@ class ProgramacionViewSet(viewsets.ModelViewSet):
         
         # Contenedores con fecha_demurrage próxima a vencer
         # Estados activos: liberado, programado, asignado, en_ruta, entregado
-        # Excluir: descargado, vacio, vacio_en_ruta, devuelto (ya completaron el ciclo)
+        # Excluir soltado/descargado/vacío: el viaje lleno ya terminó.
         containers_riesgo = Container.objects.filter(
             fecha_demurrage__isnull=False,
             fecha_demurrage__lte=fecha_limite,
@@ -259,7 +260,7 @@ class ProgramacionViewSet(viewsets.ModelViewSet):
         
         # Filtrar solo programaciones con contenedores en estados activos
         # Excluir contenedores que ya están vacíos o devueltos (completados)
-        estados_activos = ['programado', 'secuenciado', 'asignado', 'en_ruta', 'entregado', 'descargado']
+        estados_activos = ['programado', 'secuenciado', 'asignado', 'en_ruta', 'entregado', 'soltado', 'descargado']
         programaciones = self.queryset.filter(
             container__estado__in=estados_activos
         ).select_related('container', 'driver', 'cd')
@@ -620,19 +621,36 @@ class ProgramacionViewSet(viewsets.ModelViewSet):
             usuario=usuario
         )
         
-        # Calcular y guardar ETA en la programación
-        from apps.core.services.mapbox import MapboxService
+        # Calcular y guardar ETA híbrido (Mapbox + aprendizaje histórico).
+        from apps.core.services.learning_engine import OperationalLearningEngine
         try:
-            resultado = MapboxService.calcular_ruta(
-                float(lng),
-                float(lat),
-                float(programacion.cd.lng),
-                float(programacion.cd.lat)
+            recomendacion = OperationalLearningEngine.recommend(
+                (float(lat), float(lng)),
+                (float(programacion.cd.lat), float(programacion.cd.lng)),
+                programacion.fecha_inicio_ruta,
+                driver=programacion.driver,
+                window_hours=0,
             )
-            if resultado.get('success'):
-                programacion.eta_minutos = int(resultado['duration_minutes'])
-                programacion.distancia_km = resultado['distance_km']
-                programacion.save(update_fields=['eta_minutos', 'distancia_km'])
+            if recomendacion.get('success'):
+                prediccion = recomendacion['recommended']
+                programacion.eta_minutos = prediccion['predicted_minutes']
+                programacion.distancia_km = prediccion['distance_km']
+                programacion.ruta_geojson = prediccion.get('geometry')
+                programacion.ruta_firma = prediccion.get('route_signature')
+                programacion.prediccion_ml = {
+                    'source': prediccion['source'],
+                    'mapbox_minutes': prediccion['mapbox_minutes'],
+                    'predicted_minutes': prediccion['predicted_minutes'],
+                    'learned_factor': prediccion['learned_factor'],
+                    'samples': prediccion['samples'],
+                    'confidence': prediccion['confidence'],
+                    'driver_profile': prediccion.get('driver_profile'),
+                    'explanation': recomendacion['explanation'],
+                }
+                programacion.save(update_fields=[
+                    'eta_minutos', 'distancia_km', 'ruta_geojson', 'ruta_firma',
+                    'prediccion_ml', 'updated_at'
+                ])
         except Exception as e:
             import logging
             logger = logging.getLogger(__name__)
@@ -724,11 +742,70 @@ class ProgramacionViewSet(viewsets.ModelViewSet):
                     hora_del_dia=programacion.fecha_inicio_ruta.hour,
                     dia_semana=programacion.fecha_inicio_ruta.weekday(),
                     distancia_km=programacion.distancia_km or 0,
+                    ruta_firma=programacion.ruta_firma,
                     anomalia=real_min > estimado * 3,
                 )
             logger.info(f"RegistroOperacion {registro.id} actualizado al finalizar Programacion {programacion.id} con estado {estado_final}.")
         except Exception as e:
             logger.error(f"Error actualizando RegistroOperacion para Programacion {programacion.id}: {str(e)}", exc_info=True)
+
+    def _registrar_arribo(self, programacion, lat, lng, origen, usuario=None):
+        """Registra una sola vez el arribo, sea manual o disparado por geocerca."""
+        from apps.events.models import Event
+
+        with transaction.atomic():
+            locked = Programacion.objects.select_for_update().select_related(
+                'container', 'driver', 'cd'
+            ).get(pk=programacion.pk)
+
+            if locked.fecha_arribo_cd:
+                return locked, False
+            if locked.container.estado != 'en_ruta':
+                raise ValueError(
+                    f'Contenedor debe estar en ruta. Estado actual: {locked.container.get_estado_display()}'
+                )
+
+            arrived_at = timezone.now()
+            locked.driver.actualizar_posicion(lat, lng)
+            locked.fecha_arribo_cd = arrived_at
+            locked.gps_arribo_lat = lat
+            locked.gps_arribo_lng = lng
+            locked.origen_arribo = origen
+            locked.posicion_actual_lat = lat
+            locked.posicion_actual_lng = lng
+            locked.ultima_actualizacion_tracking = arrived_at
+            locked.save(update_fields=[
+                'fecha_arribo_cd', 'gps_arribo_lat', 'gps_arribo_lng', 'origen_arribo',
+                'posicion_actual_lat', 'posicion_actual_lng', 'ultima_actualizacion_tracking',
+                'updated_at',
+            ])
+            locked.container.cambiar_estado('entregado', usuario)
+
+            Event.objects.create(
+                container=locked.container,
+                event_type='arribo_cd',
+                detalles={
+                    'conductor': locked.driver.nombre,
+                    'cd': locked.cd.nombre,
+                    'gps_lat': str(lat),
+                    'gps_lng': str(lng),
+                    'timestamp': arrived_at.isoformat(),
+                    'origen': origen,
+                },
+                usuario=usuario or ('system_geocerca' if origen == 'geocerca' else 'conductor'),
+            )
+
+        self._update_registro_operacion_on_completion(locked, 'ENTREGADO')
+        return locked, True
+
+    @staticmethod
+    def _usuario_puede_operar_viaje(request, programacion):
+        """Un conductor solo puede operar su propio viaje; staff conserva acceso."""
+        if not request.user.is_authenticated:
+            return False
+        if request.user.is_staff:
+            return True
+        return programacion.driver_id and programacion.driver.user_id == request.user.id
 
 
     @action(detail=True, methods=['post'])
@@ -737,7 +814,7 @@ class ProgramacionViewSet(viewsets.ModelViewSet):
         Notifica que el conductor ha arribado al CD (llegó al destino)
         Cambia el estado del contenedor a 'entregado'
         
-        Payload opcional:
+        Payload requerido:
         {
             "lat": -33.4372,
             "lng": -70.6506
@@ -750,47 +827,38 @@ class ProgramacionViewSet(viewsets.ModelViewSet):
                 {'error': 'Programación no tiene conductor asignado'},
                 status=status.HTTP_400_BAD_REQUEST
             )
-        
-        if programacion.container.estado != 'en_ruta':
+        if not self._usuario_puede_operar_viaje(request, programacion):
             return Response(
-                {'error': f'Contenedor debe estar en ruta. Estado actual: {programacion.container.get_estado_display()}'},
-                status=status.HTTP_400_BAD_REQUEST
+                {'error': 'No puede registrar el arribo de otro conductor.'},
+                status=status.HTTP_403_FORBIDDEN,
             )
         
-        # Actualizar posición del conductor si se proporciona
         lat = request.data.get('lat')
         lng = request.data.get('lng')
-        if lat and lng:
-            programacion.driver.actualizar_posicion(lat, lng)
-        
-        # Cambiar estado del contenedor a 'entregado'
+        if lat is None or lng is None:
+            return Response(
+                {'error': 'Se requiere GPS para registrar el arribo manual.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
         usuario = request.user.username if request.user.is_authenticated else None
-        programacion.container.cambiar_estado('entregado', usuario)
-        
-        # 🆕 Actualizar RegistroOperacion con ETA real y estado final
-        self._update_registro_operacion_on_completion(programacion, 'ENTREGADO')
-        
-        # Crear evento de arribo
-        from apps.events.models import Event
-        Event.objects.create(
-            container=programacion.container,
-            event_type='arribo_cd',
-            detalles={
-                'conductor': programacion.driver.nombre,
-                'cd': programacion.cd.nombre,
-                'gps_lat': str(lat) if lat else None,
-                'gps_lng': str(lng) if lng else None,
-                'timestamp': timezone.now().isoformat()
-            },
-            usuario=usuario
-        )
+        try:
+            programacion, created = self._registrar_arribo(
+                programacion, lat, lng, 'manual', usuario
+            )
+        except ValueError as exc:
+            return Response({'error': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
         
         serializer = self.get_serializer(programacion)
         return Response({
             'success': True,
             'mensaje': f'Arribo registrado en {programacion.cd.nombre}',
             'programacion': serializer.data,
-            'nuevo_estado': 'entregado'
+            'nuevo_estado': 'entregado',
+            'fecha_arribo_cd': programacion.fecha_arribo_cd,
+            'gps_registrado': {'lat': str(programacion.gps_arribo_lat), 'lng': str(programacion.gps_arribo_lng)},
+            'origen_arribo': programacion.origen_arribo,
+            'ya_registrado': not created,
         })
     
     @action(detail=True, methods=['post'])
@@ -812,8 +880,11 @@ class ProgramacionViewSet(viewsets.ModelViewSet):
                 {'error': 'Programación no tiene conductor asignado'},
                 status=status.HTTP_400_BAD_REQUEST
             )
+        if not self._usuario_puede_operar_viaje(request, programacion):
+            return Response({'error': 'No puede operar un viaje ajeno.'}, status=status.HTTP_403_FORBIDDEN)
         
-        # Permitir notificar vacío desde 'entregado' o 'descargado'
+        # El conductor confirma la descarga solo cuando esperó con el equipo.
+        # Tras un drop & hook, la confirmación corresponde al operador del CD.
         if programacion.container.estado not in ['entregado', 'descargado']:
             return Response(
                 {'error': f'Contenedor debe estar entregado o descargado. Estado actual: {programacion.container.get_estado_display()}'},
@@ -826,14 +897,14 @@ class ProgramacionViewSet(viewsets.ModelViewSet):
         if lat and lng:
             programacion.driver.actualizar_posicion(lat, lng)
         
-        # Si está entregado, pasar primero por descargado
-        if programacion.container.estado == 'entregado':
-            usuario = request.user.username if request.user.is_authenticated else None
-            programacion.container.cambiar_estado('descargado', usuario)
-        
-        # Cambiar estado del contenedor a 'vacio'
         usuario = request.user.username if request.user.is_authenticated else None
-        programacion.container.cambiar_estado('vacio', usuario)
+        from apps.core.services.operations import OperationalFlowService
+        try:
+            programacion, timing = OperationalFlowService.mark_empty(
+                programacion, usuario, source='portal_conductor'
+            )
+        except ValueError as exc:
+            return Response({'error': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
 
         # 🆕 Actualizar RegistroOperacion con estado final
         self._update_registro_operacion_on_completion(programacion, 'PARCIAL') # Ojo: PARCIAL porque aún no se devuelve el vacío
@@ -858,7 +929,8 @@ class ProgramacionViewSet(viewsets.ModelViewSet):
             'success': True,
             'mensaje': f'Contenedor marcado como vacío. Listo para retiro.',
             'programacion': serializer.data,
-            'nuevo_estado': 'vacio'
+            'nuevo_estado': 'vacio',
+            'tiempo_descarga_min': timing.tiempo_real_min if timing else None,
         })
     
     @action(detail=True, methods=['post'])
@@ -880,6 +952,8 @@ class ProgramacionViewSet(viewsets.ModelViewSet):
                 {'error': 'Programación no tiene conductor asignado'},
                 status=status.HTTP_400_BAD_REQUEST
             )
+        if not self._usuario_puede_operar_viaje(request, programacion):
+            return Response({'error': 'No puede operar un viaje ajeno.'}, status=status.HTTP_403_FORBIDDEN)
         
         # Verificar que el CD permita soltar contenedor
         if not programacion.cd.permite_soltar_contenedor:
@@ -888,8 +962,8 @@ class ProgramacionViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST
             )
         
-        # Solo permitir soltar desde 'entregado'
-        if programacion.container.estado != 'entregado':
+        # Permitir reintento idempotente desde conexiones móviles inestables.
+        if programacion.container.estado not in {'entregado', 'soltado'}:
             return Response(
                 {'error': f'Solo se puede soltar el contenedor después de haberlo entregado. Estado actual: {programacion.container.get_estado_display()}'},
                 status=status.HTTP_400_BAD_REQUEST
@@ -901,41 +975,41 @@ class ProgramacionViewSet(viewsets.ModelViewSet):
         if lat and lng:
             programacion.driver.actualizar_posicion(lat, lng)
         
-        # Cambiar estado del contenedor a 'descargado' (conductor ya no está esperando)
         usuario = request.user.username if request.user.is_authenticated else None
-        programacion.container.cambiar_estado('descargado', usuario)
+        from apps.core.services.operations import OperationalFlowService
+        try:
+            programacion, created = OperationalFlowService.drop_container(programacion, usuario)
+        except ValueError as exc:
+            return Response({'error': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
         
-        # 🆕 Actualizar RegistroOperacion con estado final
-        self._update_registro_operacion_on_completion(programacion, 'ENTREGADO') # Se asume entrega completa al soltar
+        # El viaje lleno terminó, pero la descarga sigue pendiente en el CD.
+        self._update_registro_operacion_on_completion(programacion, 'PARCIAL')
         
         # Crear evento de contenedor soltado
         from apps.events.models import Event
-        Event.objects.create(
-            container=programacion.container,
-            event_type='contenedor_soltado',
-            detalles={
-                'conductor': programacion.driver.nombre,
-                'cd': programacion.cd.nombre,
-                'tipo': 'drop_and_hook',
-                'gps_lat': str(lat) if lat else None,
-                'gps_lng': str(lng) if lng else None,
-                'timestamp': timezone.now().isoformat()
-            },
-            usuario=usuario
-        )
-        
-        # Liberar al conductor (decrementar entregas del día)
-        if programacion.driver.num_entregas_dia > 0:
-            programacion.driver.num_entregas_dia -= 1
-            programacion.driver.save(update_fields=['num_entregas_dia'])
+        if created:
+            Event.objects.create(
+                container=programacion.container,
+                event_type='contenedor_soltado',
+                detalles={
+                    'conductor': programacion.driver.nombre,
+                    'cd': programacion.cd.nombre,
+                    'tipo': 'drop_and_hook',
+                    'gps_lat': str(lat) if lat else None,
+                    'gps_lng': str(lng) if lng else None,
+                    'timestamp': timezone.now().isoformat()
+                },
+                usuario=usuario
+            )
         
         serializer = self.get_serializer(programacion)
         return Response({
             'success': True,
             'mensaje': f'Contenedor soltado en {programacion.cd.nombre}. Conductor libre para nueva asignación.',
             'programacion': serializer.data,
-            'nuevo_estado': 'descargado',
-            'conductor_liberado': True
+            'nuevo_estado': 'soltado',
+            'conductor_liberado': True,
+            'ya_registrado': not created,
         })
     
     @action(detail=True, methods=['post'])
@@ -958,17 +1032,40 @@ class ProgramacionViewSet(viewsets.ModelViewSet):
                 {'error': 'Programación no tiene conductor asignado'},
                 status=status.HTTP_400_BAD_REQUEST
             )
+        if not self._usuario_puede_operar_viaje(request, programacion):
+            return Response(
+                {'error': 'No puede actualizar el viaje de otro conductor.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
         
         lat = request.data.get('lat')
         lng = request.data.get('lng')
         
-        if not lat or not lng:
+        if lat is None or lng is None:
             return Response(
                 {'error': 'lat y lng requeridos'},
                 status=status.HTTP_400_BAD_REQUEST
             )
         
-        # Actualizar posición del conductor
+        # Arribo automático: permanece dormido hasta que el CD tenga un radio.
+        # Se comprueba antes del tracking ordinario para registrar una sola muestra GPS.
+        if (
+            programacion.container.estado == 'en_ruta'
+            and programacion.cd.contiene_en_geocerca(lat, lng)
+        ):
+            programacion, created = self._registrar_arribo(
+                programacion, lat, lng, 'geocerca', 'system_geocerca'
+            )
+            return Response({
+                'success': True,
+                'mensaje': 'Arribo registrado automáticamente por geocerca',
+                'arribo_automatico': True,
+                'arribo_creado': created,
+                'fecha_arribo_cd': programacion.fecha_arribo_cd,
+                'nuevo_estado': 'entregado',
+            })
+
+        # Fuera de geocerca, guardar tracking y recalcular ETA normalmente.
         programacion.driver.actualizar_posicion(lat, lng)
         
         # Actualizar ETA y crear notificación si cambió significativamente
@@ -1019,6 +1116,41 @@ class ProgramacionViewSet(viewsets.ModelViewSet):
             }
         
         return Response(response_data)
+
+    @action(detail=True, methods=['get'])
+    def recomendacion_ml(self, request, pk=None):
+        """Compara horarios, rutas y conductor usando historial real + Mapbox."""
+        from apps.core.services.learning_engine import OperationalLearningEngine
+
+        programacion = self.get_object()
+        lat = request.query_params.get('lat')
+        lng = request.query_params.get('lng')
+        if lat is None or lng is None:
+            if programacion.driver and programacion.driver.ultima_posicion_lat is not None:
+                lat = programacion.driver.ultima_posicion_lat
+                lng = programacion.driver.ultima_posicion_lng
+            elif programacion.gps_inicio_lat is not None:
+                lat, lng = programacion.gps_inicio_lat, programacion.gps_inicio_lng
+            else:
+                return Response(
+                    {'error': 'Se necesita una ubicación de origen (lat/lng).'},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+        try:
+            window_hours = min(8, max(0, int(request.query_params.get('ventana_horas', 3))))
+        except ValueError:
+            return Response({'error': 'ventana_horas debe ser entero'}, status=status.HTTP_400_BAD_REQUEST)
+        salida = programacion.fecha_inicio_ruta or timezone.now()
+        recommendation = OperationalLearningEngine.recommend(
+            (float(lat), float(lng)),
+            (float(programacion.cd.lat), float(programacion.cd.lng)),
+            salida,
+            driver=programacion.driver,
+            window_hours=window_hours,
+        )
+        if not recommendation.get('success'):
+            return Response(recommendation, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+        return Response(recommendation)
 
     @action(detail=True, methods=['post'])
     def confirmar_recomendacion(self, request, pk=None):

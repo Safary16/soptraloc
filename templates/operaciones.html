@@ -1135,6 +1135,7 @@ function generarBotonesAccion(container, estado) {
         'asignado': `<button class="btn btn-sm btn-primary" onclick="cambiarEstado(${container.id}, 'en_ruta')">Iniciar Ruta</button>`,
         'en_ruta': `<button class="btn btn-sm btn-info" onclick="cambiarEstado(${container.id}, 'entregado')">Marcar Entregado</button>`,
         'entregado': `<button class="btn btn-sm btn-success" onclick="cambiarEstado(${container.id}, 'descargado')">Marcar Descargado</button>`,
+        'soltado': `<span class="badge bg-warning text-dark">Esperando confirmación de descarga del CD</span>`,
         'descargado': `<button class="btn btn-sm btn-warning" onclick="cambiarEstado(${container.id}, 'vacio')">Marcar Vacío</button>`,
         'vacio': `<button class="btn btn-sm btn-primary" onclick="cambiarEstado(${container.id}, 'vacio_en_ruta')">Iniciar Retorno</button>`,
         'vacio_en_ruta': `<button class="btn btn-sm btn-dark" onclick="cambiarEstado(${container.id}, 'devuelto')">Marcar Devuelto</button>`

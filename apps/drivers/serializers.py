@@ -1,5 +1,6 @@
 from rest_framework import serializers
 from .models import Driver, DriverLocation
+from .access import asegurar_acceso
 
 
 class DriverLocationSerializer(serializers.ModelSerializer):
@@ -27,6 +28,45 @@ class DriverSerializer(serializers.ModelSerializer):
             'created_at', 'updated_at'
         ]
         read_only_fields = ['created_at', 'updated_at', 'esta_disponible']
+
+    def validate_rut(self, value):
+        """La ausencia de RUT debe ser NULL; '' chocaría con el índice unique."""
+        return value.strip() or None if value is not None else None
+
+    def validate_patente(self, value):
+        return value.strip().upper() or None if value is not None else None
+
+    def validate_max_entregas_dia(self, value):
+        if value < 1:
+            raise serializers.ValidationError('Debe ser al menos 1.')
+        return value
+
+    def create(self, validated_data):
+        driver = super().create(validated_data)
+        # La clave temporal se adjunta en la vista y nunca se persiste en texto plano.
+        self._temporary_access = asegurar_acceso(driver)
+        return driver
+
+    def update(self, instance, validated_data):
+        driver = super().update(instance, validated_data)
+        if driver.user_id:
+            user = driver.user
+            changed = []
+            if user.is_active != driver.activo:
+                user.is_active = driver.activo
+                changed.append('is_active')
+            names = driver.nombre.split()
+            first_name = names[0] if names else ''
+            last_name = ' '.join(names[1:])
+            if user.first_name != first_name:
+                user.first_name = first_name
+                changed.append('first_name')
+            if user.last_name != last_name:
+                user.last_name = last_name
+                changed.append('last_name')
+            if changed:
+                user.save(update_fields=changed)
+        return driver
     
     def get_ubicacion_actual(self, obj):
         """Retorna la ubicación más reciente"""
@@ -62,7 +102,7 @@ class DriverDetailSerializer(DriverSerializer):
         for prog in programaciones:
             # Filter by estado after retrieval since it's a property
             estado = prog.estado
-            if estado in ['programado', 'asignado', 'en_ruta', 'entregado', 'descargado', 'vacio']:
+            if estado in ['programado', 'asignado', 'en_ruta', 'entregado', 'soltado', 'descargado', 'vacio']:
                 item = {
                     'id': prog.id,
                     'contenedor': prog.container.container_id_formatted if prog.container else None,
@@ -74,6 +114,10 @@ class DriverDetailSerializer(DriverSerializer):
                     'fecha_asignacion': prog.fecha_asignacion,
                     'fecha_programada': prog.fecha_programada,
                     'fecha_inicio_ruta': prog.fecha_inicio_ruta,
+                    'fecha_arribo_cd': prog.fecha_arribo_cd,
+                    'gps_arribo_lat': prog.gps_arribo_lat,
+                    'gps_arribo_lng': prog.gps_arribo_lng,
+                    'origen_arribo': prog.origen_arribo,
                     # Información de ETA
                     'eta_minutos': prog.eta_minutos,
                     'distancia_km': float(prog.distancia_km) if prog.distancia_km else None,
@@ -102,7 +146,10 @@ class DriverListSerializer(serializers.ModelSerializer):
     
     class Meta:
         model = Driver
-        fields = ['id', 'nombre', 'rut', 'telefono', 'activo', 'presente', 'num_entregas_dia', 'max_entregas_dia']
+        fields = [
+            'id', 'nombre', 'rut', 'telefono', 'patente', 'activo', 'presente',
+            'num_entregas_dia', 'max_entregas_dia', 'cumplimiento_porcentaje',
+        ]
 
 
 class DriverDisponibleSerializer(serializers.ModelSerializer):

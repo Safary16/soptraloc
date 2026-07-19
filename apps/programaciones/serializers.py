@@ -35,7 +35,9 @@ class ProgramacionListSerializer(serializers.ModelSerializer):
             'id', 'container_id', 'container_id_formatted', 'fecha_programada', 'cliente', 'cd_nombre', 'cd_lat', 'cd_lng',
             'driver_nombre', 'requiere_alerta', 'horas_hasta_programacion',
             'estado_container', 'fecha_asignacion', 'fecha_inicio_ruta',
+            'fecha_arribo_cd', 'gps_arribo_lat', 'gps_arribo_lng', 'origen_arribo',
             'eta_minutos', 'distancia_km', 'patente_confirmada',
+            'ruta_geojson', 'ruta_firma', 'prediccion_ml',
             'urgencia_servicio', 'requiere_seguimiento_especial',
             'clasificacion_sistema', 'nivel_confianza', 'decision_operador'
         ]

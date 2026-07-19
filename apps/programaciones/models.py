@@ -86,10 +86,24 @@ class Programacion(models.Model):
         verbose_name='Distancia (km)'
     )
     ruta_geojson = models.JSONField(null=True, blank=True, verbose_name='Ruta GeoJSON')
+    ruta_firma = models.CharField(max_length=64, null=True, blank=True, db_index=True, verbose_name='Firma Ruta')
+    prediccion_ml = models.JSONField(
+        default=dict, blank=True,
+        verbose_name='Predicción ML auditable',
+        help_text='Fuente, muestras, factor y confianza usados para estimar el viaje.'
+    )
     patente_confirmada = models.CharField(max_length=20, null=True, blank=True, verbose_name='Patente Confirmada', help_text='Patente confirmada al iniciar ruta')
     fecha_inicio_ruta = models.DateTimeField(null=True, blank=True, verbose_name='Fecha Inicio Ruta', help_text='Timestamp cuando el conductor inició la ruta')
     gps_inicio_lat = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True, verbose_name='GPS Inicio Latitud')
     gps_inicio_lng = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True, verbose_name='GPS Inicio Longitud')
+    fecha_arribo_cd = models.DateTimeField(null=True, blank=True, verbose_name='Fecha Arribo CD')
+    gps_arribo_lat = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True, verbose_name='GPS Arribo Latitud')
+    gps_arribo_lng = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True, verbose_name='GPS Arribo Longitud')
+    origen_arribo = models.CharField(
+        max_length=20, null=True, blank=True,
+        choices=[('manual', 'Manual conductor'), ('geocerca', 'Geocerca')],
+        verbose_name='Origen Arribo',
+    )
     posicion_actual_lat = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True, verbose_name='Posición Actual Lat')
     posicion_actual_lng = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True, verbose_name='Posición Actual Lng')
     ultima_actualizacion_tracking = models.DateTimeField(null=True, blank=True, verbose_name='Última Actualización Tracking')
@@ -130,6 +144,10 @@ class Programacion(models.Model):
     
     # Timestamps
     fecha_asignacion = models.DateTimeField(null=True, blank=True, verbose_name='Fecha Asignación')
+    fecha_liberacion_conductor = models.DateTimeField(
+        null=True, blank=True, verbose_name='Fecha Liberación Conductor',
+        help_text='Momento en que el conductor quedó realmente disponible para otro servicio.'
+    )
     created_at = models.DateTimeField(auto_now_add=True, verbose_name='Creado')
     updated_at = models.DateTimeField(auto_now=True, verbose_name='Actualizado')
     
@@ -166,7 +184,8 @@ class Programacion(models.Model):
                 raise ValidationError(f'El conductor {locked_driver.nombre} no está disponible.')
             conflict = Programacion.objects.select_for_update().filter(
                 driver=locked_driver,
-                container__estado__in=['asignado', 'en_ruta'],
+                fecha_liberacion_conductor__isnull=True,
+                container__estado__in=['asignado', 'en_ruta', 'entregado', 'descargado', 'vacio', 'vacio_en_ruta'],
             ).exclude(pk=programacion.pk).exists()
             if conflict:
                 raise ValidationError('El conductor ya participa en otro servicio activo.')
@@ -203,6 +222,24 @@ class Programacion(models.Model):
             import logging
             logger = logging.getLogger(__name__)
             logger.error(f"Error creando notificación de asignación para la programación {self.id}: {str(e)}", exc_info=True)
+
+    def liberar_conductor(self):
+        """Libera capacidad una sola vez, incluso ante reintentos del navegador."""
+        if not self.driver_id:
+            return False
+        with transaction.atomic():
+            locked = Programacion.objects.select_for_update().get(pk=self.pk)
+            if locked.fecha_liberacion_conductor:
+                self.fecha_liberacion_conductor = locked.fecha_liberacion_conductor
+                return False
+            released_at = timezone.now()
+            locked.fecha_liberacion_conductor = released_at
+            locked.save(update_fields=['fecha_liberacion_conductor', 'updated_at'])
+            Driver.objects.filter(pk=locked.driver_id, num_entregas_dia__gt=0).update(
+                num_entregas_dia=F('num_entregas_dia') - 1
+            )
+            self.fecha_liberacion_conductor = released_at
+            return True
     
     @property
     def horas_hasta_programacion(self):
@@ -413,6 +450,10 @@ class TiempoViaje(models.Model):
         max_digits=7,
         decimal_places=2,
         help_text='Distancia en km según Mapbox'
+    )
+    ruta_firma = models.CharField(
+        max_length=64, null=True, blank=True, db_index=True,
+        help_text='Huella estable de la geometría utilizada para aprender diferencias entre rutas.'
     )
     anomalia = models.BooleanField(
         default=False,

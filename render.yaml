@@ -6,7 +6,7 @@ services:
     env: python
     plan: free
     buildCommand: "./build.sh"
-    startCommand: "gunicorn config.wsgi:application"
+    startCommand: "./start.sh"
     envVars:
       - key: PYTHON_VERSION
         value: 3.12.0
@@ -21,7 +21,41 @@ services:
       - key: ALLOWED_HOSTS
         value: .onrender.com
       - key: PYTHONPATH
-        value: "." 
+        value: "."
+      - key: DB_STARTUP_MAX_ATTEMPTS
+        value: "12"
+      - key: DB_STARTUP_RETRY_SECONDS
+        value: "5"
+      - key: DJANGO_SUPERUSER_USERNAME
+        value: admin
+      - key: DJANGO_SUPERUSER_EMAIL
+        sync: false
+      - key: DJANGO_SUPERUSER_PASSWORD
+        sync: false
+
+  # Procesa liberaciones cuya fecha/hora ya llegó. El comando es idempotente.
+  - type: cron
+    name: soptraloc-release-due
+    runtime: python
+    env: python
+    plan: starter
+    schedule: "*/5 * * * *"
+    buildCommand: "./build.sh"
+    startCommand: "python manage.py release_due_containers"
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.12.0
+      - key: DATABASE_URL
+        fromDatabase:
+          name: soptraloc-db
+          property: connectionString
+      - key: SECRET_KEY
+        fromService:
+          name: soptraloc
+          type: web
+          envVarKey: SECRET_KEY
+      - key: DEBUG
+        value: false
 
 databases:
   - name: soptraloc-db

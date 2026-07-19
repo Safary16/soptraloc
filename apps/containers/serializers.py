@@ -12,6 +12,22 @@ class ContainerSerializer(serializers.ModelSerializer):
         fields = '__all__'
         read_only_fields = ['created_at', 'updated_at']
 
+    def validate_container_id(self, value):
+        normalized = Container.normalize_container_id(value)
+        if len(normalized) != 11 or not normalized[:4].isalpha() or not normalized[4:].isdigit():
+            raise serializers.ValidationError('Use 4 letras y 7 dígitos, por ejemplo MSCU1234567.')
+        return normalized
+
+    def validate(self, attrs):
+        instance = getattr(self, 'instance', None)
+        if instance and 'estado' in attrs and attrs['estado'] != instance.estado:
+            allowed = instance.TRANSICIONES_VALIDAS.get(instance.estado, set())
+            if attrs['estado'] not in allowed:
+                raise serializers.ValidationError({
+                    'estado': f'Transición inválida: {instance.estado} → {attrs["estado"]}'
+                })
+        return attrs
+
 
 class ContainerListSerializer(serializers.ModelSerializer):
     """Serializer simplificado para listas"""
@@ -34,9 +50,13 @@ class ContainerListSerializer(serializers.ModelSerializer):
             'posicion_fisica', 'comuna', 'secuenciado', 'fecha_programacion',
             'fecha_eta', 'fecha_liberacion', 'fecha_demurrage', 'dias_para_demurrage', 'urgencia_demurrage',
             'deposito_devolucion', 'tipo_movimiento', 'tipo_movimiento_display',
+            'retorno_destino_tipo', 'retorno_destino_cd',
+            'retorno_destino_tipo', 'retorno_destino_cd',
+            'retorno_destino_tipo', 'retorno_destino_cd',
             'cd_entrega', 'cd_entrega_nombre', 'fecha_descarga',
             # Timestamps del ciclo de vida (para operaciones)
             'fecha_asignacion', 'fecha_inicio_ruta', 'fecha_entrega', 'fecha_arribo',
+            'fecha_soltado', 'fecha_descarga', 'vacio_contabilizado',
             'tiene_programacion'
         ]
     

@@ -19,11 +19,13 @@ class Container(models.Model):
         # Estados en tránsito (lleno)
         ('en_ruta', 'En Ruta'),  # Conductor en camino a CD
         ('entregado', 'Entregado'),  # Llegó a CD cliente
+        ('soltado', 'Soltado en CD'),  # Drop & hook: sigue lleno, conductor liberado
         ('descargado', 'Descargado'),  # Cliente terminó de descargar
         
         # Estados vacío (retorno)
         ('vacio', 'Vacío'),  # Descargado, esperando retiro
         ('vacio_en_ruta', 'Vacío en Ruta'),  # Retornando a depósito
+        ('en_ccti', 'Vacío en CCTI'),
         ('devuelto', 'Devuelto'),  # Devuelto a depósito naviera
         ('cancelado', 'Cancelado'),
         ('incidente', 'Incidente'),
@@ -37,10 +39,12 @@ class Container(models.Model):
         'asignado': {'programado', 'en_ruta', 'cancelado'},
         'en_ruta': {'entregado', 'incidente', 'cancelado'},
         'incidente': {'en_ruta', 'cancelado'},
-        'entregado': {'descargado', 'vacio', 'incidente'},
+        'entregado': {'soltado', 'descargado', 'vacio', 'incidente'},
+        'soltado': {'descargado', 'incidente'},
         'descargado': {'vacio', 'vacio_en_ruta'},
         'vacio': {'vacio_en_ruta'},
-        'vacio_en_ruta': {'devuelto', 'incidente'},
+        'vacio_en_ruta': {'en_ccti', 'devuelto', 'incidente'},
+        'en_ccti': {'vacio_en_ruta'},
         'devuelto': set(),
         'cancelado': set(),
     }
@@ -97,6 +101,14 @@ class Container(models.Model):
     
     # Información de liberación y logística
     deposito_devolucion = models.CharField('Depósito Devolución', max_length=200, null=True, blank=True, help_text='Dónde devolver contenedor vacío')
+    retorno_destino_tipo = models.CharField(
+        'Tipo destino retorno', max_length=12, null=True, blank=True,
+        choices=[('deposito', 'Depósito naviera'), ('ccti', 'CCTI')],
+    )
+    retorno_destino_cd = models.ForeignKey(
+        'cds.CD', on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='retornos_vacios_recibidos', verbose_name='CCTI destino retorno',
+    )
     fecha_demurrage = models.DateTimeField('Fecha Demurrage', null=True, blank=True, db_index=True, help_text='Fecha de vencimiento de demurrage (después se paga)')
     
     # Timestamps de cada transición de estado (ciclo completo)
@@ -106,6 +118,7 @@ class Container(models.Model):
     fecha_asignacion = models.DateTimeField('Fecha Asignación', null=True, blank=True, help_text='Asignado a conductor')
     fecha_inicio_ruta = models.DateTimeField('Fecha Inicio Ruta', null=True, blank=True, help_text='Conductor sale con contenedor')
     fecha_entrega = models.DateTimeField('Fecha Entrega', null=True, blank=True, help_text='Llega a CD cliente')
+    fecha_soltado = models.DateTimeField('Fecha Soltado', null=True, blank=True, help_text='Drop & hook: conductor deja el contenedor aún lleno')
     fecha_descarga = models.DateTimeField('Fecha Descarga', null=True, blank=True, help_text='Cliente termina de descargar')
     fecha_vacio = models.DateTimeField('Fecha Vacío', null=True, blank=True, help_text='Contenedor vacío listo para retiro')
     fecha_vacio_ruta = models.DateTimeField('Fecha Vacío en Ruta', null=True, blank=True, help_text='Iniciando retorno a depósito')
@@ -258,6 +271,7 @@ class Container(models.Model):
             'asignado': 'fecha_asignacion',
             'en_ruta': 'fecha_inicio_ruta',
             'entregado': 'fecha_entrega',
+            'soltado': 'fecha_soltado',
             'descargado': 'fecha_descarga',
             'vacio': 'fecha_vacio',
             'vacio_en_ruta': 'fecha_vacio_ruta',

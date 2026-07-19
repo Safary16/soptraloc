@@ -21,7 +21,8 @@ class CDListSerializer(serializers.ModelSerializer):
         model = CD
         fields = [
             'id', 'nombre', 'codigo', 'tipo', 'tipo_display',
-            'comuna', 'lat', 'lng', 'activo',
+            'direccion', 'comuna', 'lat', 'lng', 'activo',
+            'geocerca_radio_m',
             'requiere_espera_carga', 'permite_soltar_contenedor', 
-            'tiempo_promedio_descarga_min'
+            'tiempo_promedio_descarga_min', 'capacidad_vacios', 'vacios_actuales',
         ]

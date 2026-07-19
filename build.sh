@@ -18,13 +18,9 @@ pip install -r requirements.txt
 echo " Colectando archivos estáticos..."
 python manage.py collectstatic --no-input
 
-# 4. Ejecutar migraciones con el nuevo comando seguro
-echo "🔄 Ejecutando migraciones..."
-python manage.py render_migrate
-
-# 5. Crear superusuario admin
-echo "👤 Creando superusuario admin..."
-python manage.py reset_admin --username=admin --password=1234
+# Las migraciones requieren conectividad a PostgreSQL y se ejecutan en start.sh.
+# El build debe ser reproducible aunque la base esté reiniciando o actualizando DNS.
+echo "✅ Artefactos preparados; migraciones diferidas al arranque"
 
 echo "=========================================="
 echo "✅ Build completado exitosamente"

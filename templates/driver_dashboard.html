@@ -486,10 +486,42 @@
                 if (data.success) {
                     console.log('✓ Ubicación actualizada:', lat, lng);
                     gpsActive = true;
+                    sendActiveRouteTracking(lat, lng, accuracy);
                 }
             })
             .catch(error => {
                 console.error('Error enviando ubicación:', error);
+            });
+        }
+
+        // Alimenta ETA y geocerca durante un viaje. Se limita a una vez cada
+        // 30 segundos para no recalcular rutas en cada oscilación del GPS.
+        function sendActiveRouteTracking(lat, lng, accuracy) {
+            const now = Date.now();
+            if (!activeRouteIds.length || now - lastRouteTrackingSentAt < 30000) {
+                return;
+            }
+            lastRouteTrackingSentAt = now;
+
+            activeRouteIds.forEach(progId => {
+                fetch(`/api/programaciones/${progId}/actualizar_posicion/`, {
+                    method: 'POST',
+                    credentials: 'include',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': getCookie('csrftoken')
+                    },
+                    body: JSON.stringify({ lat, lng, accuracy })
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.arribo_automatico) {
+                        showNotification('📍 Arribo registrado', 'Ingresaste a la geocerca del destino.');
+                        activeRouteIds = activeRouteIds.filter(id => id !== progId);
+                        loadAsignaciones();
+                    }
+                })
+                .catch(error => console.error('Error actualizando viaje activo:', error));
             });
         }
         
@@ -519,8 +551,10 @@
             }
         }
         
-        // Variable para rastrear asignaciones previas
+        // Variables para asignaciones y tracking de viajes activos
         let previousAssignments = [];
+        let activeRouteIds = [];
+        let lastRouteTrackingSentAt = 0;
         
         // Cargar asignaciones
         function loadAsignaciones() {
@@ -542,6 +576,9 @@
                     }
                     
                     const programaciones = data.programaciones_asignadas || [];
+                    activeRouteIds = programaciones
+                        .filter(p => p.estado === 'en_ruta')
+                        .map(p => p.id);
                     
                     // Verificar si hay nuevas asignaciones
                     checkForNewAssignments(programaciones);
@@ -620,6 +657,7 @@
                                   prog.estado === 'asignado' ? 'warning' : 
                                   prog.estado === 'en_ruta' ? 'info' : 
                                   prog.estado === 'entregado' ? 'primary' : 
+                                  prog.estado === 'soltado' ? 'warning' :
                                   prog.estado === 'descargado' ? 'primary' :
                                   prog.estado === 'vacio' ? 'success' : 'secondary';
                 
@@ -718,6 +756,8 @@
                                         <i class="fas fa-check-circle"></i> Notificar Vacío
                                     </button>
                                 `}
+                            ` : prog.estado === 'soltado' ? `
+                                <div class="alert alert-warning mb-2">Contenedor soltado; el CD debe confirmar cuando termine la descarga.</div>
                             ` : prog.estado === 'descargado' ? `
                                 <button class="btn btn-success w-100" onclick="notificarVacio(${prog.id})">
                                     <i class="fas fa-check-circle"></i> Marcar como Vacío
@@ -800,8 +840,7 @@
             }
             
             if (!navigator.geolocation) {
-                // Si no hay GPS, aún permitir notificar
-                enviarNotificacionArribo(progId, null, null);
+                alert('❌ Se necesita GPS para guardar la hora y ubicación del arribo.');
                 return;
             }
             
@@ -811,18 +850,14 @@
                     enviarNotificacionArribo(progId, position.coords.latitude, position.coords.longitude);
                 },
                 (error) => {
-                    console.warn('No se pudo obtener GPS, enviando sin coordenadas');
-                    enviarNotificacionArribo(progId, null, null);
+                    console.warn('No se pudo obtener GPS para el arribo', error);
+                    alert('❌ No se pudo obtener el GPS. Active la ubicación y vuelva a tocar “Notificar Arribo”.');
                 }
             );
         }
         
         function enviarNotificacionArribo(progId, lat, lng) {
-            const payload = {};
-            if (lat && lng) {
-                payload.lat = lat;
-                payload.lng = lng;
-            }
+            const payload = { lat: lat, lng: lng };
             
             fetch(`/api/programaciones/${progId}/notificar_arribo/`, {
                 method: 'POST',

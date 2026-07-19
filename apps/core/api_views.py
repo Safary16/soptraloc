@@ -148,6 +148,7 @@ def analytics_conductores(request):
     drivers = Driver.objects.all()
     
     analytics = []
+    from apps.core.services.learning_engine import OperationalLearningEngine
     for driver in drivers:
         # Calcular estadísticas
         programaciones_completadas = Programacion.objects.filter(
@@ -155,6 +156,7 @@ def analytics_conductores(request):
             container__estado__in=['descargado', 'devuelto']
         ).count()
         
+        perfil_ml = OperationalLearningEngine.driver_profile(driver)
         analytics.append({
             'driver_id': driver.id,
             'nombre': driver.nombre,
@@ -165,7 +167,8 @@ def analytics_conductores(request):
             'entregas_a_tiempo': driver.entregas_a_tiempo,
             'cumplimiento_porcentaje': float(driver.cumplimiento_porcentaje),
             'ocupacion_porcentaje': float(driver.ocupacion_porcentaje),
-            'programaciones_completadas': programaciones_completadas
+            'programaciones_completadas': programaciones_completadas,
+            'perfil_velocidad_ml': perfil_ml,
         })
     
     # Ordenar por cumplimiento
@@ -337,7 +340,12 @@ def operaciones_diarias(request):
             'fecha_programada': prog.fecha_programada.isoformat(),
             'fecha_asignacion': prog.fecha_asignacion.isoformat() if prog.fecha_asignacion else None,
             'fecha_inicio_viaje': prog.fecha_inicio_ruta.isoformat() if prog.fecha_inicio_ruta else None,
-            'fecha_arribo': container.fecha_entrega.isoformat() if container.fecha_entrega else None,
+            'fecha_arribo': prog.fecha_arribo_cd.isoformat() if prog.fecha_arribo_cd else None,
+            'origen_arribo': prog.origen_arribo,
+            'gps_arribo': {
+                'lat': float(prog.gps_arribo_lat),
+                'lng': float(prog.gps_arribo_lng),
+            } if prog.gps_arribo_lat is not None and prog.gps_arribo_lng is not None else None,
             'fecha_vacio': container.fecha_vacio.isoformat() if container.fecha_vacio else None,
             
             # ETAs y tiempos estimados
@@ -368,8 +376,8 @@ def operaciones_diarias(request):
         'sin_asignar': programaciones_dia.filter(driver__isnull=True).count(),
         'asignadas': programaciones_dia.filter(driver__isnull=False, container__estado='asignado').count(),
         'en_ruta': programaciones_dia.filter(container__estado='en_ruta').count(),
-        'entregadas': programaciones_dia.filter(container__estado__in=['entregado', 'descargado']).count(),
-        'completadas': programaciones_dia.filter(container__estado__in=['vacio', 'vacio_en_ruta', 'devuelto']).count(),
+        'entregadas': programaciones_dia.filter(container__estado__in=['entregado', 'soltado', 'descargado', 'vacio']).count(),
+        'completadas': programaciones_dia.filter(container__estado__in=['vacio', 'vacio_en_ruta', 'en_ccti', 'devuelto']).count(),
     }
     
     return Response({
