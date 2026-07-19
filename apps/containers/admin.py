@@ -4,9 +4,10 @@ from .models import Container
 
 @admin.register(Container)
 class ContainerAdmin(admin.ModelAdmin):
-    list_display = ['container_id', 'tipo', 'estado', 'nave', 'posicion_fisica', 'fecha_liberacion', 'secuenciado', 'updated_at']
-    list_filter = ['estado', 'tipo', 'tipo_carga', 'secuenciado', 'puerto', 'tipo_movimiento']
-    search_fields = ['container_id', 'nave', 'vendor', 'sello', 'comuna', 'booking', 'referencia']
+    list_display = ['container_id', 'cliente_empresa', 'tipo', 'estado', 'nave', 'posicion_fisica', 'fecha_liberacion', 'secuenciado', 'updated_at']
+    list_filter = ['cliente_empresa', 'estado', 'tipo', 'tipo_carga', 'secuenciado', 'puerto', 'tipo_movimiento']
+    search_fields = ['container_id', 'nave', 'vendor', 'sello', 'comuna', 'booking', 'referencia', 'cliente', 'cliente_empresa__nombre', 'cliente_empresa__rut']
+    autocomplete_fields = ['cliente_empresa', 'cd_entrega']
     readonly_fields = ['created_at', 'updated_at', 'peso_total', 'peso_total_tons', 'dias_para_demurrage', 'urgencia_demurrage']
     
     fieldsets = (
@@ -20,7 +21,7 @@ class ContainerAdmin(admin.ModelAdmin):
             'fields': ('estado', 'posicion_fisica', 'tipo_movimiento', 'secuenciado')
         }),
         ('Información de Entrega', {
-            'fields': ('cliente', 'comuna', 'cd_entrega', 'deposito_devolucion')
+            'fields': ('cliente', 'cliente_empresa', 'comuna', 'cd_entrega', 'deposito_devolucion')
         }),
         ('Fechas Importantes', {
             'fields': ('fecha_eta', 'fecha_liberacion', 'fecha_demurrage', 'dias_para_demurrage', 'urgencia_demurrage')

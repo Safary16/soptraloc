@@ -1,11 +1,30 @@
+from django.contrib import admin
 from django.test import TestCase
 from django.contrib.auth.models import User
 from django.urls import reverse
 from rest_framework.test import APITestCase
 
+from apps.clientes.models import ClienteEmpresa
+from .admin import CDAdmin
 from .models import CD
 
-# Create your tests here.
+class CDAdminClientCompanyTests(TestCase):
+    def test_client_company_is_visible_editable_filterable_and_searchable(self):
+        model_admin = CDAdmin(CD, admin.site)
+        self.assertIn('cliente_empresa', model_admin.list_display)
+        self.assertIn('cliente_empresa', model_admin.list_filter)
+        self.assertIn('cliente_empresa', model_admin.autocomplete_fields)
+        self.assertIn('cliente_empresa__nombre', model_admin.search_fields)
+        basic_fields = dict(model_admin.fieldsets)['Información Básica']['fields']
+        self.assertIn('cliente_empresa', basic_fields)
+
+    def test_admin_form_persists_client_company(self):
+        company = ClienteEmpresa.objects.create(nombre='Empresa CD', rut='76.000.001-1')
+        cd = CD.objects.create(
+            nombre='CD Empresa', codigo='CDE', direccion='Calle 1', comuna='Santiago',
+            tipo='cliente', lat=-33.45, lng=-70.65, cliente_empresa=company,
+        )
+        self.assertEqual(cd.cliente_empresa, company)
 
 
 class CDMasterDataCrudTests(APITestCase):

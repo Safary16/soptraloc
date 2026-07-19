@@ -1,20 +1,25 @@
-# Sistema de marca Safary
+# Marca Safary — vectorización de referencia
 
-Marca basada en la relación real entre Sebastián y Safary: dos perfiles mirando en la misma dirección, Safary delante y Sebastián acompañando detrás.
+Esta marca se extrajo directamente de la referencia aprobada por Sebastián usando segmentación de componentes y VTracer. No es una reinterpretación geométrica ni una imagen generada por IA.
 
-## Maestros
-- `safary-emblem.svg`: emblema para tamaños medianos y grandes (mínimo recomendado: 96 px).
-- `safary-symbol.svg`: isotipo compacto detallado (mínimo recomendado: 64 px).
-- `safary-micro.svg`: maestro óptico simplificado para 16–48 px.
-- `safary-signature.svg`: firma horizontal SAFARY.
-- `safary-brand-guide.svg`: lámina de referencia.
+## Composición preservada
+- Safary de cuerpo entero en primer plano.
+- Sebastián detrás.
+- Emblema circular original.
 
-Los SVG usan `currentColor`: negro por defecto. Para versión blanca se puede asignar `color:#fff` o usar los PNG blancos.
+Se eliminaron únicamente las olas, el texto “AMIGOS DEL MAR” y las muestras de tamaños que rodeaban al emblema.
 
-## Reglas
-1. No deformar ni cambiar proporciones.
-2. No añadir sombras, degradados ni contornos.
-3. Mantener un margen libre mínimo equivalente a la altura de la oreja de Safary.
-4. A 16–48 px usar exclusivamente `safary-micro`.
-5. Sobre fondo oscuro usar versión blanca/inversa.
-6. La fotografía original es la referencia histórica y no se sustituye ni se modifica.
+## Paleta
+Basada en la guía oficial Ubuntu y la paleta existente de SoptraLoc:
+- Dark aubergine: `#2C001E` — Safary y base.
+- Aubergine: `#772953` — Sebastián.
+- Ubuntu orange: `#E95420` — acento circular.
+- Blanco: versión inversa sobre fondos oscuros.
+
+## Uso
+- `safary-reference-ubuntu.svg`: portada y tamaños ≥64 px.
+- `safary-reference-mono.svg`: navbar, impresión y versión inversa.
+- PNG `safary-ubuntu-{16,32,64,192,512}.png`: favicon/PWA/app.
+- PNG `safary-mono-*`: usos monocromos.
+
+No deformar, rotar, agregar mar, texto interno, sombras ni degradados.
