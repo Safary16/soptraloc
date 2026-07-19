@@ -33,6 +33,30 @@ services:
       - key: DJANGO_SUPERUSER_PASSWORD
         sync: false
 
+  # Procesa liberaciones cuya fecha/hora ya llegó. El comando es idempotente.
+  - type: cron
+    name: soptraloc-release-due
+    runtime: python
+    env: python
+    plan: starter
+    schedule: "*/5 * * * *"
+    buildCommand: "./build.sh"
+    startCommand: "python manage.py release_due_containers"
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.12.0
+      - key: DATABASE_URL
+        fromDatabase:
+          name: soptraloc-db
+          property: connectionString
+      - key: SECRET_KEY
+        fromService:
+          name: soptraloc
+          type: web
+          envVarKey: SECRET_KEY
+      - key: DEBUG
+        value: false
+
 databases:
   - name: soptraloc-db
     databaseName: soptraloc

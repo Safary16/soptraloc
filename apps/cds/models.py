@@ -25,7 +25,7 @@ class CD(models.Model):
         help_text='Si se configura, una posición dentro de este radio registra el arribo automáticamente.'
     )
     
-    # Gestión de contenedores vacíos (solo para CCTI)
+    # Gestión de contenedores vacíos (CCTI o CD cliente con patio habilitado)
     capacidad_vacios = models.IntegerField('Capacidad Vacíos', default=0)
     vacios_actuales = models.IntegerField('Vacíos Actuales', default=0)
     
@@ -81,18 +81,16 @@ class CD(models.Model):
     
     @property
     def puede_recibir_vacios(self):
-        """Verifica si el CCTI puede recibir más contenedores vacíos"""
+        """Verifica si la ubicación puede almacenar vacíos según su capacidad."""
         return (
-            self.tipo == 'ccti' and 
-            self.activo and 
+            self.activo and
+            self.capacidad_vacios > 0 and
             self.vacios_actuales < self.capacidad_vacios
         )
     
     @property
     def espacios_disponibles(self):
         """Retorna cuántos espacios libres tiene el CCTI"""
-        if self.tipo != 'ccti':
-            return 0
         return max(0, self.capacidad_vacios - self.vacios_actuales)
     
     def recibir_vacio(self):

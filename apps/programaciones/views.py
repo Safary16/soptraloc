@@ -80,7 +80,7 @@ class ProgramacionViewSet(viewsets.ModelViewSet):
         
         # Contenedores con fecha_demurrage próxima a vencer
         # Estados activos: liberado, programado, asignado, en_ruta, entregado
-        # Excluir: descargado, vacio, vacio_en_ruta, devuelto (ya completaron el ciclo)
+        # Excluir soltado/descargado/vacío: el viaje lleno ya terminó.
         containers_riesgo = Container.objects.filter(
             fecha_demurrage__isnull=False,
             fecha_demurrage__lte=fecha_limite,
@@ -260,7 +260,7 @@ class ProgramacionViewSet(viewsets.ModelViewSet):
         
         # Filtrar solo programaciones con contenedores en estados activos
         # Excluir contenedores que ya están vacíos o devueltos (completados)
-        estados_activos = ['programado', 'secuenciado', 'asignado', 'en_ruta', 'entregado', 'descargado']
+        estados_activos = ['programado', 'secuenciado', 'asignado', 'en_ruta', 'entregado', 'soltado', 'descargado']
         programaciones = self.queryset.filter(
             container__estado__in=estados_activos
         ).select_related('container', 'driver', 'cd')
@@ -880,8 +880,11 @@ class ProgramacionViewSet(viewsets.ModelViewSet):
                 {'error': 'Programación no tiene conductor asignado'},
                 status=status.HTTP_400_BAD_REQUEST
             )
+        if not self._usuario_puede_operar_viaje(request, programacion):
+            return Response({'error': 'No puede operar un viaje ajeno.'}, status=status.HTTP_403_FORBIDDEN)
         
-        # Permitir notificar vacío desde 'entregado' o 'descargado'
+        # El conductor confirma la descarga solo cuando esperó con el equipo.
+        # Tras un drop & hook, la confirmación corresponde al operador del CD.
         if programacion.container.estado not in ['entregado', 'descargado']:
             return Response(
                 {'error': f'Contenedor debe estar entregado o descargado. Estado actual: {programacion.container.get_estado_display()}'},
@@ -894,14 +897,14 @@ class ProgramacionViewSet(viewsets.ModelViewSet):
         if lat and lng:
             programacion.driver.actualizar_posicion(lat, lng)
         
-        # Si está entregado, pasar primero por descargado
-        if programacion.container.estado == 'entregado':
-            usuario = request.user.username if request.user.is_authenticated else None
-            programacion.container.cambiar_estado('descargado', usuario)
-        
-        # Cambiar estado del contenedor a 'vacio'
         usuario = request.user.username if request.user.is_authenticated else None
-        programacion.container.cambiar_estado('vacio', usuario)
+        from apps.core.services.operations import OperationalFlowService
+        try:
+            programacion, timing = OperationalFlowService.mark_empty(
+                programacion, usuario, source='portal_conductor'
+            )
+        except ValueError as exc:
+            return Response({'error': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
 
         # 🆕 Actualizar RegistroOperacion con estado final
         self._update_registro_operacion_on_completion(programacion, 'PARCIAL') # Ojo: PARCIAL porque aún no se devuelve el vacío
@@ -926,7 +929,8 @@ class ProgramacionViewSet(viewsets.ModelViewSet):
             'success': True,
             'mensaje': f'Contenedor marcado como vacío. Listo para retiro.',
             'programacion': serializer.data,
-            'nuevo_estado': 'vacio'
+            'nuevo_estado': 'vacio',
+            'tiempo_descarga_min': timing.tiempo_real_min if timing else None,
         })
     
     @action(detail=True, methods=['post'])
@@ -948,6 +952,8 @@ class ProgramacionViewSet(viewsets.ModelViewSet):
                 {'error': 'Programación no tiene conductor asignado'},
                 status=status.HTTP_400_BAD_REQUEST
             )
+        if not self._usuario_puede_operar_viaje(request, programacion):
+            return Response({'error': 'No puede operar un viaje ajeno.'}, status=status.HTTP_403_FORBIDDEN)
         
         # Verificar que el CD permita soltar contenedor
         if not programacion.cd.permite_soltar_contenedor:
@@ -956,8 +962,8 @@ class ProgramacionViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST
             )
         
-        # Solo permitir soltar desde 'entregado'
-        if programacion.container.estado != 'entregado':
+        # Permitir reintento idempotente desde conexiones móviles inestables.
+        if programacion.container.estado not in {'entregado', 'soltado'}:
             return Response(
                 {'error': f'Solo se puede soltar el contenedor después de haberlo entregado. Estado actual: {programacion.container.get_estado_display()}'},
                 status=status.HTTP_400_BAD_REQUEST
@@ -969,41 +975,41 @@ class ProgramacionViewSet(viewsets.ModelViewSet):
         if lat and lng:
             programacion.driver.actualizar_posicion(lat, lng)
         
-        # Cambiar estado del contenedor a 'descargado' (conductor ya no está esperando)
         usuario = request.user.username if request.user.is_authenticated else None
-        programacion.container.cambiar_estado('descargado', usuario)
+        from apps.core.services.operations import OperationalFlowService
+        try:
+            programacion, created = OperationalFlowService.drop_container(programacion, usuario)
+        except ValueError as exc:
+            return Response({'error': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
         
-        # 🆕 Actualizar RegistroOperacion con estado final
-        self._update_registro_operacion_on_completion(programacion, 'ENTREGADO') # Se asume entrega completa al soltar
+        # El viaje lleno terminó, pero la descarga sigue pendiente en el CD.
+        self._update_registro_operacion_on_completion(programacion, 'PARCIAL')
         
         # Crear evento de contenedor soltado
         from apps.events.models import Event
-        Event.objects.create(
-            container=programacion.container,
-            event_type='contenedor_soltado',
-            detalles={
-                'conductor': programacion.driver.nombre,
-                'cd': programacion.cd.nombre,
-                'tipo': 'drop_and_hook',
-                'gps_lat': str(lat) if lat else None,
-                'gps_lng': str(lng) if lng else None,
-                'timestamp': timezone.now().isoformat()
-            },
-            usuario=usuario
-        )
-        
-        # Liberar al conductor (decrementar entregas del día)
-        if programacion.driver.num_entregas_dia > 0:
-            programacion.driver.num_entregas_dia -= 1
-            programacion.driver.save(update_fields=['num_entregas_dia'])
+        if created:
+            Event.objects.create(
+                container=programacion.container,
+                event_type='contenedor_soltado',
+                detalles={
+                    'conductor': programacion.driver.nombre,
+                    'cd': programacion.cd.nombre,
+                    'tipo': 'drop_and_hook',
+                    'gps_lat': str(lat) if lat else None,
+                    'gps_lng': str(lng) if lng else None,
+                    'timestamp': timezone.now().isoformat()
+                },
+                usuario=usuario
+            )
         
         serializer = self.get_serializer(programacion)
         return Response({
             'success': True,
             'mensaje': f'Contenedor soltado en {programacion.cd.nombre}. Conductor libre para nueva asignación.',
             'programacion': serializer.data,
-            'nuevo_estado': 'descargado',
-            'conductor_liberado': True
+            'nuevo_estado': 'soltado',
+            'conductor_liberado': True,
+            'ya_registrado': not created,
         })
     
     @action(detail=True, methods=['post'])

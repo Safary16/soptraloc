@@ -467,7 +467,7 @@ class ContainerViewSet(viewsets.ModelViewSet):
         # Validar que esté liberado o secuenciado (no ya programado)
         if container.estado not in ['liberado', 'secuenciado']:
             # Proporcionar mensaje específico según el estado
-            if container.estado in ['programado', 'asignado', 'en_ruta', 'entregado', 'descargado']:
+            if container.estado in ['programado', 'asignado', 'en_ruta', 'entregado', 'soltado', 'descargado']:
                 return Response(
                     {
                         'error': f'Contenedor ya está {container.get_estado_display()}. No se puede programar nuevamente.',
@@ -654,8 +654,24 @@ class ContainerViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST
             )
         
+        destination_type = request.data.get('destino_tipo')
+        destination_cd = None
+        if destination_type == 'ccti':
+            try:
+                from apps.cds.models import CD
+                destination_cd = CD.objects.get(pk=request.data.get('destino_cd_id'))
+            except (CD.DoesNotExist, TypeError, ValueError):
+                return Response({'error': 'CCTI destino inválido'}, status=status.HTTP_400_BAD_REQUEST)
         usuario = request.user.username if request.user.is_authenticated else None
-        container.cambiar_estado('vacio_en_ruta', usuario)
+        from apps.core.services.returns import EmptyReturnService
+        try:
+            container = EmptyReturnService.start(
+                container, destination_type=destination_type,
+                destination_cd=destination_cd,
+                depot_name=request.data.get('deposito_devolucion'), user=usuario,
+            )
+        except ValueError as exc:
+            return Response({'error': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
         
         serializer = self.get_serializer(container)
         return Response({
@@ -666,7 +682,7 @@ class ContainerViewSet(viewsets.ModelViewSet):
     
     @action(detail=True, methods=['post'])
     def marcar_devuelto(self, request, pk=None):
-        """Marca contenedor como devuelto a depósito naviera"""
+        """Completa retorno en depósito o CCTI según el destino seleccionado."""
         container = self.get_object()
         
         if container.estado != 'vacio_en_ruta':
@@ -676,7 +692,11 @@ class ContainerViewSet(viewsets.ModelViewSet):
             )
         
         usuario = request.user.username if request.user.is_authenticated else None
-        container.cambiar_estado('devuelto', usuario)
+        from apps.core.services.returns import EmptyReturnService
+        try:
+            container = EmptyReturnService.complete(container, user=usuario)
+        except ValueError as exc:
+            return Response({'error': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
 
         # 🆕 Actualizar RegistroOperacion con estado final
         try:
@@ -685,7 +705,7 @@ class ContainerViewSet(viewsets.ModelViewSet):
                 from apps.programaciones.models import RegistroOperacion
                 registro = RegistroOperacion.objects.filter(programacion=programacion).order_by('-created_at').first()
                 if registro:
-                    registro.estado_final = 'FALLIDO' # O 'ENTREGADO' si se considera exitosa la devolución
+                    registro.estado_final = 'ENTREGADO'
                     registro.save(update_fields=['estado_final'])
         except Exception as e:
             logger.error(f"Error actualizando RegistroOperacion para Contenedor {container.id}: {str(e)}", exc_info=True)
@@ -693,7 +713,7 @@ class ContainerViewSet(viewsets.ModelViewSet):
         serializer = self.get_serializer(container)
         return Response({
             'success': True,
-            'mensaje': f'Contenedor {container.container_id} devuelto a depósito',
+            'mensaje': f'Retorno de {container.container_id} completado: {container.get_estado_display()}',
             'container': serializer.data
         })
     
@@ -761,16 +781,25 @@ class ContainerViewSet(viewsets.ModelViewSet):
         
         container = self.get_object()
         
-        if container.estado != 'entregado':
+        if container.estado not in {'entregado', 'soltado'}:
             return Response(
                 {'error': f'Contenedor debe estar entregado. Estado actual: {container.get_estado_display()}'},
                 status=status.HTTP_400_BAD_REQUEST
             )
         
-        # Registrar hora de descarga
-        hora_fin = timezone.now()
         usuario = request.user.username if request.user.is_authenticated else None
-        container.cambiar_estado('descargado', usuario)
+        programacion = getattr(container, 'programacion', None)
+        if not programacion:
+            return Response({'error': 'Contenedor sin programación asociada'}, status=status.HTTP_400_BAD_REQUEST)
+        from apps.core.services.operations import OperationalFlowService
+        try:
+            programacion, timing, _ = OperationalFlowService.complete_discharge(
+                programacion, usuario, source='operador'
+            )
+        except ValueError as exc:
+            return Response({'error': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+        container = programacion.container
+        hora_fin = container.fecha_descarga
 
         # 🆕 Actualizar RegistroOperacion con estado final
         try:
@@ -794,47 +823,42 @@ class ContainerViewSet(viewsets.ModelViewSet):
             elif cd.permite_soltar_contenedor:
                 mensaje_adicional = f" (Drop & hook en {cd.nombre}, conductor libre inmediatamente)"
             
-            # 🆕 Crear registro ML de TiempoOperacion
-            try:
-                # Obtener programación y conductor
-                programacion = getattr(container, 'programacion', None)
-                conductor = programacion.driver if programacion else None
-                
-                # Calcular hora de inicio (usar fecha_entrega como aproximación)
-                hora_inicio = container.fecha_entrega if container.fecha_entrega else (hora_fin - timedelta(hours=1))
-                
-                # Calcular tiempos
-                tiempo_real_min = int((hora_fin - hora_inicio).total_seconds() / 60)
-                tiempo_estimado = cd.tiempo_promedio_descarga_min or 60
-                
-                # Crear registro
-                TiempoOperacion.objects.create(
-                    cd=cd,
-                    conductor=conductor,
-                    container=container,
-                    tipo_operacion='descarga_cd',
-                    tiempo_estimado_min=tiempo_estimado,
-                    tiempo_real_min=tiempo_real_min,
-                    hora_inicio=hora_inicio,
-                    hora_fin=hora_fin,
-                    anomalia=tiempo_real_min > max(1, tiempo_estimado) * 3,
-                    observaciones=f"Auto-generado desde registrar_descarga por {usuario or 'sistema'}"
-                )
-                
-                mensaje_adicional += f" [ML: {tiempo_real_min}min registrados]"
-            
-            except Exception as e:
-                # No fallar si el registro ML falla
-                import logging
-                logger = logging.getLogger(__name__)
-                logger.warning(f"Error creando registro TiempoOperacion: {str(e)}")
+            if timing:
+                mensaje_adicional += f" [ML: {timing.tiempo_real_min}min registrados]"
         
         serializer = self.get_serializer(container)
         return Response({
             'success': True,
             'mensaje': f'Descarga registrada para {container.container_id}{mensaje_adicional}',
             'container': serializer.data,
-            'hora_descarga': hora_fin.isoformat()
+            'hora_descarga': hora_fin.isoformat(),
+            'tiempo_descarga_min': timing.tiempo_real_min if timing else None,
+        })
+
+    @action(detail=True, methods=['post'], url_path='confirmar-vacio-cd')
+    def confirmar_vacio_cd(self, request, pk=None):
+        """El operador del CD confirma descarga terminada y disponibilidad del vacío."""
+        container = self.get_object()
+        if container.estado != 'soltado':
+            return Response(
+                {'error': 'Solo se confirma desde el estado Soltado en CD.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        programacion = getattr(container, 'programacion', None)
+        if not programacion:
+            return Response({'error': 'Contenedor sin programación'}, status=status.HTTP_400_BAD_REQUEST)
+        from apps.core.services.operations import OperationalFlowService
+        try:
+            programacion, timing = OperationalFlowService.mark_empty(
+                programacion, request.user.username, source='confirmacion_cd'
+            )
+        except ValueError as exc:
+            return Response({'error': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+        return Response({
+            'success': True,
+            'nuevo_estado': 'vacio',
+            'tiempo_descarga_min': timing.tiempo_real_min if timing else None,
+            'container': self.get_serializer(programacion.container).data,
         })
     
     @action(detail=True, methods=['post'])
@@ -867,13 +891,16 @@ class ContainerViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST
             )
         
-        # Soltar contenedor
-        hora_descarga = timezone.now()
         usuario = request.user.username if request.user.is_authenticated else None
-        container.cambiar_estado('descargado', usuario)
-        
-        # El CD recibe el vacío automáticamente (esto se maneja con signals más tarde)
-        # Por ahora solo registramos el evento
+        programacion = getattr(container, 'programacion', None)
+        if not programacion:
+            return Response({'error': 'Contenedor sin programación asociada'}, status=status.HTTP_400_BAD_REQUEST)
+        from apps.core.services.operations import OperationalFlowService
+        try:
+            programacion, _ = OperationalFlowService.drop_container(programacion, usuario)
+        except ValueError as exc:
+            return Response({'error': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+        container = programacion.container
         
         serializer = self.get_serializer(container)
         return Response({
@@ -881,5 +908,6 @@ class ContainerViewSet(viewsets.ModelViewSet):
             'mensaje': f'Contenedor soltado en {cd.nombre}. Conductor liberado inmediatamente.',
             'container': serializer.data,
             'conductor_libre': True,
-            'hora_descarga': hora_descarga.isoformat()
+            'nuevo_estado': 'soltado',
+            'hora_soltado': container.fecha_soltado.isoformat()
         })

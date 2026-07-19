@@ -36,6 +36,7 @@ class Command(BaseCommand):
         )
 
     def handle(self, *args, **options):
+        call_command('release_due_containers')
         self.stdout.write("="*60)
         self.stdout.write(self.style.WARNING("🔧 RENDER MAINTENANCE MANAGER"))
         self.stdout.write("="*60)

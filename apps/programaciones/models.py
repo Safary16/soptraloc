@@ -144,6 +144,10 @@ class Programacion(models.Model):
     
     # Timestamps
     fecha_asignacion = models.DateTimeField(null=True, blank=True, verbose_name='Fecha Asignación')
+    fecha_liberacion_conductor = models.DateTimeField(
+        null=True, blank=True, verbose_name='Fecha Liberación Conductor',
+        help_text='Momento en que el conductor quedó realmente disponible para otro servicio.'
+    )
     created_at = models.DateTimeField(auto_now_add=True, verbose_name='Creado')
     updated_at = models.DateTimeField(auto_now=True, verbose_name='Actualizado')
     
@@ -180,7 +184,8 @@ class Programacion(models.Model):
                 raise ValidationError(f'El conductor {locked_driver.nombre} no está disponible.')
             conflict = Programacion.objects.select_for_update().filter(
                 driver=locked_driver,
-                container__estado__in=['asignado', 'en_ruta'],
+                fecha_liberacion_conductor__isnull=True,
+                container__estado__in=['asignado', 'en_ruta', 'entregado', 'descargado', 'vacio', 'vacio_en_ruta'],
             ).exclude(pk=programacion.pk).exists()
             if conflict:
                 raise ValidationError('El conductor ya participa en otro servicio activo.')
@@ -217,6 +222,24 @@ class Programacion(models.Model):
             import logging
             logger = logging.getLogger(__name__)
             logger.error(f"Error creando notificación de asignación para la programación {self.id}: {str(e)}", exc_info=True)
+
+    def liberar_conductor(self):
+        """Libera capacidad una sola vez, incluso ante reintentos del navegador."""
+        if not self.driver_id:
+            return False
+        with transaction.atomic():
+            locked = Programacion.objects.select_for_update().get(pk=self.pk)
+            if locked.fecha_liberacion_conductor:
+                self.fecha_liberacion_conductor = locked.fecha_liberacion_conductor
+                return False
+            released_at = timezone.now()
+            locked.fecha_liberacion_conductor = released_at
+            locked.save(update_fields=['fecha_liberacion_conductor', 'updated_at'])
+            Driver.objects.filter(pk=locked.driver_id, num_entregas_dia__gt=0).update(
+                num_entregas_dia=F('num_entregas_dia') - 1
+            )
+            self.fecha_liberacion_conductor = released_at
+            return True
     
     @property
     def horas_hasta_programacion(self):

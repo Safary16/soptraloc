@@ -6,11 +6,14 @@ from django.contrib.auth.models import User
 from django.urls import reverse
 from rest_framework.test import APITestCase
 from django.utils import timezone
+from django.core.management import call_command
+from datetime import timedelta
 
 from apps.cds.models import CD
 from apps.containers.importers.programacion import ProgramacionImporter
 from apps.containers.models import Container
 from apps.programaciones.models import Programacion
+from apps.core.services.returns import EmptyReturnService
 
 
 class ProgramacionImporterBusinessFlowTests(TestCase):
@@ -84,3 +87,69 @@ class ContainerCrudTests(APITestCase):
         self.assertEqual(response.status_code, 204)
         container.refresh_from_db()
         self.assertEqual(container.estado, 'cancelado')
+
+
+class ScheduledReleaseTests(TestCase):
+    def test_only_due_releases_are_advanced(self):
+        due = Container.objects.create(
+            container_id='DUEU1234567', tipo='40', nave='Nave', estado='por_arribar',
+            fecha_liberacion=timezone.now() - timedelta(minutes=1),
+        )
+        future = Container.objects.create(
+            container_id='FUTU1234567', tipo='40', nave='Nave', estado='por_arribar',
+            fecha_liberacion=timezone.now() + timedelta(hours=1),
+        )
+        call_command('release_due_containers')
+        due.refresh_from_db(); future.refresh_from_db()
+        self.assertEqual(due.estado, 'liberado')
+        self.assertEqual(future.estado, 'por_arribar')
+
+
+class EmptyReturnFlowTests(TestCase):
+    def setUp(self):
+        self.origin = CD.objects.create(
+            nombre='Patio origen', codigo='ORIGIN', direccion='Origen', comuna='Santiago',
+            lat=-33.4, lng=-70.6, capacidad_vacios=5, vacios_actuales=1,
+        )
+        self.ccti = CD.objects.create(
+            nombre='CCTI destino', codigo='CCTI-D', direccion='Destino', comuna='Santiago',
+            tipo='ccti', lat=-33.5, lng=-70.7, capacidad_vacios=5,
+        )
+        self.container = Container.objects.create(
+            container_id='RETU1234567', tipo='40', nave='Nave', estado='vacio',
+            cd_entrega=self.origin, vacio_contabilizado=True,
+        )
+
+    def test_return_to_ccti_moves_inventory_between_locations(self):
+        EmptyReturnService.start(
+            self.container, destination_type='ccti', destination_cd=self.ccti, user='test'
+        )
+        self.container.refresh_from_db(); self.origin.refresh_from_db()
+        self.assertEqual(self.container.estado, 'vacio_en_ruta')
+        self.assertEqual(self.origin.vacios_actuales, 0)
+        EmptyReturnService.complete(self.container, user='test')
+        self.container.refresh_from_db(); self.ccti.refresh_from_db()
+        self.assertEqual(self.container.estado, 'en_ccti')
+        self.assertEqual(self.ccti.vacios_actuales, 1)
+        self.assertTrue(self.container.vacio_contabilizado)
+
+    def test_return_to_depot_closes_cycle(self):
+        EmptyReturnService.start(
+            self.container, destination_type='deposito', depot_name='Depósito Naviera', user='test'
+        )
+        EmptyReturnService.complete(self.container, user='test')
+        self.container.refresh_from_db(); self.origin.refresh_from_db()
+        self.assertEqual(self.container.estado, 'devuelto')
+        self.assertEqual(self.origin.vacios_actuales, 0)
+        self.assertFalse(self.container.vacio_contabilizado)
+
+    def test_ccti_without_capacity_is_rejected_before_departure(self):
+        self.ccti.capacidad_vacios = 0
+        self.ccti.save(update_fields=['capacidad_vacios', 'updated_at'])
+        with self.assertRaises(ValueError):
+            EmptyReturnService.start(
+                self.container, destination_type='ccti', destination_cd=self.ccti, user='test'
+            )
+        self.container.refresh_from_db(); self.origin.refresh_from_db()
+        self.assertEqual(self.container.estado, 'vacio')
+        self.assertEqual(self.origin.vacios_actuales, 1)

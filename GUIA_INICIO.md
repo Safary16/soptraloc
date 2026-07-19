@@ -39,6 +39,11 @@ de forma segura al arrancar.
 
 Para muchos contenedores, usa **Importar** y carga el Excel de embarque.
 
+Las liberaciones futuras son revisadas automáticamente cada cinco minutos por
+el cron `soptraloc-release-due` del Blueprint. Render cobra los cron jobs; si se
+usa un plan sin cron, hay que ejecutar `python manage.py release_due_containers`
+desde un programador externo con esa misma frecuencia.
+
 ## 4. Agregar un conductor
 
 1. Abre **Datos maestros → Conductores**.
@@ -48,3 +53,25 @@ Para muchos contenedores, usa **Importar** y carga el Excel de embarque.
 5. Si se pierde, usa el botón de llave para regenerarla.
 
 Los botones de desactivar/cancelar conservan el historial; no borran los datos operacionales.
+
+## 5. Drop & hook y vacíos
+
+- **Soltar contenedor** deja al conductor disponible inmediatamente, pero el
+  contenedor sigue lleno y queda en estado **Soltado en CD**.
+- Cuando el CD termina la descarga, el operador abre **Contenedores** y pulsa el
+  botón verde de confirmación.
+- Solo entonces pasa a **Vacío** y entra al inventario de vacíos del CD.
+- En CDs sin drop & hook, el conductor espera y confirma **Notificar vacío**;
+  allí se mide desde el arribo hasta la descarga y recién después queda libre.
+
+## 6. Retorno de vacíos
+
+Desde **Contenedores**, un vacío disponible puede iniciar retorno hacia:
+
+- **Depósito de naviera**: al confirmar llegada, termina como **Devuelto**.
+- **CCTI**: se valida capacidad antes de salir; al confirmar llegada, termina
+  como **Vacío en CCTI** y aumenta el inventario de ese CCTI.
+
+Al iniciar el retorno, el vacío se descuenta inmediatamente del inventario de
+su ubicación de origen. Así, un mismo contenedor nunca queda contado en dos
+patios simultáneamente.

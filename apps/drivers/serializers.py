@@ -102,7 +102,7 @@ class DriverDetailSerializer(DriverSerializer):
         for prog in programaciones:
             # Filter by estado after retrieval since it's a property
             estado = prog.estado
-            if estado in ['programado', 'asignado', 'en_ruta', 'entregado', 'descargado', 'vacio']:
+            if estado in ['programado', 'asignado', 'en_ruta', 'entregado', 'soltado', 'descargado', 'vacio']:
                 item = {
                     'id': prog.id,
                     'contenedor': prog.container.container_id_formatted if prog.container else None,

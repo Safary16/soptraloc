@@ -7,7 +7,8 @@ from apps.drivers.models import Driver
 from apps.containers.models import Container
 from apps.notifications.models import Notification
 from apps.cds.models import CD
-from .models import Programacion
+from .models import Programacion, TiempoOperacion
+from apps.core.services.operations import OperationalFlowService
 from unittest.mock import patch
 from rest_framework.test import APIRequestFactory, force_authenticate
 from .views import ProgramacionViewSet
@@ -171,9 +172,7 @@ class ProgramacionArriboTests(TestCase):
         request = self.factory.post('/', {'lat': -33.45, 'lng': -70.65}, format='json')
         force_authenticate(request, user=other_user)
         view = ProgramacionViewSet.as_view({'post': 'notificar_arribo'})
-
         response = view(request, pk=self.programacion.pk)
-
         self.assertEqual(response.status_code, 403)
         self.programacion.refresh_from_db()
         self.assertIsNone(self.programacion.fecha_arribo_cd)
@@ -181,10 +180,71 @@ class ProgramacionArriboTests(TestCase):
     def test_repeated_manual_arrival_is_idempotent(self):
         first = self._post('notificar_arribo', {'lat': -33.45, 'lng': -70.65})
         second = self._post('notificar_arribo', {'lat': -33.46, 'lng': -70.66})
-
         self.assertEqual(first.status_code, 200)
         self.assertEqual(second.status_code, 200)
         self.assertTrue(second.data['ya_registrado'])
         self.programacion.refresh_from_db()
         self.assertEqual(float(self.programacion.gps_arribo_lat), -33.45)
         self.assertEqual(float(self.programacion.gps_arribo_lng), -70.65)
+
+
+class OperationalCompletionTests(TestCase):
+    def _flow(self, drop_hook):
+        user = User.objects.create_user(f'driver_{drop_hook}', password='***')
+        driver = Driver.objects.create(
+            nombre=f'Driver {drop_hook}', user=user, num_entregas_dia=1,
+        )
+        cd = CD.objects.create(
+            nombre=f'CD {drop_hook}', codigo=f'CD-{drop_hook}', direccion='Destino',
+            comuna='Santiago', lat=-33.45, lng=-70.65,
+            permite_soltar_contenedor=drop_hook,
+            requiere_espera_carga=not drop_hook,
+            capacidad_vacios=10,
+        )
+        container = Container.objects.create(
+            container_id=('DROP' if drop_hook else 'WAIT') + '1234567',
+            estado='entregado', cliente='Cliente', cd_entrega=cd,
+            fecha_entrega=timezone.now() - timedelta(minutes=25),
+        )
+        programacion = Programacion.objects.create(
+            container=container, cd=cd, driver=driver, cliente='Cliente',
+            fecha_programada=timezone.now(),
+        )
+        return driver, cd, container, programacion
+
+    def test_drop_hook_separates_driver_release_from_empty_inventory(self):
+        driver, cd, container, programacion = self._flow(True)
+        OperationalFlowService.drop_container(programacion, 'driver')
+        container.refresh_from_db(); driver.refresh_from_db(); cd.refresh_from_db()
+        self.assertEqual(container.estado, 'soltado')
+        self.assertEqual(driver.num_entregas_dia, 0)
+        self.assertEqual(cd.vacios_actuales, 0)
+        self.assertFalse(container.vacio_contabilizado)
+
+        completed, timing = OperationalFlowService.mark_empty(programacion, 'cd', 'test')
+        completed.container.refresh_from_db(); cd.refresh_from_db()
+        self.assertEqual(completed.container.estado, 'vacio')
+        self.assertEqual(cd.vacios_actuales, 1)
+        self.assertTrue(completed.container.vacio_contabilizado)
+        self.assertIsNotNone(timing)
+
+    def test_waiting_driver_is_released_only_after_real_discharge(self):
+        driver, cd, container, programacion = self._flow(False)
+        completed, timing = OperationalFlowService.mark_empty(programacion, 'driver', 'test')
+        completed.container.refresh_from_db(); driver.refresh_from_db(); cd.refresh_from_db()
+        self.assertEqual(completed.container.estado, 'vacio')
+        self.assertEqual(driver.num_entregas_dia, 0)
+        self.assertEqual(cd.vacios_actuales, 0)
+        self.assertEqual(TiempoOperacion.objects.filter(container=container).count(), 1)
+        self.assertGreaterEqual(timing.tiempo_real_min, 24)
+
+    def test_retries_do_not_double_release_or_duplicate_timing(self):
+        driver, cd, container, programacion = self._flow(True)
+        OperationalFlowService.drop_container(programacion, 'driver')
+        _, created = OperationalFlowService.drop_container(programacion, 'driver')
+        self.assertFalse(created)
+        OperationalFlowService.mark_empty(programacion, 'cd', 'test')
+        driver.refresh_from_db(); cd.refresh_from_db()
+        self.assertEqual(driver.num_entregas_dia, 0)
+        self.assertEqual(cd.vacios_actuales, 1)
+        self.assertEqual(TiempoOperacion.objects.filter(container=container).count(), 1)

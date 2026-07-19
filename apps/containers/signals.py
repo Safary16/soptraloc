@@ -62,7 +62,7 @@ def manejar_vacios_automaticamente(sender, instance, created, **kwargs):
     Signal que se ejecuta después de guardar un Container
     
     Lógica:
-    1. Si el contenedor cambia a estado 'descargado'
+    1. Si el contenedor cambia a estado 'vacio'
     2. Y tiene un CD de entrega asignado
     3. Y el CD permite soltar contenedor
     4. Entonces incrementar automáticamente el inventario de vacíos del CD
@@ -71,8 +71,8 @@ def manejar_vacios_automaticamente(sender, instance, created, **kwargs):
     if created:
         return
     
-    # Solo procesar si el estado es 'descargado'
-    if instance.estado != 'descargado':
+    # Un drop deja carga llena. Solo contabilizar cuando ya está realmente vacío.
+    if instance.estado != 'vacio':
         return
     
     # Verificar que tenga CD de entrega

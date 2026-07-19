@@ -66,9 +66,9 @@ class CDViewSet(viewsets.ModelViewSet):
         """
         cd = self.get_object()
         
-        if cd.tipo != 'ccti':
+        if cd.capacidad_vacios <= 0:
             return Response(
-                {'error': 'Solo los CCTIs pueden recibir vacíos'},
+                {'error': 'Este CD no tiene capacidad de vacíos configurada'},
                 status=status.HTTP_400_BAD_REQUEST
             )
         
@@ -92,9 +92,9 @@ class CDViewSet(viewsets.ModelViewSet):
         """
         cd = self.get_object()
         
-        if cd.tipo != 'ccti':
+        if cd.capacidad_vacios <= 0:
             return Response(
-                {'error': 'Solo los CCTIs gestionan vacíos'},
+                {'error': 'Este CD no gestiona inventario de vacíos'},
                 status=status.HTTP_400_BAD_REQUEST
             )
         

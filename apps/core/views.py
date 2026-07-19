@@ -59,7 +59,7 @@ def estados(request):
     estados = [
         'por_arribar', 'liberado', 'secuenciado', 'programado', 
         'asignado', 'en_ruta', 'entregado', 'descargado', 
-        'vacio', 'vacio_en_ruta', 'devuelto'
+        'vacio', 'vacio_en_ruta', 'en_ccti', 'devuelto'
     ]
     
     # Contar contenedores por estado
