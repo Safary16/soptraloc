@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-labelledby="title desc" color="#000">
+<title id="title">Isotipo Safary</title><desc id="desc">Safary delante y Sebastián detrás, dos perfiles mirando a la izquierda.</desc>
+<g fill="currentColor">
+<!-- humano atrás: forma gruesa, sin detalles finos -->
+<path d="M355 40c-71 0-129 58-129 129 0 37 16 72 43 96l-7 51c-52 19-89 60-102 116h286c-13-56-51-97-104-116l-7-52c34-24 55-63 55-105 0-66-53-119-119-119zM251 139c8-29 33-51 64-55 25-3 49 5 66 23-20-6-39-3-54 7-13 9-21 21-24 35l-21 7 11 17-12 14 15 9-2 21c-9 11-22 17-37 18-17-18-26-41-26-65 0-11 2-21 5-31 5 3 10 3 15 0z"/>
+<!-- separación amplia -->
+<path d="M226 244c26 21 43 50 48 85-24 7-45 18-63 34-12-28-29-50-51-65 18-23 40-41 66-54z" fill="#fff"/>
+<!-- perro delante: hocico y oreja exagerados para 16–32 px -->
+<path d="M169 201 97 132l12 94c-42 9-76 34-99 73l-34 59 66 23 91-4c38-2 71-22 90-55 17-30 18-65 4-96-11-24-31-44-58-56zM132 374c59 5 103 32 130 76H30c21-39 54-66 102-76z"/>
+<path d="M111 226 104 157l49 57z" fill="#fff"/>
+<circle cx="102" cy="283" r="8" fill="#fff"/>
+<path d="M10 342c29 0 53 8 74 24" fill="none" stroke="#fff" stroke-width="12" stroke-linecap="round"/>
+</g></svg>
