@@ -4,14 +4,15 @@ from .models import CD
 
 @admin.register(CD)
 class CDAdmin(admin.ModelAdmin):
-    list_display = ['nombre', 'codigo', 'tipo', 'comuna', 'activo', 'vacios_display', 'espacios_disponibles']
-    list_filter = ['tipo', 'activo', 'comuna']
-    search_fields = ['nombre', 'codigo', 'direccion', 'comuna']
+    list_display = ['nombre', 'codigo', 'tipo', 'cliente_empresa', 'comuna', 'activo', 'vacios_display', 'espacios_disponibles']
+    list_filter = ['tipo', 'cliente_empresa', 'activo', 'comuna']
+    search_fields = ['nombre', 'codigo', 'direccion', 'comuna', 'cliente_empresa__nombre', 'cliente_empresa__rut']
+    autocomplete_fields = ['cliente_empresa']
     readonly_fields = ['created_at', 'updated_at', 'espacios_disponibles']
     
     fieldsets = (
         ('Información Básica', {
-            'fields': ('nombre', 'codigo', 'tipo', 'activo')
+            'fields': ('nombre', 'codigo', 'tipo', 'cliente_empresa', 'activo')
         }),
         ('Ubicación', {
             'fields': ('direccion', 'comuna', 'lat', 'lng', 'geocerca_radio_m')

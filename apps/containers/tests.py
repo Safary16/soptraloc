@@ -1,6 +1,7 @@
 from unittest.mock import patch
 
 import pandas as pd
+from django.contrib import admin
 from django.test import TestCase
 from django.contrib.auth.models import User
 from django.urls import reverse
@@ -12,11 +13,31 @@ from datetime import timedelta
 from apps.cds.models import CD
 from apps.containers.importers.embarque import EmbarqueImporter
 from apps.containers.importers.programacion import ProgramacionImporter
+from apps.containers.admin import ContainerAdmin
 from apps.containers.models import Container
 from apps.programaciones.models import Programacion
 from apps.core.services.returns import EmptyReturnService
 from apps.containers.serializers import ContainerListSerializer
 from apps.clientes.models import ClienteEmpresa
+
+
+class ContainerAdminClientCompanyTests(TestCase):
+    def test_client_company_is_visible_editable_filterable_and_searchable(self):
+        model_admin = ContainerAdmin(Container, admin.site)
+        self.assertIn('cliente_empresa', model_admin.list_display)
+        self.assertIn('cliente_empresa', model_admin.list_filter)
+        self.assertIn('cliente_empresa', model_admin.autocomplete_fields)
+        self.assertIn('cliente_empresa__nombre', model_admin.search_fields)
+        delivery_fields = dict(model_admin.fieldsets)['Información de Entrega']['fields']
+        self.assertIn('cliente_empresa', delivery_fields)
+
+    def test_existing_container_can_be_repaired_with_client_company(self):
+        company = ClienteEmpresa.objects.create(nombre='Empresa Container', rut='76.000.002-K')
+        container = Container.objects.create(container_id='FIXU1234567', tipo='40', nave='Nave')
+        container.cliente_empresa = company
+        container.save(update_fields=['cliente_empresa', 'updated_at'])
+        container.refresh_from_db()
+        self.assertEqual(container.cliente_empresa, company)
 
 
 class EmbarqueCustomerAssociationTests(TestCase):
