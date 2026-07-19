@@ -18,7 +18,7 @@ from .serializers import (
     DriverSerializer, DriverDetailSerializer, DriverListSerializer,
     DriverLocationSerializer,
 )
-from .access import asegurar_acceso, generar_token_dispositivo, validar_token_dispositivo
+from .access import asegurar_acceso
 
 
 # ============================================
@@ -85,7 +85,7 @@ class DriverViewSet(viewsets.ModelViewSet):
 
     def get_permissions(self):
         """Lecturas operativas públicas; datos privados y mutaciones, restringidos."""
-        if self.action in {'list', 'active_locations', 'verify_patente', 'update_location'}:
+        if self.action in {'list', 'active_locations', 'verify_patente'}:
             classes = [AllowAny]
         elif self.action in {
             'create', 'update', 'partial_update', 'destroy', 'import_excel',
@@ -382,7 +382,6 @@ class DriverViewSet(viewsets.ModelViewSet):
                 'driver_id': driver.id,
                 'driver_name': driver.nombre,
                 'patente': driver.patente,
-                'driver_token': generar_token_dispositivo(driver),
                 'max_entregas_dia': driver.max_entregas_dia,
                 'num_entregas_dia': driver.num_entregas_dia
             })
@@ -421,11 +420,8 @@ class DriverViewSet(viewsets.ModelViewSet):
         }
         """
         driver = self.get_object()
-        bearer = request.headers.get('Authorization', '')
-        token = bearer[7:].strip() if bearer.startswith('Bearer ') else ''
         if not (request.user.is_staff or request.user.is_superuser or
-                getattr(request.user, 'driver', None) == driver or
-                validar_token_dispositivo(token, driver)):
+                getattr(request.user, 'driver', None) == driver):
             return Response({'error': 'No autorizado'}, status=status.HTTP_403_FORBIDDEN)
         
         lat = request.data.get('lat')

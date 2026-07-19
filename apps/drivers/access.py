@@ -4,11 +4,7 @@ import string
 import unicodedata
 
 from django.contrib.auth.models import User
-from django.core import signing
 from django.db import transaction
-
-
-DRIVER_TOKEN_SALT = 'soptraloc.driver-location.v1'
 
 
 def generar_username(nombre):
@@ -30,19 +26,6 @@ def generar_password_temporal(length=14):
         if (any(c.islower() for c in password) and any(c.isupper() for c in password)
                 and any(c.isdigit() for c in password)):
             return password
-
-
-def generar_token_dispositivo(driver):
-    """Token firmado, revocable al desactivar el conductor y sin exponer credenciales."""
-    return signing.dumps({'driver_id': driver.pk}, salt=DRIVER_TOKEN_SALT, compress=True)
-
-
-def validar_token_dispositivo(token, driver, max_age=60 * 60 * 24 * 30):
-    try:
-        payload = signing.loads(token, salt=DRIVER_TOKEN_SALT, max_age=max_age)
-    except signing.BadSignature:
-        return False
-    return driver.activo and payload.get('driver_id') == driver.pk
 
 
 @transaction.atomic

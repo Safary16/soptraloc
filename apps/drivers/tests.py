@@ -202,35 +202,6 @@ class DriverGPSTrackingTests(APITestCase):
         
         self.assertEqual(response.status_code, 403)
 
-    def test_native_location_requires_signed_device_token(self):
-        self.driver.patente = 'TEST12'
-        self.driver.save(update_fields=['patente'])
-        verify = self.client.post(reverse('driver-verify-patente'), {'patente': 'TEST12'}, format='json')
-        self.assertEqual(verify.status_code, 200)
-        url = reverse('driver-update-location', kwargs={'pk': self.driver.pk})
-        denied = self.client.post(url, {'lat': -33.4, 'lng': -70.6}, format='json')
-        self.assertEqual(denied.status_code, 403)
-        accepted = self.client.post(
-            url, {'lat': -33.4, 'lng': -70.6}, format='json',
-            HTTP_AUTHORIZATION=f"Bearer {verify.data['driver_token']}",
-        )
-        self.assertEqual(accepted.status_code, 200)
-
-    def test_native_token_cannot_update_another_driver(self):
-        self.driver.patente = 'TEST12'
-        self.driver.save(update_fields=['patente'])
-        token = self.client.post(
-            reverse('driver-verify-patente'), {'patente': 'TEST12'}, format='json'
-        ).data['driver_token']
-        other = Driver.objects.create(nombre='Otro')
-        response = self.client.post(
-            reverse('driver-update-location', kwargs={'pk': other.pk}),
-            {'lat': -33.4, 'lng': -70.6}, format='json',
-            HTTP_AUTHORIZATION=f'Bearer {token}',
-        )
-        self.assertEqual(response.status_code, 403)
-
-
 class DriverModelTests(TestCase):
     """Tests for Driver model"""
     
