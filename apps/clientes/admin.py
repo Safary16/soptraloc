@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from .models import ClienteEmpresa, ClienteUsuario, SolicitudHorario
+from .models import ClienteEmpresa, ClienteUsuario, SituacionCliente, SolicitudHorario
 
 
 @admin.register(ClienteEmpresa)
@@ -14,6 +14,13 @@ class ClienteUsuarioAdmin(admin.ModelAdmin):
     list_display = ('user', 'empresa', 'puede_solicitar')
     list_filter = ('empresa', 'puede_solicitar')
     autocomplete_fields = ('user', 'empresa')
+
+
+@admin.register(SituacionCliente)
+class SituacionClienteAdmin(admin.ModelAdmin):
+    list_display = ('empresa', 'asunto', 'categoria', 'prioridad', 'estado', 'created_at')
+    list_filter = ('empresa', 'categoria', 'prioridad', 'estado')
+    search_fields = ('asunto', 'mensaje', 'container__container_id')
 
 
 @admin.register(SolicitudHorario)

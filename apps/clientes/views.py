@@ -16,9 +16,9 @@ from apps.containers.models import Container
 from apps.containers.serializers import ContainerListSerializer
 from apps.programaciones.models import Programacion
 
-from .models import SolicitudHorario
+from .models import SituacionCliente, SolicitudHorario
 from .permissions import IsClientUser
-from .serializers import SolicitudHorarioSerializer
+from .serializers import SituacionClienteSerializer, SolicitudHorarioSerializer
 from .services import ClientSlotRecommendationService
 
 
@@ -139,6 +139,66 @@ def api_solicitudes(request):
     except IntegrityError:
         return Response({'error': 'Ya existe una solicitud pendiente para este contenedor.'}, status=status.HTTP_409_CONFLICT)
     return Response(SolicitudHorarioSerializer(solicitud).data, status=status.HTTP_201_CREATED)
+
+
+@api_view(['GET', 'POST'])
+@permission_classes([IsClientUser])
+def api_situaciones(request):
+    profile = _profile(request.user)
+    empresa = profile.empresa
+    if request.method == 'GET':
+        rows = SituacionCliente.objects.filter(empresa=empresa).select_related('container', 'creada_por')
+        return Response({'results': SituacionClienteSerializer(rows, many=True).data})
+    container = None
+    container_id = request.data.get('container')
+    if container_id:
+        try:
+            container = Container.objects.get(pk=container_id, cliente_empresa=empresa)
+        except (Container.DoesNotExist, TypeError, ValueError):
+            return Response({'error': 'El contenedor no pertenece a la empresa.'}, status=status.HTTP_400_BAD_REQUEST)
+    categoria = request.data.get('categoria', 'operativa')
+    prioridad = request.data.get('prioridad', 'normal')
+    if categoria not in dict(SituacionCliente.CATEGORIAS):
+        return Response({'error': 'Categoría inválida.'}, status=status.HTTP_400_BAD_REQUEST)
+    if prioridad not in dict(SituacionCliente.PRIORIDADES):
+        return Response({'error': 'Prioridad inválida.'}, status=status.HTTP_400_BAD_REQUEST)
+    asunto = str(request.data.get('asunto', '')).strip()[:160]
+    mensaje = str(request.data.get('mensaje', '')).strip()[:4000]
+    if not asunto or not mensaje:
+        return Response({'error': 'Asunto y mensaje son obligatorios.'}, status=status.HTTP_400_BAD_REQUEST)
+    row = SituacionCliente.objects.create(
+        empresa=empresa, creada_por=request.user, container=container,
+        categoria=categoria, prioridad=prioridad, asunto=asunto, mensaje=mensaje,
+    )
+    return Response(SituacionClienteSerializer(row).data, status=status.HTTP_201_CREATED)
+
+
+@api_view(['GET'])
+@permission_classes([IsAdminUser])
+def api_situaciones_operaciones(request):
+    rows = SituacionCliente.objects.select_related('empresa', 'container', 'creada_por').all()
+    estado = request.query_params.get('estado')
+    if estado:
+        rows = rows.filter(estado=estado)
+    return Response({'results': SituacionClienteSerializer(rows, many=True).data})
+
+
+@api_view(['POST'])
+@permission_classes([IsAdminUser])
+def api_revisar_situacion(request, pk):
+    try:
+        row = SituacionCliente.objects.get(pk=pk)
+    except SituacionCliente.DoesNotExist:
+        return Response({'error': 'Situación no encontrada.'}, status=status.HTTP_404_NOT_FOUND)
+    nuevo_estado = request.data.get('estado')
+    if nuevo_estado not in dict(SituacionCliente.ESTADOS):
+        return Response({'error': 'Estado inválido.'}, status=status.HTTP_400_BAD_REQUEST)
+    row.estado = nuevo_estado
+    row.respuesta_operaciones = str(request.data.get('respuesta', '')).strip()[:4000]
+    row.revisada_por = request.user
+    row.revisada_at = timezone.now()
+    row.save(update_fields=['estado', 'respuesta_operaciones', 'revisada_por', 'revisada_at', 'updated_at'])
+    return Response(SituacionClienteSerializer(row).data)
 
 
 @api_view(['GET'])

@@ -100,3 +100,51 @@ class SolicitudHorario(models.Model):
 
     def __str__(self):
         return f'{self.container.container_id} · {self.inicio_solicitado:%d-%m %H:%M}'
+
+
+class SituacionCliente(models.Model):
+    CATEGORIAS = [
+        ('operativa', 'Situación operativa'),
+        ('documental', 'Documentación'),
+        ('stock', 'Diferencia de stock'),
+        ('horario', 'Horario o recepción'),
+        ('otro', 'Otro'),
+    ]
+    PRIORIDADES = [('normal', 'Normal'), ('alta', 'Alta'), ('urgente', 'Urgente')]
+    ESTADOS = [
+        ('abierta', 'Abierta'),
+        ('en_revision', 'En revisión'),
+        ('resuelta', 'Resuelta'),
+        ('cerrada', 'Cerrada'),
+    ]
+
+    empresa = models.ForeignKey(ClienteEmpresa, on_delete=models.PROTECT, related_name='situaciones')
+    creada_por = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name='situaciones_cliente')
+    container = models.ForeignKey(
+        'containers.Container', null=True, blank=True, on_delete=models.PROTECT,
+        related_name='situaciones_cliente',
+    )
+    categoria = models.CharField(max_length=20, choices=CATEGORIAS, default='operativa')
+    prioridad = models.CharField(max_length=10, choices=PRIORIDADES, default='normal')
+    asunto = models.CharField(max_length=160)
+    mensaje = models.TextField()
+    estado = models.CharField(max_length=15, choices=ESTADOS, default='abierta', db_index=True)
+    respuesta_operaciones = models.TextField(blank=True)
+    revisada_por = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL,
+        related_name='situaciones_cliente_revisadas',
+    )
+    revisada_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-created_at']
+        indexes = [models.Index(fields=['empresa', 'estado', 'prioridad'])]
+
+    def clean(self):
+        if self.container_id and self.container.cliente_empresa_id != self.empresa_id:
+            raise ValidationError('El contenedor no pertenece a la empresa informante.')
+
+    def __str__(self):
+        return f'{self.empresa.nombre} · {self.asunto}'

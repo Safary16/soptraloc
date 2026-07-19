@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 430" role="img" aria-labelledby="title desc">
+  <title id="title">Safary — Sebastián y Safary</title>
+  <desc id="desc">Silueta negra de Safary de perfil, con Sebastián detrás.</desc>
+  <g fill="#000">
+    <!-- Sebastián, detrás: cabello, cabeza y torso simplificados -->
+    <path d="M376 42c-16 2-31 13-37 28-14 0-25 11-25 24-9 9-11 24-4 36-4 18 7 34 23 41l-6 33c-35 8-63 27-76 57l25 74h187l26-78c-16-29-44-47-80-54l-7-31c17-9 27-27 21-46 8-17 2-37-12-47-5-22-26-39-49-37z"/>
+    <!-- cuello/rostro por espacio negativo -->
+    <path fill="white" d="M357 94c14-10 35-8 47 4 8 9 10 25 4 37-7 15-20 24-35 23-18-1-32-15-33-33-1-12 5-24 17-31z"/>
+    <path d="M337 79c16-26 59-28 76 0-15-8-30-5-42-1-13 5-23 4-34 1z"/>
+    <!-- Safary en primer plano -->
+    <path d="M103 199c-18-16-44-14-62-2L5 221l32 12 22 1-18 17 21 12 42-8 42 34c27 23 70 31 114 29l267-4c37-1 61 10 81 25 18 14 42 18 64 9l25-10-35-8c-18-5-30-17-41-31-18-25-42-38-79-42l-96-13c-67-10-130-16-199-16-47 0-90-7-124-29z"/>
+    <!-- hocico/oreja -->
+    <path d="M83 190 50 166l51 8 34 29z"/>
+    <path d="M31 221 0 236l47 7 29-17z"/>
+    <!-- patas -->
+    <path d="M159 295h39l-6 97 26 17h-72l10-26zM267 306h42l-3 75 25 23h-72l9-27zM495 301h43l11 79 27 22h-78l4-27zM573 297h39l22 71 31 18-72 9-9-24z"/>
+    <!-- cola -->
+    <path d="M596 268c45-4 79-22 104-57 12-17 24-17 30-9 8 12-5 32-21 48-27 27-59 46-101 56z"/>
+    <!-- ojo y separación del hocico -->
+    <circle cx="70" cy="214" r="4" fill="white"/>
+    <path d="M31 236c20 2 35 7 49 17" fill="none" stroke="white" stroke-width="5" stroke-linecap="round"/>
+  </g>
+</svg>

@@ -1,6 +1,6 @@
 from rest_framework import serializers
 
-from .models import SolicitudHorario
+from .models import SituacionCliente, SolicitudHorario
 
 
 class SolicitudHorarioSerializer(serializers.ModelSerializer):
@@ -17,5 +17,20 @@ class SolicitudHorarioSerializer(serializers.ModelSerializer):
             'recomendacion_snapshot', 'observaciones_cliente', 'estado',
             'inicio_confirmado', 'fin_confirmado', 'respuesta_operaciones',
             'programacion', 'created_at', 'updated_at',
+        )
+        read_only_fields = fields
+
+
+class SituacionClienteSerializer(serializers.ModelSerializer):
+    container_id = serializers.CharField(source='container.container_id', read_only=True)
+    empresa_nombre = serializers.CharField(source='empresa.nombre', read_only=True)
+    creada_por_nombre = serializers.CharField(source='creada_por.username', read_only=True)
+
+    class Meta:
+        model = SituacionCliente
+        fields = (
+            'id', 'empresa_nombre', 'container', 'container_id', 'creada_por_nombre',
+            'categoria', 'prioridad', 'asunto', 'mensaje', 'estado',
+            'respuesta_operaciones', 'created_at', 'updated_at',
         )
         read_only_fields = fields
