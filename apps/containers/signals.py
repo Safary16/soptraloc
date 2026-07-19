@@ -2,6 +2,7 @@
 Django signals para Container
 Maneja automáticamente el inventario de vacíos en CDs
 """
+from django.db import transaction
 from django.db.models.signals import post_save
 from django.dispatch import receiver
 from .models import Container
@@ -82,14 +83,20 @@ def manejar_vacios_automaticamente(sender, instance, created, **kwargs):
     if not instance.cd_entrega.permite_soltar_contenedor:
         return
     
-    # Verificar que no hayamos procesado esto antes
-    # (para evitar incrementar múltiples veces)
-    if hasattr(instance, '_vacio_ya_procesado'):
+    if instance.vacio_contabilizado:
         return
     
     # Intentar recibir el vacío en el CD
     try:
-        instance.cd_entrega.recibir_vacio()
+        with transaction.atomic():
+            container = Container.objects.select_for_update().get(pk=instance.pk)
+            if container.vacio_contabilizado:
+                return
+            from apps.cds.models import CD
+            cd = CD.objects.select_for_update().get(pk=container.cd_entrega_id)
+            if not cd.recibir_vacio():
+                return
+            Container.objects.filter(pk=container.pk).update(vacio_contabilizado=True)
         
         # Crear evento de auditoría
         from apps.events.models import Event
@@ -97,16 +104,13 @@ def manejar_vacios_automaticamente(sender, instance, created, **kwargs):
             container=instance,
             event_type='contenedor_vacio',
             detalles={
-                'cd_id': instance.cd_entrega.id,
-                'cd_nombre': instance.cd_entrega.nombre,
-                'vacios_actual': instance.cd_entrega.vacios_actual,
-                'descripcion': f'Contenedor vacío recibido automáticamente en {instance.cd_entrega.nombre}',
+                'cd_id': cd.id,
+                'cd_nombre': cd.nombre,
+                'vacios_actual': cd.vacios_actuales,
+                'descripcion': f'Contenedor vacío recibido automáticamente en {cd.nombre}',
                 'automatico': True
             }
         )
-        
-        # Marcar como procesado para evitar loops
-        instance._vacio_ya_procesado = True
         
     except Exception as e:
         # CD lleno, registrar en logs
@@ -147,28 +151,15 @@ def crear_programacion_automatica(sender, instance, created, **kwargs):
     except Programacion.MultipleObjectsReturned:
         return  # Ya hay programaciones, no crear más
     
-    # Determinar el CD de entrega
+    # Nunca inventar un destino: una programación sin CD requiere intervención.
     cd = instance.cd_entrega
     if not cd:
-        # Si no hay CD asignado, buscar el primer CD disponible tipo Cliente
-        from apps.cds.models import CD
-        cd = CD.objects.filter(tipo='cliente').first()
-        
-        if not cd:
-            # Si aún no hay CD, buscar cualquier CD
-            cd = CD.objects.first()
-        
-        if not cd:
-            # No hay CDs en el sistema, no podemos crear programación
-            import logging
-            logger = logging.getLogger(__name__)
-            logger.warning(f"No se pudo crear programación para {instance.container_id}: No hay CDs disponibles")
-            return
-        
-        # Asignar el CD al contenedor
-        instance.cd_entrega = cd
-        instance._programacion_auto_creada = True  # Marcar para evitar loops
-        instance.save(update_fields=['cd_entrega'])
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.warning(
+            f"No se creó programación para {instance.container_id}: falta CD de entrega explícito"
+        )
+        return
     
     # Determinar fecha programada
     fecha_programada = instance.fecha_programacion or timezone.now()

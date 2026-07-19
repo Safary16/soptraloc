@@ -14,21 +14,34 @@ def trigger_automatic_assignment(sender, instance: Programacion, created: bool, 
     Dispara la asignación automática de conductor cuando se crea una nueva programación
     y esta no tiene ya un conductor asignado.
     """
-    if created and not instance.driver:
-        logger.info(
-            f"Nueva programación ID {instance.id} creada. "
-            "Iniciando proceso de asignación automática de conductor."
+    if not created:
+        return
+
+    # Crear una programación representa el hito de negocio «programado».
+    # Esto también protege a las creaciones directas (admin, serializer, tests):
+    # asignar luego al conductor no debe intentar saltar liberado → asignado.
+    container = instance.container
+    if container and container.estado in {'liberado', 'secuenciado'}:
+        container.cambiar_estado('programado', usuario='system_programacion')
+        instance.container = container
+
+    if instance.driver:
+        return
+
+    logger.info(
+        f"Nueva programación ID {instance.id} creada. "
+        "Iniciando proceso de asignación automática de conductor."
+    )
+    try:
+        # Usamos on_commit para asegurar que la transacción principal se ha completado
+        # y el objeto Programacion está disponible en la base de datos para el servicio.
+        transaction.on_commit(lambda: _run_assignment_service(instance.id))
+    except Exception as e:
+        logger.error(
+            f"Error al encolar la tarea de asignación para la programación ID {instance.id}. "
+            f"Excepción: {e}",
+            exc_info=True
         )
-        try:
-            # Usamos on_commit para asegurar que la transacción principal se ha completado
-            # y el objeto Programacion está disponible en la base de datos para el servicio.
-            transaction.on_commit(lambda: _run_assignment_service(instance.id))
-        except Exception as e:
-            logger.error(
-                f"Error al encolar la tarea de asignación para la programación ID {instance.id}. "
-                f"Excepción: {e}",
-                exc_info=True
-            )
 
 def _run_assignment_service(programacion_id: int):
     """

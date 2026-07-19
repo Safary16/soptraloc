@@ -12,6 +12,7 @@ from apps.containers.models import Container
 from apps.programaciones.models import Programacion
 from apps.cds.models import CD
 from apps.events.models import Event
+from apps.core.services.excel import normalize_columns, read_excel_with_header_detection
 
 
 logger = logging.getLogger(__name__)
@@ -51,12 +52,6 @@ class ProgramacionImporter:
     
     def normalizar_columnas(self, df):
         """Normaliza los nombres de columnas a los esperados"""
-        # Limpiar caracteres especiales en nombres de columnas
-        df.columns = df.columns.str.replace('\xa0', ' ', regex=False)
-        df.columns = df.columns.str.replace(r'\s+', ' ', regex=True)  # Múltiples espacios a uno
-        df.columns = df.columns.str.strip()
-        df.columns = df.columns.str.lower()
-        
         mapeo = {
             'contenedor': 'container_id',
             'container': 'container_id',
@@ -84,8 +79,7 @@ class ProgramacionImporter:
             'cajas': 'cantidad_cajas',
         }
         
-        df.rename(columns=mapeo, inplace=True)
-        return df
+        return normalize_columns(df, mapeo)
     
     def parsear_fecha(self, fecha_str):
         """Parsea diferentes formatos de fecha"""
@@ -162,7 +156,10 @@ class ProgramacionImporter:
         """Procesa el archivo Excel y crea programaciones"""
         try:
             # Leer Excel
-            df = pd.read_excel(self.archivo_path)
+            df = read_excel_with_header_detection(
+                self.archivo_path,
+                ['contenedor', 'fecha de programacion', 'fecha programación', 'bodega', 'centro distribucion'],
+            )
             df = self.normalizar_columnas(df)
             
             # Validar columnas requeridas
@@ -284,6 +281,14 @@ class ProgramacionImporter:
 
                         container.save()
 
+                        # La naviera libera primero; una planilla de programación no
+                        # puede adelantar un contenedor que sigue por arribar.
+                        if container.estado not in ['liberado', 'secuenciado', 'programado']:
+                            raise ValueError(
+                                f"El contenedor debe estar liberado antes de programarse. "
+                                f"Estado actual: {container.estado}"
+                            )
+
                         # Crear o actualizar programación
                         programacion, created = Programacion.objects.update_or_create(
                             container=container,
@@ -297,7 +302,7 @@ class ProgramacionImporter:
                         )
 
                         # Actualizar estado del contenedor
-                        if container.estado in ['por_arribar', 'liberado', 'secuenciado']:
+                        if container.estado in ['liberado', 'secuenciado']:
                             container.cambiar_estado('programado', self.usuario)
 
                         # Actualizar fecha_demurrage si está disponible en el Excel

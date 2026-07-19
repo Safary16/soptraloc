@@ -295,6 +295,14 @@ class ProgramacionViewSet(viewsets.ModelViewSet):
                 'container_id': prog.container.container_id,
                 'fecha_programada': prog.fecha_programada,
                 'fecha_demurrage': prog.container.fecha_demurrage,
+                'fecha_inicio_ruta': prog.fecha_inicio_ruta,
+                'eta_minutos': prog.eta_minutos,
+                'eta_recalculado_min': prog.eta_recalculado_min,
+                'eta_timestamp': (
+                    prog.fecha_inicio_ruta + timedelta(minutes=prog.eta_minutos)
+                    if prog.fecha_inicio_ruta and prog.eta_minutos is not None
+                    else None
+                ),
                 'conductor': prog.driver.nombre if prog.driver else None,
                 'cd': prog.cd.nombre,
                 'dias_hasta_programacion': round(dias_hasta_prog, 1),
@@ -665,7 +673,7 @@ class ProgramacionViewSet(viewsets.ModelViewSet):
         return Response(response_data)
     
     def _update_registro_operacion_on_completion(self, programacion: Programacion, estado_final: str):
-        from apps.programaciones.models import RegistroOperacion
+        from apps.programaciones.models import RegistroOperacion, TiempoViaje
         from django.db.models import F
         import logging
 
@@ -687,6 +695,37 @@ class ProgramacionViewSet(viewsets.ModelViewSet):
             registro.estado_final = estado_final
             registro.incidentes_ejecucion = programacion.incidentes_registrados # Copiar incidentes al log final
             registro.save(update_fields=['eta_real_min', 'estado_final', 'incidentes_ejecucion'])
+
+            # Alimentar la estimación adaptativa con un viaje real completo.
+            if (
+                programacion.fecha_inicio_ruta
+                and programacion.container.fecha_entrega
+                and programacion.gps_inicio_lat is not None
+                and programacion.gps_inicio_lng is not None
+                and programacion.cd
+                and programacion.eta_minutos
+                and not TiempoViaje.objects.filter(programacion=programacion).exists()
+            ):
+                real_min = max(1, int((programacion.container.fecha_entrega - programacion.fecha_inicio_ruta).total_seconds() / 60))
+                estimado = max(1, int(programacion.eta_minutos))
+                TiempoViaje.objects.create(
+                    conductor=programacion.driver,
+                    programacion=programacion,
+                    origen_lat=programacion.gps_inicio_lat,
+                    origen_lon=programacion.gps_inicio_lng,
+                    destino_lat=programacion.cd.lat,
+                    destino_lon=programacion.cd.lng,
+                    origen_nombre='Inicio de ruta',
+                    destino_nombre=programacion.cd.nombre,
+                    tiempo_mapbox_min=estimado,
+                    tiempo_real_min=real_min,
+                    hora_salida=programacion.fecha_inicio_ruta,
+                    hora_llegada=programacion.container.fecha_entrega,
+                    hora_del_dia=programacion.fecha_inicio_ruta.hour,
+                    dia_semana=programacion.fecha_inicio_ruta.weekday(),
+                    distancia_km=programacion.distancia_km or 0,
+                    anomalia=real_min > estimado * 3,
+                )
             logger.info(f"RegistroOperacion {registro.id} actualizado al finalizar Programacion {programacion.id} con estado {estado_final}.")
         except Exception as e:
             logger.error(f"Error actualizando RegistroOperacion para Programacion {programacion.id}: {str(e)}", exc_info=True)
@@ -1102,7 +1141,6 @@ class ProgramacionViewSet(viewsets.ModelViewSet):
         from apps.events.models import Event
         Event.objects.create(
             container=programacion.container,
-            programacion=programacion,
             event_type='incidente_reportado',
             detalles=incidente_data,
             usuario=request.user.username if request.user.is_authenticated else 'anonimo'

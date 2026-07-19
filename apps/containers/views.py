@@ -769,7 +769,7 @@ class ContainerViewSet(viewsets.ModelViewSet):
                 from apps.programaciones.models import RegistroOperacion
                 registro = RegistroOperacion.objects.filter(programacion=programacion).order_by('-created_at').first()
                 if registro:
-                    registro.estado_final = 'DESCARTADO' # O 'ENTREGADO' si se considera el fin del ciclo de entrega
+                    registro.estado_final = 'ENTREGADO'
                     registro.save(update_fields=['estado_final'])
         except Exception as e:
             logger.error(f"Error actualizando RegistroOperacion para Contenedor {container.id}: {str(e)}", exc_info=True)
@@ -807,6 +807,7 @@ class ContainerViewSet(viewsets.ModelViewSet):
                     tiempo_real_min=tiempo_real_min,
                     hora_inicio=hora_inicio,
                     hora_fin=hora_fin,
+                    anomalia=tiempo_real_min > max(1, tiempo_estimado) * 3,
                     observaciones=f"Auto-generado desde registrar_descarga por {usuario or 'sistema'}"
                 )
                 

@@ -88,10 +88,10 @@ class NotificationService:
         
         # Determinar prioridad basada en ETA
         prioridad = 'media'
-        if eta_minutos and eta_minutos < 30:
-            prioridad = 'alta'
-        elif eta_minutos and eta_minutos < 15:
+        if eta_minutos and eta_minutos < 15:
             prioridad = 'critica'
+        elif eta_minutos and eta_minutos < 30:
+            prioridad = 'alta'
         
         # Crear notificación
         notification = Notification.objects.create(
@@ -182,10 +182,10 @@ class NotificationService:
         notificacion = None
         if crear_nueva:
             prioridad = 'media'
-            if eta_minutos < 30:
-                prioridad = 'alta'
-            elif eta_minutos < 15:
+            if eta_minutos < 15:
                 prioridad = 'critica'
+            elif eta_minutos < 30:
+                prioridad = 'alta'
             
             notificacion = Notification.objects.create(
                 container=programacion.container,

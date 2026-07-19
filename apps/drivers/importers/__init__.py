@@ -3,6 +3,7 @@ Importador de Conductores desde Excel
 Crea objetos Driver con datos de conductores.xlsx
 """
 import pandas as pd
+from apps.core.services.excel import normalize_columns, read_excel_with_header_detection
 from django.utils import timezone
 from apps.drivers.models import Driver
 
@@ -81,10 +82,25 @@ class ConductorImporter:
         """Procesa el archivo Excel y crea/actualiza conductores"""
         try:
             # Leer Excel (header en fila 1)
-            df = pd.read_excel(self.archivo_path, header=1)
+            df = read_excel_with_header_detection(
+                self.archivo_path,
+                ['conductor', 'nombre', 'rut', 'patente', 'telefono'],
+            )
+            df = normalize_columns(df, {
+                'conductor': 'conductor',
+                'nombre': 'conductor',
+                'nombre conductor': 'conductor',
+                'ppu': 'patente',
+                'patente': 'patente',
+                'rut': 'rut',
+                'telefono': 'telefono',
+                'teléfono': 'telefono',
+                'asistencia 06-10': 'asistencia',
+                'asistencia': 'asistencia',
+            })
             
             # Verificar columnas requeridas
-            columnas_requeridas = ['Conductor', 'PPU']
+            columnas_requeridas = ['conductor', 'patente']
             for col in columnas_requeridas:
                 if col not in df.columns:
                     raise ValueError(f"Columna requerida '{col}' no encontrada en el Excel")
@@ -92,19 +108,19 @@ class ConductorImporter:
             # Procesar cada fila
             for idx, row in df.iterrows():
                 try:
-                    nombre = str(row['Conductor']).strip()
+                    nombre = str(row['conductor']).strip()
                     
                     # Saltar filas vacías
-                    if not nombre or nombre == 'nan' or pd.isna(row['Conductor']):
+                    if not nombre or nombre == 'nan' or pd.isna(row['conductor']):
                         continue
                     
                     # Extraer datos
-                    ppu = str(row['PPU']).strip().upper() if pd.notna(row.get('PPU')) else None
-                    rut = self.limpiar_rut(row.get('RUT'))
-                    telefono = self.limpiar_telefono(row.get('Teléfono'))
+                    ppu = str(row['patente']).strip().upper() if pd.notna(row.get('patente')) else None
+                    rut = self.limpiar_rut(row.get('rut'))
+                    telefono = self.limpiar_telefono(row.get('telefono'))
                     
                     # Determinar si está presente (operativo)
-                    presente = self.es_operativo(row.get('ASISTENCIA 06-10'))
+                    presente = self.es_operativo(row.get('asistencia'))
                     
                     # Buscar o crear conductor
                     driver, created = Driver.objects.get_or_create(
@@ -112,6 +128,7 @@ class ConductorImporter:
                         defaults={
                             'rut': rut or '',
                             'telefono': telefono or '',
+                            'patente': ppu,
                             'presente': presente,
                             'activo': True,
                             'max_entregas_dia': 8,  # Valor por defecto
@@ -132,6 +149,8 @@ class ConductorImporter:
                             driver.rut = rut
                         if telefono:
                             driver.telefono = telefono
+                        if ppu:
+                            driver.patente = ppu
                         driver.presente = presente
                         driver.activo = True
                         driver.save()
