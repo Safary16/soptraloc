@@ -79,12 +79,18 @@ class DriverDetailSerializer(DriverSerializer):
                     'distancia_km': float(prog.distancia_km) if prog.distancia_km else None,
                 }
                 
-                # Calcular ETA timestamp si está en ruta y tenemos ETA
-                if estado == 'en_ruta' and prog.eta_minutos:
-                    eta_timestamp = timezone.now() + timedelta(minutes=prog.eta_minutos)
-                    item['eta_timestamp'] = eta_timestamp
+                # El ETA original se ancla al inicio real de ruta. Usar now() aquí
+                # desplazaría artificialmente la llegada estimada en cada recarga.
+                if estado == 'en_ruta' and prog.fecha_inicio_ruta and prog.eta_minutos is not None:
+                    item['eta_timestamp'] = prog.fecha_inicio_ruta + timedelta(minutes=prog.eta_minutos)
+                    transcurrido = max(
+                        0,
+                        int((timezone.now() - prog.fecha_inicio_ruta).total_seconds() / 60),
+                    )
+                    item['eta_restante_minutos'] = max(0, prog.eta_minutos - transcurrido)
                 else:
                     item['eta_timestamp'] = None
+                    item['eta_restante_minutos'] = None
                 
                 resultado.append(item)
         

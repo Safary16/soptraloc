@@ -12,6 +12,7 @@ from datetime import datetime
 import logging
 from apps.containers.models import Container
 from apps.events.models import Event
+from apps.core.services.excel import normalize_columns, read_excel_with_header_detection
 
 
 logger = logging.getLogger(__name__)
@@ -55,12 +56,6 @@ class LiberacionImporter:
     
     def normalizar_columnas(self, df):
         """Normaliza los nombres de columnas a los esperados"""
-        # Limpiar caracteres especiales en nombres de columnas
-        df.columns = df.columns.str.replace('\xa0', ' ', regex=False)
-        df.columns = df.columns.str.replace(r'\s+', ' ', regex=True)  # Múltiples espacios a uno
-        df.columns = df.columns.str.strip()
-        df.columns = df.columns.str.lower()
-        
         mapeo = {
             'contenedor': 'container_id',
             'container': 'container_id',
@@ -89,8 +84,7 @@ class LiberacionImporter:
             'tipo cont-temperatura': 'tipo',
         }
         
-        df.rename(columns=mapeo, inplace=True)
-        return df
+        return normalize_columns(df, mapeo)
     
     def mapear_posicion(self, posicion_original):
         """Mapea la posición física según reglas de negocio"""
@@ -111,7 +105,10 @@ class LiberacionImporter:
         """Procesa el archivo Excel y actualiza contenedores a liberado"""
         try:
             # Leer Excel
-            df = pd.read_excel(self.archivo_path)
+            df = read_excel_with_header_detection(
+                self.archivo_path,
+                ['contenedor', 'container', 'almacen', 'posición', 'terminal'],
+            )
             df = self.normalizar_columnas(df)
             
             # Validar columnas requeridas
@@ -199,7 +196,11 @@ class LiberacionImporter:
                             nuevo_estado = 'por_arribar'
 
                         if container.estado != nuevo_estado:
-                            container.cambiar_estado(nuevo_estado, self.usuario)
+                            container.cambiar_estado(
+                                nuevo_estado,
+                                self.usuario,
+                                permitir_reversion=(nuevo_estado == 'por_arribar'),
+                            )
 
                         container.posicion_fisica = posicion_mapeada
                         # Respetar fecha de Excel por trazabilidad operativa

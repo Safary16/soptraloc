@@ -1,5 +1,7 @@
 import logging
-from django.db import models
+from django.core.exceptions import ValidationError
+from django.db import models, transaction
+from django.db.models import F
 from django.utils import timezone
 from apps.containers.models import Container
 from apps.drivers.models import Driver
@@ -155,32 +157,38 @@ class Programacion(models.Model):
         """Asigna un conductor a la programación"""
         from apps.events.models import Event
 
-        if self.driver:
-            logger.warning(f"La programación {self.id} ya tiene asignado al conductor {self.driver.nombre}. No se reasignará a {driver.nombre}.")
-            return
+        with transaction.atomic():
+            programacion = Programacion.objects.select_for_update().select_related('container').get(pk=self.pk)
+            locked_driver = Driver.objects.select_for_update().get(pk=driver.pk)
+            if programacion.driver_id:
+                raise ValidationError('La programación ya tiene conductor asignado.')
+            if not locked_driver.esta_disponible:
+                raise ValidationError(f'El conductor {locked_driver.nombre} no está disponible.')
+            conflict = Programacion.objects.select_for_update().filter(
+                driver=locked_driver,
+                container__estado__in=['asignado', 'en_ruta'],
+            ).exclude(pk=programacion.pk).exists()
+            if conflict:
+                raise ValidationError('El conductor ya participa en otro servicio activo.')
 
-        self.driver = driver
-        self.fecha_asignacion = timezone.now()
-        
-        # Actualizar estado del contenedor si existe
-        if self.container:
-            self.container.cambiar_estado('asignado', usuario)
-        
-        # Incrementar contador de entregas del conductor
-        if driver.num_entregas_dia is not None:
-            driver.num_entregas_dia += 1
-            driver.save(update_fields=['num_entregas_dia'])
-        
-        # Guardar la programación después de todas las modificaciones
-        self.save()
+            programacion.driver = locked_driver
+            programacion.fecha_asignacion = timezone.now()
+            programacion.save(update_fields=['driver', 'fecha_asignacion', 'updated_at'])
+            programacion.container.cambiar_estado('asignado', usuario)
+            Driver.objects.filter(pk=locked_driver.pk).update(
+                num_entregas_dia=F('num_entregas_dia') + 1
+            )
+
+            self.driver = locked_driver
+            self.fecha_asignacion = programacion.fecha_asignacion
 
         # Crear evento de asignación
         Event.objects.create(
             container=self.container,
             event_type='asignacion_conductor',
             detalles={
-                'driver_id': driver.id,
-                'driver_nombre': driver.nombre,
+                'driver_id': self.driver.id,
+                'driver_nombre': self.driver.nombre,
                 'asignado_por': usuario or 'system',
             },
             usuario=usuario or 'system'
@@ -189,7 +197,7 @@ class Programacion(models.Model):
         # Crear notificación para el conductor
         try:
             from apps.notifications.services import NotificationService
-            NotificationService.crear_notificacion_asignacion(self, driver)
+            NotificationService.crear_notificacion_asignacion(self, self.driver)
         except Exception as e:
             # Log error pero no fallar la asignación
             import logging

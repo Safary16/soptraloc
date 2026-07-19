@@ -207,9 +207,9 @@ class AnomalyDetector:
 
         carrier_incidents = Programacion.objects.filter(
             container__vendor=programacion.container.vendor,
-            container__estado='incidente',
             created_at__gte=now - timedelta(days=14),
-        ).count()
+            incidentes_registrados__isnull=False,
+        ).exclude(incidentes_registrados=[]).count()
         if carrier_incidents > incident_threshold:
             anomalies.append(OperationalAnomaly(
                 "ANOM_OPS_010", "P1",

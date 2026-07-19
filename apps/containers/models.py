@@ -1,3 +1,4 @@
+from django.core.exceptions import ValidationError
 from django.db import models
 from django.utils import timezone
 
@@ -24,7 +25,25 @@ class Container(models.Model):
         ('vacio', 'Vacío'),  # Descargado, esperando retiro
         ('vacio_en_ruta', 'Vacío en Ruta'),  # Retornando a depósito
         ('devuelto', 'Devuelto'),  # Devuelto a depósito naviera
+        ('cancelado', 'Cancelado'),
+        ('incidente', 'Incidente'),
     ]
+
+    TRANSICIONES_VALIDAS = {
+        'por_arribar': {'liberado', 'cancelado'},
+        'liberado': {'secuenciado', 'programado', 'cancelado'},
+        'secuenciado': {'liberado', 'programado', 'cancelado'},
+        'programado': {'liberado', 'asignado', 'cancelado'},
+        'asignado': {'programado', 'en_ruta', 'cancelado'},
+        'en_ruta': {'entregado', 'incidente', 'cancelado'},
+        'incidente': {'en_ruta', 'cancelado'},
+        'entregado': {'descargado', 'vacio', 'incidente'},
+        'descargado': {'vacio', 'vacio_en_ruta'},
+        'vacio': {'vacio_en_ruta'},
+        'vacio_en_ruta': {'devuelto', 'incidente'},
+        'devuelto': set(),
+        'cancelado': set(),
+    }
     
     TIPOS = [
         ('20', "20'"),
@@ -91,6 +110,10 @@ class Container(models.Model):
     fecha_vacio = models.DateTimeField('Fecha Vacío', null=True, blank=True, help_text='Contenedor vacío listo para retiro')
     fecha_vacio_ruta = models.DateTimeField('Fecha Vacío en Ruta', null=True, blank=True, help_text='Iniciando retorno a depósito')
     fecha_devolucion = models.DateTimeField('Fecha Devolución', null=True, blank=True, help_text='Devuelto a depósito naviera')
+    vacio_contabilizado = models.BooleanField(
+        'Vacío contabilizado en CD', default=False,
+        help_text='Evita incrementar más de una vez el inventario de vacíos del CD.'
+    )
     
     # Auditoría
     created_at = models.DateTimeField('Creado', auto_now_add=True)
@@ -211,9 +234,20 @@ class Container(models.Model):
             self.tara = self.get_tara_default()
         super().save(*args, **kwargs)
     
-    def cambiar_estado(self, nuevo_estado, usuario=None):
+    def cambiar_estado(self, nuevo_estado, usuario=None, *, permitir_reversion=False):
         """Cambia el estado y registra el timestamp correspondiente"""
+        estados = {value for value, _ in self.ESTADOS}
+        if nuevo_estado not in estados:
+            raise ValidationError(f"Estado desconocido: {nuevo_estado}")
+
         estado_anterior = self.estado
+        if nuevo_estado == estado_anterior:
+            return self
+        permitidos = self.TRANSICIONES_VALIDAS.get(estado_anterior, set())
+        if nuevo_estado not in permitidos and not permitir_reversion:
+            raise ValidationError(
+                f"Transición inválida: {estado_anterior} → {nuevo_estado}"
+            )
         self.estado = nuevo_estado
         
         # Actualizar timestamp según el nuevo estado

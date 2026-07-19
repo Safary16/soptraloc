@@ -7,6 +7,10 @@ from rest_framework.test import APITestCase
 from rest_framework import status
 
 from .models import Driver, DriverLocation
+from .serializers import DriverDetailSerializer
+from apps.cds.models import CD
+from apps.containers.models import Container
+from apps.programaciones.models import Programacion
 
 
 class DriverAuthenticationTests(TestCase):
@@ -255,3 +259,38 @@ class DriverModelTests(TestCase):
         
         driver.refresh_from_db()
         self.assertEqual(driver.num_entregas_dia, 0)
+
+
+class DriverRouteTimelineSerializerTests(TestCase):
+    """The driver portal must expose stable route-start and ETA timestamps."""
+
+    def test_eta_timestamp_is_anchored_to_route_start(self):
+        driver = Driver.objects.create(nombre='Timeline Driver')
+        cd = CD.objects.create(
+            nombre='Timeline CD', codigo='TIMELINE', direccion='Destino',
+            comuna='Santiago', lat=-33.45, lng=-70.65,
+        )
+        container = Container.objects.create(
+            container_id='TIME1234567', estado='asignado', cliente='Cliente'
+        )
+        started_at = timezone.now() - timedelta(minutes=15)
+        programacion = Programacion.objects.create(
+            container=container,
+            cd=cd,
+            driver=driver,
+            cliente='Cliente',
+            fecha_programada=timezone.now() + timedelta(hours=1),
+            fecha_inicio_ruta=started_at,
+            eta_minutos=45,
+        )
+        container.estado = 'en_ruta'
+        container.fecha_inicio_ruta = started_at
+        container.save(update_fields=['estado', 'fecha_inicio_ruta', 'updated_at'])
+
+        data = DriverDetailSerializer(driver).data
+        item = next(p for p in data['programaciones_asignadas'] if p['id'] == programacion.id)
+
+        expected_arrival = started_at + timedelta(minutes=45)
+        self.assertEqual(item['fecha_inicio_ruta'], started_at)
+        self.assertEqual(item['eta_timestamp'], expected_arrival)
+        self.assertIn(item['eta_restante_minutos'], (29, 30))

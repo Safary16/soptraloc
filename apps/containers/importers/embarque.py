@@ -8,6 +8,7 @@ from django.db import transaction
 import logging
 from apps.containers.models import Container
 from apps.events.models import Event
+from apps.core.services.excel import normalize_columns, read_excel_with_header_detection
 
 
 logger = logging.getLogger(__name__)
@@ -42,12 +43,6 @@ class EmbarqueImporter:
     
     def normalizar_columnas(self, df):
         """Normaliza los nombres de columnas a los esperados"""
-        # Limpiar caracteres especiales en nombres de columnas
-        df.columns = df.columns.str.replace('\xa0', ' ', regex=False)
-        df.columns = df.columns.str.replace(r'\s+', ' ', regex=True)  # Múltiples espacios a uno
-        df.columns = df.columns.str.strip()
-        df.columns = df.columns.str.lower()
-        
         mapeo = {
             'contenedor': 'container_id',
             'container': 'container_id',
@@ -77,8 +72,7 @@ class EmbarqueImporter:
             'place of receipt': 'place_receipt',
         }
         
-        df.rename(columns=mapeo, inplace=True)
-        return df
+        return normalize_columns(df, mapeo)
     
     def validar_tipo(self, tipo):
         """Valida y normaliza el tipo de contenedor"""
@@ -111,7 +105,10 @@ class EmbarqueImporter:
         """Procesa el archivo Excel y crea/actualiza contenedores"""
         try:
             # Leer Excel
-            df = pd.read_excel(self.archivo_path)
+            df = read_excel_with_header_detection(
+                self.archivo_path,
+                ['contenedor', 'container numbers', 'container size', 'nave confirmado', 'buque'],
+            )
             df = self.normalizar_columnas(df)
             
             # Validar columnas requeridas
@@ -176,11 +173,18 @@ class EmbarqueImporter:
                                     f"Fecha ETA inválida '{row['fecha_eta']}': {str(fecha_error)}"
                                 )
 
-                        # Crear o actualizar
-                        container, created = Container.objects.update_or_create(
+                        # Crear o actualizar sin retroceder el ciclo de vida de
+                        # un contenedor que ya avanzó más allá de por_arribar.
+                        estado_inicial = datos.pop('estado')
+                        container, created = Container.objects.get_or_create(
                             container_id=container_id,
-                            defaults=datos
+                            defaults={**datos, 'estado': estado_inicial},
                         )
+                        if not created:
+                            for field, value in datos.items():
+                                if value is not None:
+                                    setattr(container, field, value)
+                            container.save()
 
                         if created:
                             self.resultados['creados'] += 1

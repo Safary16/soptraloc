@@ -236,11 +236,15 @@ async function cargarProgramacionesPrioritarias() {
                           '<span class="text-muted">N/A</span>'}
                     </td>
                     <td>
-                        ${prog.conductor ? 
-                          (prog.estado_container === 'en_ruta' && prog.dias_hasta_programacion ? 
-                            `<span class="badge bg-primary">En ruta</span>` : 
-                            `<span class="badge bg-${estadoClass}">${prog.estado_container || 'N/A'}</span>`) :
-                          '<span class="badge bg-warning">Pendiente</span>'}
+                        ${prog.estado_container === 'en_ruta' ? `
+                            <span class="badge bg-primary mb-1">En ruta</span>
+                            ${prog.fecha_inicio_ruta ? `<br><small><strong>Inicio:</strong> ${new Date(prog.fecha_inicio_ruta).toLocaleString('es-CL')}</small>` : ''}
+                            ${prog.eta_recalculado_min !== null ? `<br><small><strong>ETA restante:</strong> ${prog.eta_recalculado_min} min</small>` :
+                              (prog.eta_minutos !== null ? `<br><small><strong>Duración estimada:</strong> ${prog.eta_minutos} min</small>` : '')}
+                            ${prog.eta_timestamp ? `<br><small><strong>Llegada estimada:</strong> ${new Date(prog.eta_timestamp).toLocaleString('es-CL')}</small>` : ''}
+                        ` : (prog.conductor ?
+                            `<span class="badge bg-${estadoClass}">${prog.estado_container || 'N/A'}</span>` :
+                            '<span class="badge bg-warning">Pendiente</span>')}
                     </td>
                     <td><span class="badge badge-urgencia-${urgenciaClass}">${prog.urgencia}</span></td>
                 </tr>

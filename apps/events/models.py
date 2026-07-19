@@ -19,6 +19,8 @@ class Event(models.Model):
         ('cambio_estado', 'Cambio de Estado'),
         ('actualizacion_posicion', 'Actualización de Posición'),
         ('exportacion_stock', 'Exportación de Stock'),
+        ('asignacion_conductor', 'Asignación de Conductor'),
+        ('incidente_reportado', 'Incidente Reportado'),
     ]
     
     # Relación con contenedor

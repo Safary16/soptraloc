@@ -625,8 +625,8 @@
                 
                 // Calcular si está a tiempo o retrasado
                 const fechaProgramada = prog.fecha_programada ? new Date(prog.fecha_programada) : null;
+                const fechaInicioRuta = prog.fecha_inicio_ruta ? new Date(prog.fecha_inicio_ruta) : null;
                 const etaTimestamp = prog.eta_timestamp ? new Date(prog.eta_timestamp) : null;
-                const ahora = new Date();
                 
                 let estadoTiempo = '';
                 let colorTiempo = '';
@@ -658,9 +658,16 @@
                         </div>
                         ` : ''}
                         
-                        ${prog.estado === 'en_ruta' && prog.eta_minutos ? `
+                        ${fechaInicioRuta ? `
+                        <div class="mt-2">
+                            <strong><i class="fas fa-play-circle"></i> Inicio real de ruta:</strong> ${fechaInicioRuta.toLocaleString('es-CL')}
+                        </div>
+                        ` : ''}
+
+                        ${prog.estado === 'en_ruta' && prog.eta_minutos !== null ? `
                         <div class="mt-2 alert alert-info py-2">
-                            <strong><i class="fas fa-clock"></i> ETA (Mapbox):</strong> ${prog.eta_minutos} minutos<br>
+                            <strong><i class="fas fa-clock"></i> Duración estimada:</strong> ${prog.eta_minutos} minutos<br>
+                            ${prog.eta_restante_minutos !== null ? `<strong>ETA restante:</strong> ${prog.eta_restante_minutos} minutos<br>` : ''}
                             ${etaTimestamp ? `<strong>Llegada estimada:</strong> ${etaTimestamp.toLocaleString('es-CL')}<br>` : ''}
                             ${estadoTiempo}
                         </div>

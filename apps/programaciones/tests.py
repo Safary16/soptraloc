@@ -53,6 +53,11 @@ class ProgramacionAsignacionTests(TestCase):
             fecha_programada=timezone.now() + timedelta(hours=24)
         )
     
+    def test_crear_programacion_actualiza_container_a_programado(self):
+        """Creating a schedule establishes the container's programmed state."""
+        self.container.refresh_from_db()
+        self.assertEqual(self.container.estado, 'programado')
+
     def test_asignar_conductor_creates_notification(self):
         """Test that assigning a driver creates a notification"""
         # Verify no notifications exist before assignment
