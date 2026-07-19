@@ -24,6 +24,8 @@ from apps.core.views import (
 )
 
 # Import API views
+from apps.core.schema_diagnostics import schema_read_diagnostics
+
 from apps.core.api_views import (
     dashboard_stats, dashboard_alertas, analytics_conductores,
     analytics_eficiencia, analytics_tendencias, ml_learning_stats,
@@ -65,6 +67,9 @@ urlpatterns = [
     # API
     path('api/', include(router.urls)),
     
+    # Temporary value-free production diagnostic; remove after schema repair.
+    path('api/health/schema-read/', schema_read_diagnostics, name='schema_read_diagnostics'),
+
     # API Analytics and Stats
     path('api/dashboard/stats/', dashboard_stats, name='dashboard_stats'),
     path('api/dashboard/alertas/', dashboard_alertas, name='dashboard_alertas'),
