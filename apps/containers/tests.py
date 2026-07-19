@@ -14,6 +14,7 @@ from apps.containers.importers.programacion import ProgramacionImporter
 from apps.containers.models import Container
 from apps.programaciones.models import Programacion
 from apps.core.services.returns import EmptyReturnService
+from apps.containers.serializers import ContainerListSerializer
 
 
 class ProgramacionImporterBusinessFlowTests(TestCase):
@@ -79,6 +80,10 @@ class ContainerCrudTests(APITestCase):
         response = self.client.post(reverse('container-list'), self.payload, format='json')
         self.assertEqual(response.status_code, 201)
         self.assertEqual(response.data['container_id'], 'MSCU1234567')
+
+    def test_list_serializer_declares_each_field_once(self):
+        fields = ContainerListSerializer.Meta.fields
+        self.assertEqual(len(fields), len(set(fields)))
 
     def test_delete_cancels_and_preserves_container(self):
         container = Container.objects.create(container_id='CXLU1234567', tipo='40', nave='Nave')
