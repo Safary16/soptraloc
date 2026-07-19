@@ -10,11 +10,70 @@ from django.core.management import call_command
 from datetime import timedelta
 
 from apps.cds.models import CD
+from apps.containers.importers.embarque import EmbarqueImporter
 from apps.containers.importers.programacion import ProgramacionImporter
 from apps.containers.models import Container
 from apps.programaciones.models import Programacion
 from apps.core.services.returns import EmptyReturnService
 from apps.containers.serializers import ContainerListSerializer
+from apps.clientes.models import ClienteEmpresa
+
+
+class EmbarqueCustomerAssociationTests(TestCase):
+    def setUp(self):
+        self.empresa = ClienteEmpresa.objects.create(
+            nombre='Comercial Peña y Compañía SpA', rut='76.123.456-7'
+        )
+
+    def _import(self, customer_header='Cliente', customer='comercial pena y compania spa'):
+        frame = pd.DataFrame([{
+            'Container Numbers': 'MSCU 123456-7',
+            'Container Size': "40' HC",
+            'Nave Confirmado': 'Nave Prueba',
+            customer_header: customer,
+        }])
+        with patch(
+            'apps.containers.importers.embarque.read_excel_with_header_detection',
+            return_value=frame,
+        ):
+            return EmbarqueImporter('embarque.xlsx', 'test').procesar()
+
+    def test_known_customer_is_normalized_and_linked_without_cd(self):
+        result = self._import()
+        container = Container.objects.get(container_id='MSCU1234567')
+        self.assertEqual(result['creados'], 1)
+        self.assertEqual(result['errores'], 0)
+        self.assertEqual(container.cliente_empresa, self.empresa)
+        self.assertEqual(container.cliente, 'comercial pena y compania spa')
+        self.assertIsNone(container.cd_entrega)
+
+    def test_customer_header_aliases_are_supported(self):
+        result = self._import(customer_header='Consignee', customer='76.123.456-7')
+        container = Container.objects.get(container_id='MSCU1234567')
+        self.assertEqual(result['errores'], 0)
+        self.assertEqual(container.cliente_empresa, self.empresa)
+        self.assertIsNone(container.cd_entrega)
+
+    def test_unknown_customer_is_explicit_and_not_created(self):
+        result = self._import(customer='Cliente inexistente')
+        self.assertEqual(result['creados'], 0)
+        self.assertEqual(result['errores'], 1)
+        self.assertFalse(Container.objects.exists())
+        self.assertEqual(ClienteEmpresa.objects.count(), 1)
+        self.assertIn('no está registrado', result['detalles'][0]['error'])
+
+    def test_customer_column_is_required(self):
+        frame = pd.DataFrame([{
+            'Container Numbers': 'MSCU 123456-7',
+            'Container Size': '40',
+            'Nave Confirmado': 'Nave Prueba',
+        }])
+        with patch(
+            'apps.containers.importers.embarque.read_excel_with_header_detection',
+            return_value=frame,
+        ):
+            with self.assertRaisesRegex(Exception, "Columna requerida 'cliente'"):
+                EmbarqueImporter('embarque.xlsx', 'test').procesar()
 
 
 class ProgramacionImporterBusinessFlowTests(TestCase):

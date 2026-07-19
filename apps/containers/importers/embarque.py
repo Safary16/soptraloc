@@ -9,6 +9,7 @@ import logging
 from apps.containers.models import Container
 from apps.events.models import Event
 from apps.core.services.excel import normalize_columns, read_excel_with_header_detection
+from apps.clientes.matching import resolve_customer
 
 
 logger = logging.getLogger(__name__)
@@ -26,10 +27,11 @@ class EmbarqueImporter:
     - Weight Kgs / Peso (opcional)
     - Vendor (opcional)
     - Container Seal / Sello (opcional)
+    - Cliente / Customer / Consignee / Importador (requerido para Portal Cliente)
     - Puerto (opcional, default: Valparaíso)
     """
     
-    COLUMNAS_REQUERIDAS = ['container_id', 'tipo', 'nave']
+    COLUMNAS_REQUERIDAS = ['container_id', 'tipo', 'nave', 'cliente']
     
     def __init__(self, archivo_path, usuario=None):
         self.archivo_path = archivo_path
@@ -70,6 +72,14 @@ class EmbarqueImporter:
             'po': 'po',
             'import file': 'import_file',
             'place of receipt': 'place_receipt',
+            'cliente': 'cliente',
+            'customer': 'cliente',
+            'customer name': 'cliente',
+            'consignee': 'cliente',
+            'consignatario': 'cliente',
+            'importador': 'cliente',
+            'empresa cliente': 'cliente',
+            'rut cliente': 'cliente',
         }
         
         return normalize_columns(df, mapeo)
@@ -159,6 +169,14 @@ class EmbarqueImporter:
                             'estado': 'por_arribar',
                         }
 
+                        # La nave define la empresa propietaria del stock. El CD se
+                        # elige después desde Portal Cliente al solicitar horario.
+                        cliente_raw = str(row['cliente']).strip() if pd.notna(row['cliente']) else ''
+                        empresa = resolve_customer(cliente_raw)
+                        datos['cliente'] = cliente_raw
+                        datos['cliente_empresa'] = empresa
+                        datos['cd_entrega'] = None
+
                         # Agregar fecha_eta si está disponible
                         if 'fecha_eta' in row.index and pd.notna(row['fecha_eta']):
                             try:
@@ -195,6 +213,8 @@ class EmbarqueImporter:
                                 detalles={
                                     'nave': datos['nave'],
                                     'tipo': datos['tipo'],
+                                    'cliente': datos['cliente'],
+                                    'cliente_empresa_id': datos['cliente_empresa'].pk,
                                 },
                                 usuario=self.usuario
                             )
@@ -205,7 +225,10 @@ class EmbarqueImporter:
                             'fila': idx + 2,
                             'container_id': container_id,
                             'accion': 'creado' if created else 'actualizado',
-                            'nave': datos['nave']
+                            'nave': datos['nave'],
+                            'cliente': datos['cliente'],
+                            'cliente_empresa_id': datos['cliente_empresa'].pk,
+                            'cd_entrega': None,
                         })
                 
                 except Exception as e:
