@@ -32,9 +32,9 @@
     <!-- Navbar -->
     <nav class="navbar navbar-expand-lg navbar-dark bg-ubuntu sticky-top">
         <div class="container-fluid">
-            <a class="navbar-brand d-flex align-items-center" href="/">
-                <div class="ubuntu-logo me-2"></div>
-                <span class="fw-bold">SoptraLoc TMS</span>
+            <a class="navbar-brand d-flex align-items-center" href="{% url 'role_landing' %}">
+                <img src="{% static 'img/safary-sebastian-mark.svg' %}" alt="Safary" style="width:48px;height:34px;object-fit:contain;filter:invert(1)" class="me-2">
+                <span class="fw-bold">SoptraLoc · Safary</span>
             </a>
             
             <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
@@ -43,39 +43,22 @@
             
             <div class="collapse navbar-collapse" id="navbarNav">
                 <ul class="navbar-nav ms-auto">
-                    <li class="nav-item">
-                        <a class="nav-link" href="/">
-                            <i class="fas fa-home"></i> Dashboard
-                        </a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="/operaciones/">
-                            <i class="fas fa-tasks"></i> Operaciones
-                        </a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="/asignacion/">
-                            <i class="fas fa-truck"></i> Asignación
-                        </a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="/containers/">
-                            <i class="fas fa-boxes"></i> Contenedores
-                        </a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="/drivers/">
-                            <i class="fas fa-users"></i> Conductores
-                        </a>
-                    </li>
-                    <li class="nav-item dropdown">
-                        <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown">
-                            <i class="fas fa-database"></i> Datos maestros
-                        </a>
-                        <ul class="dropdown-menu">
-                            <li><a class="dropdown-item" href="/drivers/">Conductores</a></li>
-                            <li><a class="dropdown-item" href="/cds/">Centros de distribución</a></li>
-                        </ul>
+                    {% if request.user.is_authenticated and request.user.perfil_cliente %}
+                    <li class="nav-item"><a class="nav-link" href="{% url 'cliente_dashboard' %}"><i class="fas fa-warehouse"></i> Mi portal</a></li>
+                    <li class="nav-item"><a class="nav-link" href="{% url 'cliente_logout' %}"><i class="fas fa-sign-out-alt"></i> Salir</a></li>
+                    <li class="nav-item"><a class="nav-link" href="{% url 'role_landing' %}"><i class="fas fa-right-left"></i> Cambiar perfil</a></li>
+                    {% else %}
+                    <li class="nav-item"><a class="nav-link" href="{% url 'operations_dashboard' %}"><i class="fas fa-home"></i> Dashboard</a></li>
+                    <li class="nav-item"><a class="nav-link" href="/operaciones/"><i class="fas fa-tasks"></i> Operaciones</a></li>
+                    <li class="nav-item"><a class="nav-link" href="{% url 'solicitudes_operaciones' %}"><i class="fas fa-inbox"></i> Clientes</a></li>
+                    <li class="nav-item"><a class="nav-link" href="/asignacion/"><i class="fas fa-truck"></i> Asignación</a></li>
+                    <li class="nav-item"><a class="nav-link" href="/containers/"><i class="fas fa-boxes"></i> Contenedores</a></li>
+                    <li class="nav-item"><a class="nav-link" href="{% url 'control_hub' %}"><i class="fas fa-tower-observation"></i> Control</a></li>
+                    <li class="nav-item dropdown"><a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown"><i class="fas fa-database"></i> Maestros</a><ul class="dropdown-menu"><li><a class="dropdown-item" href="/drivers/">Conductores</a></li><li><a class="dropdown-item" href="/cds/">Centros de distribución</a></li></ul></li>
+                    <li class="nav-item"><a class="nav-link" href="/monitoring/"><i class="fas fa-map-marked-alt"></i> Monitoreo</a></li>
+                    <li class="nav-item"><a class="nav-link" href="{% url 'role_landing' %}"><i class="fas fa-right-left"></i> Cambiar perfil</a></li>
+                    {% endif %}
+                </ul>
                     </li>
                     <li class="nav-item">
                         <a class="nav-link nav-driver-portal" href="/driver/login/">
@@ -115,6 +98,11 @@
                     <li class="nav-item">
                         <a class="nav-link" href="/api/">
                             <i class="fas fa-code"></i> API
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="{% url 'role_landing' %}">
+                            <i class="fas fa-right-left"></i> Cambiar perfil
                         </a>
                     </li>
                 </ul>

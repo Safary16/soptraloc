@@ -8,8 +8,9 @@ from apps.cds.models import CD
 from django.contrib.admin.views.decorators import staff_member_required
 
 
+@staff_member_required(login_url='/cuenta/login/')
 def home(request):
-    """Dashboard principal con estadísticas"""
+    """Dashboard operacional interno con estadísticas"""
     today = timezone.now().date()
     tomorrow = today + timedelta(days=1)
     two_days_from_now = today + timedelta(days=2)
@@ -46,6 +47,7 @@ def home(request):
     return render(request, 'home.html', {'stats': stats})
 
 
+@staff_member_required(login_url='/cuenta/login/')
 def asignacion(request):
     """Sistema inteligente de asignación de conductores"""
     from django.middleware.csrf import get_token
@@ -53,6 +55,7 @@ def asignacion(request):
     return render(request, 'asignacion.html')
 
 
+@staff_member_required(login_url='/cuenta/login/')
 def estados(request):
     """Visualización de estados de contenedores"""
     # Estados del ciclo de vida (sin arribado)
@@ -73,6 +76,7 @@ def estados(request):
     })
 
 
+@staff_member_required(login_url='/cuenta/login/')
 def importar(request):
     """Página de importación de Excel"""
     return render(request, 'importar.html')
@@ -111,6 +115,7 @@ def containers_list(request):
     })
 
 
+@staff_member_required(login_url='/cuenta/login/')
 def container_detail(request, container_id):
     """Detalle completo de un contenedor"""
     container = get_object_or_404(Container, container_id=container_id)
@@ -120,6 +125,7 @@ def container_detail(request, container_id):
     })
 
 
+@staff_member_required(login_url='/cuenta/login/')
 def operaciones(request):
     """Panel de operaciones para asignación y gestión de ciclo de vida"""
     # Ensure CSRF token is in context for the template
@@ -140,11 +146,13 @@ def cds_list(request):
     return render(request, 'cds_list.html')
 
 
+@staff_member_required(login_url='/cuenta/login/')
 def executive_dashboard(request):
     """Dashboard ejecutivo con métricas y análisis"""
     return render(request, 'executive_dashboard.html')
 
 
+@staff_member_required(login_url='/cuenta/login/')
 def operaciones_diarias(request):
     """Vista de operaciones diarias con horarios completos"""
     return render(request, 'operaciones_diarias.html')

@@ -9,7 +9,7 @@ from rest_framework.test import APIClient
 from apps.cds.models import CD
 from apps.containers.models import Container
 
-from .models import ClienteEmpresa, ClienteUsuario, SolicitudHorario
+from .models import ClienteEmpresa, ClienteUsuario, SituacionCliente, SolicitudHorario
 from .services import ClientSlotRecommendationService
 
 
@@ -56,6 +56,15 @@ class ClientPortalIsolationTests(TestCase):
         }
         self.assertEqual(self.client_api.post(reverse('cliente_solicitudes'), payload, format='json').status_code, 400)
 
+    def test_role_landing_exposes_all_four_connected_portals(self):
+        response = self.client.get(reverse('role_landing'))
+        self.assertContains(response, 'Cliente')
+        self.assertContains(response, 'Operaciones')
+        self.assertContains(response, 'Control')
+        self.assertContains(response, 'Conductor')
+        self.assertContains(response, reverse('cliente_login'))
+        self.assertContains(response, reverse('driver_login'))
+
     def test_client_can_submit_request_but_it_does_not_auto_schedule(self):
         self.client_api.force_authenticate(self.user_a)
         start = timezone.now() + timedelta(days=1)
@@ -68,6 +77,23 @@ class ClientPortalIsolationTests(TestCase):
         request = SolicitudHorario.objects.get(pk=response.data['id'])
         self.assertEqual(request.estado, 'pendiente')
         self.assertFalse(hasattr(self.container_a, 'programacion'))
+
+    def test_client_can_report_situation_and_only_its_own_container(self):
+        self.client_api.force_authenticate(self.user_a)
+        response = self.client_api.post(reverse('cliente_situaciones'), {
+            'container': self.container_a.pk, 'categoria': 'stock',
+            'prioridad': 'alta', 'asunto': 'Unidad no visible',
+            'mensaje': 'Necesitamos revisión de esta unidad.',
+        }, format='json')
+        self.assertEqual(response.status_code, 201)
+        row = SituacionCliente.objects.get(pk=response.data['id'])
+        self.assertEqual(row.empresa, self.company_a)
+        self.assertEqual(row.estado, 'abierta')
+        denied = self.client_api.post(reverse('cliente_situaciones'), {
+            'container': self.container_b.pk, 'categoria': 'stock',
+            'asunto': 'No corresponde', 'mensaje': 'Otro tenant',
+        }, format='json')
+        self.assertEqual(denied.status_code, 400)
 
 
 class ClientSlotRecommendationTests(TestCase):
@@ -117,3 +143,21 @@ class OperationsReviewTests(TestCase):
         self.assertEqual(container.estado, 'programado')
         self.assertIsNotNone(request.programacion_id)
         self.assertEqual(request.programacion.container_id, container.id)
+
+    def test_staff_can_answer_client_situation(self):
+        company = ClienteEmpresa.objects.create(nombre='Cliente Situation')
+        client_user = User.objects.create_user('situation-client', password='***')
+        ClienteUsuario.objects.create(user=client_user, empresa=company)
+        staff = User.objects.create_user('situation-staff', password='***', is_staff=True)
+        row = SituacionCliente.objects.create(
+            empresa=company, creada_por=client_user, categoria='operativa',
+            prioridad='urgente', asunto='Recepción detenida', mensaje='Favor revisar.',
+        )
+        api = APIClient(); api.force_authenticate(staff)
+        response = api.post(reverse('revisar_situacion_cliente', kwargs={'pk': row.pk}), {
+            'estado': 'resuelta', 'respuesta': 'Situación coordinada.',
+        }, format='json')
+        self.assertEqual(response.status_code, 200)
+        row.refresh_from_db()
+        self.assertEqual(row.estado, 'resuelta')
+        self.assertEqual(row.respuesta_operaciones, 'Situación coordinada.')

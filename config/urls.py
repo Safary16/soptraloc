@@ -16,9 +16,11 @@ from apps.programaciones.views import ProgramacionViewSet
 from apps.cds.views import CDViewSet
 from apps.clientes.views import (
     cliente_login, cliente_logout, cliente_dashboard, solicitudes_operaciones,
-    api_stock, api_centros, api_recomendaciones, api_solicitudes,
+    api_stock, api_centros, api_recomendaciones, api_solicitudes, api_situaciones,
     api_solicitudes_operaciones, api_revisar_solicitud,
+    api_situaciones_operaciones, api_revisar_situacion,
 )
+from apps.core.access_views import role_landing, staff_login, staff_logout, control_hub
 
 # Import frontend views
 from apps.core.views import (
@@ -44,7 +46,11 @@ router.register(r'cds', CDViewSet, basename='cd')
 
 urlpatterns = [
     # Frontend pages
-    path('', home, name='home'),
+    path('', role_landing, name='role_landing'),
+    path('operaciones/dashboard/', home, name='operations_dashboard'),
+    path('cuenta/login/', staff_login, name='staff_login'),
+    path('cuenta/logout/', staff_logout, name='staff_logout'),
+    path('control/', control_hub, name='control_hub'),
     path('asignacion/', asignacion, name='asignacion'),
     path('estados/', estados, name='estados'),
     path('importar/', importar, name='importar'),
@@ -68,8 +74,11 @@ urlpatterns = [
     path('api/cliente/centros/', api_centros, name='cliente_centros'),
     path('api/cliente/recomendaciones/', api_recomendaciones, name='cliente_recomendaciones'),
     path('api/cliente/solicitudes/', api_solicitudes, name='cliente_solicitudes'),
+    path('api/cliente/situaciones/', api_situaciones, name='cliente_situaciones'),
     path('api/operaciones/solicitudes-clientes/', api_solicitudes_operaciones, name='operaciones_solicitudes_clientes'),
     path('api/operaciones/solicitudes-clientes/<int:pk>/revisar/', api_revisar_solicitud, name='revisar_solicitud_cliente'),
+    path('api/operaciones/situaciones-clientes/', api_situaciones_operaciones, name='operaciones_situaciones_clientes'),
+    path('api/operaciones/situaciones-clientes/<int:pk>/revisar/', api_revisar_situacion, name='revisar_situacion_cliente'),
 
     # Driver authentication
     path('driver/login/', driver_login, name='driver_login'),
