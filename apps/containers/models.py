@@ -95,6 +95,10 @@ class Container(models.Model):
     
     # Información de entrega
     cliente = models.CharField('Cliente', max_length=200, null=True, blank=True, help_text='Nombre del cliente final')
+    cliente_empresa = models.ForeignKey(
+        'clientes.ClienteEmpresa', on_delete=models.PROTECT, null=True, blank=True,
+        related_name='contenedores', verbose_name='Empresa cliente',
+    )
     comuna = models.CharField('Comuna Destino', max_length=100, null=True, blank=True)
     secuenciado = models.BooleanField('Secuenciado', default=False, help_text='Marcado para próxima liberación')
     cd_entrega = models.ForeignKey('cds.CD', on_delete=models.SET_NULL, null=True, blank=True, related_name='contenedores_entregados', verbose_name='CD de Entrega')

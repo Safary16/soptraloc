@@ -2,7 +2,7 @@ from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.parsers import MultiPartParser, FormParser
-from rest_framework.permissions import AllowAny, IsAuthenticatedOrReadOnly
+from rest_framework.permissions import AllowAny, IsAuthenticatedOrReadOnly, IsAdminUser
 from django.conf import settings
 from django.db import transaction
 from django.db.models import Q
@@ -36,6 +36,13 @@ class ProgramacionViewSet(viewsets.ModelViewSet):
     ordering_fields = ['fecha_programada', 'created_at']
     ordering = ['fecha_programada']
     permission_classes = [IsAuthenticatedOrReadOnly]
+
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        user = self.request.user
+        if user.is_authenticated and hasattr(user, 'perfil_cliente'):
+            return queryset.filter(container__cliente_empresa=user.perfil_cliente.empresa)
+        return queryset
     
     def get_serializer_class(self):
         if self.action == 'list':
