@@ -1,7 +1,7 @@
 from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
-from rest_framework.permissions import IsAuthenticatedOrReadOnly
+from rest_framework.permissions import AllowAny, IsAdminUser
 
 from .models import CD
 from .serializers import CDSerializer, CDListSerializer
@@ -17,7 +17,16 @@ class CDViewSet(viewsets.ModelViewSet):
     search_fields = ['nombre', 'codigo', 'direccion', 'comuna']
     ordering_fields = ['nombre', 'tipo']
     ordering = ['nombre']
-    permission_classes = [IsAuthenticatedOrReadOnly]
+    permission_classes = [AllowAny]
+
+    def get_permissions(self):
+        classes = [AllowAny] if self.action in {'list', 'retrieve', 'cctis', 'clientes'} else [IsAdminUser]
+        return [permission() for permission in classes]
+
+    def perform_destroy(self, instance):
+        """Los maestros se desactivan para no romper historia operacional."""
+        instance.activo = False
+        instance.save(update_fields=['activo', 'updated_at'])
     
     def get_serializer_class(self):
         if self.action == 'list':

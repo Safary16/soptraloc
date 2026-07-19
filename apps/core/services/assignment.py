@@ -7,6 +7,7 @@ from apps.drivers.models import Driver
 from apps.programaciones.models import Programacion, RegistroOperacion
 from apps.core.services.mapbox import MapboxService
 from apps.core.services.ml_predictor import MLTimePredictor
+from apps.core.services.learning_engine import OperationalLearningEngine
 from apps.core.services.anomaly_detector import (
     AnomalyDetector, DelayRiskScorer, CapacityChecker, ETAEstimator, RouteFeasibilityValidator
 )
@@ -59,7 +60,14 @@ class AssignmentService:
 
     @classmethod
     def _score_historial(cls, driver: Driver) -> float:
-        return round(float(driver.cumplimiento_porcentaje) / 100.0, 3)
+        cumplimiento = float(driver.cumplimiento_porcentaje) / 100.0
+        profile = OperationalLearningEngine.driver_profile(driver)
+        # Con pocas muestras no se altera el historial declarado del conductor.
+        if profile['samples'] < OperationalLearningEngine.MIN_DRIVER_SAMPLES:
+            return round(cumplimiento, 3)
+        pace_score = max(0.0, min(1.0, 1.15 - (profile['factor'] - 0.85)))
+        confidence = profile['confidence']
+        return round((cumplimiento * (1 - 0.35 * confidence)) + (pace_score * 0.35 * confidence), 3)
 
     @classmethod
     def _score_urgencia(cls, programacion: Programacion) -> float:

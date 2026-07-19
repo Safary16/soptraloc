@@ -6,6 +6,8 @@ import requests
 from django.conf import settings
 from decimal import Decimal
 import logging
+import hashlib
+import json
 
 logger = logging.getLogger(__name__)
 
@@ -18,6 +20,14 @@ class MapboxService:
     
     API_KEY = settings.MAPBOX_API_KEY
     BASE_URL = "https://api.mapbox.com/directions/v5/mapbox"
+
+    @staticmethod
+    def firma_ruta(geometry):
+        """Genera una huella estable para agrupar observaciones de la misma ruta."""
+        if not geometry:
+            return None
+        canonical = json.dumps(geometry, sort_keys=True, separators=(',', ':'))
+        return hashlib.sha256(canonical.encode('utf-8')).hexdigest()
     
     @classmethod
     def calcular_ruta(cls, origen_lng, origen_lat, destino_lng, destino_lat, profile='driving-traffic'):
@@ -51,6 +61,7 @@ class MapboxService:
                 'geometries': 'geojson',
                 'overview': 'full',
                 'steps': 'false',
+                'alternatives': 'false',
             }
             
             # Hacer request
@@ -73,6 +84,7 @@ class MapboxService:
                 'duration_minutes': round(route['duration'] / 60, 2),  # Convertir a minutos
                 'distance_km': round(route['distance'] / 1000, 2),     # Convertir a km
                 'geometry': route['geometry'],
+                'route_signature': cls.firma_ruta(route['geometry']),
                 'raw_response': data
             }
         
@@ -88,6 +100,40 @@ class MapboxService:
                 'success': False,
                 'error': f"Error inesperado: {str(e)}"
             }
+
+    @classmethod
+    def calcular_rutas_alternativas(cls, origen_lng, origen_lat, destino_lng, destino_lat, profile='driving-traffic'):
+        """Obtiene hasta tres alternativas para compararlas con el historial real."""
+        try:
+            coordinates = f"{origen_lng},{origen_lat};{destino_lng},{destino_lat}"
+            response = requests.get(
+                f"{cls.BASE_URL}/{profile}/{coordinates}",
+                params={
+                    'access_token': cls.API_KEY,
+                    'geometries': 'geojson',
+                    'overview': 'full',
+                    'steps': 'false',
+                    'alternatives': 'true',
+                },
+                timeout=10,
+            )
+            response.raise_for_status()
+            data = response.json()
+            if data.get('code') != 'Ok':
+                return {'success': False, 'error': data.get('message', 'Error Mapbox')}
+            routes = []
+            for index, route in enumerate(data.get('routes', [])[:3]):
+                routes.append({
+                    'route_index': index,
+                    'duration_minutes': round(route['duration'] / 60, 2),
+                    'distance_km': round(route['distance'] / 1000, 2),
+                    'geometry': route['geometry'],
+                    'route_signature': cls.firma_ruta(route['geometry']),
+                })
+            return {'success': bool(routes), 'routes': routes}
+        except Exception as exc:
+            logger.error(f"Error obteniendo rutas alternativas: {exc}")
+            return {'success': False, 'error': str(exc), 'routes': []}
     
     @classmethod
     def calcular_distancia_simple(cls, origen_lng, origen_lat, destino_lng, destino_lat):

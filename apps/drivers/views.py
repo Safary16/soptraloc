@@ -11,10 +11,14 @@ from datetime import timedelta
 from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import AllowAny, IsAdminUser, IsAuthenticated
 
 from .models import Driver, DriverLocation
-from .serializers import DriverSerializer, DriverDetailSerializer, DriverLocationSerializer
+from .serializers import (
+    DriverSerializer, DriverDetailSerializer, DriverListSerializer,
+    DriverLocationSerializer,
+)
+from .access import asegurar_acceso, generar_token_dispositivo, validar_token_dispositivo
 
 
 # ============================================
@@ -77,7 +81,42 @@ class DriverViewSet(viewsets.ModelViewSet):
     
     queryset = Driver.objects.all()
     serializer_class = DriverSerializer
-    permission_classes = []  # Allow access without authentication for now
+    permission_classes = [IsAuthenticated]
+
+    def get_permissions(self):
+        """Lecturas operativas públicas; datos privados y mutaciones, restringidos."""
+        if self.action in {'list', 'active_locations', 'verify_patente', 'update_location'}:
+            classes = [AllowAny]
+        elif self.action in {
+            'create', 'update', 'partial_update', 'destroy', 'import_excel',
+            'reset_entregas_diarias', 'reset_access',
+        }:
+            classes = [IsAdminUser]
+        else:
+            classes = [IsAuthenticated]
+        return [permission() for permission in classes]
+
+    def get_serializer_class(self):
+        if self.action == 'list':
+            return DriverListSerializer
+        return DriverSerializer
+
+    def perform_destroy(self, instance):
+        """Conservar trazabilidad: eliminar desde CRUD equivale a desactivar."""
+        instance.activo = False
+        instance.presente = False
+        instance.save(update_fields=['activo', 'presente', 'updated_at'])
+        if instance.user_id and instance.user.is_active:
+            instance.user.is_active = False
+            instance.user.save(update_fields=['is_active'])
+
+    def create(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        self.perform_create(serializer)
+        data = dict(serializer.data)
+        data['acceso_temporal'] = serializer._temporary_access
+        return Response(data, status=status.HTTP_201_CREATED, headers=self.get_success_headers(serializer.data))
     
     def get_queryset(self):
         """Filtrar conductores según parámetros"""
@@ -94,6 +133,13 @@ class DriverViewSet(viewsets.ModelViewSet):
             queryset = queryset.filter(presente=presente.lower() == 'true')
         
         return queryset.order_by('nombre')
+
+    def retrieve(self, request, *args, **kwargs):
+        driver = self.get_object()
+        if not (request.user.is_staff or request.user.is_superuser or
+                getattr(request.user, 'driver', None) == driver):
+            return Response({'error': 'No autorizado'}, status=status.HTTP_403_FORBIDDEN)
+        return Response(self.get_serializer(driver).data)
     
     @action(detail=True, methods=['post'])
     def track_location(self, request, pk=None):
@@ -206,6 +252,11 @@ class DriverViewSet(viewsets.ModelViewSet):
                 {'error': 'No autorizado para ver esta información'},
                 status=status.HTTP_403_FORBIDDEN
             )
+
+    @action(detail=True, methods=['post'], url_path='reset-access')
+    def reset_access(self, request, pk=None):
+        driver = self.get_object()
+        return Response({'success': True, 'acceso_temporal': asegurar_acceso(driver)})
     
     @action(detail=True, methods=['post'])
     def reset_entregas_diarias(self, request, pk=None):
@@ -231,6 +282,9 @@ class DriverViewSet(viewsets.ModelViewSet):
         GET /api/drivers/{id}/historial/?dias=7
         """
         driver = self.get_object()
+        if not (request.user.is_staff or request.user.is_superuser or
+                getattr(request.user, 'driver', None) == driver):
+            return Response({'error': 'No autorizado'}, status=status.HTTP_403_FORBIDDEN)
         dias = int(request.query_params.get('dias', 7))
         
         fecha_desde = timezone.now() - timedelta(days=dias)
@@ -328,6 +382,7 @@ class DriverViewSet(viewsets.ModelViewSet):
                 'driver_id': driver.id,
                 'driver_name': driver.nombre,
                 'patente': driver.patente,
+                'driver_token': generar_token_dispositivo(driver),
                 'max_entregas_dia': driver.max_entregas_dia,
                 'num_entregas_dia': driver.num_entregas_dia
             })
@@ -366,6 +421,12 @@ class DriverViewSet(viewsets.ModelViewSet):
         }
         """
         driver = self.get_object()
+        bearer = request.headers.get('Authorization', '')
+        token = bearer[7:].strip() if bearer.startswith('Bearer ') else ''
+        if not (request.user.is_staff or request.user.is_superuser or
+                getattr(request.user, 'driver', None) == driver or
+                validar_token_dispositivo(token, driver)):
+            return Response({'error': 'No autorizado'}, status=status.HTTP_403_FORBIDDEN)
         
         lat = request.data.get('lat')
         lng = request.data.get('lng')

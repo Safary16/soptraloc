@@ -6,6 +6,7 @@ import pandas as pd
 from apps.core.services.excel import normalize_columns, read_excel_with_header_detection
 from django.utils import timezone
 from apps.drivers.models import Driver
+from apps.drivers.access import asegurar_acceso
 
 
 class ConductorImporter:
@@ -126,8 +127,8 @@ class ConductorImporter:
                     driver, created = Driver.objects.get_or_create(
                         nombre=nombre,
                         defaults={
-                            'rut': rut or '',
-                            'telefono': telefono or '',
+                            'rut': rut,
+                            'telefono': telefono,
                             'patente': ppu,
                             'presente': presente,
                             'activo': True,
@@ -136,12 +137,14 @@ class ConductorImporter:
                     )
                     
                     if created:
+                        acceso = asegurar_acceso(driver)
                         self.resultados['creados'] += 1
                         self.resultados['detalles'].append({
                             'fila': idx + 3,  # +3 porque hay 2 filas de header
                             'accion': 'creado',
                             'conductor': nombre,
-                            'presente': presente
+                            'presente': presente,
+                            'acceso_temporal': acceso,
                         })
                     else:
                         # Actualizar datos existentes

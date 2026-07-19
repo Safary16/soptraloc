@@ -11,6 +11,11 @@ from .serializers import DriverDetailSerializer
 from apps.cds.models import CD
 from apps.containers.models import Container
 from apps.programaciones.models import Programacion
+from .access import asegurar_acceso
+from .importers import ConductorImporter
+from unittest.mock import patch
+import pandas as pd
+import tempfile
 
 
 class DriverAuthenticationTests(TestCase):
@@ -106,8 +111,8 @@ class DriverGPSTrackingTests(APITestCase):
             'lng': -70.6483,
             'accuracy': 10.5
         }, format='json')
-        # Should return 403 (Forbidden) since not authenticated
-        self.assertEqual(response.status_code, 403)
+        # DRF puede responder 401 (BasicAuth) o 403 según autenticación configurada.
+        self.assertIn(response.status_code, (401, 403))
     
     def test_track_location_with_authentication(self):
         """Test GPS tracking with authentication"""
@@ -195,6 +200,34 @@ class DriverGPSTrackingTests(APITestCase):
             'lng': -70.6483
         }, format='json')
         
+        self.assertEqual(response.status_code, 403)
+
+    def test_native_location_requires_signed_device_token(self):
+        self.driver.patente = 'TEST12'
+        self.driver.save(update_fields=['patente'])
+        verify = self.client.post(reverse('driver-verify-patente'), {'patente': 'TEST12'}, format='json')
+        self.assertEqual(verify.status_code, 200)
+        url = reverse('driver-update-location', kwargs={'pk': self.driver.pk})
+        denied = self.client.post(url, {'lat': -33.4, 'lng': -70.6}, format='json')
+        self.assertEqual(denied.status_code, 403)
+        accepted = self.client.post(
+            url, {'lat': -33.4, 'lng': -70.6}, format='json',
+            HTTP_AUTHORIZATION=f"Bearer {verify.data['driver_token']}",
+        )
+        self.assertEqual(accepted.status_code, 200)
+
+    def test_native_token_cannot_update_another_driver(self):
+        self.driver.patente = 'TEST12'
+        self.driver.save(update_fields=['patente'])
+        token = self.client.post(
+            reverse('driver-verify-patente'), {'patente': 'TEST12'}, format='json'
+        ).data['driver_token']
+        other = Driver.objects.create(nombre='Otro')
+        response = self.client.post(
+            reverse('driver-update-location', kwargs={'pk': other.pk}),
+            {'lat': -33.4, 'lng': -70.6}, format='json',
+            HTTP_AUTHORIZATION=f'Bearer {token}',
+        )
         self.assertEqual(response.status_code, 403)
 
 
@@ -294,3 +327,61 @@ class DriverRouteTimelineSerializerTests(TestCase):
         self.assertEqual(item['fecha_inicio_ruta'], started_at)
         self.assertEqual(item['eta_timestamp'], expected_arrival)
         self.assertIn(item['eta_restante_minutos'], (29, 30))
+
+
+class DriverAccessAndCrudTests(APITestCase):
+    def setUp(self):
+        self.staff = User.objects.create_user('staff', password='StrongPass123!', is_staff=True)
+        self.regular = User.objects.create_user('regular', password='StrongPass123!')
+
+    def test_secure_access_is_created_and_can_be_reset(self):
+        driver = Driver.objects.create(nombre='José Pérez')
+        first = asegurar_acceso(driver)
+        driver.refresh_from_db()
+        self.assertTrue(driver.user.check_password(first['temporary_password']))
+        self.assertNotEqual(first['temporary_password'], 'driver123')
+        second = asegurar_acceso(driver)
+        driver.user.refresh_from_db()
+        self.assertFalse(driver.user.check_password(first['temporary_password']))
+        self.assertTrue(driver.user.check_password(second['temporary_password']))
+
+    def test_only_staff_can_create_and_creation_returns_one_time_access(self):
+        url = reverse('driver-list')
+        response = self.client.post(url, {'nombre': 'Sin Permiso'}, format='json')
+        self.assertIn(response.status_code, (401, 403))
+        self.client.force_authenticate(self.staff)
+        response = self.client.post(url, {'nombre': 'Nuevo Driver'}, format='json')
+        self.assertEqual(response.status_code, 201)
+        self.assertIn('temporary_password', response.data['acceso_temporal'])
+        self.assertTrue(Driver.objects.get(pk=response.data['id']).user_id)
+
+    def test_delete_deactivates_instead_of_removing(self):
+        driver = Driver.objects.create(nombre='Con Historia')
+        asegurar_acceso(driver)
+        self.client.force_authenticate(self.staff)
+        response = self.client.delete(reverse('driver-detail', kwargs={'pk': driver.pk}))
+        self.assertEqual(response.status_code, 204)
+        driver.refresh_from_db()
+        self.assertFalse(driver.activo)
+        self.assertFalse(driver.user.is_active)
+
+    def test_non_staff_cannot_reset_or_read_other_driver(self):
+        driver = Driver.objects.create(nombre='Privado')
+        asegurar_acceso(driver)
+        self.client.force_authenticate(self.regular)
+        self.assertEqual(self.client.get(reverse('driver-detail', kwargs={'pk': driver.pk})).status_code, 403)
+        self.assertEqual(self.client.post(reverse('driver-reset-access', kwargs={'pk': driver.pk})).status_code, 403)
+
+    @patch('apps.drivers.importers.read_excel_with_header_detection')
+    def test_importer_creates_login_only_for_new_drivers(self, read_excel):
+        read_excel.return_value = pd.DataFrame([{
+            'conductor': 'Importado Uno', 'patente': 'abcd12', 'rut': None,
+            'telefono': None, 'asistencia': 'OPERATIVO',
+        }])
+        with tempfile.NamedTemporaryFile(suffix='.xlsx') as tmp:
+            first = ConductorImporter(tmp.name).procesar()
+            second = ConductorImporter(tmp.name).procesar()
+        self.assertEqual(first['creados'], 1)
+        self.assertIn('temporary_password', first['detalles'][0]['acceso_temporal'])
+        self.assertEqual(second['actualizados'], 1)
+        self.assertNotIn('acceso_temporal', second['detalles'][0])

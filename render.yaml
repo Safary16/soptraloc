@@ -26,6 +26,12 @@ services:
         value: "12"
       - key: DB_STARTUP_RETRY_SECONDS
         value: "5"
+      - key: DJANGO_SUPERUSER_USERNAME
+        value: admin
+      - key: DJANGO_SUPERUSER_EMAIL
+        sync: false
+      - key: DJANGO_SUPERUSER_PASSWORD
+        sync: false
 
 databases:
   - name: soptraloc-db

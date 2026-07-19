@@ -19,4 +19,6 @@ while ! python manage.py migrate --no-input; do
   sleep "$retry_seconds"
 done
 
+python manage.py ensure_admin
+
 exec gunicorn config.wsgi:application --bind "0.0.0.0:${PORT:-10000}"

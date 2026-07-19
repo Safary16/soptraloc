@@ -2,7 +2,7 @@ from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.parsers import MultiPartParser, FormParser
-from rest_framework.permissions import AllowAny, IsAuthenticatedOrReadOnly
+from rest_framework.permissions import AllowAny, IsAdminUser
 from django.utils import timezone
 from django.db.models import Q
 import tempfile
@@ -34,14 +34,24 @@ class ContainerViewSet(viewsets.ModelViewSet):
     search_fields = ['container_id', 'nave', 'vendor', 'comuna']
     ordering_fields = ['created_at', 'fecha_programacion', 'fecha_liberacion']
     ordering = ['-created_at']
-    permission_classes = [IsAuthenticatedOrReadOnly]
+    permission_classes = [AllowAny]
+
+    def get_permissions(self):
+        public_actions = {'list', 'retrieve', 'export_stock', 'export_liberacion_excel'}
+        classes = [AllowAny] if self.action in public_actions else [IsAdminUser]
+        return [permission() for permission in classes]
+
+    def perform_destroy(self, instance):
+        """Un contenedor operacional no se borra: se cancela y conserva su historia."""
+        if instance.estado not in {'devuelto', 'cancelado'}:
+            instance.cambiar_estado('cancelado', usuario=self.request.user.username)
     
     def get_serializer_class(self):
         if self.action == 'list':
             return ContainerListSerializer
         return ContainerSerializer
     
-    @action(detail=False, methods=['post'], parser_classes=[MultiPartParser, FormParser], permission_classes=[AllowAny], url_path='import-embarque')
+    @action(detail=False, methods=['post'], parser_classes=[MultiPartParser, FormParser], permission_classes=[IsAdminUser], url_path='import-embarque')
     def import_embarque(self, request):
         """
         Importa contenedores desde Excel de embarque
@@ -105,7 +115,7 @@ class ContainerViewSet(viewsets.ModelViewSet):
             if os.path.exists(tmp_path):
                 os.unlink(tmp_path)
     
-    @action(detail=False, methods=['post'], parser_classes=[MultiPartParser, FormParser], permission_classes=[AllowAny], url_path='import-liberacion')
+    @action(detail=False, methods=['post'], parser_classes=[MultiPartParser, FormParser], permission_classes=[IsAdminUser], url_path='import-liberacion')
     def import_liberacion(self, request):
         """
         Importa liberaciones desde Excel
@@ -170,7 +180,7 @@ class ContainerViewSet(viewsets.ModelViewSet):
             if os.path.exists(tmp_path):
                 os.unlink(tmp_path)
     
-    @action(detail=False, methods=['post'], parser_classes=[MultiPartParser, FormParser], permission_classes=[AllowAny], url_path='import-programacion')
+    @action(detail=False, methods=['post'], parser_classes=[MultiPartParser, FormParser], permission_classes=[IsAdminUser], url_path='import-programacion')
     def import_programacion(self, request):
         """
         Importa programaciones desde Excel

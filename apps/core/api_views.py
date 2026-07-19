@@ -148,6 +148,7 @@ def analytics_conductores(request):
     drivers = Driver.objects.all()
     
     analytics = []
+    from apps.core.services.learning_engine import OperationalLearningEngine
     for driver in drivers:
         # Calcular estadísticas
         programaciones_completadas = Programacion.objects.filter(
@@ -155,6 +156,7 @@ def analytics_conductores(request):
             container__estado__in=['descargado', 'devuelto']
         ).count()
         
+        perfil_ml = OperationalLearningEngine.driver_profile(driver)
         analytics.append({
             'driver_id': driver.id,
             'nombre': driver.nombre,
@@ -165,7 +167,8 @@ def analytics_conductores(request):
             'entregas_a_tiempo': driver.entregas_a_tiempo,
             'cumplimiento_porcentaje': float(driver.cumplimiento_porcentaje),
             'ocupacion_porcentaje': float(driver.ocupacion_porcentaje),
-            'programaciones_completadas': programaciones_completadas
+            'programaciones_completadas': programaciones_completadas,
+            'perfil_velocidad_ml': perfil_ml,
         })
     
     # Ordenar por cumplimiento

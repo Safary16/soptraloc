@@ -37,6 +37,7 @@ class ProgramacionListSerializer(serializers.ModelSerializer):
             'estado_container', 'fecha_asignacion', 'fecha_inicio_ruta',
             'fecha_arribo_cd', 'gps_arribo_lat', 'gps_arribo_lng', 'origen_arribo',
             'eta_minutos', 'distancia_km', 'patente_confirmada',
+            'ruta_geojson', 'ruta_firma', 'prediccion_ml',
             'urgencia_servicio', 'requiere_seguimiento_especial',
             'clasificacion_sistema', 'nivel_confianza', 'decision_operador'
         ]

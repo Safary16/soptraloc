@@ -86,6 +86,12 @@ class Programacion(models.Model):
         verbose_name='Distancia (km)'
     )
     ruta_geojson = models.JSONField(null=True, blank=True, verbose_name='Ruta GeoJSON')
+    ruta_firma = models.CharField(max_length=64, null=True, blank=True, db_index=True, verbose_name='Firma Ruta')
+    prediccion_ml = models.JSONField(
+        default=dict, blank=True,
+        verbose_name='Predicción ML auditable',
+        help_text='Fuente, muestras, factor y confianza usados para estimar el viaje.'
+    )
     patente_confirmada = models.CharField(max_length=20, null=True, blank=True, verbose_name='Patente Confirmada', help_text='Patente confirmada al iniciar ruta')
     fecha_inicio_ruta = models.DateTimeField(null=True, blank=True, verbose_name='Fecha Inicio Ruta', help_text='Timestamp cuando el conductor inició la ruta')
     gps_inicio_lat = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True, verbose_name='GPS Inicio Latitud')
@@ -421,6 +427,10 @@ class TiempoViaje(models.Model):
         max_digits=7,
         decimal_places=2,
         help_text='Distancia en km según Mapbox'
+    )
+    ruta_firma = models.CharField(
+        max_length=64, null=True, blank=True, db_index=True,
+        help_text='Huella estable de la geometría utilizada para aprender diferencias entre rutas.'
     )
     anomalia = models.BooleanField(
         default=False,

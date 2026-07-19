@@ -621,19 +621,36 @@ class ProgramacionViewSet(viewsets.ModelViewSet):
             usuario=usuario
         )
         
-        # Calcular y guardar ETA en la programación
-        from apps.core.services.mapbox import MapboxService
+        # Calcular y guardar ETA híbrido (Mapbox + aprendizaje histórico).
+        from apps.core.services.learning_engine import OperationalLearningEngine
         try:
-            resultado = MapboxService.calcular_ruta(
-                float(lng),
-                float(lat),
-                float(programacion.cd.lng),
-                float(programacion.cd.lat)
+            recomendacion = OperationalLearningEngine.recommend(
+                (float(lat), float(lng)),
+                (float(programacion.cd.lat), float(programacion.cd.lng)),
+                programacion.fecha_inicio_ruta,
+                driver=programacion.driver,
+                window_hours=0,
             )
-            if resultado.get('success'):
-                programacion.eta_minutos = int(resultado['duration_minutes'])
-                programacion.distancia_km = resultado['distance_km']
-                programacion.save(update_fields=['eta_minutos', 'distancia_km'])
+            if recomendacion.get('success'):
+                prediccion = recomendacion['recommended']
+                programacion.eta_minutos = prediccion['predicted_minutes']
+                programacion.distancia_km = prediccion['distance_km']
+                programacion.ruta_geojson = prediccion.get('geometry')
+                programacion.ruta_firma = prediccion.get('route_signature')
+                programacion.prediccion_ml = {
+                    'source': prediccion['source'],
+                    'mapbox_minutes': prediccion['mapbox_minutes'],
+                    'predicted_minutes': prediccion['predicted_minutes'],
+                    'learned_factor': prediccion['learned_factor'],
+                    'samples': prediccion['samples'],
+                    'confidence': prediccion['confidence'],
+                    'driver_profile': prediccion.get('driver_profile'),
+                    'explanation': recomendacion['explanation'],
+                }
+                programacion.save(update_fields=[
+                    'eta_minutos', 'distancia_km', 'ruta_geojson', 'ruta_firma',
+                    'prediccion_ml', 'updated_at'
+                ])
         except Exception as e:
             import logging
             logger = logging.getLogger(__name__)
@@ -725,6 +742,7 @@ class ProgramacionViewSet(viewsets.ModelViewSet):
                     hora_del_dia=programacion.fecha_inicio_ruta.hour,
                     dia_semana=programacion.fecha_inicio_ruta.weekday(),
                     distancia_km=programacion.distancia_km or 0,
+                    ruta_firma=programacion.ruta_firma,
                     anomalia=real_min > estimado * 3,
                 )
             logger.info(f"RegistroOperacion {registro.id} actualizado al finalizar Programacion {programacion.id} con estado {estado_final}.")
@@ -1092,6 +1110,41 @@ class ProgramacionViewSet(viewsets.ModelViewSet):
             }
         
         return Response(response_data)
+
+    @action(detail=True, methods=['get'])
+    def recomendacion_ml(self, request, pk=None):
+        """Compara horarios, rutas y conductor usando historial real + Mapbox."""
+        from apps.core.services.learning_engine import OperationalLearningEngine
+
+        programacion = self.get_object()
+        lat = request.query_params.get('lat')
+        lng = request.query_params.get('lng')
+        if lat is None or lng is None:
+            if programacion.driver and programacion.driver.ultima_posicion_lat is not None:
+                lat = programacion.driver.ultima_posicion_lat
+                lng = programacion.driver.ultima_posicion_lng
+            elif programacion.gps_inicio_lat is not None:
+                lat, lng = programacion.gps_inicio_lat, programacion.gps_inicio_lng
+            else:
+                return Response(
+                    {'error': 'Se necesita una ubicación de origen (lat/lng).'},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+        try:
+            window_hours = min(8, max(0, int(request.query_params.get('ventana_horas', 3))))
+        except ValueError:
+            return Response({'error': 'ventana_horas debe ser entero'}, status=status.HTTP_400_BAD_REQUEST)
+        salida = programacion.fecha_inicio_ruta or timezone.now()
+        recommendation = OperationalLearningEngine.recommend(
+            (float(lat), float(lng)),
+            (float(programacion.cd.lat), float(programacion.cd.lng)),
+            salida,
+            driver=programacion.driver,
+            window_hours=window_hours,
+        )
+        if not recommendation.get('success'):
+            return Response(recommendation, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+        return Response(recommendation)
 
     @action(detail=True, methods=['post'])
     def confirmar_recomendacion(self, request, pk=None):

@@ -5,6 +5,7 @@ from datetime import timedelta
 from apps.containers.models import Container
 from apps.drivers.models import Driver
 from apps.cds.models import CD
+from django.contrib.admin.views.decorators import staff_member_required
 
 
 def home(request):
@@ -77,6 +78,7 @@ def importar(request):
     return render(request, 'importar.html')
 
 
+@staff_member_required
 def containers_list(request):
     """Listado de contenedores con filtros"""
     # Filtros desde query params
@@ -126,9 +128,16 @@ def operaciones(request):
     return render(request, 'operaciones.html')
 
 
+@staff_member_required
 def drivers_list(request):
     """Listado de conductores con filtros"""
     return render(request, 'drivers_list.html')
+
+
+@staff_member_required
+def cds_list(request):
+    """CRUD visible de centros de distribución."""
+    return render(request, 'cds_list.html')
 
 
 def executive_dashboard(request):
