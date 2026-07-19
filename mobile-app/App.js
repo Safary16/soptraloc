@@ -120,13 +120,12 @@ const App = () => {
       );
 
       if (response.data.success) {
-        const {driver_id, driver_name, driver_token} = response.data;
+        const {driver_id, driver_name} = response.data;
         
         // Guardar datos del conductor
         await AsyncStorage.setItem('driverId', driver_id.toString());
         await AsyncStorage.setItem('driverName', driver_name);
         await AsyncStorage.setItem('patente', patente.trim().toUpperCase());
-        await AsyncStorage.setItem('driverToken', driver_token);
         
         setDriverId(driver_id);
         setDriverName(driver_name);
@@ -180,8 +179,7 @@ const App = () => {
   const sendLocationToServer = async (latitude, longitude, accuracy) => {
     try {
       const savedDriverId = await AsyncStorage.getItem('driverId');
-      const driverToken = await AsyncStorage.getItem('driverToken');
-      if (!savedDriverId || !driverToken) {
+      if (!savedDriverId) {
         console.log('No driver ID found');
         return;
       }
@@ -193,7 +191,6 @@ const App = () => {
           lng: longitude,
           accuracy: accuracy,
         },
-        {headers: {Authorization: `Bearer ${driverToken}`}},
       );
       
       console.log(`✅ Ubicación enviada: ${latitude}, ${longitude}`);
