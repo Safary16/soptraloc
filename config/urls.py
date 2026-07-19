@@ -14,6 +14,11 @@ from apps.drivers.views import DriverViewSet, driver_login, driver_logout, drive
 from apps.containers.views import ContainerViewSet
 from apps.programaciones.views import ProgramacionViewSet
 from apps.cds.views import CDViewSet
+from apps.clientes.views import (
+    cliente_login, cliente_logout, cliente_dashboard, solicitudes_operaciones,
+    api_stock, api_centros, api_recomendaciones, api_solicitudes,
+    api_solicitudes_operaciones, api_revisar_solicitud,
+)
 
 # Import frontend views
 from apps.core.views import (
@@ -54,6 +59,18 @@ urlpatterns = [
     # Admin
     path('admin/', admin.site.urls),
     
+    # Client portal
+    path('cliente/login/', cliente_login, name='cliente_login'),
+    path('cliente/logout/', cliente_logout, name='cliente_logout'),
+    path('cliente/', cliente_dashboard, name='cliente_dashboard'),
+    path('operaciones/solicitudes-clientes/', solicitudes_operaciones, name='solicitudes_operaciones'),
+    path('api/cliente/stock/', api_stock, name='cliente_stock'),
+    path('api/cliente/centros/', api_centros, name='cliente_centros'),
+    path('api/cliente/recomendaciones/', api_recomendaciones, name='cliente_recomendaciones'),
+    path('api/cliente/solicitudes/', api_solicitudes, name='cliente_solicitudes'),
+    path('api/operaciones/solicitudes-clientes/', api_solicitudes_operaciones, name='operaciones_solicitudes_clientes'),
+    path('api/operaciones/solicitudes-clientes/<int:pk>/revisar/', api_revisar_solicitud, name='revisar_solicitud_cliente'),
+
     # Driver authentication
     path('driver/login/', driver_login, name='driver_login'),
     path('driver/logout/', driver_logout, name='driver_logout'),

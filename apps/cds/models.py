@@ -16,6 +16,10 @@ class CD(models.Model):
     direccion = models.TextField('Dirección')
     comuna = models.CharField('Comuna', max_length=100)
     tipo = models.CharField('Tipo', max_length=20, choices=TIPOS, default='cliente')
+    cliente_empresa = models.ForeignKey(
+        'clientes.ClienteEmpresa', on_delete=models.PROTECT, null=True, blank=True,
+        related_name='centros_distribucion', verbose_name='Empresa cliente',
+    )
     
     # Coordenadas para Mapbox
     lat = models.DecimalField('Latitud', max_digits=9, decimal_places=6)

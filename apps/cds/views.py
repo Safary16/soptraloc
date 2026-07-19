@@ -12,6 +12,13 @@ class CDViewSet(viewsets.ModelViewSet):
     ViewSet para gestión de Centros de Distribución
     """
     queryset = CD.objects.all()
+
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        user = self.request.user
+        if user.is_authenticated and hasattr(user, 'perfil_cliente'):
+            return queryset.filter(cliente_empresa=user.perfil_cliente.empresa)
+        return queryset
     serializer_class = CDSerializer
     filterset_fields = ['tipo', 'activo', 'comuna']
     search_fields = ['nombre', 'codigo', 'direccion', 'comuna']
