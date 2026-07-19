@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc" color="#000">
+<title id="title">Micro-isotipo Safary</title><desc id="desc">Dos perfiles simplificados: Safary delante y Sebastián detrás.</desc>
+<g fill="currentColor">
+<!-- masa humana posterior: cabeza + busto, lectura por silueta -->
+<path d="M83 8c-21 0-38 17-38 38 0 11 5 21 13 28l-2 14c-14 5-25 15-30 30h94c-5-15-16-25-30-30l-2-14c10-7 16-19 16-31C104 24 95 8 83 8z"/>
+<!-- perfil humano abierto: nariz/mentón en una sola muesca ancha -->
+<path d="M62 34c4-8 11-13 20-14 8-1 15 1 21 7-7-2-13-1-18 3-4 3-6 7-7 11l-7 3 4 5-4 5 5 3-1 7c-4 3-8 5-13 5-5-6-8-13-8-21 0-5 1-10 4-14z" fill="#fff"/>
+<!-- Safary delante: oreja triangular, hocico largo y pecho -->
+<path d="M47 49 24 27l4 29C15 59 5 68-1 81l-7 14 20 8 28-1c13-1 24-8 30-19 6-11 5-23-1-33-5-8-13-14-22-17zM38 101c18 1 32 8 41 20H8c7-11 17-18 30-20z"/>
+<!-- oreja en negativo y boca ancha; sin ojo minúsculo -->
+<path d="M29 56 27 36l15 17z" fill="#fff"/>
+<path d="M2 91c9 0 16 2 23 7" fill="none" stroke="#fff" stroke-width="5" stroke-linecap="round"/>
+<!-- separación amplia entre perfiles -->
+<path d="M48 72c8 6 13 14 15 24-7 2-13 5-18 9-4-8-9-14-16-18 5-7 11-12 19-15z" fill="#fff"/>
+</g></svg>
