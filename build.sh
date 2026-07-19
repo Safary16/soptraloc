@@ -18,9 +18,22 @@ pip install -r requirements.txt
 echo " Colectando archivos estáticos..."
 python manage.py collectstatic --no-input
 
-# Las migraciones requieren conectividad a PostgreSQL y se ejecutan en start.sh.
-# El build debe ser reproducible aunque la base esté reiniciando o actualizando DNS.
-echo "✅ Artefactos preparados; migraciones diferidas al arranque"
+# Render puede conservar el start command histórico (gunicorn directo) aunque
+# render.yaml cambie. Ejecutar migraciones también en build mantiene el esquema
+# alineado; `migrate` es idempotente si start.sh vuelve a ejecutarlo.
+echo "🔄 Aplicando migraciones..."
+max_attempts="${DB_BUILD_MAX_ATTEMPTS:-12}"
+retry_seconds="${DB_BUILD_RETRY_SECONDS:-5}"
+attempt=1
+while ! python manage.py migrate --no-input; do
+  if [ "$attempt" -ge "$max_attempts" ]; then
+    echo "ERROR: no fue posible migrar PostgreSQL tras ${max_attempts} intentos."
+    exit 1
+  fi
+  echo "PostgreSQL no disponible (intento ${attempt}/${max_attempts}); reintentando en ${retry_seconds}s..."
+  attempt=$((attempt + 1))
+  sleep "$retry_seconds"
+done
 
 echo "=========================================="
 echo "✅ Build completado exitosamente"
