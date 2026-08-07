@@ -1,0 +1,358 @@
+from django.test import TestCase, Client
+from django.contrib.auth.models import User
+from django.urls import reverse
+from django.utils import timezone
+from datetime import timedelta
+from rest_framework.test import APITestCase
+from rest_framework import status
+
+from .models import Driver, DriverLocation
+from .serializers import DriverDetailSerializer
+from apps.cds.models import CD
+from apps.containers.models import Container
+from apps.programaciones.models import Programacion
+from .access import asegurar_acceso
+from .importers import ConductorImporter
+from unittest.mock import patch
+import pandas as pd
+import tempfile
+
+
+class DriverAuthenticationTests(TestCase):
+    """Tests for driver authentication system"""
+    
+    def setUp(self):
+        """Set up test data"""
+        self.client = Client()
+        
+        # Create a test user and driver
+        self.user = User.objects.create_user(
+            username='test_driver',
+            password='test123'
+        )
+        self.driver = Driver.objects.create(
+            nombre='Test Driver',
+            rut='12345678-9',
+            telefono='123456789',
+            user=self.user
+        )
+    
+    def test_driver_login_page_loads(self):
+        """Test that driver login page loads correctly"""
+        response = self.client.get(reverse('driver_login'))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'SoptraLoc TMS')
+        self.assertContains(response, 'Acceso para Conductores')
+    
+    def test_driver_can_login(self):
+        """Test that driver can login with correct credentials"""
+        response = self.client.post(reverse('driver_login'), {
+            'username': 'test_driver',
+            'password': 'test123'
+        })
+        # Should redirect to dashboard
+        self.assertEqual(response.status_code, 302)
+        self.assertTrue(response.url.endswith(reverse('driver_dashboard')))
+    
+    def test_driver_cannot_login_with_wrong_password(self):
+        """Test that login fails with wrong password"""
+        response = self.client.post(reverse('driver_login'), {
+            'username': 'test_driver',
+            'password': 'wrong_password'
+        })
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Usuario o contraseña incorrectos')
+    
+    def test_dashboard_requires_login(self):
+        """Test that dashboard requires authentication"""
+        response = self.client.get(reverse('driver_dashboard'))
+        # Should redirect to login
+        self.assertEqual(response.status_code, 302)
+        self.assertTrue('login' in response.url)
+    
+    def test_dashboard_loads_for_authenticated_driver(self):
+        """Test that dashboard loads for authenticated driver"""
+        self.client.login(username='test_driver', password='test123')
+        response = self.client.get(reverse('driver_dashboard'))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Test Driver')
+        self.assertContains(response, 'Mis Entregas')
+    
+    def test_driver_logout(self):
+        """Test that driver can logout"""
+        self.client.login(username='test_driver', password='test123')
+        response = self.client.get(reverse('driver_logout'))
+        # Should redirect to login
+        self.assertEqual(response.status_code, 302)
+        self.assertTrue(response.url.endswith(reverse('driver_login')))
+
+
+class DriverGPSTrackingTests(APITestCase):
+    """Tests for GPS tracking functionality"""
+    
+    def setUp(self):
+        """Set up test data"""
+        # Create test user and driver
+        self.user = User.objects.create_user(
+            username='gps_driver',
+            password='test123'
+        )
+        self.driver = Driver.objects.create(
+            nombre='GPS Driver',
+            rut='98765432-1',
+            user=self.user
+        )
+    
+    def test_track_location_requires_authentication(self):
+        """Test that tracking location requires authentication"""
+        url = reverse('driver-track-location', kwargs={'pk': self.driver.id})
+        response = self.client.post(url, {
+            'lat': -33.4569,
+            'lng': -70.6483,
+            'accuracy': 10.5
+        }, format='json')
+        # DRF puede responder 401 (BasicAuth) o 403 según autenticación configurada.
+        self.assertIn(response.status_code, (401, 403))
+    
+    def test_track_location_with_authentication(self):
+        """Test GPS tracking with authentication"""
+        self.client.force_authenticate(user=self.user)
+        url = reverse('driver-track-location', kwargs={'pk': self.driver.id})
+        
+        response = self.client.post(url, {
+            'lat': -33.4569,
+            'lng': -70.6483,
+            'accuracy': 10.5
+        }, format='json')
+        
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.data['success'])
+        
+        # Verify location was saved
+        self.driver.refresh_from_db()
+        self.assertIsNotNone(self.driver.ultima_posicion_lat)
+        self.assertIsNotNone(self.driver.ultima_posicion_lng)
+        self.assertEqual(float(self.driver.ultima_posicion_lat), -33.4569)
+        self.assertEqual(float(self.driver.ultima_posicion_lng), -70.6483)
+    
+    def test_location_history_is_created(self):
+        """Test that location history is created when tracking"""
+        self.client.force_authenticate(user=self.user)
+        url = reverse('driver-track-location', kwargs={'pk': self.driver.id})
+        
+        # Track location
+        self.client.post(url, {
+            'lat': -33.4569,
+            'lng': -70.6483,
+            'accuracy': 10.5
+        }, format='json')
+        
+        # Verify history record was created
+        locations = DriverLocation.objects.filter(driver=self.driver)
+        self.assertEqual(locations.count(), 1)
+        
+        location = locations.first()
+        self.assertEqual(float(location.lat), -33.4569)
+        self.assertEqual(float(location.lng), -70.6483)
+        self.assertEqual(location.accuracy, 10.5)
+    
+    def test_active_locations_returns_recent_drivers(self):
+        """Test that active_locations returns drivers with recent GPS data"""
+        # Set recent location
+        self.driver.ultima_posicion_lat = -33.4569
+        self.driver.ultima_posicion_lng = -70.6483
+        self.driver.ultima_actualizacion_posicion = timezone.now()
+        self.driver.save()
+        
+        url = reverse('driver-active-locations')
+        response = self.client.get(url)
+        
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(response.data), 1)
+        self.assertEqual(response.data[0]['nombre'], 'GPS Driver')
+    
+    def test_active_locations_excludes_old_data(self):
+        """Test that active_locations excludes drivers with old GPS data"""
+        # Set old location (more than 30 minutes ago)
+        self.driver.ultima_posicion_lat = -33.4569
+        self.driver.ultima_posicion_lng = -70.6483
+        self.driver.ultima_actualizacion_posicion = timezone.now() - timedelta(minutes=35)
+        self.driver.save()
+        
+        url = reverse('driver-active-locations')
+        response = self.client.get(url)
+        
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(response.data), 0)
+    
+    def test_driver_cannot_track_other_drivers(self):
+        """Test that driver cannot update location for other drivers"""
+        # Create another driver
+        other_user = User.objects.create_user(username='other_driver', password='test123')
+        other_driver = Driver.objects.create(nombre='Other Driver', user=other_user)
+        
+        # Try to track other driver's location
+        self.client.force_authenticate(user=self.user)
+        url = reverse('driver-track-location', kwargs={'pk': other_driver.id})
+        
+        response = self.client.post(url, {
+            'lat': -33.4569,
+            'lng': -70.6483
+        }, format='json')
+        
+        self.assertEqual(response.status_code, 403)
+
+class DriverModelTests(TestCase):
+    """Tests for Driver model"""
+    
+    def test_driver_availability(self):
+        """Test driver availability calculation"""
+        driver = Driver.objects.create(
+            nombre='Available Driver',
+            activo=True,
+            presente=True,
+            num_entregas_dia=2,
+            max_entregas_dia=3
+        )
+        self.assertTrue(driver.esta_disponible)
+    
+    def test_driver_not_available_when_max_reached(self):
+        """Test driver is not available when max deliveries reached"""
+        driver = Driver.objects.create(
+            nombre='Busy Driver',
+            activo=True,
+            presente=True,
+            num_entregas_dia=3,
+            max_entregas_dia=3
+        )
+        self.assertFalse(driver.esta_disponible)
+    
+    def test_driver_not_available_when_inactive(self):
+        """Test driver is not available when inactive"""
+        driver = Driver.objects.create(
+            nombre='Inactive Driver',
+            activo=False,
+            presente=True,
+            num_entregas_dia=0,
+            max_entregas_dia=3
+        )
+        self.assertFalse(driver.esta_disponible)
+    
+    def test_actualizar_posicion(self):
+        """Test position update method"""
+        driver = Driver.objects.create(nombre='Test Driver')
+        
+        driver.actualizar_posicion(-33.4569, -70.6483, 10.5)
+        
+        driver.refresh_from_db()
+        self.assertEqual(float(driver.ultima_posicion_lat), -33.4569)
+        self.assertEqual(float(driver.ultima_posicion_lng), -70.6483)
+        self.assertIsNotNone(driver.ultima_actualizacion_posicion)
+        
+        # Verify history was created
+        self.assertEqual(DriverLocation.objects.filter(driver=driver).count(), 1)
+    
+    def test_reset_entregas_diarias(self):
+        """Test daily deliveries reset"""
+        driver = Driver.objects.create(
+            nombre='Test Driver',
+            num_entregas_dia=5
+        )
+        
+        driver.reset_entregas_diarias()
+        
+        driver.refresh_from_db()
+        self.assertEqual(driver.num_entregas_dia, 0)
+
+
+class DriverRouteTimelineSerializerTests(TestCase):
+    """The driver portal must expose stable route-start and ETA timestamps."""
+
+    def test_eta_timestamp_is_anchored_to_route_start(self):
+        driver = Driver.objects.create(nombre='Timeline Driver')
+        cd = CD.objects.create(
+            nombre='Timeline CD', codigo='TIMELINE', direccion='Destino',
+            comuna='Santiago', lat=-33.45, lng=-70.65,
+        )
+        container = Container.objects.create(
+            container_id='TIME1234567', estado='asignado', cliente='Cliente'
+        )
+        started_at = timezone.now() - timedelta(minutes=15)
+        programacion = Programacion.objects.create(
+            container=container,
+            cd=cd,
+            driver=driver,
+            cliente='Cliente',
+            fecha_programada=timezone.now() + timedelta(hours=1),
+            fecha_inicio_ruta=started_at,
+            eta_minutos=45,
+        )
+        container.estado = 'en_ruta'
+        container.fecha_inicio_ruta = started_at
+        container.save(update_fields=['estado', 'fecha_inicio_ruta', 'updated_at'])
+
+        data = DriverDetailSerializer(driver).data
+        item = next(p for p in data['programaciones_asignadas'] if p['id'] == programacion.id)
+
+        expected_arrival = started_at + timedelta(minutes=45)
+        self.assertEqual(item['fecha_inicio_ruta'], started_at)
+        self.assertEqual(item['eta_timestamp'], expected_arrival)
+        self.assertIn(item['eta_restante_minutos'], (29, 30))
+
+
+class DriverAccessAndCrudTests(APITestCase):
+    def setUp(self):
+        self.staff = User.objects.create_user('staff', password='StrongPass123!', is_staff=True)
+        self.regular = User.objects.create_user('regular', password='StrongPass123!')
+
+    def test_secure_access_is_created_and_can_be_reset(self):
+        driver = Driver.objects.create(nombre='José Pérez')
+        first = asegurar_acceso(driver)
+        driver.refresh_from_db()
+        self.assertTrue(driver.user.check_password(first['temporary_password']))
+        self.assertNotEqual(first['temporary_password'], 'driver123')
+        second = asegurar_acceso(driver)
+        driver.user.refresh_from_db()
+        self.assertFalse(driver.user.check_password(first['temporary_password']))
+        self.assertTrue(driver.user.check_password(second['temporary_password']))
+
+    def test_only_staff_can_create_and_creation_returns_one_time_access(self):
+        url = reverse('driver-list')
+        response = self.client.post(url, {'nombre': 'Sin Permiso'}, format='json')
+        self.assertIn(response.status_code, (401, 403))
+        self.client.force_authenticate(self.staff)
+        response = self.client.post(url, {'nombre': 'Nuevo Driver'}, format='json')
+        self.assertEqual(response.status_code, 201)
+        self.assertIn('temporary_password', response.data['acceso_temporal'])
+        self.assertTrue(Driver.objects.get(pk=response.data['id']).user_id)
+
+    def test_delete_deactivates_instead_of_removing(self):
+        driver = Driver.objects.create(nombre='Con Historia')
+        asegurar_acceso(driver)
+        self.client.force_authenticate(self.staff)
+        response = self.client.delete(reverse('driver-detail', kwargs={'pk': driver.pk}))
+        self.assertEqual(response.status_code, 204)
+        driver.refresh_from_db()
+        self.assertFalse(driver.activo)
+        self.assertFalse(driver.user.is_active)
+
+    def test_non_staff_cannot_reset_or_read_other_driver(self):
+        driver = Driver.objects.create(nombre='Privado')
+        asegurar_acceso(driver)
+        self.client.force_authenticate(self.regular)
+        self.assertEqual(self.client.get(reverse('driver-detail', kwargs={'pk': driver.pk})).status_code, 403)
+        self.assertEqual(self.client.post(reverse('driver-reset-access', kwargs={'pk': driver.pk})).status_code, 403)
+
+    @patch('apps.drivers.importers.read_excel_with_header_detection')
+    def test_importer_creates_login_only_for_new_drivers(self, read_excel):
+        read_excel.return_value = pd.DataFrame([{
+            'conductor': 'Importado Uno', 'patente': 'abcd12', 'rut': None,
+            'telefono': None, 'asistencia': 'OPERATIVO',
+        }])
+        with tempfile.NamedTemporaryFile(suffix='.xlsx') as tmp:
+            first = ConductorImporter(tmp.name).procesar()
+            second = ConductorImporter(tmp.name).procesar()
+        self.assertEqual(first['creados'], 1)
+        self.assertIn('temporary_password', first['detalles'][0]['acceso_temporal'])
+        self.assertEqual(second['actualizados'], 1)
+        self.assertNotIn('acceso_temporal', second['detalles'][0])

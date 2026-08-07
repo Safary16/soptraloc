@@ -1,0 +1,529 @@
+"""
+API Views para el core del sistema
+Endpoints de dashboard y estadísticas
+"""
+from rest_framework import status
+from rest_framework.decorators import api_view, permission_classes
+from rest_framework.permissions import IsAuthenticatedOrReadOnly
+from rest_framework.response import Response
+from django.utils import timezone
+from datetime import timedelta
+from django.db.models import Avg, Count, Q, F
+
+from apps.containers.models import Container
+from apps.drivers.models import Driver
+from apps.programaciones.models import Programacion, TiempoOperacion, TiempoViaje
+from apps.notifications.models import Notification
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticatedOrReadOnly])
+def dashboard_stats(request):
+    """
+    Estadísticas generales para el dashboard
+    """
+    today = timezone.now().date()
+    
+    stats = {
+        # Métricas principales
+        'contenedores_total': Container.objects.count(),
+        'conductores': Driver.objects.count(),
+        'conductores_disponibles': Driver.objects.filter(
+            activo=True,
+            presente=True,
+            num_entregas_dia__lt=F('max_entregas_dia')
+        ).count(),
+        
+        # Métricas específicas requeridas
+        'programados_hoy': Container.objects.filter(
+            estado='programado',
+            fecha_programacion__date=today
+        ).count(),
+        
+        'con_demurrage': Container.objects.filter(
+            fecha_demurrage__isnull=False,
+            estado__in=['liberado', 'programado', 'asignado']
+        ).exclude(estado='devuelto').count(),
+        
+        'liberados': Container.objects.filter(estado='liberado').count(),
+        'en_ruta': Container.objects.filter(estado='en_ruta').count(),
+        
+        # Alertas de no asignados
+        'sin_asignar': Container.objects.filter(
+            estado='programado',
+            fecha_programacion__lte=timezone.now() + timedelta(hours=48)
+        ).count(),
+        
+        # Totales por estado (excluyendo devueltos)
+        'por_arribar': Container.objects.filter(estado='por_arribar').count(),
+        'programados': Container.objects.filter(estado='programado').count(),
+        'asignados': Container.objects.filter(estado='asignado').count(),
+        'entregados': Container.objects.filter(estado='entregado').count(),
+        'descargados': Container.objects.filter(estado='descargado').count(),
+        'vacios': Container.objects.filter(estado__in=['vacio', 'vacio_en_ruta']).count(),
+        
+        # Total excluyendo devueltos
+        'total_activos': Container.objects.exclude(estado='devuelto').count(),
+        
+        # Notificaciones activas
+        'notificaciones_activas': Notification.objects.filter(
+            estado__in=['pendiente', 'enviada']
+        ).count(),
+    }
+    
+    return Response({
+        'success': True,
+        'stats': stats
+    })
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticatedOrReadOnly])
+def dashboard_alertas(request):
+    """
+    Lista de alertas activas para el dashboard
+    
+    SOLO muestra alertas para contenedores que:
+    - Tienen demurrage próximo a vencer Y están liberados (sin programar todavía)
+    - Tienen programación sin conductor asignado
+    """
+    alertas = []
+    
+    # Alertas de demurrage - SOLO para contenedores liberados (sin programar)
+    fecha_limite = timezone.now() + timedelta(days=2)
+    containers_riesgo = Container.objects.filter(
+        fecha_demurrage__isnull=False,
+        fecha_demurrage__lte=fecha_limite,
+        estado='liberado'  # Solo liberados, no programados ni asignados
+    ).select_related('cd_entrega')
+    
+    for container in containers_riesgo:
+        dias_restantes = (container.fecha_demurrage - timezone.now()).days
+        alertas.append({
+            'tipo': 'demurrage',
+            'prioridad': 'critica' if dias_restantes < 0 else 'alta',
+            'container_id': container.container_id,
+            'mensaje': f'Demurrage vence en {dias_restantes} días' if dias_restantes >= 0 else 'Demurrage vencido',
+            'dias_restantes': dias_restantes,
+            'estado': container.estado
+        })
+    
+    # Alertas de programaciones sin conductor (contenedores programados o asignados sin conductor)
+    # Filtrar solo programaciones donde el contenedor NO está en ruta o entregado
+    programaciones_sin_conductor = Programacion.objects.filter(
+        driver__isnull=True,
+        fecha_programada__lte=timezone.now() + timedelta(hours=48),
+        container__estado__in=['programado', 'secuenciado']  # Solo si está pendiente de asignación
+    ).select_related('container')
+    
+    for prog in programaciones_sin_conductor:
+        horas_restantes = (prog.fecha_programada - timezone.now()).total_seconds() / 3600
+        alertas.append({
+            'tipo': 'sin_conductor',
+            'prioridad': 'critica' if horas_restantes < 24 else 'alta',
+            'container_id': prog.container.container_id,
+            'mensaje': f'Sin conductor asignado - Faltan {int(horas_restantes)} horas',
+            'horas_restantes': int(horas_restantes),
+            'estado': prog.container.estado,
+            'programacion_id': prog.id
+        })
+    
+    # Ordenar por prioridad
+    prioridad_orden = {'critica': 0, 'alta': 1, 'media': 2, 'baja': 3}
+    alertas.sort(key=lambda x: prioridad_orden.get(x['prioridad'], 9))
+    
+    return Response({
+        'success': True,
+        'total': len(alertas),
+        'alertas': alertas
+    })
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticatedOrReadOnly])
+def analytics_conductores(request):
+    """
+    Analíticas de rendimiento de conductores
+    """
+    drivers = Driver.objects.all()
+    
+    analytics = []
+    from apps.core.services.learning_engine import OperationalLearningEngine
+    for driver in drivers:
+        # Calcular estadísticas
+        programaciones_completadas = Programacion.objects.filter(
+            driver=driver,
+            container__estado__in=['descargado', 'devuelto']
+        ).count()
+        
+        perfil_ml = OperationalLearningEngine.driver_profile(driver)
+        analytics.append({
+            'driver_id': driver.id,
+            'nombre': driver.nombre,
+            'esta_disponible': driver.esta_disponible,
+            'entregas_dia': driver.num_entregas_dia,
+            'max_entregas_dia': driver.max_entregas_dia,
+            'total_entregas': driver.total_entregas,
+            'entregas_a_tiempo': driver.entregas_a_tiempo,
+            'cumplimiento_porcentaje': float(driver.cumplimiento_porcentaje),
+            'ocupacion_porcentaje': float(driver.ocupacion_porcentaje),
+            'programaciones_completadas': programaciones_completadas,
+            'perfil_velocidad_ml': perfil_ml,
+        })
+    
+    # Ordenar por cumplimiento
+    analytics.sort(key=lambda x: x['cumplimiento_porcentaje'], reverse=True)
+    
+    return Response({
+        'success': True,
+        'total': len(analytics),
+        'conductores': analytics
+    })
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticatedOrReadOnly])
+def analytics_eficiencia(request):
+    """
+    Métricas de eficiencia operacional
+    """
+    # Calcular tiempo promedio de operación
+    tiempos_operacion = TiempoOperacion.objects.filter(
+        anomalia=False
+    ).aggregate(
+        tiempo_promedio=Avg('tiempo_real_min')
+    )
+    
+    # Calcular tiempo promedio de viaje
+    tiempos_viaje = TiempoViaje.objects.filter(
+        anomalia=False
+    ).aggregate(
+        tiempo_promedio=Avg('tiempo_real_min')
+    )
+    
+    # Calcular tasa de cumplimiento general
+    drivers = Driver.objects.all()
+    if drivers.exists():
+        tasa_cumplimiento = sum(float(d.cumplimiento_porcentaje) for d in drivers) / drivers.count()
+    else:
+        tasa_cumplimiento = 0
+    
+    # Entregas completadas últimos 7 días
+    fecha_inicio = timezone.now() - timedelta(days=7)
+    entregas_recientes = Container.objects.filter(
+        estado__in=['descargado', 'devuelto'],
+        fecha_descarga__gte=fecha_inicio
+    ).count()
+    
+    # Contenedores por estado (para análisis de flujo)
+    estados_count = Container.objects.values('estado').annotate(
+        count=Count('id')
+    )
+    
+    return Response({
+        'success': True,
+        'tiempo_promedio_operacion_min': tiempos_operacion['tiempo_promedio'] or 0,
+        'tiempo_promedio_viaje_min': tiempos_viaje['tiempo_promedio'] or 0,
+        'tasa_cumplimiento_porcentaje': round(tasa_cumplimiento, 2),
+        'entregas_ultimos_7_dias': entregas_recientes,
+        'distribucion_estados': list(estados_count)
+    })
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticatedOrReadOnly])
+def analytics_tendencias(request):
+    """
+    Tendencias y patrones históricos
+    """
+    dias = int(request.query_params.get('dias', 30))
+    fecha_inicio = timezone.now() - timedelta(days=dias)
+    
+    # Entregas por día
+    entregas_por_dia = []
+    for i in range(dias):
+        fecha = (timezone.now() - timedelta(days=dias-i-1)).date()
+        count = Container.objects.filter(
+            estado__in=['descargado', 'devuelto'],
+            fecha_descarga__date=fecha
+        ).count()
+        
+        entregas_por_dia.append({
+            'fecha': fecha.isoformat(),
+            'entregas': count
+        })
+    
+    # Promedio de entregas por día de la semana
+    from collections import defaultdict
+    entregas_por_dia_semana = defaultdict(int)
+    contenedores_completados = Container.objects.filter(
+        fecha_descarga__gte=fecha_inicio,
+        estado__in=['descargado', 'devuelto']
+    )
+    
+    for container in contenedores_completados:
+        dia_semana = container.fecha_descarga.weekday()  # 0=Monday, 6=Sunday
+        entregas_por_dia_semana[dia_semana] += 1
+    
+    dias_semana = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo']
+    entregas_semana = [
+        {'dia': dias_semana[i], 'entregas': entregas_por_dia_semana.get(i, 0)}
+        for i in range(7)
+    ]
+    
+    return Response({
+        'success': True,
+        'periodo_dias': dias,
+        'entregas_por_dia': entregas_por_dia,
+        'entregas_por_dia_semana': entregas_semana
+    })
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticatedOrReadOnly])
+def operaciones_diarias(request):
+    """
+    Vista completa de operaciones del día con horarios detallados
+    
+    Muestra:
+    - Contenedores programados para una fecha específica (hoy por defecto)
+    - Horarios de programación, inicio de viaje, y vacío
+    - ETAs calculados por ML y Mapbox
+    - Estado actual de cada operación
+    
+    Parámetros:
+    - fecha: YYYY-MM-DD (opcional, default: hoy)
+    """
+    # Obtener fecha desde query params, o usar hoy por defecto
+    fecha_str = request.query_params.get('fecha', None)
+    
+    if fecha_str:
+        try:
+            from datetime import datetime
+            fecha_seleccionada = datetime.strptime(fecha_str, '%Y-%m-%d').date()
+        except ValueError:
+            return Response({
+                'success': False,
+                'error': 'Formato de fecha inválido. Use YYYY-MM-DD'
+            }, status=status.HTTP_400_BAD_REQUEST)
+    else:
+        fecha_seleccionada = timezone.now().date()
+    
+    # Obtener programaciones del día seleccionado
+    programaciones_dia = Programacion.objects.filter(
+        fecha_programada__date=fecha_seleccionada
+    ).select_related('container', 'driver', 'cd').order_by('fecha_programada')
+    
+    operaciones = []
+    for prog in programaciones_dia:
+        container = prog.container
+        
+        # Calcular tiempos y ETAs
+        tiempo_transcurrido = None
+        if prog.fecha_inicio_ruta:
+            tiempo_transcurrido = int((timezone.now() - prog.fecha_inicio_ruta).total_seconds() / 60)
+        
+        eta_restante = None
+        if prog.eta_minutos and tiempo_transcurrido:
+            eta_restante = max(0, prog.eta_minutos - tiempo_transcurrido)
+        
+        operaciones.append({
+            'programacion_id': prog.id,
+            'container_id': container.container_id,
+            'container_tipo': container.get_tipo_display(),
+            
+            # Información del conductor
+            'conductor': prog.driver.nombre if prog.driver else None,
+            'patente': prog.patente_confirmada or (prog.driver.patente if prog.driver else None),
+            
+            # Horarios clave
+            'fecha_programada': prog.fecha_programada.isoformat(),
+            'fecha_asignacion': prog.fecha_asignacion.isoformat() if prog.fecha_asignacion else None,
+            'fecha_inicio_viaje': prog.fecha_inicio_ruta.isoformat() if prog.fecha_inicio_ruta else None,
+            'fecha_arribo': prog.fecha_arribo_cd.isoformat() if prog.fecha_arribo_cd else None,
+            'origen_arribo': prog.origen_arribo,
+            'gps_arribo': {
+                'lat': float(prog.gps_arribo_lat),
+                'lng': float(prog.gps_arribo_lng),
+            } if prog.gps_arribo_lat is not None and prog.gps_arribo_lng is not None else None,
+            'fecha_vacio': container.fecha_vacio.isoformat() if container.fecha_vacio else None,
+            
+            # ETAs y tiempos estimados
+            'eta_minutos_original': prog.eta_minutos,
+            'eta_minutos_restante': eta_restante,
+            'distancia_km': float(prog.distancia_km) if prog.distancia_km else None,
+            'tiempo_transcurrido_min': tiempo_transcurrido,
+            
+            # Ubicación
+            'cd_nombre': prog.cd.nombre,
+            'cd_direccion': prog.cd.direccion,
+            'cd_tipo': prog.cd.tipo,
+            
+            # Estado
+            'estado_container': container.estado,
+            'estado_display': container.get_estado_display(),
+            
+            # Cliente
+            'cliente': prog.cliente,
+            
+            # Observaciones
+            'observaciones': prog.observaciones,
+        })
+    
+    # Estadísticas del día
+    stats_dia = {
+        'total_programadas': programaciones_dia.count(),
+        'sin_asignar': programaciones_dia.filter(driver__isnull=True).count(),
+        'asignadas': programaciones_dia.filter(driver__isnull=False, container__estado='asignado').count(),
+        'en_ruta': programaciones_dia.filter(container__estado='en_ruta').count(),
+        'entregadas': programaciones_dia.filter(container__estado__in=['entregado', 'soltado', 'descargado', 'vacio']).count(),
+        'completadas': programaciones_dia.filter(container__estado__in=['vacio', 'vacio_en_ruta', 'en_ccti', 'devuelto']).count(),
+    }
+    
+    return Response({
+        'success': True,
+        'fecha': fecha_seleccionada.isoformat(),
+        'total_operaciones': len(operaciones),
+        'stats': stats_dia,
+        'operaciones': operaciones,
+        'ultima_actualizacion': timezone.now().isoformat()
+    })
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticatedOrReadOnly])
+def ml_learning_stats(request):
+    """
+    Estadísticas de aprendizaje del sistema de Machine Learning
+    
+    Muestra:
+    - Datos recolectados para entrenamiento
+    - Precisión del modelo
+    - Estadísticas de asignación automática
+    - Progreso del aprendizaje
+    """
+    from apps.cds.models import CD
+    
+    # Estadísticas de datos de entrenamiento
+    fecha_30_dias = timezone.now() - timedelta(days=30)
+    fecha_7_dias = timezone.now() - timedelta(days=7)
+    
+    # Tiempos de operación
+    total_tiempos_operacion = TiempoOperacion.objects.count()
+    tiempos_operacion_recientes = TiempoOperacion.objects.filter(
+        fecha__gte=fecha_30_dias
+    ).count()
+    tiempos_operacion_validos = TiempoOperacion.objects.filter(
+        anomalia=False
+    ).count()
+    
+    # Tiempos de viaje
+    total_tiempos_viaje = TiempoViaje.objects.count()
+    tiempos_viaje_recientes = TiempoViaje.objects.filter(
+        fecha__gte=fecha_30_dias
+    ).count()
+    tiempos_viaje_validos = TiempoViaje.objects.filter(
+        anomalia=False
+    ).count()
+    
+    # Estadísticas por CD
+    cds_con_datos = []
+    for cd in CD.objects.all():
+        tiempos_cd = TiempoOperacion.objects.filter(
+            cd=cd,
+            anomalia=False
+        ).count()
+        
+        if tiempos_cd > 0:
+            # Calcular precisión promedio (diferencia entre estimado y real)
+            tiempos_cd_obj = TiempoOperacion.objects.filter(
+                cd=cd,
+                anomalia=False,
+                fecha__gte=fecha_30_dias
+            )
+            
+            if tiempos_cd_obj.exists():
+                total_diff = 0
+                count = 0
+                for tiempo in tiempos_cd_obj:
+                    diff_abs = abs(tiempo.tiempo_real_min - tiempo.tiempo_estimado_min)
+                    total_diff += diff_abs
+                    count += 1
+                
+                error_promedio_min = total_diff / count if count > 0 else 0
+                precision = max(0, 100 - (error_promedio_min / 60 * 100))  # Precisión basada en error
+            else:
+                precision = 0
+            
+            cds_con_datos.append({
+                'cd_nombre': cd.nombre,
+                'datos_recolectados': tiempos_cd,
+                'precision_porcentaje': round(precision, 1),
+                'estado_aprendizaje': 'Excelente' if tiempos_cd > 50 else 'Bueno' if tiempos_cd > 20 else 'Inicial'
+            })
+    
+    # Estadísticas de asignación automática
+    total_programaciones = Programacion.objects.count()
+    programaciones_asignadas = Programacion.objects.filter(
+        driver__isnull=False
+    ).count()
+    
+    programaciones_recientes = Programacion.objects.filter(
+        created_at__gte=fecha_7_dias
+    )
+    asignaciones_recientes = programaciones_recientes.filter(
+        driver__isnull=False
+    ).count()
+    
+    tasa_asignacion = (asignaciones_recientes / programaciones_recientes.count() * 100) if programaciones_recientes.count() > 0 else 0
+    
+    # Resumen del estado del ML
+    datos_minimos_operacion = 20  # Mínimo de datos para considerar el ML "entrenado"
+    datos_minimos_viaje = 10
+    
+    ml_operacion_estado = 'Entrenado' if tiempos_operacion_validos >= datos_minimos_operacion else 'En entrenamiento'
+    ml_viaje_estado = 'Entrenado' if tiempos_viaje_validos >= datos_minimos_viaje else 'En entrenamiento'
+    
+    # Calcular progreso general
+    progreso_operacion = min(100, (tiempos_operacion_validos / datos_minimos_operacion * 100))
+    progreso_viaje = min(100, (tiempos_viaje_validos / datos_minimos_viaje * 100))
+    progreso_general = (progreso_operacion + progreso_viaje) / 2
+    
+    return Response({
+        'success': True,
+        'resumen': {
+            'estado_general': 'Activo' if progreso_general > 50 else 'Inicial',
+            'progreso_porcentaje': round(progreso_general, 1),
+            'datos_total': total_tiempos_operacion + total_tiempos_viaje,
+            'datos_ultimos_30_dias': tiempos_operacion_recientes + tiempos_viaje_recientes,
+        },
+        'tiempos_operacion': {
+            'total': total_tiempos_operacion,
+            'validos': tiempos_operacion_validos,
+            'recientes_30d': tiempos_operacion_recientes,
+            'anomalos': total_tiempos_operacion - tiempos_operacion_validos,
+            'estado': ml_operacion_estado,
+            'progreso_porcentaje': round(progreso_operacion, 1)
+        },
+        'tiempos_viaje': {
+            'total': total_tiempos_viaje,
+            'validos': tiempos_viaje_validos,
+            'recientes_30d': tiempos_viaje_recientes,
+            'anomalos': total_tiempos_viaje - tiempos_viaje_validos,
+            'estado': ml_viaje_estado,
+            'progreso_porcentaje': round(progreso_viaje, 1)
+        },
+        'asignacion_automatica': {
+            'total_programaciones': total_programaciones,
+            'total_asignadas': programaciones_asignadas,
+            'asignaciones_ultimos_7d': asignaciones_recientes,
+            'tasa_asignacion_porcentaje': round(tasa_asignacion, 1)
+        },
+        'aprendizaje_por_cd': cds_con_datos,
+        'recomendaciones': [
+            'Sistema aprendiendo continuamente de operaciones reales',
+            f'Se han recolectado {tiempos_operacion_recientes} datos de operación en los últimos 30 días',
+            f'Se han recolectado {tiempos_viaje_recientes} datos de viaje en los últimos 30 días',
+            'Continúa operando normalmente para mejorar la precisión del sistema'
+        ]
+    })

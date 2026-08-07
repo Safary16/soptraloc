@@ -1,0 +1,307 @@
+"""
+Importador de Excel de Liberación
+Actualiza contenedores de 'por_arribar' a 'liberado'
+Asigna posición física según reglas:
+- TPS → ZEAL
+- STI/PCE → CLEP
+"""
+import pandas as pd
+from django.utils import timezone
+from django.db import transaction
+from datetime import datetime
+import logging
+from apps.containers.models import Container
+from apps.events.models import Event
+from apps.core.services.excel import normalize_columns, read_excel_with_header_detection
+
+
+logger = logging.getLogger(__name__)
+
+
+class LiberacionImporter:
+    """
+    Importa datos de liberación desde Excel
+    
+    Columnas esperadas (se normalizan automáticamente):
+    - Contenedor / Container ID
+    - Almacen / Posición Física (TPS, STI, PCE, etc.) - Se mapea según reglas
+    - Devolucion Vacio / Depot (nombre del depósito para devolución)
+    - Peso Unidades (opcional, actualiza peso si es más preciso)
+    - Comuna (opcional)
+    - Fecha Salida (opcional, puede usarse para cálculos)
+    
+    Mapeo automático de posiciones:
+    - TPS → ZEAL
+    - STI / PCE → CLEP
+    """
+    
+    COLUMNAS_REQUERIDAS = ['container_id', 'posicion_fisica']
+    
+    MAPEO_POSICIONES = {
+        'TPS': 'ZEAL',
+        'STI': 'CLEP',
+        'PCE': 'CLEP',
+    }
+    
+    def __init__(self, archivo_path, usuario=None):
+        self.archivo_path = archivo_path
+        self.usuario = usuario
+        self.resultados = {
+            'liberados': 0,
+            'por_liberar': 0,  # Contenedores con fecha futura
+            'no_encontrados': 0,
+            'errores': 0,
+            'detalles': []
+        }
+    
+    def normalizar_columnas(self, df):
+        """Normaliza los nombres de columnas a los esperados"""
+        mapeo = {
+            'contenedor': 'container_id',
+            'container': 'container_id',
+            'id': 'container_id',
+            'posicion': 'posicion_fisica',
+            'posición': 'posicion_fisica',
+            'ubicacion': 'posicion_fisica',
+            'ubicación': 'posicion_fisica',
+            'terminal': 'posicion_fisica',
+            'almacen': 'posicion_fisica',
+            'almacén': 'posicion_fisica',
+            'almacen ': 'posicion_fisica',  # Con espacio extra por si acaso
+            'devolucion vacio': 'deposito_devolucion',
+            'devolución vacio': 'deposito_devolucion',
+            'devolucion vacío': 'deposito_devolucion',
+            'devolución vacío': 'deposito_devolucion',
+            'depot': 'deposito_devolucion',
+            'peso unidades': 'peso',
+            'fecha salida': 'fecha_liberacion',
+            'hora salida': 'hora_liberacion',
+            'm/n': 'nave',
+            'cliente': 'cliente',
+            'ref': 'referencia',
+            'despacho': 'despacho',
+            'tipo cont- temperatura': 'tipo',
+            'tipo cont-temperatura': 'tipo',
+        }
+        
+        return normalize_columns(df, mapeo)
+    
+    def mapear_posicion(self, posicion_original):
+        """Mapea la posición física según reglas de negocio"""
+        if pd.isna(posicion_original):
+            return None
+        
+        posicion = str(posicion_original).strip().upper()
+        
+        # Buscar en el mapeo
+        for key, value in self.MAPEO_POSICIONES.items():
+            if key in posicion:
+                return value
+        
+        # Si no está en el mapeo, retornar la original
+        return posicion
+    
+    def procesar(self):
+        """Procesa el archivo Excel y actualiza contenedores a liberado"""
+        try:
+            # Leer Excel
+            df = read_excel_with_header_detection(
+                self.archivo_path,
+                ['contenedor', 'container', 'almacen', 'posición', 'terminal'],
+            )
+            df = self.normalizar_columnas(df)
+            
+            # Validar columnas requeridas
+            for col in self.COLUMNAS_REQUERIDAS:
+                if col not in df.columns:
+                    raise ValueError(f"Columna requerida '{col}' no encontrada en el Excel")
+            
+            # Filtrar filas vacías (donde container_id es NaN o vacío)
+            df = df[df['container_id'].notna()]
+            df = df[df['container_id'].astype(str).str.strip() != '']
+            df = df.reset_index(drop=True)
+
+            logger.info(
+                'import_liberacion_start',
+                extra={'archivo': self.archivo_path, 'filas': len(df), 'usuario': self.usuario}
+            )
+            
+            # Procesar cada fila
+            for idx, row in df.iterrows():
+                try:
+                    with transaction.atomic():
+                        # Normalizar container_id (eliminar espacios y guiones)
+                        container_id_raw = str(row['container_id']).strip().upper()
+                        container_id = Container.normalize_container_id(container_id_raw)
+
+                        if not container_id or container_id == 'NAN':
+                            self.resultados['errores'] += 1
+                            self.resultados['detalles'].append({
+                                'fila': idx + 2,
+                                'error': 'Container ID vacío'
+                            })
+                            continue
+
+                        # Buscar contenedor
+                        try:
+                            container = Container.objects.get(container_id=container_id)
+                        except Container.DoesNotExist:
+                            self.resultados['no_encontrados'] += 1
+                            self.resultados['detalles'].append({
+                                'fila': idx + 2,
+                                'container_id': container_id,
+                                'error': 'Contenedor no encontrado en el sistema'
+                            })
+                            continue
+
+                        # Mapear posición física
+                        posicion_original = row.get('posicion_fisica')
+                        posicion_mapeada = self.mapear_posicion(posicion_original)
+                        if not posicion_mapeada:
+                            raise ValueError('Posición física vacía o inválida')
+
+                        # Parsear fecha y hora de liberación desde el Excel
+                        fecha_liberacion = None
+                        if 'fecha_liberacion' in df.columns and pd.notna(row.get('fecha_liberacion')):
+                            try:
+                                fecha_lib = pd.to_datetime(row['fecha_liberacion'])
+                                # Combinar con hora si está disponible
+                                if 'hora_liberacion' in df.columns and pd.notna(row.get('hora_liberacion')):
+                                    try:
+                                        # Intentar parsear hora (puede venir como datetime o string)
+                                        if isinstance(row['hora_liberacion'], str):
+                                            hora_lib = pd.to_datetime(row['hora_liberacion'], format='%H:%M:%S').time()
+                                        else:
+                                            hora_lib = pd.to_datetime(row['hora_liberacion']).time()
+                                        fecha_liberacion = timezone.make_aware(datetime.combine(fecha_lib.date(), hora_lib))
+                                    except Exception:
+                                        # Si falla el parseo de hora, usar solo fecha
+                                        fecha_liberacion = timezone.make_aware(fecha_lib) if timezone.is_naive(fecha_lib) else fecha_lib
+                                else:
+                                    fecha_liberacion = timezone.make_aware(fecha_lib) if timezone.is_naive(fecha_lib) else fecha_lib
+                            except Exception as fecha_error:
+                                raise ValueError(
+                                    f"Fecha de liberación inválida '{row.get('fecha_liberacion')}': {str(fecha_error)}"
+                                )
+
+                        # Si no hay fecha de liberación en el Excel, usar la fecha actual
+                        if not fecha_liberacion:
+                            fecha_liberacion = timezone.now()
+
+                        # Determinar el estado basado en la fecha de liberación
+                        now = timezone.now()
+                        if fecha_liberacion <= now:
+                            nuevo_estado = 'liberado'
+                        else:
+                            nuevo_estado = 'por_arribar'
+
+                        if container.estado != nuevo_estado:
+                            container.cambiar_estado(
+                                nuevo_estado,
+                                self.usuario,
+                                permitir_reversion=(nuevo_estado == 'por_arribar'),
+                            )
+
+                        container.posicion_fisica = posicion_mapeada
+                        # Respetar fecha de Excel por trazabilidad operativa
+                        container.fecha_liberacion = fecha_liberacion
+
+                        # Comuna si viene en el Excel
+                        if 'comuna' in df.columns and pd.notna(row.get('comuna')):
+                            container.comuna = str(row['comuna']).strip()
+
+                        # Depósito de devolución si viene en el Excel
+                        if 'deposito_devolucion' in df.columns and pd.notna(row.get('deposito_devolucion')):
+                            container.deposito_devolucion = str(row['deposito_devolucion']).strip()
+
+                        # Actualizar peso_carga si viene en el Excel (puede ser más preciso que el inicial)
+                        if 'peso' in df.columns and pd.notna(row.get('peso')):
+                            peso = float(row['peso'])
+                            if peso <= 0:
+                                raise ValueError('Peso inválido: debe ser mayor a 0')
+                            container.peso_carga = peso
+
+                        # Cliente y referencia
+                        if 'cliente' in df.columns and pd.notna(row.get('cliente')):
+                            container.cliente = str(row['cliente']).strip()
+
+                        if 'referencia' in df.columns and pd.notna(row.get('referencia')):
+                            container.referencia = str(row['referencia']).strip()
+
+                        # Fecha salida puede usarse para calcular fecha_demurrage
+                        # Nota: La fecha_demurrage real vendrá del Excel de programación
+                        if 'fecha_salida' in df.columns and pd.notna(row.get('fecha_salida')):
+                            try:
+                                if isinstance(row['fecha_salida'], str):
+                                    pd.to_datetime(row['fecha_salida'])
+                                else:
+                                    pd.to_datetime(row['fecha_salida'])
+                            except Exception as salida_error:
+                                raise ValueError(
+                                    f"Fecha salida inválida '{row.get('fecha_salida')}': {str(salida_error)}"
+                                )
+
+                        container.save()
+                    
+                    # Registrar evento
+                    Event.objects.create(
+                        container=container,
+                        event_type='import_liberacion',
+                        detalles={
+                            'posicion_original': str(posicion_original) if pd.notna(posicion_original) else None,
+                            'posicion_mapeada': posicion_mapeada,
+                            'comuna': container.comuna,
+                            'fecha_liberacion': fecha_liberacion.isoformat(),
+                            'estado_resultante': nuevo_estado,
+                        },
+                        usuario=self.usuario
+                    )
+                    
+                    # Actualizar contador según el estado resultante
+                    if nuevo_estado == 'liberado':
+                        self.resultados['liberados'] += 1
+                    else:
+                        self.resultados['por_liberar'] += 1
+                    
+                    self.resultados['detalles'].append({
+                        'fila': idx + 2,
+                        'container_id': container_id,
+                        'posicion': posicion_mapeada,
+                        'fecha_liberacion': fecha_liberacion.strftime('%Y-%m-%d %H:%M') if fecha_liberacion else 'N/A',
+                        'estado': nuevo_estado,
+                        'accion': 'liberado' if nuevo_estado == 'liberado' else 'programado para liberación'
+                    })
+                
+                except Exception as e:
+                    logger.warning(
+                        'import_liberacion_row_error',
+                        extra={
+                            'fila': idx + 2,
+                            'container_id': container_id if 'container_id' in locals() else None,
+                            'error': str(e),
+                            'usuario': self.usuario,
+                        }
+                    )
+                    self.resultados['errores'] += 1
+                    self.resultados['detalles'].append({
+                        'fila': idx + 2,
+                        'container_id': container_id if 'container_id' in locals() else 'N/A',
+                        'error': str(e)
+                    })
+            
+            logger.info(
+                'import_liberacion_finished',
+                extra={
+                    'liberados': self.resultados['liberados'],
+                    'por_liberar': self.resultados['por_liberar'],
+                    'no_encontrados': self.resultados['no_encontrados'],
+                    'errores': self.resultados['errores'],
+                    'usuario': self.usuario,
+                }
+            )
+
+            return self.resultados
+        
+        except Exception as e:
+            logger.exception('import_liberacion_failed', extra={'usuario': self.usuario})
+            raise Exception(f"Error al procesar archivo de liberación: {str(e)}")

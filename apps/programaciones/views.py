@@ -1,0 +1,1355 @@
+from rest_framework import viewsets, status
+from rest_framework.decorators import action
+from rest_framework.response import Response
+from rest_framework.parsers import MultiPartParser, FormParser
+from rest_framework.permissions import AllowAny, IsAuthenticatedOrReadOnly
+from django.conf import settings
+from django.db import transaction
+from django.db.models import Q
+from django.utils import timezone
+from datetime import timedelta
+from dateutil import parser as date_parser
+import logging
+
+from .models import Programacion
+from .serializers import (
+    ProgramacionSerializer,
+    RutaManualSerializer,
+    ProgramacionListSerializer,
+    ProgramacionCreateSerializer
+)
+from apps.core.services.assignment import AssignmentService
+from apps.drivers.serializers import DriverDisponibleSerializer
+
+
+logger = logging.getLogger(__name__)
+
+
+class ProgramacionViewSet(viewsets.ModelViewSet):
+    """
+    ViewSet para gestión de programaciones
+    """
+    queryset = Programacion.objects.select_related('container', 'driver', 'cd').all()
+    serializer_class = ProgramacionSerializer
+    filterset_fields = ['fecha_programada', 'requiere_alerta', 'driver', 'cd']
+    search_fields = ['container__container_id', 'cliente']
+    ordering_fields = ['fecha_programada', 'created_at']
+    ordering = ['fecha_programada']
+    permission_classes = [IsAuthenticatedOrReadOnly]
+    
+    def get_serializer_class(self):
+        if self.action == 'list':
+            return ProgramacionListSerializer
+        elif self.action == 'create':
+            return ProgramacionCreateSerializer
+        return ProgramacionSerializer
+    
+    @action(detail=False, methods=['get'])
+    def alertas(self, request):
+        """
+        Lista programaciones que requieren alerta (< 48h sin conductor)
+        """
+        alertas = self.queryset.filter(
+            requiere_alerta=True,
+            driver__isnull=True
+        )
+        
+        serializer = ProgramacionListSerializer(alertas, many=True)
+        return Response({
+            'success': True,
+            'total': alertas.count(),
+            'alertas': serializer.data
+        })
+    
+    @action(detail=False, methods=['get'])
+    def alertas_demurrage(self, request):
+        """
+        Lista contenedores con fecha_demurrage crítica (< 2 días para vencer)
+        
+        Lógica: Demurrage vence el día indicado, día siguiente ya se paga.
+        Alertamos si quedan menos de 2 días para el vencimiento.
+        
+        ACTUALIZADO: Muestra contenedores en todos los estados activos (no solo liberados)
+        para dar visibilidad completa del riesgo de demurrage.
+        """
+        from apps.containers.models import Container
+        from apps.containers.serializers import ContainerListSerializer
+        
+        # Fecha límite: hoy + 2 días
+        fecha_limite = timezone.now() + timedelta(days=2)
+        
+        # Contenedores con fecha_demurrage próxima a vencer
+        # Estados activos: liberado, programado, asignado, en_ruta, entregado
+        # Excluir soltado/descargado/vacío: el viaje lleno ya terminó.
+        containers_riesgo = Container.objects.filter(
+            fecha_demurrage__isnull=False,
+            fecha_demurrage__lte=fecha_limite,
+            estado__in=['liberado', 'programado', 'asignado', 'en_ruta', 'entregado']
+        ).select_related('cd_entrega').order_by('fecha_demurrage')
+        
+        # Calcular días restantes para cada contenedor
+        resultados = []
+        for container in containers_riesgo:
+            dias_restantes = (container.fecha_demurrage - timezone.now()).days
+            container_data = ContainerListSerializer(container).data
+            container_data['dias_hasta_demurrage'] = dias_restantes
+            container_data['vencido'] = dias_restantes < 0
+            container_data['estado'] = container.estado
+            container_data['tiene_programacion'] = container.tiene_programacion()
+            resultados.append(container_data)
+        
+        return Response({
+            'success': True,
+            'total': len(resultados),
+            'containers_en_riesgo': resultados,
+            'mensaje': f'{len(resultados)} contenedores con demurrage próximo a vencer o vencido'
+        })
+    
+    @action(detail=True, methods=['post'], permission_classes=[AllowAny])
+    def asignar_conductor(self, request, pk=None):
+        """
+        Asigna un conductor específico a una programación
+        Permite acceso anónimo para operaciones manuales desde el panel.
+        """
+        programacion = self.get_object()
+        driver_id = request.data.get('driver_id')
+        
+        if not driver_id:
+            return Response(
+                {'error': 'driver_id no proporcionado'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        from apps.drivers.models import Driver
+        try:
+            driver = Driver.objects.get(id=driver_id)
+        except Driver.DoesNotExist:
+            return Response(
+                {'error': f'Conductor con ID {driver_id} no encontrado'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        
+        if not driver.esta_disponible:
+            return Response(
+                {'error': f'Conductor {driver.nombre} no está disponible'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        usuario = request.user.username if request.user.is_authenticated else 'operador_manual'
+        programacion.asignar_conductor(driver, usuario)
+        
+        serializer = self.get_serializer(programacion)
+        return Response({
+            'success': True,
+            'mensaje': f'Conductor {driver.nombre} asignado',
+            'programacion': serializer.data
+        })
+    
+    @action(detail=True, methods=['post'], permission_classes=[AllowAny])
+    def asignar_automatico(self, request, pk=None):
+        """
+        Asigna automáticamente el mejor conductor disponible
+        Permite acceso anónimo para operaciones automáticas desde el panel.
+        """
+        programacion = self.get_object()
+        usuario = request.user.username if request.user.is_authenticated else 'operador_manual'
+        
+        resultado = AssignmentService.asignar_mejor_conductor(programacion, usuario)
+        
+        if resultado['success']:
+            serializer = self.get_serializer(programacion)
+            return Response({
+                'success': True,
+                'mensaje': f'Conductor {resultado["driver"].nombre} asignado automáticamente',
+                'score': float(resultado['score']),
+                'desglose': {k: float(v) for k, v in resultado['desglose'].items()},
+                'clasificacion': resultado.get('classification'),
+                'confianza': resultado.get('confidence'),
+                'anomalias': resultado.get('anomalies', []),
+                'similitud_historica': resultado.get('similar_cases', []),
+                'razon': resultado.get('reason'),
+                'alternativas': resultado.get('alternatives', []),
+                'programacion': serializer.data
+            })
+        else:
+            if resultado.get('requires_operator'):
+                return Response({
+                    'success': False,
+                    'requires_operator': True,
+                    'mensaje': 'Se requiere revisión humana antes de despacho',
+                    'driver_recomendado': resultado['driver'].nombre if resultado.get('driver') else None,
+                    'score': float(resultado['score']) if resultado.get('score') else None,
+                    'desglose': {k: float(v) for k, v in (resultado.get('desglose') or {}).items()},
+                    'clasificacion': resultado.get('classification'),
+                    'confianza': resultado.get('confidence'),
+                    'anomalias': resultado.get('anomalies', []),
+                    'similitud_historica': resultado.get('similar_cases', []),
+                    'razon': resultado.get('reason'),
+                    'alternativas': resultado.get('alternatives', []),
+                }, status=status.HTTP_409_CONFLICT)
+            return Response(
+                {'error': resultado['error']},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+    
+    @action(detail=True, methods=['get'])
+    def conductores_disponibles(self, request, pk=None):
+        """
+        Lista conductores disponibles con su score de asignación
+        """
+        programacion = self.get_object()
+        
+        conductores = AssignmentService.obtener_conductores_disponibles_con_score(programacion)
+        
+        # Serializar con scores
+        resultados = []
+        for item in conductores:
+            driver_data = DriverDisponibleSerializer(item['driver']).data
+            driver_data['score'] = float(item['score'])
+            driver_data['desglose'] = {k: float(v) for k, v in item['desglose'].items()}
+            driver_data['clasificacion'] = item.get('classification')
+            driver_data['confianza'] = item.get('confidence')
+            driver_data['anomalias'] = item.get('anomalies', [])
+            driver_data['razon'] = item.get('reason')
+            resultados.append(driver_data)
+        
+        return Response({
+            'success': True,
+            'total': len(resultados),
+            'conductores': resultados
+        })
+    
+    @action(detail=False, methods=['post'], permission_classes=[AllowAny])
+    def asignar_multiples(self, request):
+        """
+        Asigna conductores automáticamente a múltiples programaciones
+        Permite acceso anónimo para operaciones masivas desde el panel.
+        """
+        programacion_ids = request.data.get('programacion_ids', [])
+        
+        if not programacion_ids:
+            return Response(
+                {'error': 'programacion_ids no proporcionado'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        programaciones = self.queryset.filter(id__in=programacion_ids, driver__isnull=True)
+        usuario = request.user.username if request.user.is_authenticated else 'operador_manual'
+        
+        resultados = AssignmentService.asignar_multiples(programaciones, usuario)
+        
+        return Response({
+            'success': True,
+            'asignadas': resultados['asignadas'],
+            'fallidas': resultados['fallidas'],
+            'detalles': resultados['detalles']
+        })
+    
+    @action(detail=False, methods=['get'])
+    def dashboard(self, request):
+        """
+        Dashboard con priorización inteligente
+        Score = 50% días_hasta_programacion + 50% días_hasta_demurrage
+        Ordena por urgencia (score más bajo = más urgente)
+        
+        SOLO muestra programaciones activas (pendientes de completar):
+        - Estados válidos: programado, asignado, en_ruta, entregado, descargado
+        - Excluye: vacio, vacio_en_ruta, devuelto (ya completados)
+        """
+        ahora = timezone.now()
+        
+        # Filtrar solo programaciones con contenedores en estados activos
+        # Excluir contenedores que ya están vacíos o devueltos (completados)
+        estados_activos = ['programado', 'secuenciado', 'asignado', 'en_ruta', 'entregado', 'soltado', 'descargado']
+        programaciones = self.queryset.filter(
+            container__estado__in=estados_activos
+        ).select_related('container', 'driver', 'cd')
+        
+        resultados = []
+        for prog in programaciones:
+            # Calcular días hasta programación
+            dias_hasta_prog = (prog.fecha_programada - ahora).total_seconds() / 86400
+            
+            # Calcular días hasta demurrage (si existe)
+            dias_hasta_demurrage = None
+            if prog.container.fecha_demurrage:
+                dias_hasta_demurrage = (prog.container.fecha_demurrage - ahora).total_seconds() / 86400
+            
+            # Score de prioridad (más bajo = más urgente)
+            if dias_hasta_demurrage is not None:
+                score_prioridad = (dias_hasta_prog * 0.5) + (dias_hasta_demurrage * 0.5)
+            else:
+                score_prioridad = dias_hasta_prog  # Solo considerar programación si no hay demurrage
+            
+            # Determinar nivel de urgencia
+            if score_prioridad < 1:
+                urgencia = 'CRÍTICA'
+            elif score_prioridad < 2:
+                urgencia = 'ALTA'
+            elif score_prioridad < 3:
+                urgencia = 'MEDIA'
+            else:
+                urgencia = 'BAJA'
+            
+            resultados.append({
+                'id': prog.id,
+                'container_id': prog.container.container_id,
+                'fecha_programada': prog.fecha_programada,
+                'fecha_demurrage': prog.container.fecha_demurrage,
+                'fecha_inicio_ruta': prog.fecha_inicio_ruta,
+                'eta_minutos': prog.eta_minutos,
+                'eta_recalculado_min': prog.eta_recalculado_min,
+                'eta_timestamp': (
+                    prog.fecha_inicio_ruta + timedelta(minutes=prog.eta_minutos)
+                    if prog.fecha_inicio_ruta and prog.eta_minutos is not None
+                    else None
+                ),
+                'conductor': prog.driver.nombre if prog.driver else None,
+                'cd': prog.cd.nombre,
+                'dias_hasta_programacion': round(dias_hasta_prog, 1),
+                'dias_hasta_demurrage': round(dias_hasta_demurrage, 1) if dias_hasta_demurrage else None,
+                'score_prioridad': round(score_prioridad, 2),
+                'urgencia': urgencia,
+                'estado_container': prog.container.estado
+            })
+        
+        # Ordenar por score (más urgente primero)
+        resultados.sort(key=lambda x: x['score_prioridad'])
+        
+        return Response({
+            'success': True,
+            'total': len(resultados),
+            'programaciones': resultados,
+            'leyenda': {
+                'CRÍTICA': 'Menos de 1 día',
+                'ALTA': '1-2 días',
+                'MEDIA': '2-3 días',
+                'BAJA': 'Más de 3 días'
+            }
+        })
+    
+    @action(detail=False, methods=['post'], permission_classes=[AllowAny])
+    def crear_ruta_manual(self, request):
+        """
+        Crea una ruta manual para retiro desde puerto
+        Permite acceso anónimo para operaciones manuales desde el panel.
+        
+        Casos de uso:
+        1. retiro_ccti: CCTI va a buscar contenedor al puerto y lo lleva a CCTI
+        2. retiro_directo: CCTI va a buscar al puerto y entrega directo a cliente
+        
+        Payload:
+        {
+            "container_id": "ABCD1234567",
+            "tipo_movimiento": "retiro_ccti" | "retiro_directo",
+            "cd_destino_id": 1,  // Solo para retiro_directo
+            "fecha_programacion": "2025-10-15T10:00:00",
+            "cliente": "Cliente XYZ",
+            "observaciones": "..."
+        }
+        """
+        serializer = RutaManualSerializer(data=request.data)
+        
+        if not serializer.is_valid():
+            return Response(
+                {'error': 'Datos inválidos', 'detalles': serializer.errors},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        data = serializer.validated_data
+        container = data['_container']
+        tipo_movimiento = data['tipo_movimiento']
+        
+        # Actualizar tipo de movimiento en el contenedor
+        container.tipo_movimiento = tipo_movimiento
+        container.save(update_fields=['tipo_movimiento'])
+        
+        # Determinar CD destino
+        if tipo_movimiento == 'retiro_ccti':
+            # Buscar el primer CCTI
+            from apps.cds.models import CD
+            cd_destino = CD.objects.filter(tipo='ccti').first()
+            if not cd_destino:
+                return Response(
+                    {'error': 'No se encontró ningún CCTI en el sistema'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+        else:  # retiro_directo
+            cd_destino = data['_cd_destino']
+        
+        # Crear la programación
+        programacion = Programacion.objects.create(
+            container=container,
+            cd=cd_destino,
+            fecha_programada=data['fecha_programacion'],
+            cliente=data.get('cliente', ''),
+            direccion_entrega=cd_destino.direccion,
+            observaciones=data.get('observaciones', f'Retiro manual desde {container.posicion_fisica}')
+        )
+        
+        usuario = request.user.username if request.user.is_authenticated else None
+        container.cambiar_estado('programado', usuario)
+        
+        # Crear evento de auditoría
+        from apps.events.models import Event
+        Event.objects.create(
+            container=container,
+            event_type='import_programacion',
+            usuario=request.user.username if request.user.is_authenticated else None,
+            detalles={
+                'accion': 'ruta_manual_creada',
+                'descripcion': f'Ruta manual creada: {tipo_movimiento}',
+                'tipo_movimiento': tipo_movimiento,
+                'origen': container.posicion_fisica,
+                'destino': cd_destino.nombre,
+                'programacion_id': programacion.id,
+                'fecha_programacion': data['fecha_programacion'].isoformat()
+            }
+        )
+        
+        return Response({
+            'success': True,
+            'mensaje': f'Ruta manual creada exitosamente',
+            'programacion': ProgramacionSerializer(programacion).data,
+            'tipo_movimiento': tipo_movimiento,
+            'origen': container.posicion_fisica,
+            'destino': cd_destino.nombre
+        }, status=status.HTTP_201_CREATED)
+    
+    @action(detail=False, methods=['post'], parser_classes=[MultiPartParser, FormParser], url_path='import-excel', permission_classes=[AllowAny])
+    def import_excel(self, request):
+        """
+        Importa programaciones desde Excel
+        Crea programaciones y actualiza contenedores a 'programado'
+        
+        NOTA: Este endpoint permite AllowAny por compatibilidad con sistemas externos.
+        """
+        if 'file' not in request.FILES:
+            return Response(
+                {'error': 'No se proporcionó archivo'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        archivo = request.FILES['file']
+        
+        # Validar extensión de archivo
+        if not archivo.name.endswith(('.xlsx', '.xls')):
+            return Response(
+                {'error': 'Formato de archivo inválido. Solo se permiten archivos .xlsx o .xls'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Validar tamaño de archivo (máximo 10MB)
+        max_size = 10 * 1024 * 1024  # 10MB en bytes
+        if archivo.size > max_size:
+            return Response(
+                {'error': f'Archivo demasiado grande. Tamaño máximo: 10MB'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        usuario = request.user.username if request.user.is_authenticated else None
+        
+        import tempfile
+        import os
+        
+        with tempfile.NamedTemporaryFile(delete=False, suffix='.xlsx') as tmp:
+            for chunk in archivo.chunks():
+                tmp.write(chunk)
+            tmp_path = tmp.name
+        
+        try:
+            from apps.containers.importers.programacion import ProgramacionImporter
+            importer = ProgramacionImporter(tmp_path, usuario)
+            resultados = importer.procesar()
+            
+            return Response({
+                'success': True,
+                'mensaje': f'Importación de programación completada',
+                'programados': resultados['programados'],
+                'no_encontrados': resultados['no_encontrados'],
+                'cd_no_encontrado': resultados['cd_no_encontrado'],
+                'errores': resultados['errores'],
+                'alertas_generadas': resultados['alertas_generadas'],
+                'detalles': resultados['detalles']
+            })
+        
+        except Exception as e:
+            logger.exception('import_programacion_endpoint_failed', extra={'usuario': usuario})
+            return Response(
+                {
+                    'error': 'No fue posible completar la importación de programación',
+                    'detalle': str(e)
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+        finally:
+            if os.path.exists(tmp_path):
+                os.unlink(tmp_path)
+    
+    @action(detail=True, methods=['post'])
+    def validar_asignacion(self, request, pk=None):
+        """
+        Valida si un conductor puede ser asignado considerando ventanas de tiempo
+        
+        Payload:
+        {
+            "driver_id": 1
+        }
+        """
+        from apps.core.services.validation import PreAssignmentValidationService
+        from apps.drivers.models import Driver
+        
+        programacion = self.get_object()
+        driver_id = request.data.get('driver_id')
+        
+        if not driver_id:
+            return Response(
+                {'error': 'driver_id no proporcionado'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        try:
+            driver = Driver.objects.get(id=driver_id)
+        except Driver.DoesNotExist:
+            return Response(
+                {'error': f'Conductor con ID {driver_id} no encontrado'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        
+        # Validar disponibilidad temporal
+        resultado = PreAssignmentValidationService.validar_disponibilidad_temporal(
+            driver, programacion
+        )
+        
+        return Response({
+            'success': True,
+            'disponible': resultado['disponible'],
+            'conflictos': resultado['conflictos'],
+            'tiempo_requerido': resultado['tiempo_requerido'],
+            'ventana_ocupada': resultado['ventana_ocupada'],
+            'nueva_ventana': resultado.get('nueva_ventana'),
+            'conductor': driver.nombre
+        })
+    
+    @action(detail=True, methods=['post'])
+    def iniciar_ruta(self, request, pk=None):
+        """
+        Inicia la ruta de una programación y crea notificación con ETA
+        
+        Requiere confirmación de patente del conductor para verificar que está usando el vehículo correcto.
+        
+        Payload requerido:
+        {
+            "patente": "ABC123",  // Patente del vehículo que está usando
+            "lat": -33.4372,      // Ubicación GPS actual (opcional)
+            "lng": -70.6506       // Ubicación GPS actual (opcional)
+        }
+        """
+        from apps.notifications.services import NotificationService
+        
+        programacion = self.get_object()
+        
+        if not programacion.driver:
+            return Response(
+                {'error': 'Programación no tiene conductor asignado'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Validar que se proporcione la patente
+        patente_ingresada = request.data.get('patente', '').strip().upper()
+        if not patente_ingresada:
+            return Response(
+                {'error': 'Debe ingresar la patente del vehículo para confirmar'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Si el conductor tiene una patente asignada, validar que coincida
+        if programacion.driver.patente and programacion.driver.patente.strip():
+            patente_asignada = programacion.driver.patente.strip().upper()
+            if patente_ingresada != patente_asignada:
+                return Response({
+                    'error': f'La patente ingresada ({patente_ingresada}) no coincide con la asignada ({patente_asignada})',
+                    'patente_esperada': patente_asignada,
+                    'patente_ingresada': patente_ingresada,
+                    'success': False
+                }, status=status.HTTP_400_BAD_REQUEST)
+        else:
+            # Si no hay patente asignada, aceptar cualquiera pero registrarla
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.info(f'Conductor {programacion.driver.nombre} no tiene patente asignada. Usando: {patente_ingresada}')
+        
+        # Obtener coordenadas GPS (requeridas para registrar posición de inicio)
+        lat = request.data.get('lat')
+        lng = request.data.get('lng')
+        
+        if not lat or not lng:
+            return Response(
+                {'error': 'Se requieren coordenadas GPS (lat, lng) para iniciar la ruta'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Actualizar posición del conductor
+        programacion.driver.actualizar_posicion(lat, lng)
+        programacion.posicion_actual_lat = lat
+        programacion.posicion_actual_lng = lng
+        programacion.ultima_actualizacion_tracking = timezone.now()
+        
+        # Guardar datos de inicio de ruta en la programación
+        programacion.patente_confirmada = patente_ingresada
+        programacion.fecha_inicio_ruta = timezone.now()
+        programacion.gps_inicio_lat = lat
+        programacion.gps_inicio_lng = lng
+        programacion.save()
+        
+        # Cambiar estado del contenedor a 'en_ruta'
+        usuario = request.user.username if request.user.is_authenticated else None
+        programacion.container.cambiar_estado('en_ruta', usuario)
+        
+        # Crear evento de inicio de ruta con datos GPS
+        from apps.events.models import Event
+        Event.objects.create(
+            container=programacion.container,
+            event_type='inicio_ruta',
+            detalles={
+                'conductor': programacion.driver.nombre,
+                'patente': patente_ingresada,
+                'gps_lat': str(lat),
+                'gps_lng': str(lng),
+                'timestamp': timezone.now().isoformat()
+            },
+            usuario=usuario
+        )
+        
+        # Calcular y guardar ETA híbrido (Mapbox + aprendizaje histórico).
+        from apps.core.services.learning_engine import OperationalLearningEngine
+        try:
+            recomendacion = OperationalLearningEngine.recommend(
+                (float(lat), float(lng)),
+                (float(programacion.cd.lat), float(programacion.cd.lng)),
+                programacion.fecha_inicio_ruta,
+                driver=programacion.driver,
+                window_hours=0,
+            )
+            if recomendacion.get('success'):
+                prediccion = recomendacion['recommended']
+                programacion.eta_minutos = prediccion['predicted_minutes']
+                programacion.distancia_km = prediccion['distance_km']
+                programacion.ruta_geojson = prediccion.get('geometry')
+                programacion.ruta_firma = prediccion.get('route_signature')
+                programacion.prediccion_ml = {
+                    'source': prediccion['source'],
+                    'mapbox_minutes': prediccion['mapbox_minutes'],
+                    'predicted_minutes': prediccion['predicted_minutes'],
+                    'learned_factor': prediccion['learned_factor'],
+                    'samples': prediccion['samples'],
+                    'confidence': prediccion['confidence'],
+                    'driver_profile': prediccion.get('driver_profile'),
+                    'explanation': recomendacion['explanation'],
+                }
+                programacion.save(update_fields=[
+                    'eta_minutos', 'distancia_km', 'ruta_geojson', 'ruta_firma',
+                    'prediccion_ml', 'updated_at'
+                ])
+        except Exception as e:
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.warning(f"Error calculando ETA para programación: {str(e)}")
+        
+        # Crear notificación con ETA
+        try:
+            notificacion = NotificationService.crear_notificacion_inicio_ruta(
+                programacion, programacion.driver
+            )
+            notificacion_data = {
+                'id': notificacion.id,
+                'titulo': notificacion.titulo,
+                'mensaje': notificacion.mensaje,
+                'eta_minutos': notificacion.eta_minutos,
+                'eta_timestamp': notificacion.eta_timestamp,
+                'distancia_km': str(notificacion.distancia_km) if notificacion.distancia_km else None
+            }
+        except Exception as e:
+            # Si falla la notificación, continuar pero registrar el error
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.warning(f"Error creando notificación de inicio de ruta: {str(e)}")
+            notificacion_data = None
+        
+        serializer = self.get_serializer(programacion)
+        response_data = {
+            'success': True,
+            'mensaje': f'Ruta iniciada por conductor {programacion.driver.nombre} con patente {patente_ingresada}',
+            'programacion': serializer.data,
+            'patente_confirmada': patente_ingresada,
+            'gps_registrado': {'lat': str(lat), 'lng': str(lng)}
+        }
+        
+        if notificacion_data:
+            response_data['notificacion'] = notificacion_data
+        
+        return Response(response_data)
+    
+    def _update_registro_operacion_on_completion(self, programacion: Programacion, estado_final: str):
+        from apps.programaciones.models import RegistroOperacion, TiempoViaje
+        from django.db.models import F
+        import logging
+
+        logger = logging.getLogger(__name__)
+
+        try:
+            registro = RegistroOperacion.objects.filter(programacion=programacion).order_by('-created_at').first()
+            if not registro:
+                logger.warning(f"No se encontró RegistroOperacion para Programacion ID {programacion.id}. No se actualizará al finalizar.")
+                return
+            
+            # Calcular ETA real
+            eta_real_min = None
+            if programacion.fecha_inicio_ruta and programacion.container.fecha_entrega:
+                duration = programacion.container.fecha_entrega - programacion.fecha_inicio_ruta
+                eta_real_min = int(duration.total_seconds() / 60)
+
+            registro.eta_real_min = eta_real_min
+            registro.estado_final = estado_final
+            registro.incidentes_ejecucion = programacion.incidentes_registrados # Copiar incidentes al log final
+            registro.save(update_fields=['eta_real_min', 'estado_final', 'incidentes_ejecucion'])
+
+            # Alimentar la estimación adaptativa con un viaje real completo.
+            if (
+                programacion.fecha_inicio_ruta
+                and programacion.container.fecha_entrega
+                and programacion.gps_inicio_lat is not None
+                and programacion.gps_inicio_lng is not None
+                and programacion.cd
+                and programacion.eta_minutos
+                and not TiempoViaje.objects.filter(programacion=programacion).exists()
+            ):
+                real_min = max(1, int((programacion.container.fecha_entrega - programacion.fecha_inicio_ruta).total_seconds() / 60))
+                estimado = max(1, int(programacion.eta_minutos))
+                TiempoViaje.objects.create(
+                    conductor=programacion.driver,
+                    programacion=programacion,
+                    origen_lat=programacion.gps_inicio_lat,
+                    origen_lon=programacion.gps_inicio_lng,
+                    destino_lat=programacion.cd.lat,
+                    destino_lon=programacion.cd.lng,
+                    origen_nombre='Inicio de ruta',
+                    destino_nombre=programacion.cd.nombre,
+                    tiempo_mapbox_min=estimado,
+                    tiempo_real_min=real_min,
+                    hora_salida=programacion.fecha_inicio_ruta,
+                    hora_llegada=programacion.container.fecha_entrega,
+                    hora_del_dia=programacion.fecha_inicio_ruta.hour,
+                    dia_semana=programacion.fecha_inicio_ruta.weekday(),
+                    distancia_km=programacion.distancia_km or 0,
+                    ruta_firma=programacion.ruta_firma,
+                    anomalia=real_min > estimado * 3,
+                )
+            logger.info(f"RegistroOperacion {registro.id} actualizado al finalizar Programacion {programacion.id} con estado {estado_final}.")
+        except Exception as e:
+            logger.error(f"Error actualizando RegistroOperacion para Programacion {programacion.id}: {str(e)}", exc_info=True)
+
+    def _registrar_arribo(self, programacion, lat, lng, origen, usuario=None):
+        """Registra una sola vez el arribo, sea manual o disparado por geocerca."""
+        from apps.events.models import Event
+
+        with transaction.atomic():
+            locked = Programacion.objects.select_for_update().select_related(
+                'container', 'driver', 'cd'
+            ).get(pk=programacion.pk)
+
+            if locked.fecha_arribo_cd:
+                return locked, False
+            if locked.container.estado != 'en_ruta':
+                raise ValueError(
+                    f'Contenedor debe estar en ruta. Estado actual: {locked.container.get_estado_display()}'
+                )
+
+            arrived_at = timezone.now()
+            locked.driver.actualizar_posicion(lat, lng)
+            locked.fecha_arribo_cd = arrived_at
+            locked.gps_arribo_lat = lat
+            locked.gps_arribo_lng = lng
+            locked.origen_arribo = origen
+            locked.posicion_actual_lat = lat
+            locked.posicion_actual_lng = lng
+            locked.ultima_actualizacion_tracking = arrived_at
+            locked.save(update_fields=[
+                'fecha_arribo_cd', 'gps_arribo_lat', 'gps_arribo_lng', 'origen_arribo',
+                'posicion_actual_lat', 'posicion_actual_lng', 'ultima_actualizacion_tracking',
+                'updated_at',
+            ])
+            locked.container.cambiar_estado('entregado', usuario)
+
+            Event.objects.create(
+                container=locked.container,
+                event_type='arribo_cd',
+                detalles={
+                    'conductor': locked.driver.nombre,
+                    'cd': locked.cd.nombre,
+                    'gps_lat': str(lat),
+                    'gps_lng': str(lng),
+                    'timestamp': arrived_at.isoformat(),
+                    'origen': origen,
+                },
+                usuario=usuario or ('system_geocerca' if origen == 'geocerca' else 'conductor'),
+            )
+
+        self._update_registro_operacion_on_completion(locked, 'ENTREGADO')
+        return locked, True
+
+    @staticmethod
+    def _usuario_puede_operar_viaje(request, programacion):
+        """Un conductor solo puede operar su propio viaje; staff conserva acceso."""
+        if not request.user.is_authenticated:
+            return False
+        if request.user.is_staff:
+            return True
+        return programacion.driver_id and programacion.driver.user_id == request.user.id
+
+
+    @action(detail=True, methods=['post'])
+    def notificar_arribo(self, request, pk=None):
+        """
+        Notifica que el conductor ha arribado al CD (llegó al destino)
+        Cambia el estado del contenedor a 'entregado'
+        
+        Payload requerido:
+        {
+            "lat": -33.4372,
+            "lng": -70.6506
+        }
+        """
+        programacion = self.get_object()
+        
+        if not programacion.driver:
+            return Response(
+                {'error': 'Programación no tiene conductor asignado'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        if not self._usuario_puede_operar_viaje(request, programacion):
+            return Response(
+                {'error': 'No puede registrar el arribo de otro conductor.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        
+        lat = request.data.get('lat')
+        lng = request.data.get('lng')
+        if lat is None or lng is None:
+            return Response(
+                {'error': 'Se requiere GPS para registrar el arribo manual.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        usuario = request.user.username if request.user.is_authenticated else None
+        try:
+            programacion, created = self._registrar_arribo(
+                programacion, lat, lng, 'manual', usuario
+            )
+        except ValueError as exc:
+            return Response({'error': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+        
+        serializer = self.get_serializer(programacion)
+        return Response({
+            'success': True,
+            'mensaje': f'Arribo registrado en {programacion.cd.nombre}',
+            'programacion': serializer.data,
+            'nuevo_estado': 'entregado',
+            'fecha_arribo_cd': programacion.fecha_arribo_cd,
+            'gps_registrado': {'lat': str(programacion.gps_arribo_lat), 'lng': str(programacion.gps_arribo_lng)},
+            'origen_arribo': programacion.origen_arribo,
+            'ya_registrado': not created,
+        })
+    
+    @action(detail=True, methods=['post'])
+    def notificar_vacio(self, request, pk=None):
+        """
+        Notifica que el contenedor está vacío (descargado y listo para retiro)
+        Cambia el estado del contenedor a 'vacio'
+        
+        Payload opcional:
+        {
+            "lat": -33.4372,
+            "lng": -70.6506
+        }
+        """
+        programacion = self.get_object()
+        
+        if not programacion.driver:
+            return Response(
+                {'error': 'Programación no tiene conductor asignado'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        if not self._usuario_puede_operar_viaje(request, programacion):
+            return Response({'error': 'No puede operar un viaje ajeno.'}, status=status.HTTP_403_FORBIDDEN)
+        
+        # El conductor confirma la descarga solo cuando esperó con el equipo.
+        # Tras un drop & hook, la confirmación corresponde al operador del CD.
+        if programacion.container.estado not in ['entregado', 'descargado']:
+            return Response(
+                {'error': f'Contenedor debe estar entregado o descargado. Estado actual: {programacion.container.get_estado_display()}'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Actualizar posición del conductor si se proporciona
+        lat = request.data.get('lat')
+        lng = request.data.get('lng')
+        if lat and lng:
+            programacion.driver.actualizar_posicion(lat, lng)
+        
+        usuario = request.user.username if request.user.is_authenticated else None
+        from apps.core.services.operations import OperationalFlowService
+        try:
+            programacion, timing = OperationalFlowService.mark_empty(
+                programacion, usuario, source='portal_conductor'
+            )
+        except ValueError as exc:
+            return Response({'error': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+
+        # 🆕 Actualizar RegistroOperacion con estado final
+        self._update_registro_operacion_on_completion(programacion, 'PARCIAL') # Ojo: PARCIAL porque aún no se devuelve el vacío
+        
+        # Crear evento de vacío
+        from apps.events.models import Event
+        Event.objects.create(
+            container=programacion.container,
+            event_type='contenedor_vacio',
+            detalles={
+                'conductor': programacion.driver.nombre,
+                'cd': programacion.cd.nombre,
+                'gps_lat': str(lat) if lat else None,
+                'gps_lng': str(lng) if lng else None,
+                'timestamp': timezone.now().isoformat()
+            },
+            usuario=usuario
+        )
+        
+        serializer = self.get_serializer(programacion)
+        return Response({
+            'success': True,
+            'mensaje': f'Contenedor marcado como vacío. Listo para retiro.',
+            'programacion': serializer.data,
+            'nuevo_estado': 'vacio',
+            'tiempo_descarga_min': timing.tiempo_real_min if timing else None,
+        })
+    
+    @action(detail=True, methods=['post'])
+    def soltar_contenedor(self, request, pk=None):
+        """
+        Permite al conductor soltar el contenedor y quedar libre inmediatamente (Drop & Hook)
+        Solo disponible si el CD permite soltar contenedor
+        
+        Payload opcional:
+        {
+            "lat": -33.4372,
+            "lng": -70.6506
+        }
+        """
+        programacion = self.get_object()
+        
+        if not programacion.driver:
+            return Response(
+                {'error': 'Programación no tiene conductor asignado'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        if not self._usuario_puede_operar_viaje(request, programacion):
+            return Response({'error': 'No puede operar un viaje ajeno.'}, status=status.HTTP_403_FORBIDDEN)
+        
+        # Verificar que el CD permita soltar contenedor
+        if not programacion.cd.permite_soltar_contenedor:
+            return Response(
+                {'error': f'El CD {programacion.cd.nombre} no permite Drop & Hook. El conductor debe esperar la descarga.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Permitir reintento idempotente desde conexiones móviles inestables.
+        if programacion.container.estado not in {'entregado', 'soltado'}:
+            return Response(
+                {'error': f'Solo se puede soltar el contenedor después de haberlo entregado. Estado actual: {programacion.container.get_estado_display()}'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Actualizar posición del conductor si se proporciona
+        lat = request.data.get('lat')
+        lng = request.data.get('lng')
+        if lat and lng:
+            programacion.driver.actualizar_posicion(lat, lng)
+        
+        usuario = request.user.username if request.user.is_authenticated else None
+        from apps.core.services.operations import OperationalFlowService
+        try:
+            programacion, created = OperationalFlowService.drop_container(programacion, usuario)
+        except ValueError as exc:
+            return Response({'error': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+        
+        # El viaje lleno terminó, pero la descarga sigue pendiente en el CD.
+        self._update_registro_operacion_on_completion(programacion, 'PARCIAL')
+        
+        # Crear evento de contenedor soltado
+        from apps.events.models import Event
+        if created:
+            Event.objects.create(
+                container=programacion.container,
+                event_type='contenedor_soltado',
+                detalles={
+                    'conductor': programacion.driver.nombre,
+                    'cd': programacion.cd.nombre,
+                    'tipo': 'drop_and_hook',
+                    'gps_lat': str(lat) if lat else None,
+                    'gps_lng': str(lng) if lng else None,
+                    'timestamp': timezone.now().isoformat()
+                },
+                usuario=usuario
+            )
+        
+        serializer = self.get_serializer(programacion)
+        return Response({
+            'success': True,
+            'mensaje': f'Contenedor soltado en {programacion.cd.nombre}. Conductor libre para nueva asignación.',
+            'programacion': serializer.data,
+            'nuevo_estado': 'soltado',
+            'conductor_liberado': True,
+            'ya_registrado': not created,
+        })
+    
+    @action(detail=True, methods=['post'])
+    def actualizar_posicion(self, request, pk=None):
+        """
+        Actualiza la posición del conductor y recalcula ETA
+        
+        Payload:
+        {
+            "lat": -33.4372,
+            "lng": -70.6506
+        }
+        """
+        from apps.notifications.services import NotificationService
+        
+        programacion = self.get_object()
+        
+        if not programacion.driver:
+            return Response(
+                {'error': 'Programación no tiene conductor asignado'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        if not self._usuario_puede_operar_viaje(request, programacion):
+            return Response(
+                {'error': 'No puede actualizar el viaje de otro conductor.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        
+        lat = request.data.get('lat')
+        lng = request.data.get('lng')
+        
+        if lat is None or lng is None:
+            return Response(
+                {'error': 'lat y lng requeridos'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Arribo automático: permanece dormido hasta que el CD tenga un radio.
+        # Se comprueba antes del tracking ordinario para registrar una sola muestra GPS.
+        if (
+            programacion.container.estado == 'en_ruta'
+            and programacion.cd.contiene_en_geocerca(lat, lng)
+        ):
+            programacion, created = self._registrar_arribo(
+                programacion, lat, lng, 'geocerca', 'system_geocerca'
+            )
+            return Response({
+                'success': True,
+                'mensaje': 'Arribo registrado automáticamente por geocerca',
+                'arribo_automatico': True,
+                'arribo_creado': created,
+                'fecha_arribo_cd': programacion.fecha_arribo_cd,
+                'nuevo_estado': 'entregado',
+            })
+
+        # Fuera de geocerca, guardar tracking y recalcular ETA normalmente.
+        programacion.driver.actualizar_posicion(lat, lng)
+        
+        # Actualizar ETA y crear notificación si cambió significativamente
+        resultado = NotificationService.actualizar_eta(
+            programacion, programacion.driver, lat, lng
+        )
+        
+        if not resultado:
+            return Response(
+                {'error': 'No se pudo calcular ETA actualizado'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+        
+        # Verificar si debe crear alerta de arribo próximo
+        if resultado['eta_minutos'] <= 15:
+            NotificationService.crear_alerta_arribo_proximo(programacion)
+
+        programacion.eta_recalculado_min = resultado['eta_minutos']
+        configured_delay_threshold = int(getattr(settings, 'ETA_DELAY_ALERT_MIN', 15))
+        request_override_threshold = request.query_params.get('eta_delay_alert_min')
+        eta_delay_threshold = int(request_override_threshold) if request_override_threshold else configured_delay_threshold
+        if programacion.eta_minutos and (resultado['eta_minutos'] - programacion.eta_minutos) > eta_delay_threshold:
+            desvio = {
+                'tipo': 'ETA_DELAY',
+                'mensaje': 'ETA recalculado supera lo prometido',
+                'valor_min': int(resultado['eta_minutos'] - programacion.eta_minutos),
+                'timestamp': timezone.now().isoformat(),
+            }
+            programacion.desviaciones_detectadas = (programacion.desviaciones_detectadas or []) + [desvio]
+        programacion.save(update_fields=[
+            'posicion_actual_lat', 'posicion_actual_lng', 'ultima_actualizacion_tracking',
+            'eta_recalculado_min', 'desviaciones_detectadas'
+        ])
+        
+        response_data = {
+            'success': True,
+            'mensaje': 'Posición actualizada y ETA recalculado',
+            'eta_minutos': resultado['eta_minutos'],
+            'distancia_km': str(resultado['distancia_km']),
+            'eta_timestamp': resultado['eta_timestamp']
+        }
+        
+        if resultado['notificacion']:
+            response_data['notificacion'] = {
+                'id': resultado['notificacion'].id,
+                'titulo': resultado['notificacion'].titulo,
+                'mensaje': resultado['notificacion'].mensaje
+            }
+        
+        return Response(response_data)
+
+    @action(detail=True, methods=['get'])
+    def recomendacion_ml(self, request, pk=None):
+        """Compara horarios, rutas y conductor usando historial real + Mapbox."""
+        from apps.core.services.learning_engine import OperationalLearningEngine
+
+        programacion = self.get_object()
+        lat = request.query_params.get('lat')
+        lng = request.query_params.get('lng')
+        if lat is None or lng is None:
+            if programacion.driver and programacion.driver.ultima_posicion_lat is not None:
+                lat = programacion.driver.ultima_posicion_lat
+                lng = programacion.driver.ultima_posicion_lng
+            elif programacion.gps_inicio_lat is not None:
+                lat, lng = programacion.gps_inicio_lat, programacion.gps_inicio_lng
+            else:
+                return Response(
+                    {'error': 'Se necesita una ubicación de origen (lat/lng).'},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+        try:
+            window_hours = min(8, max(0, int(request.query_params.get('ventana_horas', 3))))
+        except ValueError:
+            return Response({'error': 'ventana_horas debe ser entero'}, status=status.HTTP_400_BAD_REQUEST)
+        salida = programacion.fecha_inicio_ruta or timezone.now()
+        recommendation = OperationalLearningEngine.recommend(
+            (float(lat), float(lng)),
+            (float(programacion.cd.lat), float(programacion.cd.lng)),
+            salida,
+            driver=programacion.driver,
+            window_hours=window_hours,
+        )
+        if not recommendation.get('success'):
+            return Response(recommendation, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+        return Response(recommendation)
+
+    @action(detail=True, methods=['post'])
+    def confirmar_recomendacion(self, request, pk=None):
+        """Confirma recomendación del sistema y permite despacho según clasificación."""
+        programacion = self.get_object()
+        programacion.decision_operador = 'CONFIRMAR'
+        programacion.motivo_override = ''
+        programacion.save(update_fields=['decision_operador', 'motivo_override'])
+        return Response({'success': True, 'mensaje': 'Recomendación confirmada por operador.'})
+
+    @action(detail=True, methods=['post'])
+    def rechazar_recomendacion(self, request, pk=None):
+        """Rechaza recomendación con motivo obligatorio."""
+        programacion = self.get_object()
+        motivo = (request.data.get('motivo') or '').strip()
+        if not motivo:
+            return Response({'error': 'motivo es obligatorio para rechazar'}, status=status.HTTP_400_BAD_REQUEST)
+        programacion.decision_operador = 'RECHAZAR'
+        programacion.motivo_override = motivo
+        programacion.save(update_fields=['decision_operador', 'motivo_override'])
+        return Response({'success': True, 'mensaje': 'Recomendación rechazada y registrada.'})
+
+    @action(detail=True, methods=['post'])
+    def escalar_supervisor(self, request, pk=None):
+        """Escala la operación a supervisor."""
+        programacion = self.get_object()
+        motivo = (request.data.get('motivo') or 'Escalado manual por operador').strip()
+        programacion.decision_operador = 'ESCALAR'
+        programacion.motivo_override = motivo
+        programacion.save(update_fields=['decision_operador', 'motivo_override'])
+        return Response({'success': True, 'mensaje': 'Caso escalado a supervisor.'})
+
+    @action(detail=True, methods=['post'])
+    def reevaluar(self, request, pk=None):
+        """Permite modificar parámetros operativos y recalcular recomendación."""
+        programacion = self.get_object()
+        urgencia = request.data.get('urgencia_servicio')
+        seguimiento = request.data.get('requiere_seguimiento_especial')
+        if urgencia in ['NORMAL', 'URGENTE', 'CRITICO']:
+            programacion.urgencia_servicio = urgencia
+        if isinstance(seguimiento, bool):
+            programacion.requiere_seguimiento_especial = seguimiento
+        if request.data.get('ventana_horaria_inicio'):
+            try:
+                programacion.ventana_horaria_inicio = date_parser.parse(request.data.get('ventana_horaria_inicio'))
+            except Exception:
+                return Response({'error': 'ventana_horaria_inicio inválida (usar ISO 8601)'}, status=status.HTTP_400_BAD_REQUEST)
+        if request.data.get('ventana_horaria_fin'):
+            try:
+                programacion.ventana_horaria_fin = date_parser.parse(request.data.get('ventana_horaria_fin'))
+            except Exception:
+                return Response({'error': 'ventana_horaria_fin inválida (usar ISO 8601)'}, status=status.HTTP_400_BAD_REQUEST)
+        programacion.decision_operador = 'MODIFICAR'
+        programacion.save()
+
+        usuario = request.user.username if request.user.is_authenticated else 'operador_manual'
+        resultado = AssignmentService.asignar_mejor_conductor(programacion, usuario)
+        return Response({'success': True, 'resultado': resultado})
+    
+    @action(detail=True, methods=['post'], permission_classes=[AllowAny])
+    def reportar_incidente(self, request, pk=None):
+        """
+        Permite al conductor o a un operador registrar un incidente durante un viaje.
+        Este incidente se añade al campo `incidentes_registrados` de la programación.
+
+        Payload:
+        {
+            "tipo_incidente": "ACCIDENTE" | "AVERIA" | "DEMORA_TRAFICO" | "OTRO",
+            "descripcion": "Descripción detallada del incidente",
+            "gravedad": "LEVE" | "MODERADA" | "ALTA" | "CRITICA",
+            "lat": -33.4372,      // Ubicación GPS actual (opcional)
+            "lng": -70.6506       // Ubicación GPS actual (opcional)
+        }
+        """
+        programacion = self.get_object()
+        
+        tipo_incidente = request.data.get('tipo_incidente')
+        descripcion = request.data.get('descripcion', '').strip()
+        gravedad = request.data.get('gravedad', 'MODERADA')
+        lat = request.data.get('lat')
+        lng = request.data.get('lng')
+
+        if not tipo_incidente or not descripcion:
+            return Response(
+                {'error': 'tipo_incidente y descripcion son campos obligatorios.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Validar tipo de incidente y gravedad (opcional, pero buena práctica)
+        tipos_validos = ["ACCIDENTE", "AVERIA", "DEMORA_TRAFICO", "OTRO"]
+        gravedades_validas = ["LEVE", "MODERADA", "ALTA", "CRITICA"]
+
+        if tipo_incidente not in tipos_validos:
+            return Response(
+                {'error': f'Tipo de incidente inválido. Tipos permitidos: {", ".join(tipos_validos)}'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        if gravedad not in gravedades_validas:
+            return Response(
+                {'error': f'Gravedad inválida. Gravedades permitidas: {", ".join(gravedades_validas)}'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        incidente_data = {
+            'tipo': tipo_incidente,
+            'descripcion': descripcion,
+            'gravedad': gravedad,
+            'timestamp': timezone.now().isoformat(),
+            'reportado_por': request.user.username if request.user.is_authenticated else 'anonimo',
+        }
+        if lat and lng:
+            incidente_data['gps_lat'] = str(lat)
+            incidente_data['gps_lng'] = str(lng)
+        
+        # Añadir a la lista de incidentes registrados
+        programacion.incidentes_registrados = (programacion.incidentes_registrados or []) + [incidente_data]
+        programacion.save(update_fields=['incidentes_registrados'])
+
+        # Crear evento de auditoría
+        from apps.events.models import Event
+        Event.objects.create(
+            container=programacion.container,
+            event_type='incidente_reportado',
+            detalles=incidente_data,
+            usuario=request.user.username if request.user.is_authenticated else 'anonimo'
+        )
+
+        # Opcional: Notificar a operadores vía OpenClaw si es de alta gravedad
+        if gravedad in ['ALTA', 'CRITICA']:
+            from apps.core.services.openclaw import OpenClawService
+            OpenClawService.notify_anomaly(
+                programacion,
+                [
+                    {
+                        'code': f"INCIDENTE_{gravedad}",
+                        'severity': 'P0' if gravedad == 'CRITICA' else 'P1',
+                        'message': f"Incidente reportado: {tipo_incidente} - {descripcion}",
+                        'recommended_action': "Revisar de inmediato y coordinar asistencia."
+                    }
+                ]
+            )
+
+        serializer = self.get_serializer(programacion)
+        return Response({
+            'success': True,
+            'mensaje': 'Incidente registrado exitosamente.',
+            'incidente': incidente_data,
+            'programacion': serializer.data
+        }, status=status.HTTP_201_CREATED)
+
+    @action(detail=True, methods=['get'])
+    def eta(self, request, pk=None):
+        """
+        Calcula el ETA actual para una programación
+        """
+        from apps.core.services.mapbox import MapboxService
+        
+        programacion = self.get_object()
+        
+        if not programacion.driver:
+            return Response(
+                {'error': 'Programación no tiene conductor asignado'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        driver = programacion.driver
+        cd = programacion.cd
+        
+        if not driver.ultima_posicion_lat or not driver.ultima_posicion_lng:
+            return Response(
+                {'error': 'Conductor no tiene posición GPS conocida'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Calcular ETA con Mapbox
+        resultado = MapboxService.calcular_ruta(
+            float(driver.ultima_posicion_lng),
+            float(driver.ultima_posicion_lat),
+            float(cd.lng),
+            float(cd.lat)
+        )
+        
+        if not resultado.get('success'):
+            return Response(
+                {'error': f'Error calculando ETA: {resultado.get("error")}'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+        
+        eta_timestamp = timezone.now() + timedelta(minutes=resultado['duration_minutes'])
+        
+        return Response({
+            'success': True,
+            'eta_minutos': resultado['duration_minutes'],
+            'distancia_km': resultado['distance_km'],
+            'eta_timestamp': eta_timestamp,
+            'conductor': driver.nombre,
+            'destino': cd.nombre,
+            'posicion_actual': {
+                'lat': str(driver.ultima_posicion_lat),
+                'lng': str(driver.ultima_posicion_lng)
+            }
+        })

@@ -1,0 +1,590 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Asignación - SoptraLoc TMS{% endblock %}
+
+{% block extra_css %}
+<style>
+    .programacion-card {
+        transition: all 0.2s ease;
+        border-left: 4px solid transparent;
+        cursor: pointer;
+    }
+    .programacion-card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    }
+    .programacion-card.urgente {
+        border-left-color: #dc3545;
+        background-color: #fff5f5;
+    }
+    .programacion-card.alta {
+        border-left-color: #ffc107;
+        background-color: #fffef5;
+    }
+    .programacion-card.media {
+        border-left-color: #0dcaf0;
+        background-color: #f5feff;
+    }
+    .conductor-item {
+        transition: all 0.2s ease;
+        cursor: pointer;
+        border: 2px solid transparent;
+    }
+    .conductor-item:hover {
+        border-color: #e95420;
+        transform: scale(1.02);
+    }
+    .conductor-item.selected {
+        border-color: #e95420;
+        background-color: #fff8f5;
+    }
+    .score-badge {
+        font-size: 1.2rem;
+        font-weight: bold;
+        min-width: 60px;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <!-- Header -->
+    <div class="row mb-4">
+        <div class="col-md-8">
+            <h2 class="mb-1">
+                <i class="fas fa-truck text-warning"></i> Asignación de Conductores
+            </h2>
+            <p class="text-muted">Sistema inteligente de asignación automática y manual</p>
+        </div>
+        <div class="col-md-4 text-end">
+            <button class="btn btn-success btn-lg" onclick="asignarTodosAutomatico()" id="btn-asignar-todos">
+                <i class="fas fa-robot"></i> Asignar Todos (Auto)
+            </button>
+        </div>
+    </div>
+
+    <!-- Estadísticas Rápidas -->
+    <div class="row mb-4">
+        <div class="col-md-3">
+            <div class="card bg-warning text-dark">
+                <div class="card-body text-center">
+                    <h3 class="mb-0" id="stat-pendientes">-</h3>
+                    <small>Sin Asignar</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-danger text-white">
+                <div class="card-body text-center">
+                    <h3 class="mb-0" id="stat-urgentes">-</h3>
+                    <small>Urgentes (&lt;24h)</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-success text-white">
+                <div class="card-body text-center">
+                    <h3 class="mb-0" id="stat-conductores">-</h3>
+                    <small>Conductores Disponibles</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-primary text-white">
+                <div class="card-body text-center">
+                    <h3 class="mb-0" id="stat-asignados">-</h3>
+                    <small>Asignados Hoy</small>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Contenido Principal -->
+    <div class="row">
+        <!-- Panel Izquierdo: Programaciones Sin Asignar -->
+        <div class="col-lg-7 mb-4">
+            <div class="card">
+                <div class="card-header bg-ubuntu text-white d-flex justify-content-between align-items-center">
+                    <span><i class="fas fa-list-ul"></i> Programaciones Pendientes</span>
+                    <button class="btn btn-sm btn-light" onclick="cargarProgramaciones()">
+                        <i class="fas fa-sync"></i> Actualizar
+                    </button>
+                </div>
+                <div class="card-body p-0">
+                    <div id="programaciones-list" style="max-height: 600px; overflow-y: auto;">
+                        <div class="text-center py-5">
+                            <div class="spinner-border text-primary" role="status"></div>
+                            <p class="mt-2 text-muted">Cargando programaciones...</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="card-footer text-muted">
+                    <small><i class="fas fa-info-circle"></i> Click en una programación para ver conductores disponibles</small>
+                </div>
+            </div>
+        </div>
+
+        <!-- Panel Derecho: Conductores Disponibles / Detalle -->
+        <div class="col-lg-5 mb-4">
+            <div class="card">
+                <div class="card-header bg-success text-white">
+                    <i class="fas fa-users"></i> <span id="conductores-header">Conductores Disponibles</span>
+                </div>
+                <div class="card-body p-0">
+                    <div id="conductores-list" style="max-height: 600px; overflow-y: auto;">
+                        <div class="text-center py-5 text-muted">
+                            <i class="fas fa-hand-pointer fa-3x mb-3"></i>
+                            <p>Seleccione una programación para ver conductores disponibles con sus scores de asignación</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Información de Criterios de Asignación (colapsable) -->
+    <div class="row mt-3">
+        <div class="col-12">
+            <div class="card card-ubuntu">
+                <div class="card-header" data-bs-toggle="collapse" data-bs-target="#criteriosInfo" style="cursor: pointer;">
+                    <i class="fas fa-info-circle"></i> Criterios de Asignación Inteligente
+                    <i class="fas fa-chevron-down float-end"></i>
+                </div>
+                <div class="collapse" id="criteriosInfo">
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-md-3 mb-2">
+                                <div class="card h-100">
+                                    <div class="card-body text-center">
+                                        <i class="fas fa-check-circle fa-2x text-success mb-2"></i>
+                                        <h6>Disponibilidad (30%)</h6>
+                                        <small class="text-muted">Presente y con capacidad</small>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-3 mb-2">
+                                <div class="card h-100">
+                                    <div class="card-body text-center">
+                                        <i class="fas fa-tasks fa-2x text-primary mb-2"></i>
+                                        <h6>Ocupación (25%)</h6>
+                                        <small class="text-muted">Carga de trabajo actual</small>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-3 mb-2">
+                                <div class="card h-100">
+                                    <div class="card-body text-center">
+                                        <i class="fas fa-star fa-2x text-warning mb-2"></i>
+                                        <h6>Cumplimiento (30%)</h6>
+                                        <small class="text-muted">Historial de entregas</small>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-3 mb-2">
+                                <div class="card h-100">
+                                    <div class="card-body text-center">
+                                        <i class="fas fa-map-marker-alt fa-2x text-danger mb-2"></i>
+                                        <h6>Proximidad (15%)</h6>
+                                        <small class="text-muted">Distancia al CD</small>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+</div>
+
+<script>
+// Variables globales
+let programaciones = [];
+let programacionSeleccionada = null;
+let conductoresDisponibles = [];
+
+// Función para obtener cookie CSRF
+function getCookie(name) {
+    let cookieValue = null;
+    if (document.cookie && document.cookie !== '') {
+        const cookies = document.cookie.split(';');
+        for (let i = 0; i < cookies.length; i++) {
+            const cookie = cookies[i].trim();
+            if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                break;
+            }
+        }
+    }
+    return cookieValue;
+}
+
+// Función auxiliar para parsear JSON de forma segura
+async function parseJsonSafely(response) {
+    const text = await response.text();
+    try {
+        return JSON.parse(text);
+    } catch (e) {
+        // Si no es JSON, probablemente es una página HTML de error
+        throw new Error(`Error ${response.status}: El servidor respondió con un formato inesperado. Verifique que el servidor esté funcionando correctamente.`);
+    }
+}
+
+// Cargar programaciones pendientes
+async function cargarProgramaciones() {
+    try {
+        const response = await fetch('/api/programaciones/?driver__isnull=true&ordering=fecha_programada');
+        if (!response.ok) {
+            throw new Error(`Error ${response.status}: No se pudieron cargar las programaciones`);
+        }
+        const data = await parseJsonSafely(response);
+        
+        programaciones = data.results || [];
+        
+        // Actualizar estadísticas
+        const ahora = new Date();
+        const urgentes = programaciones.filter(p => {
+            const fechaProg = new Date(p.fecha_programada);
+            const horasHasta = (fechaProg - ahora) / (1000 * 60 * 60);
+            return horasHasta < 24;
+        }).length;
+        
+        document.getElementById('stat-pendientes').textContent = programaciones.length;
+        document.getElementById('stat-urgentes').textContent = urgentes;
+        
+        // Renderizar lista
+        renderizarProgramaciones();
+        
+        // Cargar conductores disponibles
+        cargarConductoresGlobal();
+        
+        // Cargar asignados hoy
+        cargarAsignadosHoy();
+        
+    } catch (error) {
+        console.error('Error cargando programaciones:', error);
+        document.getElementById('programaciones-list').innerHTML = 
+            '<div class="alert alert-danger m-3">Error al cargar programaciones</div>';
+    }
+}
+
+// Renderizar lista de programaciones
+function renderizarProgramaciones() {
+    const container = document.getElementById('programaciones-list');
+    
+    if (programaciones.length === 0) {
+        container.innerHTML = '<div class="text-center py-5 text-success"><i class="fas fa-check-circle fa-3x mb-3"></i><p class="h5">¡Todas las programaciones están asignadas!</p></div>';
+        return;
+    }
+    
+    let html = '';
+    const ahora = new Date();
+    
+    programaciones.forEach(prog => {
+        const fechaProg = new Date(prog.fecha_programada);
+        const horasHasta = (fechaProg - ahora) / (1000 * 60 * 60);
+        const diasHasta = Math.floor(horasHasta / 24);
+        
+        let urgenciaClass = 'media';
+        let urgenciaLabel = 'Normal';
+        let urgenciaBadge = 'info';
+        
+        if (horasHasta < 24) {
+            urgenciaClass = 'urgente';
+            urgenciaLabel = 'URGENTE';
+            urgenciaBadge = 'danger';
+        } else if (horasHasta < 48) {
+            urgenciaClass = 'alta';
+            urgenciaLabel = 'Alta';
+            urgenciaBadge = 'warning';
+        }
+        
+        html += `
+            <div class="programacion-card card mb-2 ${urgenciaClass}" onclick="seleccionarProgramacion(${prog.id})">
+                <div class="card-body py-2">
+                    <div class="row align-items-center">
+                        <div class="col-md-3">
+                            <strong class="text-primary">${prog.container_id_formatted || prog.container_id || 'N/A'}</strong><br>
+                            <small class="text-muted"><i class="fas fa-building"></i> ${prog.cd_nombre || 'N/A'}</small>
+                        </div>
+                        <div class="col-md-3">
+                            <small class="text-muted">Programado:</small><br>
+                            <small><strong>${fechaProg.toLocaleString('es-CL', {day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit'})}</strong></small>
+                        </div>
+                        <div class="col-md-2">
+                            <small class="text-muted">Faltan:</small><br>
+                            <small><strong>${diasHasta}d ${Math.floor(horasHasta % 24)}h</strong></small>
+                        </div>
+                        <div class="col-md-2">
+                            <span class="badge bg-${urgenciaBadge}">${urgenciaLabel}</span>
+                        </div>
+                        <div class="col-md-2 text-end">
+                            <button class="btn btn-sm btn-success" onclick="event.stopPropagation(); asignarAutomatico(${prog.id})">
+                                <i class="fas fa-robot"></i> Auto
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+    });
+    
+    container.innerHTML = html;
+}
+
+// Cargar conductores disponibles globales
+async function cargarConductoresGlobal() {
+    try {
+        const response = await fetch('/api/drivers/?activo=true&presente=true');
+        if (!response.ok) {
+            throw new Error(`Error ${response.status}: No se pudieron cargar conductores`);
+        }
+        const data = await parseJsonSafely(response);
+        document.getElementById('stat-conductores').textContent = data.results ? data.results.length : 0;
+    } catch (error) {
+        console.error('Error cargando conductores:', error);
+    }
+}
+
+// Cargar asignados hoy
+async function cargarAsignadosHoy() {
+    try {
+        const hoy = new Date().toISOString().split('T')[0];
+        const response = await fetch(`/api/programaciones/?fecha_asignacion__gte=${hoy}T00:00:00Z&driver__isnull=false`);
+        if (!response.ok) {
+            throw new Error(`Error ${response.status}: No se pudieron cargar asignados`);
+        }
+        const data = await parseJsonSafely(response);
+        document.getElementById('stat-asignados').textContent = data.results ? data.results.length : 0;
+    } catch (error) {
+        console.error('Error cargando asignados:', error);
+    }
+}
+
+// Seleccionar programación y cargar conductores
+async function seleccionarProgramacion(progId) {
+    programacionSeleccionada = progId;
+    
+    // Resaltar programación seleccionada
+    document.querySelectorAll('.programacion-card').forEach(card => {
+        card.style.backgroundColor = '';
+    });
+    event.currentTarget.style.backgroundColor = '#e3f2fd';
+    
+    // Cargar conductores con score
+    document.getElementById('conductores-list').innerHTML = '<div class="text-center py-4"><div class="spinner-border text-primary"></div></div>';
+    document.getElementById('conductores-header').textContent = 'Conductores Disponibles (con score)';
+    
+    try {
+        const response = await fetch(`/api/programaciones/${progId}/conductores_disponibles/`);
+        if (!response.ok) {
+            throw new Error(`Error ${response.status}: No se pudieron cargar conductores disponibles`);
+        }
+        const data = await parseJsonSafely(response);
+        
+        if (data.success) {
+            conductoresDisponibles = data.conductores || [];
+            renderizarConductores();
+        } else {
+            throw new Error('Error en respuesta');
+        }
+    } catch (error) {
+        console.error('Error cargando conductores:', error);
+        document.getElementById('conductores-list').innerHTML = 
+            '<div class="alert alert-danger m-3">Error al cargar conductores</div>';
+    }
+}
+
+// Renderizar conductores con score
+function renderizarConductores() {
+    const container = document.getElementById('conductores-list');
+    
+    if (conductoresDisponibles.length === 0) {
+        container.innerHTML = '<div class="alert alert-warning m-3"><i class="fas fa-exclamation-triangle"></i> No hay conductores disponibles para esta programación</div>';
+        return;
+    }
+    
+    let html = '<div class="p-3">';
+    
+    conductoresDisponibles.forEach((item, index) => {
+        const conductor = item;
+        const score = Math.round(conductor.score || 0);
+        const desglose = conductor.desglose || {};
+        
+        // Determinar color del score
+        let scoreBadgeClass = 'success';
+        if (score < 50) scoreBadgeClass = 'warning';
+        if (score < 30) scoreBadgeClass = 'danger';
+        
+        // Mejor opción (más alto score)
+        const esMejor = index === 0;
+        
+        html += `
+            <div class="conductor-item card mb-3 ${esMejor ? 'border-success' : ''}">
+                <div class="card-body">
+                    <div class="row align-items-center">
+                        <div class="col-md-3 text-center">
+                            <div class="score-badge badge bg-${scoreBadgeClass}">${score}</div>
+                            ${esMejor ? '<div class="mt-1"><span class="badge bg-success"><i class="fas fa-star"></i> Mejor</span></div>' : ''}
+                        </div>
+                        <div class="col-md-6">
+                            <h6 class="mb-1">${conductor.nombre || 'N/A'}</h6>
+                            <small class="text-muted">
+                                <i class="fas fa-car"></i> ${conductor.patente || 'Sin patente'}<br>
+                                <i class="fas fa-tasks"></i> ${conductor.num_entregas_dia || 0}/${conductor.max_entregas_dia || 0} entregas
+                            </small>
+                            <div class="mt-2">
+                                <small>
+                                    <span class="badge bg-light text-dark">Disp: ${Math.round(desglose.disponibilidad || 0)}</span>
+                                    <span class="badge bg-light text-dark">Ocup: ${Math.round(desglose.ocupacion || 0)}</span>
+                                    <span class="badge bg-light text-dark">Cumpl: ${Math.round(desglose.cumplimiento || 0)}</span>
+                                    <span class="badge bg-light text-dark">Prox: ${Math.round(desglose.proximidad || 0)}</span>
+                                </small>
+                            </div>
+                        </div>
+                        <div class="col-md-3 text-end">
+                            <button class="btn btn-ubuntu w-100" onclick="asignarManual(${programacionSeleccionada}, ${conductor.id}, '${conductor.nombre || 'N/A'}')">
+                                <i class="fas fa-check"></i> Asignar
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+    });
+    
+    html += '</div>';
+    container.innerHTML = html;
+}
+
+// Asignar automáticamente
+async function asignarAutomatico(progId) {
+    if (!confirm('¿Asignar automáticamente el mejor conductor disponible?')) {
+        return;
+    }
+    
+    try {
+        const response = await fetch(`/api/programaciones/${progId}/asignar_automatico/`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCookie('csrftoken')
+            }
+        });
+        
+        if (!response.ok) {
+            const errorData = await parseJsonSafely(response);
+            throw new Error(errorData.error || errorData.detail || `Error ${response.status}`);
+        }
+        
+        const result = await parseJsonSafely(response);
+        
+        if (result.success) {
+            alert(`✅ Conductor asignado: ${result.mensaje}`);
+            await cargarProgramaciones();
+            programacionSeleccionada = null;
+            document.getElementById('conductores-list').innerHTML = 
+                '<div class="text-center py-5 text-muted"><i class="fas fa-hand-pointer fa-3x mb-3"></i><p>Seleccione una programación para ver conductores disponibles</p></div>';
+        } else {
+            alert(`❌ Error: ${result.error || 'Error desconocido'}`);
+        }
+    } catch (error) {
+        console.error('Error en asignación automática:', error);
+        alert(`❌ Error al asignar conductor: ${error.message}`);
+    }
+}
+
+// Asignar manualmente
+async function asignarManual(progId, driverId, driverNombre) {
+    if (!confirm(`¿Asignar a ${driverNombre}?`)) {
+        return;
+    }
+    
+    try {
+        const response = await fetch(`/api/programaciones/${progId}/asignar_conductor/`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCookie('csrftoken')
+            },
+            body: JSON.stringify({ driver_id: driverId })
+        });
+        
+        if (!response.ok) {
+            const errorData = await parseJsonSafely(response);
+            throw new Error(errorData.error || errorData.detail || `Error ${response.status}`);
+        }
+        
+        const result = await parseJsonSafely(response);
+        
+        if (result.success) {
+            alert(`✅ ${result.mensaje}`);
+            await cargarProgramaciones();
+            programacionSeleccionada = null;
+            document.getElementById('conductores-list').innerHTML = 
+                '<div class="text-center py-5 text-muted"><i class="fas fa-hand-pointer fa-3x mb-3"></i><p>Seleccione una programación para ver conductores disponibles</p></div>';
+        } else {
+            alert(`❌ Error: ${result.error || 'Error desconocido'}`);
+        }
+    } catch (error) {
+        console.error('Error en asignación manual:', error);
+        alert(`❌ Error al asignar conductor: ${error.message}`);
+    }
+}
+
+// Asignar todos automáticamente
+async function asignarTodosAutomatico() {
+    if (programaciones.length === 0) {
+        alert('No hay programaciones pendientes');
+        return;
+    }
+    
+    if (!confirm(`¿Asignar automáticamente ${programaciones.length} programaciones pendientes?`)) {
+        return;
+    }
+    
+    const progIds = programaciones.map(p => p.id);
+    
+    try {
+        const response = await fetch('/api/programaciones/asignar_multiples/', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCookie('csrftoken')
+            },
+            body: JSON.stringify({ programacion_ids: progIds })
+        });
+        
+        if (!response.ok) {
+            const errorData = await parseJsonSafely(response);
+            throw new Error(errorData.error || errorData.detail || `Error ${response.status}`);
+        }
+        
+        const result = await parseJsonSafely(response);
+        
+        if (result.success) {
+            alert(`✅ Asignación completada:\n- Asignadas: ${result.asignadas}\n- Fallidas: ${result.fallidas}`);
+            await cargarProgramaciones();
+            programacionSeleccionada = null;
+        } else {
+            alert(`❌ Error en asignación múltiple`);
+        }
+    } catch (error) {
+        console.error('Error en asignación múltiple:', error);
+        alert('❌ Error al asignar múltiples programaciones');
+    }
+}
+
+// Auto-refresh cada 30 segundos
+setInterval(() => {
+    cargarProgramaciones();
+}, 30000);
+
+// Cargar al inicio
+document.addEventListener('DOMContentLoaded', () => {
+    cargarProgramaciones();
+});
+</script>
+{% endblock %}

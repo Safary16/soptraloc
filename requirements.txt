@@ -1,0 +1,33 @@
+# Core Django
+Django==5.1.4
+python-decouple==3.8
+psycopg2-binary==2.9.10
+
+# Django REST Framework
+djangorestframework==3.16.1
+django-cors-headers==4.6.0
+django-filter==24.3
+djangorestframework-simplejwt==5.3.1
+drf-yasg==1.21.11
+
+# Excel processing
+openpyxl==3.1.2
+pandas==2.2.3
+xlrd==2.0.1
+numpy>=1.26.0,<2.0.0
+
+# Mapbox integration
+requests==2.32.3
+
+# Date/Time
+python-dateutil==2.9.0
+
+# Production server
+gunicorn==23.0.0
+whitenoise==6.8.2
+
+# Database utilities
+dj-database-url==2.2.0
+
+# Utilities
+Pillow==10.4.0

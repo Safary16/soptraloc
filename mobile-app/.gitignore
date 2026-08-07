@@ -1,0 +1,25 @@
+# Node
+node_modules/
+npm-debug.log
+yarn-error.log
+
+# Android
+android/.gradle
+android/build
+android/app/build
+android/local.properties
+*.keystore
+!debug.keystore
+
+# iOS (for future)
+ios/Pods
+ios/build
+
+# IDE
+.vscode
+.idea
+*.iml
+
+# Misc
+.DS_Store
+*.log

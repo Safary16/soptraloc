@@ -1,0 +1,603 @@
+import logging
+from django.core.exceptions import ValidationError
+from django.db import models, transaction
+from django.db.models import F
+from django.utils import timezone
+from apps.containers.models import Container
+from apps.drivers.models import Driver
+from apps.cds.models import CD
+
+logger = logging.getLogger(__name__)
+
+
+class Programacion(models.Model):
+    """Modelo de programación de entregas"""
+
+    URGENCIA_CHOICES = [
+        ('NORMAL', 'Normal'),
+        ('URGENTE', 'Urgente'),
+        ('CRITICO', 'Crítico'),
+    ]
+
+    CLASIFICACION_CHOICES = [
+        ('DESPACHO_DIRECTO', '🟢 Despacho Directo'),
+        ('REVISION_OPERADOR', '🟡 Revisión Operador'),
+        ('INTERVENCION', '🔴 Intervención'),
+    ]
+
+    DECISION_OPERADOR_CHOICES = [
+        ('PENDIENTE', 'Pendiente'),
+        ('CONFIRMAR', 'Confirmar'),
+        ('RECHAZAR', 'Rechazar'),
+        ('MODIFICAR', 'Modificar'),
+        ('ESCALAR', 'Escalar'),
+    ]
+
+    ESTADO_FINAL_CHOICES = [
+        ('ENTREGADO', 'Entregado'),
+        ('PARCIAL', 'Parcial'),
+        ('FALLIDO', 'Fallido'),
+    ]
+    
+    # Relaciones
+    container = models.OneToOneField(
+        Container,
+        on_delete=models.CASCADE,
+        related_name='programacion',
+        verbose_name='Contenedor'
+    )
+    driver = models.ForeignKey(
+        Driver,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='programaciones',
+        verbose_name='Conductor'
+    )
+    cd = models.ForeignKey(
+        CD,
+        on_delete=models.CASCADE,
+        related_name='programaciones',
+        verbose_name='Centro de Distribución'
+    )
+    
+    # Información de entrega
+    fecha_programada = models.DateTimeField(verbose_name='Fecha Programada', db_index=True)
+    cliente = models.CharField(max_length=200, verbose_name='Cliente')
+    direccion_entrega = models.TextField(blank=True, verbose_name='Dirección Entrega')
+    observaciones = models.TextField(blank=True, verbose_name='Observaciones')
+    urgencia_servicio = models.CharField(
+        max_length=10,
+        choices=URGENCIA_CHOICES,
+        default='NORMAL',
+        verbose_name='Urgencia del Servicio'
+    )
+    requiere_seguimiento_especial = models.BooleanField(default=False, verbose_name='Requiere Seguimiento Especial')
+    ventana_horaria_inicio = models.DateTimeField(null=True, blank=True, verbose_name='Ventana Horaria Inicio')
+    ventana_horaria_fin = models.DateTimeField(null=True, blank=True, verbose_name='Ventana Horaria Fin')
+    
+    # Datos de ruta
+    eta_minutos = models.IntegerField(null=True, blank=True, verbose_name='ETA (minutos)')
+    distancia_km = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        verbose_name='Distancia (km)'
+    )
+    ruta_geojson = models.JSONField(null=True, blank=True, verbose_name='Ruta GeoJSON')
+    ruta_firma = models.CharField(max_length=64, null=True, blank=True, db_index=True, verbose_name='Firma Ruta')
+    prediccion_ml = models.JSONField(
+        default=dict, blank=True,
+        verbose_name='Predicción ML auditable',
+        help_text='Fuente, muestras, factor y confianza usados para estimar el viaje.'
+    )
+    patente_confirmada = models.CharField(max_length=20, null=True, blank=True, verbose_name='Patente Confirmada', help_text='Patente confirmada al iniciar ruta')
+    fecha_inicio_ruta = models.DateTimeField(null=True, blank=True, verbose_name='Fecha Inicio Ruta', help_text='Timestamp cuando el conductor inició la ruta')
+    gps_inicio_lat = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True, verbose_name='GPS Inicio Latitud')
+    gps_inicio_lng = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True, verbose_name='GPS Inicio Longitud')
+    fecha_arribo_cd = models.DateTimeField(null=True, blank=True, verbose_name='Fecha Arribo CD')
+    gps_arribo_lat = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True, verbose_name='GPS Arribo Latitud')
+    gps_arribo_lng = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True, verbose_name='GPS Arribo Longitud')
+    origen_arribo = models.CharField(
+        max_length=20, null=True, blank=True,
+        choices=[('manual', 'Manual conductor'), ('geocerca', 'Geocerca')],
+        verbose_name='Origen Arribo',
+    )
+    posicion_actual_lat = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True, verbose_name='Posición Actual Lat')
+    posicion_actual_lng = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True, verbose_name='Posición Actual Lng')
+    ultima_actualizacion_tracking = models.DateTimeField(null=True, blank=True, verbose_name='Última Actualización Tracking')
+    eta_recalculado_min = models.IntegerField(null=True, blank=True, verbose_name='ETA Recalculado (min)')
+    desviaciones_detectadas = models.JSONField(default=list, blank=True, verbose_name='Desviaciones Detectadas')
+    incidentes_registrados = models.JSONField(default=list, blank=True, verbose_name='Incidentes Registrados')
+    
+    # Alertas
+    alerta_48h_enviada = models.BooleanField(default=False, verbose_name='Alerta 48h Enviada')
+    requiere_alerta = models.BooleanField(default=False, verbose_name='Requiere Alerta')
+    score_por_dimension = models.JSONField(default=dict, blank=True, verbose_name='Score por Dimensión')
+    clasificacion_sistema = models.CharField(
+        max_length=20,
+        choices=CLASIFICACION_CHOICES,
+        default='REVISION_OPERADOR',
+        verbose_name='Clasificación del Sistema'
+    )
+    nivel_confianza = models.DecimalField(max_digits=5, decimal_places=2, default=0.00, verbose_name='Nivel de Confianza')
+    decision_operador = models.CharField(
+        max_length=12,
+        choices=DECISION_OPERADOR_CHOICES,
+        default='PENDIENTE',
+        verbose_name='Decisión Operador'
+    )
+    motivo_override = models.TextField(blank=True, verbose_name='Motivo Override')
+    anomalias_detectadas = models.JSONField(default=list, blank=True, verbose_name='Anomalías Detectadas')
+    similitud_historica_usada = models.JSONField(default=list, blank=True, verbose_name='Similitud Histórica Usada')
+    timestamp_despacho = models.DateTimeField(null=True, blank=True, verbose_name='Timestamp Despacho')
+    eta_estimado_cierre_min = models.IntegerField(null=True, blank=True, verbose_name='ETA Estimado al Cierre (min)')
+    eta_real_cierre_min = models.IntegerField(null=True, blank=True, verbose_name='ETA Real al Cierre (min)')
+    estado_final = models.CharField(
+        max_length=10,
+        choices=ESTADO_FINAL_CHOICES,
+        null=True,
+        blank=True,
+        verbose_name='Estado Final'
+    )
+    
+    # Timestamps
+    fecha_asignacion = models.DateTimeField(null=True, blank=True, verbose_name='Fecha Asignación')
+    fecha_liberacion_conductor = models.DateTimeField(
+        null=True, blank=True, verbose_name='Fecha Liberación Conductor',
+        help_text='Momento en que el conductor quedó realmente disponible para otro servicio.'
+    )
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name='Creado')
+    updated_at = models.DateTimeField(auto_now=True, verbose_name='Actualizado')
+    
+    class Meta:
+        verbose_name = 'Programación'
+        verbose_name_plural = 'Programaciones'
+        ordering = ['fecha_programada']
+        indexes = [
+            models.Index(fields=['fecha_programada']),
+            models.Index(fields=['alerta_48h_enviada', 'requiere_alerta']),
+            models.Index(fields=['driver']),
+        ]
+    
+    def __str__(self):
+        return f"{self.container.container_id if self.container else 'N/A'} - {self.cliente}"
+    
+    @property
+    def estado(self):
+        """Retorna el estado basado en el estado del contenedor"""
+        if self.container:
+            return self.container.estado
+        return 'sin_contenedor'
+    
+    def asignar_conductor(self, driver, usuario=None):
+        """Asigna un conductor a la programación"""
+        from apps.events.models import Event
+
+        with transaction.atomic():
+            programacion = Programacion.objects.select_for_update().select_related('container').get(pk=self.pk)
+            locked_driver = Driver.objects.select_for_update().get(pk=driver.pk)
+            if programacion.driver_id:
+                raise ValidationError('La programación ya tiene conductor asignado.')
+            if not locked_driver.esta_disponible:
+                raise ValidationError(f'El conductor {locked_driver.nombre} no está disponible.')
+            conflict = Programacion.objects.select_for_update().filter(
+                driver=locked_driver,
+                fecha_liberacion_conductor__isnull=True,
+                container__estado__in=['asignado', 'en_ruta', 'entregado', 'descargado', 'vacio', 'vacio_en_ruta'],
+            ).exclude(pk=programacion.pk).exists()
+            if conflict:
+                raise ValidationError('El conductor ya participa en otro servicio activo.')
+
+            programacion.driver = locked_driver
+            programacion.fecha_asignacion = timezone.now()
+            programacion.save(update_fields=['driver', 'fecha_asignacion', 'updated_at'])
+            programacion.container.cambiar_estado('asignado', usuario)
+            Driver.objects.filter(pk=locked_driver.pk).update(
+                num_entregas_dia=F('num_entregas_dia') + 1
+            )
+
+            self.driver = locked_driver
+            self.fecha_asignacion = programacion.fecha_asignacion
+
+        # Crear evento de asignación
+        Event.objects.create(
+            container=self.container,
+            event_type='asignacion_conductor',
+            detalles={
+                'driver_id': self.driver.id,
+                'driver_nombre': self.driver.nombre,
+                'asignado_por': usuario or 'system',
+            },
+            usuario=usuario or 'system'
+        )
+        
+        # Crear notificación para el conductor
+        try:
+            from apps.notifications.services import NotificationService
+            NotificationService.crear_notificacion_asignacion(self, self.driver)
+        except Exception as e:
+            # Log error pero no fallar la asignación
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.error(f"Error creando notificación de asignación para la programación {self.id}: {str(e)}", exc_info=True)
+
+    def liberar_conductor(self):
+        """Libera capacidad una sola vez, incluso ante reintentos del navegador."""
+        if not self.driver_id:
+            return False
+        with transaction.atomic():
+            locked = Programacion.objects.select_for_update().get(pk=self.pk)
+            if locked.fecha_liberacion_conductor:
+                self.fecha_liberacion_conductor = locked.fecha_liberacion_conductor
+                return False
+            released_at = timezone.now()
+            locked.fecha_liberacion_conductor = released_at
+            locked.save(update_fields=['fecha_liberacion_conductor', 'updated_at'])
+            Driver.objects.filter(pk=locked.driver_id, num_entregas_dia__gt=0).update(
+                num_entregas_dia=F('num_entregas_dia') - 1
+            )
+            self.fecha_liberacion_conductor = released_at
+            return True
+    
+    @property
+    def horas_hasta_programacion(self):
+        """Calcula horas hasta la fecha programada"""
+        if not self.fecha_programada:
+            return None
+        delta = self.fecha_programada - timezone.now()
+        return delta.total_seconds() / 3600
+    
+    def requiere_conductor_urgente(self):
+        """Verifica si requiere asignación urgente (< 48h)"""
+        if self.driver:
+            return False
+        horas = self.horas_hasta_programacion
+        if horas is None:
+            return False
+        return horas < 48
+    requiere_conductor_urgente.boolean = True
+    requiere_conductor_urgente.short_description = 'Urgente'
+    
+    def verificar_alerta(self):
+        """
+        Verifica si la programación requiere alerta (< 48h sin conductor) y actualiza el campo
+        
+        Returns:
+            bool: True si se debe generar alerta, False en caso contrario
+        """
+        if self.driver:
+            # Si ya tiene conductor, no requiere alerta
+            if self.pk:  # Solo guardar si el objeto ya existe en la DB
+                self.requiere_alerta = False
+                self.save(update_fields=['requiere_alerta'])
+            return False
+        
+        horas = self.horas_hasta_programacion
+        if horas is None:
+            return False
+        
+        # Requiere alerta si faltan menos de 48 horas y no tiene conductor
+        requiere = horas < 48 and horas > 0
+        
+        # Actualizar el campo si cambió (solo si el objeto existe en la DB)
+        if self.pk and self.requiere_alerta != requiere:
+            self.requiere_alerta = requiere
+            self.save(update_fields=['requiere_alerta'])
+        
+        return requiere
+    
+    @classmethod
+    def container_tiene_programacion(cls, container):
+        """
+        Verifica de forma segura si un contenedor tiene una programación existente
+        
+        Returns:
+            tuple: (tiene_programacion: bool, programacion: Programacion|None)
+        """
+        try:
+            prog = container.programacion
+            return (True, prog)
+        except cls.DoesNotExist:
+            return (False, None)
+
+
+class TiempoOperacion(models.Model):
+    """Modelo para tracking de tiempos de operación (carga/descarga)"""
+    
+    TIPOS_OPERACION = [
+        ('carga_ccti', 'Carga en CCTI'),
+        ('descarga_cd', 'Descarga en CD'),
+        ('retiro_puerto', 'Retiro en Puerto'),
+        ('devolucion_vacio', 'Devolución Vacío'),
+    ]
+    
+    # Relaciones
+    cd = models.ForeignKey(CD, on_delete=models.CASCADE, related_name='tiempos_operacion')
+    conductor = models.ForeignKey(Driver, on_delete=models.SET_NULL, null=True, blank=True)
+    container = models.ForeignKey(Container, on_delete=models.SET_NULL, null=True, blank=True)
+    
+    # Datos de operación
+    tipo_operacion = models.CharField(max_length=20, choices=TIPOS_OPERACION)
+    tiempo_estimado_min = models.IntegerField(
+        help_text='Tiempo estimado inicial (ej: CD.tiempo_promedio_descarga_min)'
+    )
+    tiempo_real_min = models.IntegerField(
+        help_text='Tiempo real medido desde hora_inicio hasta hora_fin'
+    )
+    hora_inicio = models.DateTimeField()
+    hora_fin = models.DateTimeField()
+    fecha = models.DateField(auto_now_add=True, db_index=True)
+    anomalia = models.BooleanField(
+        default=False,
+        help_text='Marca tiempos anómalos (>3x estimado) para excluir del aprendizaje'
+    )
+    observaciones = models.TextField(blank=True)
+    
+    class Meta:
+        verbose_name = 'Tiempo de Operación'
+        verbose_name_plural = 'Tiempos de Operación'
+        ordering = ['-fecha', '-hora_inicio']
+        indexes = [
+            models.Index(fields=['cd', 'tipo_operacion', '-fecha']),
+            models.Index(fields=['conductor', '-fecha']),
+        ]
+    
+    def __str__(self):
+        return f"{self.get_tipo_operacion_display()} - {self.cd.nombre} ({self.fecha})"
+    
+    def calcular_desviacion(self):
+        """
+        Calcula el porcentaje de desviación entre el tiempo estimado y el real
+        
+        Returns:
+            float: Porcentaje de desviación (positivo = más lento que estimado, negativo = más rápido)
+        """
+        if self.tiempo_estimado_min == 0:
+            return 0
+        return ((self.tiempo_real_min - self.tiempo_estimado_min) / self.tiempo_estimado_min) * 100
+    
+    @classmethod
+    def obtener_tiempo_aprendido(cls, cd, tipo_operacion, conductor=None):
+        """
+        Obtiene tiempo aprendido basado en operaciones históricas
+        
+        Estrategia:
+        - Promedio móvil de las últimas 10 operaciones válidas (no anómalas)
+        - Si hay conductor, priorizarlo pero considerar datos generales del CD
+        - Fallback al tiempo promedio del CD
+        
+        Returns:
+            int: Tiempo estimado en minutos
+        """
+        from datetime import timedelta
+        from django.utils import timezone
+        from django.db.models import Avg
+        
+        # Filtro base: CD + tipo_operacion + sin anomalías + últimos 30 días
+        fecha_limite = timezone.now() - timedelta(days=30)
+        
+        filtros = {
+            'cd': cd,
+            'tipo_operacion': tipo_operacion,
+            'anomalia': False,
+            'fecha__gte': fecha_limite
+        }
+        
+        # Intentar con conductor específico primero
+        if conductor:
+            tiempos_conductor = cls.objects.filter(
+                **filtros,
+                conductor=conductor
+            ).order_by('-fecha')[:10]
+            
+            if tiempos_conductor.count() >= 3:
+                # Suficientes datos del conductor
+                promedio = tiempos_conductor.aggregate(Avg('tiempo_real_min'))['tiempo_real_min__avg']
+                if promedio:
+                    return int(promedio)
+        
+        # Fallback a datos generales del CD
+        tiempos_cd = cls.objects.filter(**filtros).order_by('-fecha')[:20]
+        
+        if tiempos_cd.count() >= 5:
+            # Suficientes datos generales
+            promedio = tiempos_cd.aggregate(Avg('tiempo_real_min'))['tiempo_real_min__avg']
+            if promedio:
+                return int(promedio)
+        
+        # Fallback final al tiempo promedio del CD
+        if tipo_operacion == 'descarga_cd' and cd.tiempo_promedio_descarga_min:
+            return cd.tiempo_promedio_descarga_min
+        
+        # Default genérico
+        return 60
+
+
+class TiempoViaje(models.Model):
+    """Modelo para tracking de tiempos de viaje"""
+    
+    # Relaciones
+    conductor = models.ForeignKey(Driver, on_delete=models.SET_NULL, null=True, blank=True)
+    programacion = models.ForeignKey(Programacion, on_delete=models.SET_NULL, null=True, blank=True)
+    
+    # Coordenadas
+    origen_lat = models.DecimalField(max_digits=10, decimal_places=7)
+    origen_lon = models.DecimalField(max_digits=10, decimal_places=7)
+    destino_lat = models.DecimalField(max_digits=10, decimal_places=7)
+    destino_lon = models.DecimalField(max_digits=10, decimal_places=7)
+    origen_nombre = models.CharField(max_length=200, blank=True)
+    destino_nombre = models.CharField(max_length=200, blank=True)
+    
+    # Datos de viaje
+    tiempo_mapbox_min = models.IntegerField(
+        help_text='Tiempo estimado por Mapbox al iniciar viaje'
+    )
+    tiempo_real_min = models.IntegerField(
+        help_text='Tiempo real medido desde salida hasta llegada'
+    )
+    hora_salida = models.DateTimeField()
+    hora_llegada = models.DateTimeField()
+    fecha = models.DateField(auto_now_add=True, db_index=True)
+    hora_del_dia = models.IntegerField(
+        help_text='Hora de salida (0-23) para análisis de tráfico'
+    )
+    dia_semana = models.IntegerField(
+        help_text='Día de la semana (0=Lunes, 6=Domingo)'
+    )
+    distancia_km = models.DecimalField(
+        max_digits=7,
+        decimal_places=2,
+        help_text='Distancia en km según Mapbox'
+    )
+    ruta_firma = models.CharField(
+        max_length=64, null=True, blank=True, db_index=True,
+        help_text='Huella estable de la geometría utilizada para aprender diferencias entre rutas.'
+    )
+    anomalia = models.BooleanField(
+        default=False,
+        help_text='Marca viajes anómalos (pausas largas, desvíos) para excluir'
+    )
+    observaciones = models.TextField(blank=True)
+    
+    class Meta:
+        verbose_name = 'Tiempo de Viaje'
+        verbose_name_plural = 'Tiempos de Viaje'
+        ordering = ['-fecha', '-hora_salida']
+        indexes = [
+            models.Index(fields=['origen_lat', 'origen_lon', 'destino_lat', 'destino_lon']),
+            models.Index(fields=['hora_del_dia', 'dia_semana']),
+            models.Index(fields=['conductor', '-fecha']),
+        ]
+    
+    def __str__(self):
+        return f"{self.origen_nombre} → {self.destino_nombre} ({self.fecha})"
+    
+    def calcular_factor_correccion(self):
+        """
+        Calcula el factor de corrección entre el tiempo de Mapbox y el tiempo real
+        
+        Returns:
+            float: Factor de corrección (>1 = más lento que Mapbox, <1 = más rápido)
+        """
+        if self.tiempo_mapbox_min == 0:
+            return 1.0
+        return self.tiempo_real_min / self.tiempo_mapbox_min
+    
+    @classmethod
+    def obtener_tiempo_aprendido(cls, origen_coords, destino_coords, tiempo_mapbox, hora_salida, conductor=None):
+        """
+        Obtiene tiempo aprendido basado en viajes históricos similares
+        
+        Estrategia:
+        - Buscar viajes en radio de 1km de origen y destino
+        - Considerar hora del día y día de semana (tráfico)
+        - Calcular factor de corrección sobre tiempo Mapbox
+        - Priorizar datos del conductor si disponibles
+        
+        Args:
+            origen_coords: tuple (lat, lon)
+            destino_coords: tuple (lat, lon)
+            tiempo_mapbox: int (tiempo base de Mapbox)
+            hora_salida: datetime
+            conductor: Driver opcional
+        
+        Returns:
+            int: Tiempo estimado en minutos
+        """
+        from datetime import timedelta
+        from django.utils import timezone
+        from django.db.models import Avg, Q
+        from decimal import Decimal
+        
+        # Radio de búsqueda: ~1km = 0.009 grados
+        radio = Decimal('0.009')
+        
+        # Extraer hora y día de semana
+        hora_del_dia = hora_salida.hour
+        dia_semana = hora_salida.weekday()
+        
+        # Filtros base: origen/destino similares + sin anomalías + últimos 60 días
+        fecha_limite = timezone.now() - timedelta(days=60)
+        
+        filtros_base = Q(
+            origen_lat__gte=Decimal(str(origen_coords[0])) - radio,
+            origen_lat__lte=Decimal(str(origen_coords[0])) + radio,
+            origen_lon__gte=Decimal(str(origen_coords[1])) - radio,
+            origen_lon__lte=Decimal(str(origen_coords[1])) + radio,
+            destino_lat__gte=Decimal(str(destino_coords[0])) - radio,
+            destino_lat__lte=Decimal(str(destino_coords[0])) + radio,
+            destino_lon__gte=Decimal(str(destino_coords[1])) - radio,
+            destino_lon__lte=Decimal(str(destino_coords[1])) + radio,
+            anomalia=False,
+            fecha__gte=fecha_limite
+        )
+        
+        # Priorizar misma franja horaria (±2 horas)
+        hora_min = max(0, hora_del_dia - 2)
+        hora_max = min(23, hora_del_dia + 2)
+        
+        # Intentar con conductor específico primero
+        if conductor:
+            viajes_conductor = cls.objects.filter(
+                filtros_base,
+                conductor=conductor,
+                hora_del_dia__gte=hora_min,
+                hora_del_dia__lte=hora_max
+            ).order_by('-fecha')[:5]
+            
+            if viajes_conductor.count() >= 2:
+                # Suficientes datos del conductor
+                promedio_real = viajes_conductor.aggregate(Avg('tiempo_real_min'))['tiempo_real_min__avg']
+                if promedio_real:
+                    return int(promedio_real)
+        
+        # Fallback a datos generales (misma franja horaria)
+        viajes_similares = cls.objects.filter(
+            filtros_base,
+            hora_del_dia__gte=hora_min,
+            hora_del_dia__lte=hora_max
+        ).order_by('-fecha')[:10]
+        
+        if viajes_similares.count() >= 3:
+            # Calcular factor de corrección
+            promedio_real = viajes_similares.aggregate(Avg('tiempo_real_min'))['tiempo_real_min__avg']
+            promedio_mapbox = viajes_similares.aggregate(Avg('tiempo_mapbox_min'))['tiempo_mapbox_min__avg']
+            
+            if promedio_real and promedio_mapbox and promedio_mapbox > 0:
+                factor = promedio_real / promedio_mapbox
+                # Aplicar factor al tiempo actual de Mapbox
+                tiempo_ajustado = int(tiempo_mapbox * factor)
+                return tiempo_ajustado
+        
+        # Fallback final: usar Mapbox directo
+        return tiempo_mapbox
+
+
+class RegistroOperacion(models.Model):
+    """Bitácora auditable de cada ciclo de asignación y despacho."""
+
+    programacion = models.ForeignKey(Programacion, on_delete=models.CASCADE, related_name='registros_operacion')
+    service_id = models.CharField(max_length=100)
+    recurso_asignado = models.CharField(max_length=200, blank=True)
+    score_por_dimension = models.JSONField(default=dict, blank=True)
+    clasificacion_sistema = models.CharField(max_length=20, choices=Programacion.CLASIFICACION_CHOICES)
+    decision_operador = models.CharField(max_length=12, choices=Programacion.DECISION_OPERADOR_CHOICES, default='PENDIENTE')
+    motivo_override = models.TextField(blank=True)
+    anomalias_detectadas = models.JSONField(default=list, blank=True)
+    similitud_historica_usada = models.JSONField(default=list, blank=True)
+    timestamp_despacho = models.DateTimeField(default=timezone.now)
+    eta_estimado_min = models.IntegerField(null=True, blank=True)
+    eta_real_min = models.IntegerField(null=True, blank=True)
+    incidentes_ejecucion = models.JSONField(default=list, blank=True)
+    estado_final = models.CharField(max_length=10, choices=Programacion.ESTADO_FINAL_CHOICES, null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at']
+        verbose_name = 'Registro Operación'
+        verbose_name_plural = 'Registros Operación'
+
+    def __str__(self):
+        return f"{self.service_id} - {self.clasificacion_sistema}"
