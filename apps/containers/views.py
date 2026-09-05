@@ -741,6 +741,11 @@ class ContainerViewSet(viewsets.ModelViewSet):
             container = EmptyReturnService.complete(container, user=usuario)
         except ValueError as exc:
             return Response({'error': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Forzar cambio de estado a 'devuelto' si el servicio no lo hizo
+        if container.estado != 'devuelto':
+            container.cambiar_estado('devuelto', usuario)
+            container.save()
 
         # 🆕 Actualizar RegistroOperacion con estado final
         try:
