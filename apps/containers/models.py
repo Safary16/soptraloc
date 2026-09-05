@@ -12,7 +12,7 @@ class Container(models.Model):
         
         # Estados en puerto (contenedor lleno)
         ('liberado', 'Liberado'),  # Liberado por aduana/naviera
-        ('secuenciado', 'Secuenciado'),  # Marcado para próxima entrega
+        ('secuenciado', 'Secuenciado'),  # Marcado para próxima entrega (validado por importador)
         ('programado', 'Programado'),  # Asignado a fecha y CD
         ('asignado', 'Asignado'),  # Asignado a conductor
         
@@ -40,7 +40,7 @@ class Container(models.Model):
         'en_ruta': {'entregado', 'incidente', 'cancelado'},
         'incidente': {'en_ruta', 'cancelado'},
         'entregado': {'soltado', 'descargado', 'vacio', 'incidente'},
-        'soltado': {'descargado', 'incidente'},
+        'soltado': {'descargado', 'vacio', 'vacio_en_ruta', 'incidente'},
         'descargado': {'vacio', 'vacio_en_ruta'},
         'vacio': {'vacio_en_ruta'},
         'vacio_en_ruta': {'en_ccti', 'devuelto', 'incidente'},
@@ -266,6 +266,7 @@ class Container(models.Model):
         # Actualizar timestamp según el nuevo estado
         now = timezone.now()
         timestamp_map = {
+            'por_arribar': 'fecha_arribo',
             'liberado': 'fecha_liberacion',
             'programado': 'fecha_programacion',
             'asignado': 'fecha_asignacion',
