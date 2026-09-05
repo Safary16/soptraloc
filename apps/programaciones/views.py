@@ -43,7 +43,22 @@ class ProgramacionViewSet(viewsets.ModelViewSet):
         elif self.action == 'create':
             return ProgramacionCreateSerializer
         return ProgramacionSerializer
-    
+
+    @action(detail=False, methods=['get'], url_path='por-container/(?P<container_id>[^/.]+)')
+    def por_container(self, request, container_id=None):
+        from apps.containers.models import Container
+        try:
+            normalized = Container.normalize_container_id(container_id)
+            container = Container.objects.get(container_id=normalized)
+            programacion = Programacion.objects.select_related('container', 'driver', 'cd').get(container=container)
+        except Container.DoesNotExist:
+            return Response({'found': False, 'error': 'Contenedor no encontrado'}, status=status.HTTP_404_NOT_FOUND)
+        except Programacion.DoesNotExist:
+            return Response({'found': False, 'error': 'Contenedor no tiene programacion'}, status=status.HTTP_404_NOT_FOUND)
+
+        serializer = self.get_serializer(programacion)
+        return Response({'found': True, 'programacion': serializer.data})
+
     @action(detail=False, methods=['get'])
     def alertas(self, request):
         """

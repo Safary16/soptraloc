@@ -376,15 +376,14 @@
 document.addEventListener('DOMContentLoaded', function() {
     const containerId = '{{ container.container_id }}';
     
-    // Fetch programming information
-    fetch('/api/programaciones/?format=json')
-        .then(response => response.json())
+    // Fetch programming information directly by container_id
+    fetch('/api/programaciones/por-container/' + encodeURIComponent(containerId) + '/')
+        .then(response => {
+            if (!response.ok) throw new Error('No programacion');
+            return response.json();
+        })
         .then(data => {
-            const programacion = data.results ? data.results.find(prog => {
-                return prog.container_id === containerId || 
-                       (prog.container && prog.container.container_id === containerId) ||
-                       (prog.container_detail && prog.container_detail.container_id === containerId);
-            }) : null;
+            const programacion = data.found ? data.programacion : null;
             
             const loadingDiv = document.getElementById('programacion-info-loading');
             const contentDiv = document.getElementById('programacion-info-content');
