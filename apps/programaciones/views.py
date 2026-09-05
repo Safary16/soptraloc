@@ -172,6 +172,19 @@ class ProgramacionViewSet(viewsets.ModelViewSet):
         resultado = AssignmentService.asignar_mejor_conductor(programacion, usuario)
         
         if resultado['success']:
+            # Cambiar estado del contenedor a 'asignado'
+            usuario = request.user.username if request.user.is_authenticated else 'operador_manual'
+            programacion.container.cambiar_estado('asignado', usuario)
+            
+            # Crear evento de auditoría
+            from apps.events.models import Event
+            Event.objects.create(
+                container=programacion.container,
+                event_type='asignacion_automatica',
+                detalles={'conductor': resultado['driver'].nombre, 'programacion_id': programacion.id},
+                usuario=usuario
+            )
+            
             serializer = self.get_serializer(programacion)
             return Response({
                 'success': True,
