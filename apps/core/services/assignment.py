@@ -247,7 +247,7 @@ class AssignmentService:
         programacion.eta_recalculado_min = mejor['eta_estimado_min']
         programacion.timestamp_despacho = timezone.now()
         programacion.save(update_fields=[
-            'score_por_dimension', 'clasificacion_sistema', 'nivel_confianza',
+            'driver', 'score_por_dimension', 'clasificacion_sistema', 'nivel_confianza',
             'anomalias_detectadas', 'similitud_historica_usada', 'eta_recalculado_min', 'timestamp_despacho'
         ])
 
