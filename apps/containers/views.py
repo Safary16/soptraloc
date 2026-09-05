@@ -623,6 +623,50 @@ class ContainerViewSet(viewsets.ModelViewSet):
         })
     
     @action(detail=True, methods=['post'])
+
+    @action(detail=True, methods=['post'])
+    def marcar_entregado(self, request, pk=None):
+        """Marca contenedor como entregado (llegó a destino)"""
+        container = self.get_object()
+        
+        if container.estado != 'en_ruta':
+            return Response(
+                {'error': f'Contenedor debe estar en_ruta. Estado actual: {container.get_estado_display()}'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        usuario = request.user.username if request.user.is_authenticated else None
+        container.cambiar_estado('entregado', usuario)
+        
+        serializer = self.get_serializer(container)
+        return Response({
+            'success': True,
+            'mensaje': f'Contenedor {container.container_id} marcado como entregado',
+            'container': serializer.data
+        })
+
+
+    @action(detail=True, methods=['post'])
+    def marcar_descargado(self, request, pk=None):
+        """Marca contenedor como descargado (vaciado en destino)"""
+        container = self.get_object()
+        
+        if container.estado != 'entregado':
+            return Response(
+                {'error': f'Contenedor debe estar entregado. Estado actual: {container.get_estado_display()}'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        usuario = request.user.username if request.user.is_authenticated else None
+        container.cambiar_estado('descargado', usuario)
+        
+        serializer = self.get_serializer(container)
+        return Response({
+            'success': True,
+            'mensaje': f'Contenedor {container.container_id} marcado como descargado',
+            'container': serializer.data
+        })
+
     def marcar_vacio(self, request, pk=None):
         """Marca contenedor como vacío (descargado, esperando retiro)"""
         container = self.get_object()
