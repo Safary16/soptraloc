@@ -212,19 +212,6 @@ function formatearFecha(dateStr) {
     });
 }
 
-function formatearFechaCompleta(dateStr) {
-    if (!dateStr) return 'No registrado';
-    const date = new Date(dateStr);
-    return date.toLocaleString('es-CL', {
-        year: 'numeric',
-        month: '2-digit',
-        day: '2-digit',
-        hour: '2-digit',
-        minute: '2-digit'
-    });
-}
-
-// Obtener color de badge según estado
 function getEstadoBadge(estado) {
     const badges = {
         'programado': 'bg-primary',

@@ -559,10 +559,14 @@
         // Cargar asignaciones
         function loadAsignaciones() {
             fetch(`/api/drivers/${driverId}/my_info/`, {
-                credentials: 'include',  // Incluir cookies de sesión
+                method: 'GET',
                 headers: {
                     'Accept': 'application/json',
-                }
+                    'Cache-Control': 'no-cache, no-store, must-revalidate',
+                    'Pragma': 'no-cache',
+                    'Expires': '0'
+                },
+                credentials: 'include'
             })
                 .then(response => {
                     if (!response.ok) {

@@ -161,6 +161,40 @@ class ProgramacionViewSet(viewsets.ModelViewSet):
         })
     
     @action(detail=True, methods=['post'], permission_classes=[AllowAny])
+    def desasignar(self, request, pk=None):
+        """
+        Desasigna el conductor de una programación,
+        regresando el contenedor asociado de 'asignado' a 'programado'.
+        """
+        programacion = self.get_object()
+        
+        if not programacion.driver:
+            return Response(
+                {'error': 'Esta programación no tiene conductor asignado.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        container = programacion.container
+        if container and container.estado not in ['asignado', 'programado']:
+            return Response(
+                {'error': f'El contenedor está en estado {container.get_estado_display()}, no se puede desasignar.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        programacion.driver = None
+        programacion.fecha_asignacion = None
+        programacion.save(update_fields=['driver', 'fecha_asignacion'])
+        
+        if container:
+            container.estado = 'programado'
+            container.save(update_fields=['estado'])
+        
+        return Response({
+            'success': True,
+            'mensaje': f'Conductor desasignado exitosamente de la programación #{programacion.id}. Contenedor regresado a estado programado.'
+        }, status=status.HTTP_200_OK)
+    
+    @action(detail=True, methods=['post'], permission_classes=[AllowAny])
     def asignar_automatico(self, request, pk=None):
         """
         Asigna automáticamente el mejor conductor disponible

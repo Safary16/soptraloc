@@ -605,6 +605,39 @@ class ContainerViewSet(viewsets.ModelViewSet):
             'fecha_programada': fecha_programada_dt.isoformat()
         }, status=status.HTTP_201_CREATED)
     
+    @action(detail=True, methods=['post'], permission_classes=[AllowAny])
+    def desprogramar(self, request, pk=None):
+        """
+        Desprograma un contenedor (si está en estado 'programado'),
+        eliminando su programación asociada y regresándolo a estado 'liberado'.
+        """
+        container = self.get_object()
+        
+        if container.estado != 'programado':
+            return Response(
+                {'error': f'Solo se pueden desprogramar contenedores en estado programado. Estado actual: {container.get_estado_display()}'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        from apps.programaciones.models import Programacion
+        prog = Programacion.objects.filter(container=container).first()
+        
+        if prog:
+            if prog.driver is not None:
+                return Response(
+                    {'error': 'No se puede desprogramar un contenedor que ya tiene un conductor asignado. Desasigne el conductor primero.'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            prog.delete()
+        
+        container.estado = 'liberado'
+        container.save(update_fields=['estado'])
+        
+        return Response({
+            'success': True,
+            'mensaje': f'Contenedor {container.container_id} desprogramado exitosamente (regresado a liberado).'
+        }, status=status.HTTP_200_OK)
+    
     @action(detail=False, methods=['get'], url_path='liberados')
     def liberados(self, request):
         """
