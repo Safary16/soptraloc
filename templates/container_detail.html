@@ -378,27 +378,182 @@
     </div>
 </div>
 
+<!-- Modal para Iniciar Ruta -->
+<div class="modal fade" id="modalIniciarRuta" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title"><i class="fas fa-play"></i> Iniciar Ruta</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p>Confirme los datos para iniciar la ruta del contenedor.</p>
+                <div class="mb-3">
+                    <label class="form-label">Patente del Vehículo *</label>
+                    <input type="text" id="inputPatenteRuta" class="form-control" placeholder="Ej: ABC123" maxlength="7">
+                    <small class="text-muted">Patente asignada al conductor</small>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Latitud GPS *</label>
+                    <input type="number" id="inputLatRuta" class="form-control" placeholder="Ej: -33.4372" step="any">
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Longitud GPS *</label>
+                    <input type="number" id="inputLngRuta" class="form-control" placeholder="Ej: -70.6506" step="any">
+                    <button type="button" class="btn btn-sm btn-outline-primary mt-2" onclick="obtenerGPS()">
+                        <i class="fas fa-location-crosshairs"></i> Obtener ubicación actual
+                    </button>
+                </div>
+                <input type="hidden" id="hiddenProgId">
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-primary" onclick="confirmarIniciarRuta()">
+                    <i class="fas fa-play"></i> Iniciar Ruta
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal para Iniciar Retorno -->
+<div class="modal fade" id="modalRetorno" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-dark text-white">
+                <h5 class="modal-title"><i class="fas fa-rotate-left"></i> Iniciar Retorno de Contenedor Vacío</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p>Seleccione el destino del retorno:</p>
+                <div class="mb-3">
+                    <label class="form-label">Tipo de Destino *</label>
+                    <select id="retornoDestinoTipo" class="form-select" onchange="toggleRetornoDestino()">
+                        <option value="deposito">Depósito</option>
+                        <option value="ccti">CCTI</option>
+                    </select>
+                </div>
+                <div class="mb-3" id="retornoDepositoDiv">
+                    <label class="form-label">Nombre del Depósito *</label>
+                    <input type="text" id="retornoDeposito" class="form-control" placeholder="Ej: Depósito San Antonio">
+                </div>
+                <div class="mb-3" id="retornoCCTIDiv" style="display:none">
+                    <label class="form-label">CCTI Destino *</label>
+                    <select id="retornoCCTISelect" class="form-select">
+                        <option value="">Cargando CCTIs...</option>
+                    </select>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-dark" onclick="confirmarRetorno()">
+                    <i class="fas fa-truck"></i> Iniciar Retorno
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
 <script>
-// Load programming information
+function toggleRetornoDestino() {
+    const tipo = document.getElementById('retornoDestinoTipo').value;
+    document.getElementById('retornoDepositoDiv').style.display = tipo === 'deposito' ? 'block' : 'none';
+    document.getElementById('retornoCCTIDiv').style.display = tipo === 'ccti' ? 'block' : 'none';
+    if (tipo === 'ccti') cargarCCTIs();
+}
+
+function cargarCCTIs() {
+    const select = document.getElementById('retornoCCTISelect');
+    if (select.options.length > 1) return; // Ya cargado
+    fetch('/api/cds/?tipo=ccti')
+        .then(r => r.json())
+        .then(d => {
+            select.innerHTML = '<option value="">Seleccione CCTI...</option>';
+            (d.results || d || []).forEach(cd => {
+                select.innerHTML += '<option value="' + cd.id + '">' + cd.nombre + '</option>';
+            });
+        })
+        .catch(() => { select.innerHTML = '<option value="">Error al cargar</option>'; });
+}
+
+function confirmarRetorno() {
+    const tipo = document.getElementById('retornoDestinoTipo').value;
+    let body = { destination_type: tipo };
+    if (tipo === 'deposito') {
+        body.deposito_devolucion = document.getElementById('retornoDeposito').value.trim();
+        if (!body.deposito_devolucion) { alert('Ingrese el nombre del depósito.'); return; }
+    } else {
+        body.destino_cd_id = parseInt(document.getElementById('retornoCCTISelect').value);
+        if (!body.destino_cd_id) { alert('Seleccione un CCTI destino.'); return; }
+    }
+    fetch('/api/containers/' + retornoContainerId + '/iniciar_retorno/', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCookie('csrftoken') },
+        body: JSON.stringify(body)
+    })
+    .then(r => r.json())
+    .then(d => {
+        if (d.error) alert('Error: ' + d.error);
+        else { bootstrap.Modal.getInstance(document.getElementById('modalRetorno')).hide(); location.reload(); }
+    })
+    .catch(e => alert('Error: ' + e));
+}
+</script>
+
+<!-- Modal para Programar -->
+<div class="modal fade" id="modalProgramar" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-ubuntu text-white">
+                <h5 class="modal-title"><i class="fas fa-calendar-plus"></i> Programar Contenedor</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="progContainerId">
+                <div class="mb-3">
+                    <label class="form-label">Centro de Destino (CD) *</label>
+                    <select id="progCdSelect" class="form-select">
+                        <option value="">Cargando CDs...</option>
+                    </select>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Fecha y Hora Programada *</label>
+                    <input type="datetime-local" id="progFecha" class="form-control">
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Cliente</label>
+                    <input type="text" id="progCliente" class="form-control" placeholder="Nombre del cliente">
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Observaciones</label>
+                    <textarea id="progObs" class="form-control" rows="2" placeholder="Observaciones opcionales"></textarea>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-ubuntu" onclick="confirmarProgramar()">
+                    <i class="fas fa-calendar-check"></i> Confirmar Programación
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+// ─────────────────────────────────────────────
+// Carga de información de programación
+// ─────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', function() {
     const containerId = '{{ container.container_id }}';
-    
-    // Fetch programming information directly by container_id
     fetch('/api/programaciones/por-container/' + encodeURIComponent(containerId) + '/')
-        .then(response => {
-            if (!response.ok) throw new Error('No programacion');
-            return response.json();
-        })
+        .then(response => { if (!response.ok) throw new Error('No programacion'); return response.json(); })
         .then(data => {
             const programacion = data.found ? data.programacion : null;
-            
             const loadingDiv = document.getElementById('programacion-info-loading');
             const contentDiv = document.getElementById('programacion-info-content');
-            
             if (programacion) {
                 loadingDiv.style.display = 'none';
                 contentDiv.style.display = 'block';
-                
                 const formatDate = (dateStr) => {
                     if (!dateStr) return 'No registrado';
                     return new Date(dateStr).toLocaleString('es-CL', {
@@ -406,10 +561,7 @@ document.addEventListener('DOMContentLoaded', function() {
                         hour: '2-digit', minute: '2-digit'
                     });
                 };
-                
                 let html = '<div class="row">';
-                
-                // Programación
                 html += '<div class="col-md-6 mb-3">';
                 html += '<h6><i class="fas fa-calendar-check text-primary"></i> Información de Programación</h6>';
                 html += '<table class="table table-sm">';
@@ -417,187 +569,279 @@ document.addEventListener('DOMContentLoaded', function() {
                 html += '<tr><td><strong>Cliente:</strong></td><td>' + (programacion.cliente || 'N/A') + '</td></tr>';
                 html += '<tr><td><strong>CD Destino:</strong></td><td>' + (programacion.cd_nombre || 'N/A') + '</td></tr>';
                 html += '<tr><td><strong>Conductor:</strong></td><td>' + (programacion.driver_nombre || 'No asignado') + '</td></tr>';
-                if (programacion.fecha_asignacion) {
-                    html += '<tr><td><strong>Fecha Asignación:</strong></td><td>' + formatDate(programacion.fecha_asignacion) + '</td></tr>';
-                }
-                html += '</table>';
-                html += '</div>';
-                
-                // ETAs y tiempos de viaje
+                if (programacion.fecha_asignacion) html += '<tr><td><strong>Fecha Asignación:</strong></td><td>' + formatDate(programacion.fecha_asignacion) + '</td></tr>';
+                html += '</table></div>';
                 html += '<div class="col-md-6 mb-3">';
-                html += '<h6><i class="fas fa-route text-success"></i> ETAs y Tiempos (ML + Mapbox)</h6>';
+                html += '<h6><i class="fas fa-route text-success"></i> ETAs y Tiempos</h6>';
                 html += '<table class="table table-sm">';
-                
-                if (programacion.fecha_inicio_ruta) {
-                    html += '<tr><td><strong>Inicio de Viaje:</strong></td><td>' + formatDate(programacion.fecha_inicio_ruta) + '</td></tr>';
-                }
-                
+                if (programacion.fecha_inicio_ruta) html += '<tr><td><strong>Inicio de Viaje:</strong></td><td>' + formatDate(programacion.fecha_inicio_ruta) + '</td></tr>';
                 if (programacion.eta_minutos) {
-                    html += '<tr><td><strong>ETA (Tiempo Estimado):</strong></td><td><span class="badge bg-info">' + programacion.eta_minutos + ' minutos</span></td></tr>';
-                    
-                    // Calculate estimated arrival time
+                    html += '<tr><td><strong>ETA:</strong></td><td><span class="badge bg-info">' + programacion.eta_minutos + ' min</span></td></tr>';
                     if (programacion.fecha_inicio_ruta) {
-                        const inicioRuta = new Date(programacion.fecha_inicio_ruta);
-                        const etaDate = new Date(inicioRuta.getTime() + programacion.eta_minutos * 60000);
-                        html += '<tr><td><strong>Hora Estimada de Llegada:</strong></td><td>' + etaDate.toLocaleString('es-CL', {
-                            year: 'numeric', month: '2-digit', day: '2-digit',
-                            hour: '2-digit', minute: '2-digit'
-                        }) + '</td></tr>';
+                        const etaDate = new Date(new Date(programacion.fecha_inicio_ruta).getTime() + programacion.eta_minutos * 60000);
+                        html += '<tr><td><strong>Llegada Est.:</strong></td><td>' + etaDate.toLocaleString('es-CL') + '</td></tr>';
                     }
                 }
-                
-                if (programacion.distancia_km) {
-                    html += '<tr><td><strong>Distancia:</strong></td><td>' + parseFloat(programacion.distancia_km).toFixed(2) + ' km</td></tr>';
-                }
-                
-                if (programacion.patente_confirmada) {
-                    html += '<tr><td><strong>Patente Vehículo:</strong></td><td>' + programacion.patente_confirmada + '</td></tr>';
-                }
-                
-                if (!programacion.eta_minutos && !programacion.fecha_inicio_ruta) {
-                    html += '<tr><td colspan="2"><em class="text-muted">No hay datos de ETA disponibles aún. Los datos se generan cuando el conductor inicia la ruta.</em></td></tr>';
-                }
-                
-                html += '</table>';
-                html += '</div>';
-                
-                html += '</div>';
-                
-                // Show current day schedule if programmed for today
+                if (programacion.distancia_km) html += '<tr><td><strong>Distancia:</strong></td><td>' + parseFloat(programacion.distancia_km).toFixed(2) + ' km</td></tr>';
+                if (programacion.patente_confirmada) html += '<tr><td><strong>Patente:</strong></td><td>' + programacion.patente_confirmada + '</td></tr>';
+                if (!programacion.eta_minutos && !programacion.fecha_inicio_ruta) html += '<tr><td colspan="2"><em class="text-muted">Sin datos de ruta aún</em></td></tr>';
+                html += '</table></div></div>';
                 const hoy = new Date().toDateString();
-                const fechaProg = new Date(programacion.fecha_programada);
-                if (fechaProg.toDateString() === hoy) {
-                    html += '<div class="alert alert-warning mt-3">';
-                    html += '<h6><i class="fas fa-calendar-day"></i> Programado para HOY</h6>';
-                    html += '<p class="mb-0">Este contenedor está programado para ser entregado hoy. Asegúrese de que esté asignado y en ruta a tiempo.</p>';
-                    html += '</div>';
+                if (new Date(programacion.fecha_programada).toDateString() === hoy) {
+                    html += '<div class="alert alert-warning mt-3"><i class="fas fa-calendar-day"></i> Programado para HOY</div>';
                 }
-                
                 contentDiv.innerHTML = html;
             } else {
                 loadingDiv.style.display = 'none';
                 contentDiv.style.display = 'block';
-                contentDiv.innerHTML = '<p class="text-muted text-center py-3"><i class="fas fa-info-circle"></i> Este contenedor no tiene programación asignada aún.</p>';
+                contentDiv.innerHTML = '<p class="text-muted text-center py-3"><i class="fas fa-info-circle"></i> Sin programación asignada.</p>';
             }
         })
         .catch(error => {
             console.error('Error loading programacion:', error);
-            document.getElementById('programacion-info-loading').innerHTML = 
-                '<p class="text-danger text-center"><i class="fas fa-exclamation-triangle"></i> Error al cargar información de programación</p>';
+            document.getElementById('programacion-info-loading').innerHTML = '<p class="text-danger text-center"><i class="fas fa-exclamation-triangle"></i> Error al cargar programación</p>';
         });
 });
 
-
+// ─────────────────────────────────────────────
 // Botones de acción del ciclo de vida
+// ─────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', function() {
     const estado = '{{ container.estado }}';
     const containerId = {{ container.id }};
     const containerIdStr = '{{ container.container_id }}';
     const btnDiv = document.getElementById('action-buttons');
-    
     if (!btnDiv) return;
-    
     let html = '';
-    
-    if (estado === 'por_arribar') {
-        html += '<button class="btn btn-sm btn-success me-1" onclick="ejecutarAccion(containerId, \'liberar\')"><i class="fas fa-unlock"></i> Liberar</button> ';
-    }
-    if (estado === 'liberado' || estado === 'secuenciado') {
-        html += '<button class="btn btn-sm btn-primary me-1" onclick="abrirModalProgramar(containerId, containerIdStr)"><i class="fas fa-calendar-plus"></i> Programar</button> ';
-    }
+    if (estado === 'por_arribar') html += '<button class="btn btn-sm btn-success me-1" onclick="ejecutarAccion(containerId, \'liberar\')"><i class="fas fa-unlock"></i> Liberar</button>';
+    if (estado === 'liberado' || estado === 'secuenciado') html += '<button class="btn btn-sm btn-primary me-1" onclick="abrirModalProgramar(containerId, containerIdStr)"><i class="fas fa-calendar-plus"></i> Programar</button>';
     if (estado === 'programado') {
-        html += '<button class="btn btn-sm btn-success me-1" onclick="asignarManual(containerId)"><i class="fas fa-user-plus"></i> Asignar Conductor</button> ';
+        html += '<button class="btn btn-sm btn-success me-1" onclick="asignarManual(containerId)"><i class="fas fa-user-plus"></i> Asignar Conductor</button>';
+        html += '<button class="btn btn-sm btn-outline-danger me-1" onclick="desprogramarContainer(containerId)"><i class="fas fa-calendar-xmark"></i> Desprogramar</button>';
     }
-    if (estado === 'asignado') {
-        html += '<button class="btn btn-sm btn-primary me-1" onclick="ejecutarAccion(containerId, \'iniciar_ruta\')"><i class="fas fa-play"></i> Iniciar Ruta</button> ';
-    }
-    if (estado === 'en_ruta') {
-        html += '<button class="btn btn-sm btn-info me-1" onclick="ejecutarAccion(containerId, \'entregar\')"><i class="fas fa-flag-checkered"></i> Marcar Entregado</button> ';
-    }
-    if (estado === 'entregado') {
-        html += '<button class="btn btn-sm btn-warning me-1" onclick="ejecutarAccion(containerId, \'descargar\')"><i class="fas fa-dolly"></i> Marcar Descargado</button> ';
-    }
-    if (estado === 'descargado') {
-        html += '<button class="btn btn-sm btn-secondary me-1" onclick="ejecutarAccion(containerId, \'vacio\')"><i class="fas fa-empty-set"></i> Marcar Vacío</button> ';
-    }
-    if (estado === 'vacio') {
-        html += '<button class="btn btn-sm btn-dark me-1" onclick="ejecutarAccion(containerId, \'retorno\')"><i class="fas fa-rotate-left"></i> Iniciar Retorno</button> ';
-    }
-    if (estado === 'vacio_en_ruta') {
-        html += '<button class="btn btn-sm btn-dark me-1" onclick="ejecutarAccion(containerId, \'devolver\')"><i class="fas fa-warehouse"></i> Marcar Devuelto</button> ';
-    }
-    
-    if (html === '') {
-        html = '<span class="text-muted"><em>Sin acciones disponibles para estado: ' + estado + '</em></span>';
-    }
-    
+    if (estado === 'asignado') html += '<button class="btn btn-sm btn-primary me-1" onclick="abrirModalIniciarRuta(containerId)"><i class="fas fa-play"></i> Iniciar Ruta</button>';
+    if (estado === 'en_ruta') html += '<button class="btn btn-sm btn-info me-1" onclick="ejecutarAccion(containerId, \'entregar\')"><i class="fas fa-flag-checkered"></i> Marcar Entregado</button>';
+    if (estado === 'entregado') html += '<button class="btn btn-sm btn-warning me-1" onclick="ejecutarAccion(containerId, \'descargar\')"><i class="fas fa-dolly"></i> Marcar Descargado</button>';
+    if (estado === 'descargado') html += '<button class="btn btn-sm btn-secondary me-1" onclick="ejecutarAccion(containerId, \'vacio\')"><i class="fas fa-empty-set"></i> Marcar Vacío</button>';
+    if (estado === 'vacio') html += '<button class="btn btn-sm btn-dark me-1" onclick="abrirModalRetorno(containerId)"><i class="fas fa-rotate-left"></i> Iniciar Retorno</button>';
+    if (estado === 'vacio_en_ruta') html += '<button class="btn btn-sm btn-dark me-1" onclick="ejecutarAccion(containerId, \'devolver\')"><i class="fas fa-warehouse"></i> Marcar Devuelto</button>';
+    if (html === '') html = '<span class="text-muted"><em>Sin acciones para estado: ' + estado + '</em></span>';
     btnDiv.innerHTML = html;
 });
 
+// ─────────────────────────────────────────────
+// Ejecutar acción genérica (estados simples)
+// ─────────────────────────────────────────────
 function ejecutarAccion(containerId, accion) {
     const endpoints = {
-        'liberar': '/api/containers/' + containerId + '/marcar_liberado/',
-        'iniciar_ruta': '/api/programaciones/?container=' + containerId + '&_method=POST',
-        'entregar': '/api/containers/' + containerId + '/marcar_entregado/',
-        'descargar': '/api/containers/' + containerId + '/marcar_descargado/',
-        'vacio': '/api/containers/' + containerId + '/marcar_vacio/',
-        'retorno': '/api/containers/' + containerId + '/iniciar_retorno/',
-        'devolver': '/api/containers/' + containerId + '/marcar_devuelto/'
+        'liberar':     { method: 'POST', body: {} },
+        'entregar':    { method: 'POST', body: {} },
+        'descargar':   { method: 'POST', body: {} },
+        'vacio':       { method: 'POST', body: {} },
+        'devolver':    { method: 'POST', body: {} },
     };
-    
-    const ep = endpoints[accion];
-    if (!ep) { alert('Accion no disponible'); return; }
-    
-    if (!confirm('¿Ejecutar acción ' + accion + '?')) return;
-    
-    fetch(ep, {
+    const info = endpoints[accion];
+    if (!info) { alert('Acción no disponible'); return; }
+    if (!confirm('¿Ejecutar acción "' + accion + '"?')) return;
+    const ep = '/api/containers/' + containerId + '/' + accion.replace('_', '_') + '/';
+    // Map action name to viewset method name
+    const actionMap = {
+        'liberar': 'marcar_liberado',
+        'entregar': 'marcar_entregado',
+        'descargar': 'marcar_descargado',
+        'vacio': 'marcar_vacio',
+        'devolver': 'marcar_devuelto'
+    };
+    const endpoint = '/api/containers/' + containerId + '/' + (actionMap[accion] || accion) + '/';
+    fetch(endpoint, {
+        method: info.method,
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': getCookie('csrftoken')
+        },
+        body: JSON.stringify(info.body)
+    })
+    .then(r => r.json())
+    .then(d => {
+        if (d.error) alert('Error: ' + d.error);
+        else location.reload();
+    })
+    .catch(e => alert('Error de conexión: ' + e));
+}
+
+// ─────────────────────────────────────────────
+// Iniciar Ruta (con modal + GPS)
+// ─────────────────────────────────────────────
+let iniciarRutaContainerId = null;
+function abrirModalIniciarRuta(containerId) {
+    iniciarRutaContainerId = containerId;
+    document.getElementById('inputPatenteRuta').value = '';
+    document.getElementById('inputLatRuta').value = '';
+    document.getElementById('inputLngRuta').value = '';
+    document.getElementById('hiddenProgId').value = '';
+    // Obtener prog ID del container
+    fetch('/api/programaciones/por-container/' + encodeURIComponent('{{ container.container_id }}') + '/')
+        .then(r => r.json())
+        .then(d => {
+            if (!d.found) { alert('Este contenedor no tiene programación.'); return; }
+            document.getElementById('hiddenProgId').value = d.programacion.id;
+            // Pre-llenar patente del conductor si existe
+            if (d.programacion.driver_patente) {
+                document.getElementById('inputPatenteRuta').value = d.programacion.driver_patente;
+            }
+            new bootstrap.Modal(document.getElementById('modalIniciarRuta')).show();
+        })
+        .catch(() => alert('No se pudo cargar la programación.'));
+}
+
+function obtenerGPS() {
+    if (!navigator.geolocation) {
+        alert('Geolocalización no disponible en este navegador.');
+        return;
+    }
+    navigator.geolocation.getCurrentPosition(
+        (pos) => {
+            document.getElementById('inputLatRuta').value = pos.coords.latitude.toFixed(6);
+            document.getElementById('inputLngRuta').value = pos.coords.longitude.toFixed(6);
+        },
+        () => alert('No se pudo obtener ubicación GPS.')
+    );
+}
+
+function confirmarIniciarRuta() {
+    const progId = document.getElementById('hiddenProgId').value;
+    const patente = document.getElementById('inputPatenteRuta').value.trim().toUpperCase();
+    const lat = parseFloat(document.getElementById('inputLatRuta').value);
+    const lng = parseFloat(document.getElementById('inputLngRuta').value);
+    if (!progId) { alert('No se encontró la programación.'); return; }
+    if (!patente) { alert('Ingrese la patente del vehículo.'); return; }
+    if (isNaN(lat) || isNaN(lng)) { alert('Ingrese coordenadas GPS válidas.'); return; }
+    fetch('/api/programaciones/' + progId + '/iniciar_ruta/', {
         method: 'POST',
-        headers: {'Content-Type': 'application/json', 'X-CSRFToken': getCookie('csrftoken')}
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': getCookie('csrftoken')
+        },
+        body: JSON.stringify({ patente, lat, lng })
     })
     .then(r => r.json())
     .then(d => {
         if (d.error) { alert('Error: ' + d.error); }
-        else { location.reload(); }
+        else { bootstrap.Modal.getInstance(document.getElementById('modalIniciarRuta')).hide(); location.reload(); }
     })
     .catch(e => alert('Error: ' + e));
 }
 
-function getCookie(name) {
-    let cookieValue = null;
-    if (document.cookie && document.cookie !== '') {
-        const cookies = document.cookie.split(';');
-        for (let i = 0; i < cookies.length; i++) {
-            const cookie = cookies[i].trim();
-            if (cookie.substring(0, name.length + 1) === (name + '=')) {
-                cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
-                break;
-            }
-        }
-    }
-    return cookieValue;
-}
-
+// ─────────────────────────────────────────────
+// Programar contenedor (modal con CDs)
+// ─────────────────────────────────────────────
+let programarContainerId = null;
 function abrirModalProgramar(containerId, containerIdStr) {
-    // Llamar al endpoint directo de programacion
-    fetch('/api/containers/' + containerId + '/')
+    programarContainerId = containerId;
+    document.getElementById('progCdSelect').innerHTML = '<option value="">Cargando...</option>';
+    document.getElementById('progFecha').value = '';
+    document.getElementById('progCliente').value = '';
+    document.getElementById('progObs').value = '';
+    // Cargar CDs
+    fetch('/api/cds/')
         .then(r => r.json())
-        .then(c => {
-            // Abrir modal de programacion con datos del contenedor
-            alert('Para programar: usa el panel de Operaciones > Liberación y Programación');
-        });
+        .then(d => {
+            const select = document.getElementById('progCdSelect');
+            select.innerHTML = '<option value="">Seleccione CD...</option>';
+            (d.results || d || []).forEach(cd => {
+                select.innerHTML += '<option value="' + cd.id + '">' + cd.nombre + '</option>';
+            });
+        })
+        .catch(() => { select.innerHTML = '<option value="">Error al cargar</option>'; });
+    new bootstrap.Modal(document.getElementById('modalProgramar')).show();
 }
 
+function confirmarProgramar() {
+    const cdId = document.getElementById('progCdSelect').value;
+    const fecha = document.getElementById('progFecha').value;
+    const cliente = document.getElementById('progCliente').value.trim();
+    const obs = document.getElementById('progObs').value.trim();
+    if (!cdId) { alert('Seleccione un CD de destino.'); return; }
+    if (!fecha) { alert('Ingrese fecha y hora de programación.'); return; }
+    fetch('/api/containers/' + programarContainerId + '/programar/', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': getCookie('csrftoken')
+        },
+        body: JSON.stringify({
+            cd_id: parseInt(cdId),
+            fecha_programada: new Date(fecha).toISOString(),
+            cliente: cliente,
+            observaciones: obs
+        })
+    })
+    .then(r => r.json())
+    .then(d => {
+        if (d.error) { alert('Error: ' + d.error); }
+        else { bootstrap.Modal.getInstance(document.getElementById('modalProgramar')).hide(); location.reload(); }
+    })
+    .catch(e => alert('Error: ' + e));
+}
+
+// ─────────────────────────────────────────────
+// Asignar conductor
+// ─────────────────────────────────────────────
 function asignarManual(containerId) {
-    // Buscar la programacion y redirigir a asignar
     fetch('/api/programaciones/por-container/' + encodeURIComponent('{{ container.container_id }}') + '/')
         .then(r => r.json())
         .then(d => {
-            if (d.found) {
-                alert('Para asignar conductor: usa el panel de Operaciones > Asignación');
-            } else {
-                alert('Este contenedor no tiene programación');
+            if (!d.found) { alert('Este contenedor no tiene programación.'); return; }
+            // Redirigir al tab de Asignación en Operaciones con la programacion seleccionada
+            window.location.href = '/operaciones/?tab=asignacion&prog_id=' + d.programacion.id;
+        })
+        .catch(() => alert('Error al buscar programación.'));
+}
+
+// ─────────────────────────────────────────────
+// Desprogramar
+// ─────────────────────────────────────────────
+function desprogramarContainer(containerId) {
+    if (!confirm('¿Desprogramar este contenedor? Regresará a estado "Liberado".')) return;
+    fetch('/api/containers/' + containerId + '/desprogramar/', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': getCookie('csrftoken')
+        },
+        body: JSON.stringify({})
+    })
+    .then(r => r.json())
+    .then(d => {
+        if (d.error) alert('Error: ' + d.error);
+        else location.reload();
+    })
+    .catch(e => alert('Error: ' + e));
+}
+
+// ─────────────────────────────────────────────
+// Modal Retorno (con destino tipo + depot/cd)
+// ─────────────────────────────────────────────
+let retornoContainerId = null;
+function abrirModalRetorno(containerId) {
+    retornoContainerId = containerId;
+    new bootstrap.Modal(document.getElementById('modalRetorno')).show();
+}
+
+// ─────────────────────────────────────────────
+// CSRF helper
+// ─────────────────────────────────────────────
+function getCookie(name) {
+    let cookieValue = null;
+    if (document.cookie && document.cookie !== '') {
+        document.cookie.split(';').forEach(cookie => {
+            const c = cookie.trim();
+            if (c.substring(0, name.length + 1) === (name + '=')) {
+                cookieValue = decodeURIComponent(c.substring(name.length + 1));
             }
         });
+    }
+    return cookieValue;
 }
 </script>
 {% endblock %}

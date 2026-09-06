@@ -24,6 +24,27 @@ from .importers.programacion import ProgramacionImporter
 logger = logging.getLogger(__name__)
 
 
+def _update_registro_operacion(container, estado_final=None, eta_real_min=None):
+    """Helper para actualizar RegistroOperacion con estado final y ETA real."""
+    try:
+        programacion = getattr(container, 'programacion', None)
+        if not programacion:
+            from apps.programaciones.models import Programacion
+            programacion = Programacion.objects.filter(container=container).first()
+        if not programacion:
+            return
+        from apps.programaciones.models import RegistroOperacion
+        registro = RegistroOperacion.objects.filter(programacion=programacion).order_by('-created_at').first()
+        if registro:
+            if estado_final:
+                registro.estado_final = estado_final
+            if eta_real_min and registro.eta_real_min is None:
+                registro.eta_real_min = eta_real_min
+            registro.save(update_fields=['estado_final', 'eta_real_min'])
+    except Exception:
+        logger.error(f'No se pudo actualizar RegistroOperacion para container {getattr(container, "id", "?")}')
+
+
 class ContainerViewSet(viewsets.ModelViewSet):
     """
     ViewSet para gestión de contenedores
@@ -655,9 +676,7 @@ class ContainerViewSet(viewsets.ModelViewSet):
             'containers': serializer.data
         })
     
-    @action(detail=True, methods=['post'])
-
-    @action(detail=True, methods=['post'])
+    @action(detail=True, methods=['post'], permission_classes=[AllowAny])
     def marcar_entregado(self, request, pk=None):
         """Marca contenedor como entregado (llegó a destino)"""
         container = self.get_object()
@@ -700,6 +719,7 @@ class ContainerViewSet(viewsets.ModelViewSet):
             'container': serializer.data
         })
 
+    @action(detail=True, methods=['post'], permission_classes=[AllowAny])
     def marcar_vacio(self, request, pk=None):
         """Marca contenedor como vacío (descargado, esperando retiro)"""
         container = self.get_object()
@@ -775,23 +795,12 @@ class ContainerViewSet(viewsets.ModelViewSet):
         except ValueError as exc:
             return Response({'error': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
         
-        # Forzar cambio de estado a 'devuelto' si el servicio no lo hizo
         if container.estado != 'devuelto':
             container.cambiar_estado('devuelto', usuario)
             container.save()
 
-        # 🆕 Actualizar RegistroOperacion con estado final
-        try:
-            programacion = getattr(container, 'programacion', None)
-            if programacion:
-                from apps.programaciones.models import RegistroOperacion
-                registro = RegistroOperacion.objects.filter(programacion=programacion).order_by('-created_at').first()
-                if registro:
-                    registro.estado_final = 'ENTREGADO'
-                    registro.save(update_fields=['estado_final'])
-        except Exception as e:
-            logger.error(f"Error actualizando RegistroOperacion para Contenedor {container.id}: {str(e)}", exc_info=True)
-        
+        _update_registro_operacion(container, estado_final='ENTREGADO')
+
         serializer = self.get_serializer(container)
         return Response({
             'success': True,
@@ -816,24 +825,11 @@ class ContainerViewSet(viewsets.ModelViewSet):
         usuario = request.user.username if request.user.is_authenticated else None
         container.cambiar_estado('entregado', usuario)
 
-        # 🆕 Actualizar RegistroOperacion con estado final
-        try:
-            programacion = getattr(container, 'programacion', None)
-            if programacion:
-                from apps.programaciones.models import RegistroOperacion
-                registro = RegistroOperacion.objects.filter(programacion=programacion).order_by('-created_at').first()
-                if registro:
-                    # Calcular ETA real si es posible
-                    eta_real_min = None
-                    if programacion.fecha_inicio_ruta and container.fecha_entrega:
-                        duration = container.fecha_entrega - programacion.fecha_inicio_ruta
-                        eta_real_min = int(duration.total_seconds() / 60)
-
-                    registro.eta_real_min = eta_real_min
-                    registro.estado_final = 'ENTREGADO'
-                    registro.save(update_fields=['eta_real_min', 'estado_final'])
-        except Exception as e:
-            logger.error(f"Error actualizando RegistroOperacion para Contenedor {container.id}: {str(e)}", exc_info=True)
+        eta_real = None
+        prog = getattr(container, 'programacion', None)
+        if prog and prog.fecha_inicio_ruta and container.fecha_entrega:
+            eta_real = int((container.fecha_entrega - prog.fecha_inicio_ruta).total_seconds() / 60)
+        _update_registro_operacion(container, estado_final='ENTREGADO', eta_real_min=eta_real)
 
         serializer = self.get_serializer(container)
         return Response({
@@ -883,19 +879,8 @@ class ContainerViewSet(viewsets.ModelViewSet):
         container = programacion.container
         hora_fin = container.fecha_descarga
 
-        # 🆕 Actualizar RegistroOperacion con estado final
-        try:
-            programacion = getattr(container, 'programacion', None)
-            if programacion:
-                from apps.programaciones.models import RegistroOperacion
-                registro = RegistroOperacion.objects.filter(programacion=programacion).order_by('-created_at').first()
-                if registro:
-                    registro.estado_final = 'ENTREGADO'
-                    registro.save(update_fields=['estado_final'])
-        except Exception as e:
-            logger.error(f"Error actualizando RegistroOperacion para Contenedor {container.id}: {str(e)}", exc_info=True)
-        
-        # Verificar configuración del CD
+        _update_registro_operacion(container, estado_final='ENTREGADO')
+
         cd = container.cd_entrega
         mensaje_adicional = ""
         
@@ -936,6 +921,7 @@ class ContainerViewSet(viewsets.ModelViewSet):
             )
         except ValueError as exc:
             return Response({'error': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+        _update_registro_operacion(programacion.container, estado_final='ENTREGADO')
         return Response({
             'success': True,
             'nuevo_estado': 'vacio',
