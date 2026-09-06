@@ -68,7 +68,7 @@
             </button>
         </li>
         <li class="nav-item" role="presentation">
-            <button class="nav-link" id="preAsignacion-tab" data-bs-toggle="tab" data-bs-target="#preAsignacion" type="button">
+            <button class="nav-link" id="preAsignacion-tab" data-bs-toggle="tab" data-bs-target="#preAsignacion" type="button" onclick="setTimeout(setupPreAsignacionListeners, 100)">
                 <i class="fas fa-calendar-plus"></i> Pre-Asignación
             </button>
         </li>
@@ -266,6 +266,10 @@
                                         <select class="form-select" id="pre-driver-select">
                                             <option value="">Cargando conductores...</option>
                                         </select>
+                                    </div>
+                                    <div class="mb-3">
+                                        <label class="form-label">Fecha y Hora de Salida</label>
+                                        <input type="datetime-local" class="form-control" id="pre-fecha-salida">
                                     </div>
                                     <div id="pre-driver-info" class="alert alert-secondary d-none">
                                         <!-- Info del conductor seleccionado -->
@@ -1110,4 +1114,181 @@ function getCookie(name) {
     return cookieValue;
 }
 
+// =====================================================================
+// PRE-ASIGNACIÓN con ML
+// =====================================================================
+
+let preasignacionTimer = null;
+
+async function crearPreAsignacion() {
+    const progId = document.getElementById('pre-container-select')?.value;
+    const driverId = document.getElementById('pre-driver-select')?.value;
+    const fechaSalida = document.getElementById('pre-fecha-salida')?.value;
+
+    if (!progId || !driverId || !fechaSalida) {
+        mostrarToast('Completa todos los campos: contenedor, conductor y fecha de salida.', 'warning');
+        return;
+    }
+
+    const btn = document.getElementById('btn-pre-asignar');
+    const originalText = btn.innerHTML;
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Calculando ML...';
+
+    try {
+        const response = await fetch(`/api/programaciones/${progId}/crear_preasignacion/`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCookie('csrftoken')
+            },
+            body: JSON.stringify({ driver_id: parseInt(driverId), fecha_salida: fechaSalida })
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+            renderPreasignacionResult(data);
+            mostrarToast(`✅ Pre-asignación creada para ${data.driver.nombre}`, 'success');
+        } else {
+            mostrarToast(`❌ ${data.error}`, 'danger');
+        }
+    } catch (err) {
+        console.error('Error pre-asignación:', err);
+        mostrarToast('Error de red al crear pre-asignación.', 'danger');
+    } finally {
+        btn.disabled = false;
+        btn.innerHTML = originalText;
+    }
+}
+
+function renderPreasignacionResult(data) {
+    const ml = data.ml;
+    const riesgo = data.riesgo_demurrage;
+    const optimo = data.horario_optimo;
+
+    const confianzaColor = ml.confianza >= 0.8 ? 'text-success' : ml.confianza >= 0.6 ? 'text-warning' : 'text-danger';
+    const fuenteLabel = ml.fuente === 'ml' ? '🧠 ML histórico' : ml.fuente === 'mapbox' ? '📍 Mapbox' : '📊 Promedio';
+    const riesgoBadge = riesgo?.alerta
+        ? `<span class="badge bg-danger me-1">⚠️ Demurrage por vencer</span>`
+        : riesgo
+        ? `<span class="badge bg-success me-1">✅ Demurrage OK</span>`
+        : '';
+
+    const perfilBadge = ml.perfil_conductor
+        ? `<span class="badge bg-info me-1">${ml.perfil_conductor}</span>`
+        : '';
+
+    const html = `
+        <div class="alert alert-success mt-3" id="preasignacion-result">
+            <h5 class="mb-3">📊 Resultado ML — Pre-Asignación</h5>
+            <div class="row">
+                <div class="col-md-6">
+                    <table class="table table-sm table-borderless mb-0">
+                        <tr><td><strong>ETA estimado</strong></td><td><strong>${ml.eta_minutos} min</strong> (${(ml.distancia_km).toFixed(1)} km)</td></tr>
+                        <tr><td><strong>Confianza</strong></td><td class="${confianzaColor}"><strong>${(ml.confianza * 100).toFixed(0)}%</strong></td></tr>
+                        <tr><td><strong>Fuente</strong></td><td>${fuenteLabel} ${ml.muestras_ml > 0 ? `(n=${ml.muestras_ml})` : ''}</td></tr>
+                        <tr><td><strong>Factor ML</strong></td><td>${ml.factor_ml.toFixed(2)}x</td></tr>
+                        <tr><td><strong>Mapbox base</strong></td><td>${ml.mapbox_minutos} min</td></tr>
+                        ${ml.perfil_conductor ? `<tr><td><strong>Perfil</strong></td><td>${perfilBadge}</td></tr>` : ''}
+                    </table>
+                </div>
+                <div class="col-md-6">
+                    ${riesgoBadge ? `<div class="mb-2">${riesgoBadge}</div>` : ''}
+                    ${riesgo ? `<p class="mb-1 small"><strong>Horas hasta demurrage:</strong> ${riesgo.horas_hasta_vencimiento}h</p>` : ''}
+                    ${optimo ? `
+                        <div class="alert alert-info py-2 px-3 small mb-1">
+                            <strong>⏰ Horario óptimo:</strong> ${optimo.hora_salida}<br>
+                            <strong>ETA alternativo:</strong> ${optimo.eta_min} min (confianza ${(optimo.confianza * 100).toFixed(0)}%)
+                        </div>
+                    ` : ''}
+                    <p class="mb-1 small"><strong>Driver:</strong> ${data.driver.nombre} — ${data.driver.patente}</p>
+                    <p class="mb-1 small"><strong>Service ID:</strong> <code>${data.service_id}</code></p>
+                </div>
+            </div>
+            <div class="mt-2">
+                <button class="btn btn-success btn-sm me-2" onclick="confirmarPreAsignacion(${data.programacion_id})">
+                    <i class="fas fa-check"></i> Confirmar Asignación
+                </button>
+                <button class="btn btn-outline-secondary btn-sm" onclick="descartarPreasignacion()">
+                    <i class="fas fa-times"></i> Descartar
+                </button>
+            </div>
+        </div>
+    `;
+
+    const container = document.getElementById('pre-asignaciones-list');
+    if (container) {
+        container.innerHTML = html;
+    }
+}
+
+async function confirmarPreAsignacion(programacionId) {
+    try {
+        const response = await fetch(`/api/programaciones/${programacionId}/asignar_automatico/`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCookie('csrftoken')
+            }
+        });
+        const data = await response.json();
+        if (data.success) {
+            mostrarToast(`✅ Conductor asignado: ${data.mensaje}`, 'success');
+            if (typeof loadContainersPorAsignar === 'function') loadContainersPorAsignar();
+            if (typeof loadContaineresAsignados === 'function') loadContaineresAsignados();
+            descartarPreasignacion();
+        } else {
+            mostrarToast(`❌ ${data.error}`, 'danger');
+        }
+    } catch (err) {
+        mostrarToast('Error al confirmar asignación.', 'danger');
+    }
+}
+
+function descartarPreasignacion() {
+    const result = document.getElementById('preasignacion-result');
+    if (result) result.remove();
+    const list = document.getElementById('pre-asignaciones-list');
+    if (list) list.innerHTML = '<p class="text-muted small">Sin pre-asignaciones activas.</p>';
+    if (typeof loadPreAsignaciones === 'function') loadPreAsignaciones();
+}
+
+function mostrarToast(mensaje, tipo) {
+    const container = document.getElementById('toast-container') || (() => {
+        const c = document.createElement('div');
+        c.id = 'toast-container';
+        c.className = 'toast-container position-fixed bottom-0 end-0 p-3';
+        document.body.appendChild(c);
+        return c;
+    })();
+    const id = 'toast-' + Date.now();
+    const bg = tipo === 'success' ? 'bg-success' : tipo === 'danger' ? 'bg-danger' : tipo === 'warning' ? 'bg-warning text-dark' : 'bg-info';
+    container.innerHTML += `
+        <div id="${id}" class="toast" role="alert">
+            <div class="toast-body ${bg} text-white rounded">${mensaje}</div>
+        </div>
+    `;
+    const toastEl = document.getElementById(id);
+    const toast = new bootstrap.Toast(toastEl);
+    toast.show();
+    toastEl.addEventListener('hidden.bs.toast', () => toastEl.remove());
+}
+
+// Al cambiar conductor o contenedor en el tab de pre-asignación, habilita botón
+function setupPreAsignacionListeners() {
+    const progSelect = document.getElementById('pre-container-select');
+    const driverSelect = document.getElementById('pre-driver-select');
+    const fechaInput = document.getElementById('pre-fecha-salida');
+    const btn = document.getElementById('btn-pre-asignar');
+
+    const check = () => {
+        if (btn) {
+            btn.disabled = !(progSelect?.value && driverSelect?.value && fechaInput?.value);
+        }
+    };
+    [progSelect, driverSelect, fechaInput].forEach(el => el?.addEventListener('change', check));
+}
+
+// =====================================================================
 // Función auxiliar para parsear JSON de forma segura
