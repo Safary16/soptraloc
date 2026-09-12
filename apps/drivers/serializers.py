@@ -1,6 +1,6 @@
 from rest_framework import serializers
 from .models import Driver, DriverLocation
-from .access import asegurar_acceso
+from .access import asegurar_acceso_conductor
 
 
 class DriverLocationSerializer(serializers.ModelSerializer):

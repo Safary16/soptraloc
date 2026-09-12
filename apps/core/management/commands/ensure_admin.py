@@ -1,34 +1,30 @@
-"""Crea o actualiza el administrador inicial desde variables de entorno."""
 import os
-
+from django.core.management.base import BaseCommand
 from django.contrib.auth import get_user_model
-from django.core.management.base import BaseCommand, CommandError
-
 
 class Command(BaseCommand):
-    help = 'Ensure a secure superuser exists from DJANGO_SUPERUSER_* variables.'
+    help = 'Asegura que exista un superusuario basado en variables de entorno'
 
     def handle(self, *args, **options):
-        username = os.getenv('DJANGO_SUPERUSER_USERNAME', '').strip()
-        email = os.getenv('DJANGO_SUPERUSER_EMAIL', '').strip()
-        password = os.getenv('DJANGO_SUPERUSER_PASSWORD', '')
-        if not username and not password:
-            self.stdout.write(self.style.WARNING('Admin bootstrap omitido: variables no configuradas.'))
-            return
-        if not username or not password:
-            raise CommandError('DJANGO_SUPERUSER_USERNAME y DJANGO_SUPERUSER_PASSWORD deben configurarse juntas.')
-        if len(password) < 12:
-            raise CommandError('DJANGO_SUPERUSER_PASSWORD debe tener al menos 12 caracteres.')
-
         User = get_user_model()
-        user, created = User.objects.get_or_create(username=username, defaults={'email': email})
-        if email and user.email != email:
+        username = os.environ.get('DJANGO_SUPERUSER_USERNAME')
+        email = os.environ.get('DJANGO_SUPERUSER_EMAIL')
+        password = os.environ.get('DJANGO_SUPERUSER_PASSWORD')
+
+        if not all([username, password]):
+            self.stdout.write(self.style.WARNING('Variables de entorno DJANGO_SUPERUSER_USERNAME o PASSWORD no definidas. Saltando.'))
+            return
+
+        if len(password) < 12:
+            self.stdout.write(self.style.ERROR('La contraseña del superusuario debe tener al menos 12 caracteres.'))
+            return
+
+        if not User.objects.filter(username=username).exists():
+            User.objects.create_superuser(username=username, email=email, password=password)
+            self.stdout.write(self.style.SUCCESS(f'Superusuario "{username}" creado exitosamente.'))
+        else:
+            user = User.objects.get(username=username)
+            user.set_password(password)
             user.email = email
-        user.is_active = True
-        user.is_staff = True
-        user.is_superuser = True
-        # Aplicar el secreto configurado permite recuperar una base recreada de forma determinista.
-        user.set_password(password)
-        user.save()
-        action = 'creado' if created else 'verificado/actualizado'
-        self.stdout.write(self.style.SUCCESS(f'Administrador {username} {action}.'))
+            user.save()
+            self.stdout.write(self.style.SUCCESS(f'Superusuario "{username}" ya existe. Contraseña y email actualizados.'))

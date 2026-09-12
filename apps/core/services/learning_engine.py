@@ -67,7 +67,7 @@ class OperationalLearningEngine:
         rows = rows if rows is not None else list(
             TiempoViaje.objects.filter(conductor=driver, anomalia=False).order_by('-fecha')[:40]
         )
-        factors = [r.calcular_factor_correccion() for r in rows if r.tiempo_mapbox_min > 0]
+        factors = [r.calcular_factor_correccion() for r in rows if r.tiempo_mapbox_min > 0 and r.tiempo_real_min > 0]
         samples = len(factors)
         if samples < cls.MIN_DRIVER_SAMPLES:
             return {
@@ -108,7 +108,6 @@ class OperationalLearningEngine:
             'predicted_minutes': predicted,
             'mapbox_minutes': float(base_route['duration_minutes']),
             'learned_factor': round(learned_factor, 3),
-            'samples': samples,
             'confidence': round(confidence, 2),
             'source': 'hybrid_ml_mapbox' if samples else 'mapbox_cold_start',
             'driver_profile': cls.driver_profile(driver, relevant) if driver else None,

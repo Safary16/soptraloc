@@ -1,6 +1,6 @@
 from django.contrib import admin, messages
 
-from .access import asegurar_acceso
+from .access import asegurar_acceso_conductor
 from .models import Driver, DriverLocation
 
 
