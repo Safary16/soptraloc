@@ -1,7 +1,9 @@
 # Core Django
 Django==5.1.4
 python-decouple==3.8
-# psycopg2-binary==2.9.10 # Comentado para evitar error de compilación por falta de pg_config
+# Driver PostgreSQL: imprescindible en OnRender (la BD es Postgres).
+# La variante -binary trae wheel precompilado y NO necesita pg_config.
+psycopg2-binary==2.9.13
 
 # Django REST Framework
 djangorestframework==3.16.1
