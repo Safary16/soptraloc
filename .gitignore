@@ -33,6 +33,8 @@ staticfiles/
 !static/service-worker.js
 !static/img/icon-*.png
 !static/img/badge.png
+!static/img/badge-icon.png
+!static/img/truck-icon.png
 !static/img/ICONS_README.md
 !static/css/
 !static/css/ubuntu-style.css
