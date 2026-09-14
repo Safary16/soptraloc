@@ -25,7 +25,7 @@ from apps.core.views import (
 
 # Import API views
 from apps.core.api_views import (
-    dashboard_stats, dashboard_alertas, analytics_conductores,
+    dashboard_stats, dashboard_alertas, dashboard_operativo, analytics_conductores,
     analytics_eficiencia, analytics_tendencias, ml_learning_stats,
     operaciones_diarias
 )
@@ -70,6 +70,7 @@ urlpatterns = [
     # API Analytics and Stats
     path('api/dashboard/stats/', dashboard_stats, name='dashboard_stats'),
     path('api/dashboard/alertas/', dashboard_alertas, name='dashboard_alertas'),
+    path('api/dashboard/operativo/', dashboard_operativo, name='dashboard_operativo'),
     path('api/analytics/conductores/', analytics_conductores, name='analytics_conductores'),
     path('api/analytics/eficiencia/', analytics_eficiencia, name='analytics_eficiencia'),
     path('api/analytics/tendencias/', analytics_tendencias, name='analytics_tendencias'),

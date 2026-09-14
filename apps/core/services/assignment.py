@@ -137,7 +137,7 @@ class AssignmentService:
             'classification': classification,
             'confidence': confidence,
             'similar_cases': [
-                {'programacion_id': c.programacion_id, 'similarity': c.similarity, 'outcome': c.outcome}
+                {'programacion_id': c.id, 'similarity': c.similarity, 'outcome': c.outcome}
                 for c in similar_cases
             ],
             'reason': reason,

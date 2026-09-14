@@ -11,7 +11,7 @@ from .serializers import DriverDetailSerializer
 from apps.cds.models import CD
 from apps.containers.models import Container
 from apps.programaciones.models import Programacion
-from .access import asegurar_acceso_conductor
+from .access import asegurar_acceso
 from .importers import ConductorImporter
 from unittest.mock import patch
 import pandas as pd
