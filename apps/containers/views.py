@@ -651,8 +651,7 @@ class ContainerViewSet(viewsets.ModelViewSet):
                 )
             prog.delete()
         
-        container.estado = 'liberado'
-        container.save(update_fields=['estado'])
+        container.cambiar_estado('liberado', usuario)  # FSM: registra timestamp + evento auditoría
         
         return Response({
             'success': True,

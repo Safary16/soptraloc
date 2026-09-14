@@ -518,7 +518,7 @@ function loadMainMetrics() {
         url: '/api/dashboard/stats/',
         method: 'GET',
         success: function(data) {
-            renderMainMetrics(data);
+            renderMainMetrics(data.stats || {});
         },
         error: function(xhr) {
             console.error('Error cargando métricas:', xhr);

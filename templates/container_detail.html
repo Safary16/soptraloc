@@ -478,7 +478,7 @@ function cargarCCTIs() {
 
 function confirmarRetorno() {
     const tipo = document.getElementById('retornoDestinoTipo').value;
-    let body = { destination_type: tipo };
+    let body = { destino_tipo: tipo };
     if (tipo === 'deposito') {
         body.deposito_devolucion = document.getElementById('retornoDeposito').value.trim();
         if (!body.deposito_devolucion) { alert('Ingrese el nombre del depósito.'); return; }
