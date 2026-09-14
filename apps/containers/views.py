@@ -575,14 +575,19 @@ class ContainerViewSet(viewsets.ModelViewSet):
                     observaciones=request.data.get('observaciones', '')
                 )
                 
-                # Actualizar contenedor - solo si está en estado válido
+                # Actualizar contenedor.
+                # El signal post_save de Programacion (programaciones/signals.py)
+                # ya transiciona liberado/secuenciado -> programado (estado + fecha).
+                # Aquí solo asociamos el CD de entrega sin re-transicionar, evitando
+                # el falso 500 cuando el estado ya quedó en 'programado'.
+                if container.estado not in ['liberado', 'secuenciado', 'programado']:
+                    raise ValueError(f"Estado del contenedor inválido al programar: {container.estado}")
+                container.cd_entrega = cd
+                container.fecha_programacion = timezone.now()
                 if container.estado in ['liberado', 'secuenciado']:
-                    container.cd_entrega = cd
-                    container.fecha_programacion = timezone.now()
                     container.cambiar_estado('programado', request.user.username if request.user.is_authenticated else None)
                 else:
-                    # Esto no debería pasar por las validaciones previas, pero lo manejamos
-                    raise ValueError(f"Estado del contenedor inválido para programar: {container.estado}")
+                    container.save(update_fields=['cd_entrega', 'fecha_programacion'])
                 
                 # Crear evento de auditoría
                 Event.objects.create(

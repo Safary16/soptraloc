@@ -138,22 +138,39 @@ class NotificationService:
             }
         """
         cd = programacion.cd
-        
-        # Calcular nuevo ETA con Mapbox
+
+        # Calcular nuevo ETA con Mapbox; si no hay API key o falla, usar haversine.
+        from math import asin, cos, radians, sin, sqrt
+
+        def _haversine_km(lat1, lng1, lat2, lng2):
+            R = 6371.0
+            p1, p2 = radians(float(lat1)), radians(float(lat2))
+            dp = radians(float(lat2) - float(lat1))
+            dl = radians(float(lng2) - float(lng1))
+            a = sin(dp/2)**2 + cos(p1)*cos(p2)*sin(dl/2)**2
+            return 2 * R * asin(sqrt(a))
+
         resultado = MapboxService.calcular_ruta(
             float(nueva_posicion_lng),
             float(nueva_posicion_lat),
             float(cd.lng),
             float(cd.lat)
         )
-        
+
         if not resultado.get('success'):
-            logger.warning(f"Error calculando ETA actualizado: {resultado.get('error')}")
-            return None
-        
-        eta_minutos = int(resultado['duration_minutes'])
-        distancia_km = Decimal(str(resultado['distance_km']))
-        eta_timestamp = timezone.now() + timedelta(minutes=eta_minutos)
+            logger.warning(f"Error calculando ETA actualizado con Mapbox: {resultado.get('error')}. Usando haversine.")
+            km = _haversine_km(
+                float(nueva_posicion_lat), float(nueva_posicion_lng),
+                float(cd.lat), float(cd.lng)
+            )
+            velocidad_kmh = 35.0  # velocidad urbana promedio de referencia
+            eta_minutos = max(1, int(km / velocidad_kmh * 60))
+            distancia_km = Decimal(str(round(km, 2)))
+            eta_timestamp = timezone.now() + timedelta(minutes=eta_minutos)
+        else:
+            eta_minutos = int(resultado['duration_minutes'])
+            distancia_km = Decimal(str(resultado['distance_km']))
+            eta_timestamp = timezone.now() + timedelta(minutes=eta_minutos)
         
         # Actualizar ETA en la programación
         programacion.eta_minutos = eta_minutos
