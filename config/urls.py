@@ -55,8 +55,6 @@ urlpatterns = [
     path('executive/', executive_dashboard, name='executive_dashboard'),
     path('operaciones-diarias/', operaciones_diarias_view, name='operaciones_diarias_view'),
     path('monitoring/', monitoring, name='monitoring'),
-    path('datos-maestros/conductores/', drivers_list, name='drivers_list_crud'),
-    path('datos-maestros/centros-distribucion/', cds_list, name='cds_list_crud'),
     # Admin
     path('admin/', admin.site.urls),
     
