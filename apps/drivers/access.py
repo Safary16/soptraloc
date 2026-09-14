@@ -20,9 +20,19 @@ def asegurar_acceso(driver):
     # Asegurar unicidad de username
     base_username = username
     counter = 1
-    while User.objects.filter(username=username).exclude(id=driver.user_id if driver.user else None).exists():
+    # Nota: exclude(id=...) con None no filtra en Django; se usa consulta
+    # sin exclusión cuando el driver aún no tiene user asociado.
+    if driver.user_id:
+        existe_username = User.objects.filter(username=username).exclude(id=driver.user_id).exists
+    else:
+        existe_username = User.objects.filter(username=username).exists
+    while existe_username():
         username = f"{base_username}.{counter}"
         counter += 1
+        if driver.user_id:
+            existe_username = User.objects.filter(username=username).exclude(id=driver.user_id).exists
+        else:
+            existe_username = User.objects.filter(username=username).exists
 
     temp_password = generar_password_temporal()
     if not driver.user:
