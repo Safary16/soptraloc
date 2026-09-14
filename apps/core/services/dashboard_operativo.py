@@ -191,6 +191,114 @@ def vacios() -> list[dict]:
     return items
 
 
+def riesgo_encadenamiento(desde, hasta) -> list[dict]:
+    """
+    Riesgo de encadenamiento: para cada programación B (hoy/mañana) con conductor
+    asignado, verifica la asignación ANTERIOR del mismo conductor (A) y calcula si
+    la llegada estimada a B (fin de A + tiempo de viaje del tramo, vía Mapbox o
+    cálculo haversine como fallback) supera su fecha_programada.
+    Si llega tarde -> alerta con déficit en minutos y alternativas de cambio.
+    """
+    from math import asin, cos, radians, sin, sqrt
+    from time import sleep
+
+    def _haversine_km(lat1, lng1, lat2, lng2):
+        R = 6371.0
+        p1, p2 = radians(float(lat1)), radians(float(lat2))
+        dp = radians(float(lat2) - float(lat1))
+        dl = radians(float(lng2) - float(lng1))
+        a = sin(dp/2)**2 + cos(p1)*cos(p2)*sin(dl/2)**2
+        return 2 * R * asin(sqrt(a))
+
+    def _tiempo_viaje_min(origen, destino):
+        """Retorna (minutos, km, fuente). Mapbox primero; haversine como fallback."""
+        try:
+            from apps.core.services.mapbox import MapboxService
+            ruta = MapboxService.calcular_ruta(
+                float(origen[1]), float(origen[0]),
+                float(destino[1]), float(destino[0]),
+            )
+            if ruta.get('success'):
+                return (
+                    float(ruta['duration_minutes']),
+                    float(ruta.get('distance_km', 0)),
+                    'mapbox',
+                )
+        except Exception:
+            pass
+        km = _haversine_km(origen[0], origen[1], destino[0], destino[1])
+        # Velocidad urbana promedio de referencia (km/h) para el cálculo propio.
+        velocidad_kmh = 35.0
+        min_estim = km / velocidad_kmh * 60
+        return round(min_estim, 1), round(km, 2), 'haversine'
+
+    # Buffer operativo: carga/maniobra antes de partir a la siguiente entrega.
+    BUFFER_MANIOBRA_MIN = 15.0
+
+    qs = Programacion.objects.filter(
+        fecha_programada__date__gte=desde,
+        fecha_programada__date__lte=hasta,
+        driver__isnull=False,
+        container__estado__in=ESTADOS_CONTAINER_ACTIVOS,
+    ).select_related('container', 'driver', 'cd').order_by('fecha_programada')
+
+    en_riesgo = []
+    for prog_b in qs:
+        # Asignación inmediatamente anterior del mismo conductor (por fecha).
+        anterior = Programacion.objects.filter(
+            driver=prog_b.driver,
+            fecha_programada__lt=prog_b.fecha_programada,
+            container__estado__in=ESTADOS_CONTAINER_ACTIVOS,
+        ).exclude(pk=prog_b.pk).order_by('-fecha_programada').select_related('cd').first()
+        if not anterior or not anterior.cd:
+            continue
+
+        # Fin estimado de A: si está en ruta usamos fecha_inicio_ruta + ETA;
+        # si no, fecha programada + ETA (o 60 min de referencia si no hay ETA).
+        if anterior.estado == 'en_ruta' and anterior.fecha_inicio_ruta and anterior.eta_minutos:
+            fin_a = anterior.fecha_inicio_ruta + timedelta(minutes=anterior.eta_minutos)
+        elif anterior.fecha_programada:
+            eta_a = anterior.eta_minutos or 60
+            fin_a = anterior.fecha_programada + timedelta(minutes=eta_a)
+        else:
+            continue
+
+        # Origen del tramo: CD de A (fin de la entrega anterior).
+        origen = (float(anterior.cd.lat), float(anterior.cd.lng))
+        # Destino del tramo: CD de B (punto donde debe estar para la 2ª entrega).
+        destino = (float(prog_b.cd.lat), float(prog_b.cd.lng))
+
+        viaje_min, km, fuente = _tiempo_viaje_min(origen, destino)
+        llegada_estimada = fin_a + timedelta(minutes=viaje_min + BUFFER_MANIOBRA_MIN)
+        deficit = (llegada_estimada - prog_b.fecha_programada).total_seconds() / 60
+        if deficit <= 0:
+            continue  # Alcanza justo o sobra tiempo; no es riesgo.
+
+        item = _programacion_item(prog_b)
+        item.update({
+            'asignacion_anterior_id': anterior.id,
+            'contenedor_anterior': anterior.container.container_id_formatted if anterior.container else None,
+            'fin_anterior_estimado': fin_a.isoformat(),
+            'distancia_tramo_km': km,
+            'viaje_tramo_min': round(viaje_min, 1),
+            'fuente_tramo': fuente,
+            'buffer_min': BUFFER_MANIOBRA_MIN,
+            'llegada_estimada': llegada_estimada.isoformat(),
+            'deficit_min': round(deficit, 1),
+            'motivo': (
+                f'Conductor termina {anterior.container.container_id_formatted or anterior.container.container_id} '
+                f'aprox. {fin_a.strftime("%H:%M")}; tramo de {km} km ≈ {viaje_min:.0f} min '
+                f'+ {BUFFER_MANIOBRA_MIN:.0f} min de maniobra'
+                f' → llegaría {llegada_estimada.strftime("%H:%M")}, '
+                f'{deficit:.0f} min después de la hora programada de esta entrega.'
+            ),
+        })
+        item['alternativas'] = _alternativas_driver(prog_b, excluir_driver_id=prog_b.driver_id)
+        en_riesgo.append(item)
+
+    return en_riesgo
+
+
 # --------------------------------------------------------------------------- #
 # Orquestador único (fuente de verdad del endpoint /api/dashboard/operativo/)
 # --------------------------------------------------------------------------- #
@@ -204,5 +312,6 @@ def construir_dashboard_operativo() -> dict:
         'programadas_manana': programadas_por_fecha(manana, manana),
         'sin_asignar': sin_asignar(),
         'riesgo_ml': riesgo_ml(hoy, manana),
+        'riesgo_encadenamiento': riesgo_encadenamiento(hoy, manana),
         'vacios': vacios(),
     }

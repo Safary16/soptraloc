@@ -142,6 +142,20 @@
                 </div>
             </div>
 
+            <!-- Riesgo de encadenamiento: no alcanza a la 2ª asignación -->
+            <div class="row">
+                <div class="col-12 mb-4">
+                    <div class="card">
+                        <div class="card-header">
+                            <h5 class="mb-0">🔗 Riesgo de Encadenamiento: ¿alcanza a la 2ª asignación?</h5>
+                        </div>
+                        <div class="card-body" id="operativo-encadenamiento">
+                            <p class="text-muted">Cargando...</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
             <!-- Vacíos con posición -->
             <div class="row">
                 <div class="col-12 mb-4">
@@ -316,6 +330,7 @@ function loadOperativoData() {
             renderOperativoProgramadas(data.programadas_manana || [], '#operativo-manana');
             renderOperativoSinAsignar(data.sin_asignar || []);
             renderOperativoRiesgoML(data.riesgo_ml || []);
+            renderOperativoEncadenamiento(data.riesgo_encadenamiento || []);
             renderOperativoVacios(data.vacios || []);
         },
         error: function() {
@@ -426,6 +441,53 @@ function aplicarCambioConductor(programacionId, driverId) {
             alert('❌ ' + msg);
         }
     });
+}
+
+function renderOperativoEncadenamiento(items) {
+    const container = $('#operativo-encadenamiento');
+    if (!items.length) {
+        container.html('<div class="alert alert-success mb-0">✅ Ningún conductor tiene conflicto de encadenamiento para hoy/mañana (llega a tiempo a su 2ª asignación).</div>');
+        return;
+    }
+    let html = '';
+    items.forEach(item => {
+        const alternativas = (item.alternativas || []).map(a =>
+            `<li>${e(a.driver_nombre)} — factor ${a.factor_ml.toFixed(2)} · cumpl. ${a.cumplimiento_porcentaje}% · ocup. ${a.ocupacion_porcentaje}%</li>`
+        ).join('');
+        const sugerido = (item.alternativas || [])[0];
+        const botonCambio = sugerido
+            ? `<button class="btn btn-sm btn-warning mt-2" onclick="aplicarCambioConductor(${item.id}, ${sugerido.driver_id})">
+                 <i class="fas fa-exchange-alt"></i> Asignar sugerido: ${e(sugerido.driver_nombre)}
+               </button>`
+            : '';
+        const fuente = item.fuente_tramo === 'mapbox' ? 'Mapbox' : 'Cálculo propio (haversine)';
+        html += `<div class="border rounded p-3 mb-3 bg-light">
+            <div class="d-flex justify-content-between">
+                <div>
+                    <strong>${e(item.container_id_formatted || item.container_id || '')}</strong>
+                    <span class="ms-2 text-muted">${e(item.cliente || '')} · ${e(item.cd || '')}</span>
+                </div>
+                <span class="badge bg-danger">No alcanza (${item.deficit_min} min tarde)</span>
+            </div>
+            <p class="mt-2 mb-1">
+                Conductor: <strong>${e(item.driver_nombre)}</strong>
+                — Programada: ${item.fecha_programada ? new Date(item.fecha_programada).toLocaleString('es-CL') : '—'}
+            </p>
+            <p class="mb-1">
+                <strong>Asignación anterior:</strong> ${e(item.contenedor_anterior || '—')}
+                — fin estimado ${item.fin_anterior_estimado ? new Date(item.fin_anterior_estimado).toLocaleString('es-CL') : '—'}
+            </p>
+            <p class="mb-1">
+                <strong>Tramo:</strong> ${item.distancia_tramo_km} km ≈ ${item.viaje_tramo_min} min
+                + ${item.buffer_min} min maniobra (${fuente})
+                → llegaría ${item.llegada_estimada ? new Date(item.llegada_estimada).toLocaleString('es-CL') : '—'}
+            </p>
+            <p class="mb-0 text-danger"><i class="fas fa-exclamation-triangle"></i> ${e(item.motivo || '')}</p>
+            ${alternativas ? `<p class="mb-1 mt-2"><strong>Sugerencia de cambio:</strong></p><ul>${alternativas}</ul>` : '<p class="text-muted mb-0">Sin conductores alternativos disponibles.</p>'}
+            ${botonCambio}
+        </div>`;
+    });
+    container.html(html);
 }
 
 function renderOperativoVacios(items) {
