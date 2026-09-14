@@ -109,15 +109,15 @@ class ProgramacionDashboardTestCase(TestCase):
         from rest_framework.test import APIRequestFactory
         from apps.programaciones.views import ProgramacionViewSet
         
-        # Crear request adecuado
+        # Crear request adecuado — el endpoint 'dashboard' devuelve {'programaciones', ...}
         factory = APIRequestFactory()
-        view = ProgramacionViewSet.as_view({'get': 'list'})
+        view = ProgramacionViewSet.as_view({'get': 'dashboard'})
         request = factory.get('/api/programaciones/dashboard/')
         response = view(request)
         
         # Filtrar programaciones activas (no devueltas)
         container_ids = [p['container_id'] for p in response.data['programaciones'] 
-                        if p.get('container_estado') != 'devuelto']
+                        if p.get('estado_container') != 'devuelto']
         self.assertIn(self.container_active.container_id, container_ids)
         self.assertNotIn(self.container_completed.container_id, container_ids)
 
