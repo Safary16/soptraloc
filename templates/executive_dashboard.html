@@ -296,6 +296,13 @@ $(document).ready(function() {
 });
 
 // Cargar Dashboard Operativo (hoy/mañana, sin asignar, riesgo ML, vacíos)
+// Escape HTML para prevenir XSS: única fuente de sanitización del frontend.
+function e(s) {
+    return s == null ? '' : String(s).replace(/[&<>"']/g, function(m) {
+        return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m];
+    });
+}
+
 function loadOperativoData() {
     $.ajax({
         url: '/api/dashboard/operativo/',
@@ -327,16 +334,17 @@ function renderOperativoProgramadas(items, selector) {
         '</tr></thead><tbody>';
     items.forEach(p => {
         const hora = p.fecha_programada ? new Date(p.fecha_programada).toLocaleTimeString('es-CL', {hour:'2-digit', minute:'2-digit'}) : '—';
+        const contenedor = e(p.container_id_formatted || p.container_id || '');
         const conductor = p.driver_nombre
-            ? '<span class="text-success">' + p.driver_nombre + '</span>'
+            ? '<span class="text-success">' + e(p.driver_nombre) + '</span>'
             : '<span class="badge bg-danger">Sin asignar</span>';
         html += `<tr>
-            <td>${p.container_id_formatted || p.container_id}</td>
-            <td>${p.cliente || '—'}</td>
-            <td>${p.cd || '—'}</td>
+            <td>${contenedor}</td>
+            <td>${e(p.cliente || '—')}</td>
+            <td>${e(p.cd || '—')}</td>
             <td>${hora}</td>
             <td>${conductor}</td>
-            <td>${p.estado || '—'}</td>
+            <td>${e(p.estado || '—')}</td>
         </tr>`;
     });
     html += '</tbody></table>';
@@ -355,8 +363,8 @@ function renderOperativoSinAsignar(items) {
         const horas = p['horas_restantes'] != null ? p['horas_restantes'] : '—';
         html += `<div class="alert alert-warning d-flex justify-content-between align-items-center mb-2">
             <div>
-                <strong>${p.container_id_formatted || p.container_id}</strong>
-                <span class="ms-2 text-muted">${p.cliente || ''} · ${p.cd || ''}</span>
+                <strong>${e(p.container_id_formatted || p.container_id || '')}</strong>
+                <span class="ms-2 text-muted">${e(p.cliente || '')} · ${e(p.cd || '')}</span>
                 <br><small>Programada: ${p.fecha_programada ? new Date(p.fecha_programada).toLocaleString('es-CL') : '—'}</small>
             </div>
             <span class="badge ${badge}">${horas} h restantes</span>
@@ -374,25 +382,25 @@ function renderOperativoRiesgoML(items) {
     let html = '';
     items.forEach(item => {
         const alternativas = (item.alternativas || []).map(a =>
-            `<li>${a.driver_nombre} — factor ${a.factor_ml.toFixed(2)} · cumpl. ${a.cumplimiento_porcentaje}% · ocup. ${a.ocupacion_porcentaje}%</li>`
+            `<li>${e(a.driver_nombre)} — factor ${a.factor_ml.toFixed(2)} · cumpl. ${a.cumplimiento_porcentaje}% · ocup. ${a.ocupacion_porcentaje}%</li>`
         ).join('');
         const sugerido = (item.alternativas || [])[0];
         const botonCambio = sugerido
             ? `<button class="btn btn-sm btn-warning mt-2" onclick="aplicarCambioConductor(${item.id}, ${sugerido.driver_id})">
-                 <i class="fas fa-exchange-alt"></i> Asignar sugerido: ${sugerido.driver_nombre}
+                 <i class="fas fa-exchange-alt"></i> Asignar sugerido: ${e(sugerido.driver_nombre)}
                </button>`
             : '';
         html += `<div class="border rounded p-3 mb-3 bg-light">
             <div class="d-flex justify-content-between">
                 <div>
-                    <strong>${item.container_id_formatted || item.container_id}</strong>
-                    <span class="ms-2 text-muted">${item.cliente || ''} · ${item.cd || ''}</span>
+                    <strong>${e(item.container_id_formatted || item.container_id || '')}</strong>
+                    <span class="ms-2 text-muted">${e(item.cliente || '')} · ${e(item.cd || '')}</span>
                 </div>
                 <span class="badge bg-danger">Riesgo ML</span>
             </div>
             <p class="mt-2 mb-1">
-                Conductor actual: <strong>${item.driver_nombre}</strong>
-                <span class="text-danger">(factor ${item.factor_ml.toFixed(2)} — ${item.motivo || 'riesgo de incumplimiento'})</span>
+                Conductor actual: <strong>${e(item.driver_nombre)}</strong>
+                <span class="text-danger">(factor ${item.factor_ml.toFixed(2)} — ${e(item.motivo || 'riesgo de incumplimiento')})</span>
             </p>
             ${alternativas ? `<p class="mb-1"><strong>Sugerencia de cambio:</strong></p><ul>${alternativas}</ul>` : '<p class="text-muted mb-0">Sin conductores alternativos disponibles.</p>'}
             ${botonCambio}
@@ -432,10 +440,10 @@ function renderOperativoVacios(items) {
     items.forEach(c => {
         const estado = c.estado === 'vacio_en_ruta' ? 'Vacío en Ruta' : (c.estado === 'vacio' ? 'Vacío' : c.estado);
         html += `<tr>
-            <td>${c.container_id_formatted || c.container_id}</td>
-            <td>${estado}</td>
-            <td><span class="badge bg-info text-dark">${c.posicion_fisica || 'Sin posición'}</span></td>
-            <td>${c.cliente || '—'}</td>
+            <td>${e(c.container_id_formatted || c.container_id || '')}</td>
+            <td>${e(estado)}</td>
+            <td><span class="badge bg-info text-dark">${e(c.posicion_fisica || 'Sin posición')}</span></td>
+            <td>${e(c.cliente || '—')}</td>
         </tr>`;
     });
     html += '</tbody></table>';
