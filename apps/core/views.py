@@ -148,3 +148,9 @@ def executive_dashboard(request):
 def operaciones_diarias(request):
     """Vista de operaciones diarias con horarios completos"""
     return render(request, 'operaciones_diarias.html')
+
+
+@staff_member_required
+def auditoria(request):
+    """Panel de auditoría: trazabilidad de eventos del sistema."""
+    return render(request, 'auditoria.html')

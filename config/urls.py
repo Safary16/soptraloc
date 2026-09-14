@@ -21,10 +21,12 @@ from apps.core.views import (
     home, asignacion, estados, importar, 
     containers_list, container_detail,
     operaciones, drivers_list, cds_list, executive_dashboard,
-    operaciones_diarias as operaciones_diarias_view
+    operaciones_diarias as operaciones_diarias_view,
+    auditoria
 )
 
 # Import API views
+from apps.events.api import auditoria_events
 from apps.core.api_views import (
     dashboard_stats, dashboard_alertas, dashboard_operativo, analytics_conductores,
     analytics_eficiencia, analytics_tendencias, ml_learning_stats,
@@ -80,6 +82,8 @@ urlpatterns = [
     path('api/operaciones/diarias/', operaciones_diarias, name='operaciones_diarias'),
     
     # API Authentication
+    path('auditoria/', auditoria, name='auditoria'),
+    path('api/auditoria/', auditoria_events, name='auditoria_events'),
     path('api-auth/', include('rest_framework.urls')),
     
     # Digital Asset Links for Android TWA
