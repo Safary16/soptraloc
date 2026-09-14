@@ -32,7 +32,7 @@ class Container(models.Model):
     ]
 
     TRANSICIONES_VALIDAS = {
-        'por_arribar': {'liberado', 'cancelado'},
+        'por_arribar': {'liberado', 'secuenciado', 'cancelado'},
         'liberado': {'secuenciado', 'programado', 'cancelado'},
         'secuenciado': {'liberado', 'programado', 'cancelado'},
         'programado': {'liberado', 'asignado', 'cancelado'},

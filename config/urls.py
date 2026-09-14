@@ -65,9 +65,6 @@ urlpatterns = [
     path('driver/logout/', driver_logout, name='driver_logout'),
     path('driver/dashboard/', driver_dashboard, name='driver_dashboard'),
     
-    # Monitoring
-    path('monitoring/', monitoring, name='monitoring'),
-    
     # API
     path('api/', include(router.urls)),
     

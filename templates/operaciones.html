@@ -72,6 +72,16 @@
                 <i class="fas fa-calendar-plus"></i> Pre-Asignación
             </button>
         </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link" id="diarias-tab" data-bs-toggle="tab" data-bs-target="#diarias" type="button">
+                <i class="fas fa-calendar-day"></i> Diarias
+            </button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link" id="monitoreo-tab" data-bs-toggle="tab" data-bs-target="#monitoreo" type="button">
+                <i class="fas fa-map-marked-alt"></i> Monitoreo
+            </button>
+        </li>
     </ul>
 
     <!-- Tab Content -->
@@ -300,7 +310,16 @@
                 </div>
             </div>
         </div>
-    </div>
+    
+        <!-- Diarias (embebido) -->
+        <div class="tab-pane fade" id="diarias" role="tabpanel">
+            <iframe src="/operaciones-diarias/?embed=1" class="w-100" style="min-height:75vh; border:0; border-radius:8px;" title="Operaciones Diarias"></iframe>
+        </div>
+        <!-- Monitoreo (embebido) -->
+        <div class="tab-pane fade" id="monitoreo" role="tabpanel">
+            <iframe src="/monitoring/?embed=1" class="w-100" style="min-height:75vh; border:0; border-radius:8px;" title="Monitoreo"></iframe>
+        </div>
+</div>
 </div>
 
 <!-- Modal para Asignación Manual -->
