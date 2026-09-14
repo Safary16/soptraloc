@@ -8,10 +8,12 @@ def generar_password_temporal(length=12):
     chars = string.ascii_letters + string.digits + "!@#$%^&*"
     return "".join(random.choice(chars) for _ in range(length))
 
-def asegurar_acceso_conductor(driver):
+def asegurar_acceso(driver):
     """
-    Crea o actualiza el User de Django vinculado a un Driver.
-    Retorna (user, password_temporal) si se creó/resetó, (user, None) si ya existía.
+    Crea o resetea el User de Django vinculado a un Driver.
+    Cada llamada genera una nueva contraseña temporal (comportamiento de
+    "regenerar acceso"): la anterior deja de ser válida.
+    Retorna dict con 'username' y 'temporary_password'.
     """
     username = slugify(driver.nombre.lower().replace(" ", "."))
     
@@ -22,9 +24,8 @@ def asegurar_acceso_conductor(driver):
         username = f"{base_username}.{counter}"
         counter += 1
 
-    temp_password = None
+    temp_password = generar_password_temporal()
     if not driver.user:
-        temp_password = generar_password_temporal()
         user = User.objects.create_user(
             username=username,
             password=temp_password,
@@ -34,8 +35,19 @@ def asegurar_acceso_conductor(driver):
         driver.save()
     else:
         user = driver.user
+        changed = []
         if user.username != username:
             user.username = username
-            user.save()
-            
-    return user, temp_password
+            changed.append('username')
+        user.set_password(temp_password)
+        changed.append('password')
+        user.save(update_fields=changed)
+
+    return {
+        'username': user.username,
+        'temporary_password': temp_password,
+    }
+
+
+# Alias de compatibilidad (nombre histórico usado por algunos módulos)
+asegurar_acceso_conductor = asegurar_acceso

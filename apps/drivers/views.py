@@ -18,7 +18,7 @@ from .serializers import (
     DriverSerializer, DriverDetailSerializer, DriverListSerializer,
     DriverLocationSerializer,
 )
-from .access import asegurar_acceso_conductor
+from .access import asegurar_acceso
 
 
 # ============================================

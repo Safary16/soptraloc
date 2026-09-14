@@ -108,6 +108,7 @@ class OperationalLearningEngine:
             'predicted_minutes': predicted,
             'mapbox_minutes': float(base_route['duration_minutes']),
             'learned_factor': round(learned_factor, 3),
+            'samples': samples,
             'confidence': round(confidence, 2),
             'source': 'hybrid_ml_mapbox' if samples else 'mapbox_cold_start',
             'driver_profile': cls.driver_profile(driver, relevant) if driver else None,
