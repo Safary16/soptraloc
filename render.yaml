@@ -29,8 +29,13 @@ services:
       - key: DJANGO_SUPERUSER_USERNAME
         value: admin
       - key: DJANGO_SUPERUSER_EMAIL
-        sync: false
+        value: admin@soptraloc.cl
+      # PERIODO DE PRUEBAS: password genérica. Quitar DJANGO_SUPERUSER_ALLOW_WEAK
+      # y poner una password >= 12 caracteres antes de producción.
+      - key: DJANGO_SUPERUSER_ALLOW_WEAK
+        value: "1"
       - key: DJANGO_SUPERUSER_PASSWORD
+        value: "1234"
         sync: false
 
   # Procesa liberaciones cuya fecha/hora ya llegó. El comando es idempotente.

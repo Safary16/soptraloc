@@ -15,8 +15,13 @@ class Command(BaseCommand):
             self.stdout.write(self.style.WARNING('Variables de entorno DJANGO_SUPERUSER_USERNAME o PASSWORD no definidas. Saltando.'))
             return
 
-        if len(password) < 12:
-            self.stdout.write(self.style.ERROR('La contraseña del superusuario debe tener al menos 12 caracteres.'))
+        allow_weak = os.environ.get('DJANGO_SUPERUSER_ALLOW_WEAK', '0') in ('1', 'true', 'True', 'yes')
+        if len(password) < (4 if allow_weak else 12):
+            self.stdout.write(self.style.ERROR(
+                'La contraseña del superusuario debe tener al menos '
+                f'{"4" if allow_weak else "12"} caracteres '
+                '(usa DJANGO_SUPERUSER_ALLOW_WEAK=1 solo en pruebas).'
+            ))
             return
 
         if not User.objects.filter(username=username).exists():
