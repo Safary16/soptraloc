@@ -56,7 +56,12 @@
     <!-- Tabs para diferentes secciones -->
     <ul class="nav nav-tabs mb-4" role="tablist">
         <li class="nav-item" role="presentation">
-            <button class="nav-link active" id="operaciones-tab" data-bs-toggle="tab" data-bs-target="#operaciones" type="button">
+            <button class="nav-link active" id="operativo-tab" data-bs-toggle="tab" data-bs-target="#operativo" type="button">
+                🗓️ Operativo Hoy
+            </button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link" id="operaciones-tab" data-bs-toggle="tab" data-bs-target="#operaciones" type="button">
                 📦 Operaciones
             </button>
         </li>
@@ -79,8 +84,83 @@
 
     <!-- Tab Content -->
     <div class="tab-content">
+        <!-- Tab Operativo del Día -->
+        <div class="tab-pane fade show active" id="operativo" role="tabpanel">
+            <!-- Hoy y Mañana -->
+            <div class="row">
+                <div class="col-md-6 mb-4">
+                    <div class="card h-100">
+                        <div class="card-header">
+                            <h5 class="mb-0">📅 Programados Hoy</h5>
+                        </div>
+                        <div class="card-body">
+                            <div class="table-responsive" id="operativo-hoy">
+                                <p class="text-muted">Cargando...</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-6 mb-4">
+                    <div class="card h-100">
+                        <div class="card-header">
+                            <h5 class="mb-0">📅 Programados Mañana</h5>
+                        </div>
+                        <div class="card-body">
+                            <div class="table-responsive" id="operativo-manana">
+                                <p class="text-muted">Cargando...</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Alertas: sin asignar -->
+            <div class="row">
+                <div class="col-12 mb-4">
+                    <div class="card">
+                        <div class="card-header">
+                            <h5 class="mb-0">⚠️ Pendientes de Asignación</h5>
+                        </div>
+                        <div class="card-body" id="operativo-sin-asignar">
+                            <p class="text-muted">Cargando...</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Riesgo ML con cambio propuesto -->
+            <div class="row">
+                <div class="col-12 mb-4">
+                    <div class="card">
+                        <div class="card-header">
+                            <h5 class="mb-0">🧠 Riesgo ML: conductor puede no cumplir</h5>
+                        </div>
+                        <div class="card-body" id="operativo-riesgo-ml">
+                            <p class="text-muted">Cargando...</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Vacíos con posición -->
+            <div class="row">
+                <div class="col-12 mb-4">
+                    <div class="card">
+                        <div class="card-header">
+                            <h5 class="mb-0">♻️ Contenedores Vacíos y Posición</h5>
+                        </div>
+                        <div class="card-body">
+                            <div class="table-responsive" id="operativo-vacios">
+                                <p class="text-muted">Cargando...</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
         <!-- Tab Operaciones -->
-        <div class="tab-pane fade show active" id="operaciones" role="tabpanel">
+        <div class="tab-pane fade" id="operaciones" role="tabpanel">
             <div class="row">
                 <div class="col-md-6 mb-4">
                     <div class="card">
@@ -205,13 +285,162 @@ $(document).ready(function() {
     loadConductoresData();
     loadEficienciaData();
     loadAlertasData();
+    loadOperativoData();
     
     // Auto-actualizar cada 60 segundos
     setInterval(function() {
         loadMainMetrics();
         loadAlertasData();
+        loadOperativoData();
     }, 60000);
 });
+
+// Cargar Dashboard Operativo (hoy/mañana, sin asignar, riesgo ML, vacíos)
+function loadOperativoData() {
+    $.ajax({
+        url: '/api/dashboard/operativo/',
+        method: 'GET',
+        success: function(data) {
+            if (!data.success) {
+                $('#operativo-hoy').html('<p class="text-danger">' + (data.error || 'Error cargando operativo') + '</p>');
+                return;
+            }
+            renderOperativoProgramadas(data.programadas_hoy || [], '#operativo-hoy');
+            renderOperativoProgramadas(data.programadas_manana || [], '#operativo-manana');
+            renderOperativoSinAsignar(data.sin_asignar || []);
+            renderOperativoRiesgoML(data.riesgo_ml || []);
+            renderOperativoVacios(data.vacios || []);
+        },
+        error: function() {
+            $('#operativo-hoy').html('<p class="text-danger">Error conectando con el servidor.</p>');
+        }
+    });
+}
+
+function renderOperativoProgramadas(items, selector) {
+    if (!items.length) {
+        $(selector).html('<p class="text-muted">Sin programaciones</p>');
+        return;
+    }
+    let html = '<table class="table table-striped table-sm"><thead><tr>' +
+        '<th>Contenedor</th><th>Cliente</th><th>CD</th><th>Hora</th><th>Conductor</th><th>Estado</th>' +
+        '</tr></thead><tbody>';
+    items.forEach(p => {
+        const hora = p.fecha_programada ? new Date(p.fecha_programada).toLocaleTimeString('es-CL', {hour:'2-digit', minute:'2-digit'}) : '—';
+        const conductor = p.driver_nombre
+            ? '<span class="text-success">' + p.driver_nombre + '</span>'
+            : '<span class="badge bg-danger">Sin asignar</span>';
+        html += `<tr>
+            <td>${p.container_id_formatted || p.container_id}</td>
+            <td>${p.cliente || '—'}</td>
+            <td>${p.cd || '—'}</td>
+            <td>${hora}</td>
+            <td>${conductor}</td>
+            <td>${p.estado || '—'}</td>
+        </tr>`;
+    });
+    html += '</tbody></table>';
+    $(selector).html(html);
+}
+
+function renderOperativoSinAsignar(items) {
+    const container = $('#operativo-sin-asignar');
+    if (!items.length) {
+        container.html('<div class="alert alert-success mb-0">✅ Todas las programaciones próximas tienen conductor asignado.</div>');
+        return;
+    }
+    let html = '';
+    items.forEach(p => {
+        const badge = p.prioridad === 'critica' ? 'bg-danger' : 'bg-warning text-dark';
+        const horas = p['horas_restantes'] != null ? p['horas_restantes'] : '—';
+        html += `<div class="alert alert-warning d-flex justify-content-between align-items-center mb-2">
+            <div>
+                <strong>${p.container_id_formatted || p.container_id}</strong>
+                <span class="ms-2 text-muted">${p.cliente || ''} · ${p.cd || ''}</span>
+                <br><small>Programada: ${p.fecha_programada ? new Date(p.fecha_programada).toLocaleString('es-CL') : '—'}</small>
+            </div>
+            <span class="badge ${badge}">${horas} h restantes</span>
+        </div>`;
+    });
+    container.html(html);
+}
+
+function renderOperativoRiesgoML(items) {
+    const container = $('#operativo-riesgo-ml');
+    if (!items.length) {
+        container.html('<div class="alert alert-success mb-0">✅ Ningún conductor asignado presenta riesgo ML de incumplimiento para hoy/mañana.</div>');
+        return;
+    }
+    let html = '';
+    items.forEach(item => {
+        const alternativas = (item.alternativas || []).map(a =>
+            `<li>${a.driver_nombre} — factor ${a.factor_ml.toFixed(2)} · cumpl. ${a.cumplimiento_porcentaje}% · ocup. ${a.ocupacion_porcentaje}%</li>`
+        ).join('');
+        const sugerido = (item.alternativas || [])[0];
+        const botonCambio = sugerido
+            ? `<button class="btn btn-sm btn-warning mt-2" onclick="aplicarCambioConductor(${item.id}, ${sugerido.driver_id})">
+                 <i class="fas fa-exchange-alt"></i> Asignar sugerido: ${sugerido.driver_nombre}
+               </button>`
+            : '';
+        html += `<div class="border rounded p-3 mb-3 bg-light">
+            <div class="d-flex justify-content-between">
+                <div>
+                    <strong>${item.container_id_formatted || item.container_id}</strong>
+                    <span class="ms-2 text-muted">${item.cliente || ''} · ${item.cd || ''}</span>
+                </div>
+                <span class="badge bg-danger">Riesgo ML</span>
+            </div>
+            <p class="mt-2 mb-1">
+                Conductor actual: <strong>${item.driver_nombre}</strong>
+                <span class="text-danger">(factor ${item.factor_ml.toFixed(2)} — ${item.motivo || 'riesgo de incumplimiento'})</span>
+            </p>
+            ${alternativas ? `<p class="mb-1"><strong>Sugerencia de cambio:</strong></p><ul>${alternativas}</ul>` : '<p class="text-muted mb-0">Sin conductores alternativos disponibles.</p>'}
+            ${botonCambio}
+        </div>`;
+    });
+    container.html(html);
+}
+
+// Ejecuta el cambio de conductor sugerido por el riesgo ML
+function aplicarCambioConductor(programacionId, driverId) {
+    if (!confirm('¿Asignar el conductor sugerido a esta programación?')) return;
+    $.ajax({
+        url: '/api/programaciones/' + programacionId + '/asignar_conductor/',
+        method: 'POST',
+        contentType: 'application/json',
+        data: JSON.stringify({ driver_id: driverId }),
+        success: function(response) {
+            alert('✅ ' + (response.mensaje || 'Conductor asignado'));
+            loadOperativoData();
+        },
+        error: function(xhr) {
+            const msg = (xhr.responseJSON && xhr.responseJSON.error) || 'Error al asignar conductor';
+            alert('❌ ' + msg);
+        }
+    });
+}
+
+function renderOperativoVacios(items) {
+    const container = $('#operativo-vacios');
+    if (!items.length) {
+        container.html('<p class="text-muted mb-0">No hay contenedores vacíos en este momento.</p>');
+        return;
+    }
+    let html = '<table class="table table-striped table-sm"><thead><tr>' +
+        '<th>Contenedor</th><th>Estado</th><th>Posición Física</th><th>Cliente</th>' +
+        '</tr></thead><tbody>';
+    items.forEach(c => {
+        const estado = c.estado === 'vacio_en_ruta' ? 'Vacío en Ruta' : (c.estado === 'vacio' ? 'Vacío' : c.estado);
+        html += `<tr>
+            <td>${c.container_id_formatted || c.container_id}</td>
+            <td>${estado}</td>
+            <td><span class="badge bg-info text-dark">${c.posicion_fisica || 'Sin posición'}</span></td>
+            <td>${c.cliente || '—'}</td>
+        </tr>`;
+    });
+    html += '</tbody></table>';
+    container.html(html);
+}
 
 // Cargar métricas principales
 function loadMainMetrics() {

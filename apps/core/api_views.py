@@ -527,3 +527,24 @@ def ml_learning_stats(request):
             'Continúa operando normalmente para mejorar la precisión del sistema'
         ]
     })
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticatedOrReadOnly])
+def dashboard_operativo(request):
+    """
+    Dashboard operativo del día:
+    - programadas_hoy / programadas_manana
+    - sin_asignar (programaciones sin conductor)
+    - riesgo_ml (conductor asignado probablemente no cumple + alternativas)
+    - vacios (contenedores vacíos con posición física)
+    """
+    from apps.core.services.dashboard_operativo import construir_dashboard_operativo
+    try:
+        payload = construir_dashboard_operativo()
+        return Response(payload)
+    except Exception as exc:
+        return Response(
+            {'success': False, 'error': f'Error construyendo dashboard operativo: {exc}'},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        )

@@ -1,0 +1,208 @@
+"""
+Servicio del Dashboard Operativo.
+Unifica en un solo contrato lo que el operador necesita al abrir el panel:
+
+- programadas_hoy / programadas_manana : contenedores programados del día y del siguiente.
+- sin_asignar                        : programaciones pendientes SIN conductor.
+- riesgo_ml                          : programaciones cuyo conductor asignado, según
+                                       el perfil ML (factor típico del conductor en el
+                                       histórico), probablemente NO cumpla el horario;
+                                       se proponen alternativas ordenadas con la MISMA
+                                       información (factor ML + cumplimiento + ocupación).
+- vacios                             : contenedores vacíos (vacio / vacio_en_ruta) con
+                                       su posición física.
+
+Todos los nombres de campos son la fuente de verdad del frontend (executive_dashboard.html).
+"""
+from __future__ import annotations
+
+from datetime import timedelta
+
+from django.utils import timezone
+
+from apps.containers.models import Container
+from apps.drivers.models import Driver
+from apps.programaciones.models import Programacion
+from apps.core.services.learning_engine import OperationalLearningEngine
+
+# Umbral de factor ML: >= 1.12 => conductor históricamente más lento que la referencia.
+FACTOR_RIESGO_ML = 1.12
+# Cuántas alternativas proponer por programación en riesgo.
+MAX_ALTERNATIVAS = 3
+
+ESTADOS_CONTAINER_ACTIVOS = [
+    'programado', 'secuenciado', 'asignado', 'en_ruta',
+    'entregado', 'soltado', 'descargado',
+]
+
+
+# --------------------------------------------------------------------------- #
+# Helpers de serialización (un solo lugar para que el frontend no se bifurque)
+# --------------------------------------------------------------------------- #
+def _programacion_item(prog: Programacion) -> dict:
+    return {
+        'id': prog.id,
+        'container_id': prog.container.container_id if prog.container else None,
+        'container_id_formatted': prog.container.container_id_formatted if prog.container else None,
+        'cliente': prog.cliente,
+        'cd': prog.cd.nombre if prog.cd else None,
+        'fecha_programada': prog.fecha_programada.isoformat() if prog.fecha_programada else None,
+        'driver_id': prog.driver_id,
+        'driver_nombre': prog.driver.nombre if prog.driver else None,
+        'estado': prog.container.estado if prog.container else None,
+        'eta_minutos': prog.eta_minutos,
+    }
+
+
+def _perfil_conductor(driver) -> dict | None:
+    """Perfil ML del conductor (factor/label/confianza) con fallback seguro."""
+    if not driver:
+        return None
+    try:
+        perfil = OperationalLearningEngine.driver_profile(driver)
+    except Exception:
+        perfil = {
+            'samples': 0, 'factor': 1.0,
+            'label': 'sin_datos_suficientes', 'confidence': 0.0,
+        }
+    return {
+        'factor_ml': perfil.get('factor', 1.0),
+        'label_ml': perfil.get('label', 'sin_datos_suficientes'),
+        'confianza_ml': perfil.get('confidence', 0.0),
+        'samples_ml': perfil.get('samples', 0),
+    }
+
+
+def _alternativas_driver(prog: Programacion, excluir_driver_id=None) -> list[dict]:
+    """
+    Ordena conductores disponibles usando la MISMA información que el riesgo ML:
+    factor propio del histórico (menor = más rápido), cumplimiento y ocupación.
+    """
+    candidatos = Driver.objects.filter(
+        activo=True,
+        presente=True,
+    ).exclude(id=excluir_driver_id)
+
+    ranking = []
+    for driver in candidatos:
+        perfil = _perfil_conductor(driver)
+        # Ocupación: entregas del día / máximo permitido (0.0 si no hay máximo).
+        if driver.max_entregas_dia:
+            ocupacion = float(driver.num_entregas_dia) / float(driver.max_entregas_dia)
+        else:
+            ocupacion = 0.0
+        ranking.append({
+            'driver_id': driver.id,
+            'driver_nombre': driver.nombre,
+            'factor_ml': perfil['factor_ml'],
+            'label_ml': perfil['label_ml'],
+            'confianza_ml': perfil['confianza_ml'],
+            'samples_ml': perfil['samples_ml'],
+            'cumplimiento_porcentaje': float(driver.cumplimiento_porcentaje or 0),
+            'ocupacion_porcentaje': round(ocupacion * 100, 1),
+            'disponible': driver.esta_disponible,
+        })
+
+    # Menor factor ML primero; ante empate, mejor cumplimiento y menor ocupación.
+    ranking.sort(key=lambda a: (
+        a['factor_ml'],
+        -a['cumplimiento_porcentaje'],
+        a['ocupacion_porcentaje'],
+    ))
+    return ranking[:MAX_ALTERNATIVAS]
+
+
+# --------------------------------------------------------------------------- #
+# Secciones del dashboard
+# --------------------------------------------------------------------------- #
+def programadas_por_fecha(desde, hasta) -> list[dict]:
+    """Programaciones activas cuya fecha cae entre [desde, hasta] (inclusive)."""
+    qs = Programacion.objects.filter(
+        fecha_programada__date__gte=desde,
+        fecha_programada__date__lte=hasta,
+        container__estado__in=ESTADOS_CONTAINER_ACTIVOS,
+    ).select_related('container', 'driver', 'cd').order_by('fecha_programada')
+    return [_programacion_item(p) for p in qs]
+
+
+def sin_asignar(limit_horas=48) -> list[dict]:
+    """Programaciones pendientes sin conductor, dentro de la ventana indicada."""
+    limite = timezone.now() + timedelta(hours=limit_horas)
+    qs = Programacion.objects.filter(
+        driver__isnull=True,
+        fecha_programada__lte=limite,
+        container__estado__in=['programado', 'secuenciado'],
+    ).select_related('container', 'cd').order_by('fecha_programada')
+    items = []
+    for prog in qs:
+        horas = (prog.fecha_programada - timezone.now()).total_seconds() / 3600
+        item = _programacion_item(prog)
+        item['horas_restantes'] = round(horas, 1)
+        item['prioridad'] = 'critica' if horas < 24 else 'alta'
+        items.append(item)
+    return items
+
+
+def riesgo_ml(desde, hasta) -> list[dict]:
+    """
+    Programaciones hoy/mañana con conductor asignado cuyo perfil ML indica
+    riesgo de no cumplir: factor del conductor >= FACTOR_RIESGO_ML
+    (label 'más_lento_que_referencia').
+    """
+    qs = Programacion.objects.filter(
+        fecha_programada__date__gte=desde,
+        fecha_programada__date__lte=hasta,
+        driver__isnull=False,
+        container__estado__in=ESTADOS_CONTAINER_ACTIVOS,
+    ).select_related('container', 'driver', 'cd').order_by('fecha_programada')
+
+    en_riesgo = []
+    for prog in qs:
+        perfil = _perfil_conductor(prog.driver)
+        if perfil['factor_ml'] < FACTOR_RIESGO_ML:
+            continue  # Conductor cumple el umbral; no se reporta.
+        item = _programacion_item(prog)
+        item.update(perfil)
+        item['motivo'] = (
+            'Conductor histórico más lento que la referencia '
+            f'(factor {perfil["factor_ml"]:.2f})'
+        )
+        item['alternativas'] = _alternativas_driver(prog, excluir_driver_id=prog.driver_id)
+        en_riesgo.append(item)
+    return en_riesgo
+
+
+def vacios() -> list[dict]:
+    """Contenedores vacíos (esperando retiro / en retorno) con su posición física."""
+    qs = Container.objects.filter(
+        estado__in=['vacio', 'vacio_en_ruta'],
+    ).order_by('fecha_vacio')
+    items = []
+    for c in qs:
+        items.append({
+            'container_id': c.container_id,
+            'container_id_formatted': c.container_id_formatted,
+            'estado': c.estado,
+            'posicion_fisica': c.posicion_fisica or 'Sin posición registrada',
+            'cliente': c.cliente,
+            'fecha_vacio': c.fecha_vacio.isoformat() if c.fecha_vacio else None,
+            'fecha_vacio_ruta': c.fecha_vacio_ruta.isoformat() if c.fecha_vacio_ruta else None,
+        })
+    return items
+
+
+# --------------------------------------------------------------------------- #
+# Orquestador único (fuente de verdad del endpoint /api/dashboard/operativo/)
+# --------------------------------------------------------------------------- #
+def construir_dashboard_operativo() -> dict:
+    hoy = timezone.localdate()
+    manana = hoy + timedelta(days=1)
+    return {
+        'success': True,
+        'generado_en': timezone.now().isoformat(),
+        'programadas_hoy': programadas_por_fecha(hoy, hoy),
+        'programadas_manana': programadas_por_fecha(manana, manana),
+        'sin_asignar': sin_asignar(),
+        'riesgo_ml': riesgo_ml(hoy, manana),
+        'vacios': vacios(),
+    }
