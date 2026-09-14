@@ -28,10 +28,10 @@
     
     {% block extra_css %}{% endblock %}
 </head>
-<body>
+<body data-bs-theme="light">
     {% if not request.GET.embed %}
     <!-- Navbar -->
-    <nav class="navbar navbar-expand-lg navbar-dark bg-ubuntu sticky-top">
+    <nav class="navbar navbar-expand-lg navbar-dark sticky-top">
         <div class="container-fluid">
             <a class="navbar-brand d-flex align-items-center" href="/">
                 <div class="ubuntu-logo me-2"></div>
@@ -113,6 +113,11 @@
                             <i class="fas fa-code"></i> API
                         </a>
                     </li>
+                    <li class="nav-item ms-lg-2">
+                        <button id="theme-toggle" class="btn btn-ubuntu-outline btn-sm" type="button" title="Cambiar tema (claro/oscuro)">
+                            <i id="theme-icon" class="fas fa-moon"></i>
+                        </button>
+                    </li>
                 </ul>
             </div>
         </div>
@@ -147,6 +152,37 @@
     
     <!-- Custom JS -->
     <script src="{% static 'js/main.js' %}"></script>
+    
+    <!-- Tema claro/oscuro -->
+    <script>
+    (function() {
+        var KEY = 'soptraloc-theme';
+        var root = document.documentElement;
+        var body = document.body;
+        function applyTheme(t) {
+            root.setAttribute('data-theme', t);
+            if (body) body.setAttribute('data-bs-theme', t);
+            try { localStorage.setItem(KEY, t); } catch (e) {}
+            var icon = document.getElementById('theme-icon');
+            if (icon) { icon.className = t === 'dark' ? 'fas fa-sun' : 'fas fa-moon'; }
+            var meta = document.querySelector('meta[name="theme-color"]');
+            if (meta) { meta.setAttribute('content', t === 'dark' ? '#1A0E17' : '#E95420'); }
+        }
+        var saved = null;
+        try { saved = localStorage.getItem(KEY); } catch (e) {}
+        var dark = saved
+            ? saved === 'dark'
+            : window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+        applyTheme(dark ? 'dark' : 'light');
+        var btn = document.getElementById('theme-toggle');
+        if (btn) {
+            btn.addEventListener('click', function() {
+                var cur = (root.getAttribute('data-theme') || 'light') === 'dark' ? 'light' : 'dark';
+                applyTheme(cur);
+            });
+        }
+    })();
+    </script>
     
     {% block extra_js %}{% endblock %}
 </body>

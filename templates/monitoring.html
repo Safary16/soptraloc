@@ -17,7 +17,7 @@
         }
         
         .header {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background: linear-gradient(135deg, #2C001E 0%, #772953 55%, #E95420 100%);
             color: white;
             padding: 15px 20px;
             box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
@@ -105,12 +105,12 @@
         }
         
         .driver-card:hover {
-            border-color: #667eea;
+            border-color: #E95420;
             box-shadow: 0 5px 15px rgba(102, 126, 234, 0.2);
         }
         
         .driver-card.active {
-            border-color: #667eea;
+            border-color: #E95420;
             background: #e7eaf6;
         }
         
@@ -313,7 +313,7 @@ function e(s) {
                     // Crear nuevo marcador
                     const el = document.createElement('div');
                     el.className = 'driver-marker';
-                    el.innerHTML = '<i class="fas fa-truck" style="color: #667eea; font-size: 24px;"></i>';
+                    el.innerHTML = '<i class="fas fa-truck" style="color: #E95420; font-size: 24px;"></i>';
                     
                     const popup = new mapboxgl.Popup({ offset: 25 })
                         .setHTML(`

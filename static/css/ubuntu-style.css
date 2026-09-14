@@ -1,0 +1,185 @@
+/* =========================================================
+   SoptraLoc TMS — Sistema de diseño Ubuntu
+   Identidad única: naranja Ubuntu + púrpura oscuro.
+   Light / Dark mode vía [data-theme] + prefers-color-scheme.
+   ========================================================= */
+
+:root {
+    /* Paleta base — Ubuntu */
+    --ubuntu-orange: #E95420;
+    --ubuntu-orange-dark: #C34113;   /* contraste ≥4.5:1 sobre blanco */
+    --ubuntu-orange-darker: #A8340F;
+    --ubuntu-dark: #2C001E;
+    --ubuntu-purple: #772953;        /* puente entre dark y orange */
+    --ubuntu-gray: #333333;
+    --ubuntu-light: #F7F7F7;
+
+    /* Tokens semánticos light */
+    --bg-body: #F7F7F7;
+    --bg-card: #FFFFFF;
+    --bg-table-head: #EFEFEF;
+    --text-primary: #1A1A1A;
+    --text-muted: #666666;
+    --border-color: #E0E0E0;
+    --shadow-card: 0 2px 10px rgba(0, 0, 0, 0.07);
+    --hover-bg: #F2F2F2;
+    --navbar-gradient: linear-gradient(135deg, #2C001E 0%, #772953 55%, #E95420 100%);
+}
+
+[data-theme="dark"] {
+    --bg-body: #1A0E17;
+    --bg-card: #261220;
+    --bg-table-head: #2E1A26;
+    --text-primary: #F0E6EC;
+    --text-muted: #B8A5B2;
+    --border-color: #3A2333;
+    --shadow-card: 0 2px 12px rgba(0, 0, 0, 0.45);
+    --hover-bg: #331C2B;
+    --ubuntu-light: #261220;
+}
+
+@media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+        --bg-body: #1A0E17;
+        --bg-card: #261220;
+        --bg-table-head: #2E1A26;
+        --text-primary: #F0E6EC;
+        --text-muted: #B8A5B2;
+        --border-color: #3A2333;
+        --shadow-card: 0 2px 12px rgba(0, 0, 0, 0.45);
+        --hover-bg: #331C2B;
+        --ubuntu-light: #261220;
+    }
+}
+
+/* ---------- Base ---------- */
+body {
+    font-family: 'Ubuntu', sans-serif;
+    background-color: var(--bg-body);
+    color: var(--text-primary);
+    transition: background-color .25s ease, color .25s ease;
+}
+
+/* ---------- Navbar: identidad Ubuntu ---------- */
+.navbar {
+    background: var(--navbar-gradient) !important;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.25);
+}
+.navbar-brand { font-weight: 700; font-size: 1.2rem; }
+.navbar-dark .nav-link { color: rgba(255, 255, 255, 0.88); }
+.navbar-dark .nav-link:hover { color: #fff; }
+
+/* ---------- Cards ---------- */
+.stat-card {
+    border-radius: 12px;
+    border: none;
+    background: var(--bg-card);
+    box-shadow: var(--shadow-card);
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+.stat-card:hover { transform: translateY(-2px); box-shadow: 0 6px 18px rgba(0, 0, 0, 0.12); }
+.stat-icon { font-size: 1.5rem; color: var(--ubuntu-orange); }
+.stat-number { font-size: 2rem; font-weight: 700; color: var(--text-primary); }
+.stat-label { font-size: 0.85rem; color: var(--text-muted); }
+
+.card {
+    background: var(--bg-card);
+    border-color: var(--border-color);
+    color: var(--text-primary);
+}
+.card-header { background: var(--bg-table-head); color: var(--text-primary); }
+
+/* ---------- Botones: jerarquía clara ---------- */
+.btn-ubuntu {
+    background-color: var(--ubuntu-orange);
+    color: #fff;
+    border: none;
+    border-radius: 8px;
+    transition: background-color .15s ease, transform .1s ease;
+}
+.btn-ubuntu:hover, .btn-ubuntu:focus {
+    background-color: var(--ubuntu-orange-dark);
+    color: #fff;
+    transform: translateY(-1px);
+}
+.btn-ubuntu-outline {
+    background: transparent;
+    color: var(--ubuntu-orange);
+    border: 1.5px solid var(--ubuntu-orange);
+    border-radius: 8px;
+    transition: background-color .15s ease, color .15s ease;
+}
+.btn-ubuntu-outline:hover { background: var(--ubuntu-orange); color: #fff; }
+
+/* ---------- Tablas: densidad de datos ---------- */
+.table-dense th, .table-dense td {
+    padding: .45rem .6rem;
+    font-size: .875rem;
+}
+.table-dense thead th {
+    background: var(--bg-table-head);
+    color: var(--text-primary);
+    border-bottom: 2px solid var(--ubuntu-orange);
+    white-space: nowrap;
+}
+.table-dense td { color: var(--text-primary); }
+.table-dense tbody tr:hover { background: var(--hover-bg); }
+.table-dense .text-end, .table-dense td.monto { text-align: right; font-variant-numeric: tabular-nums; }
+
+/* ---------- Estados del contenedor (semánticos) ---------- */
+.estado-por_arribar  { --ec: #6c757d; }
+.estado-liberado     { --ec: #17a2b8; }
+.estado-secuenciado  { --ec: #6f42c1; }
+.estado-programado   { --ec: #007bff; }
+.estado-asignado     { --ec: #fd7e14; }
+.estado-en_ruta      { --ec: #ffc107; }
+.estado-entregado    { --ec: #28a745; }
+.estado-soltado      { --ec: #20c997; }
+.estado-descargado   { --ec: #28a745; }
+.estado-vacio        { --ec: #17a2b8; }
+.estado-vacio_en_ruta{ --ec: #6c757d; }
+.estado-en_ccti      { --ec: #007bff; }
+.estado-devuelto     { --ec: #6f42c1; }
+.estado-cancelado    { --ec: #dc3545; }
+
+.badge-estado, .estado-badge {
+    display: inline-block;
+    padding: .28em .6em;
+    font-size: .72rem;
+    font-weight: 600;
+    border-radius: 20px;
+    color: #fff;
+    background-color: var(--ec, #6c757d);
+    border: 1px solid rgba(255,255,255,.25);
+    white-space: nowrap;
+}
+
+/* ---------- Micro-interacciones ---------- */
+.chip {
+    display: inline-flex;
+    align-items: center;
+    gap: .35rem;
+    padding: .3rem .7rem;
+    border-radius: 20px;
+    border: 1px solid var(--border-color);
+    background: var(--bg-card);
+    color: var(--text-primary);
+    transition: border-color .15s ease, background-color .15s ease;
+    cursor: pointer;
+}
+.chip:hover { border-color: var(--ubuntu-orange); color: var(--ubuntu-orange); }
+.chip.active { background: var(--ubuntu-orange); border-color: var(--ubuntu-orange); color: #fff; }
+
+/* ---------- Varios ---------- */
+.bg-ubuntu { background-color: var(--ubuntu-orange) !important; }
+.bg-ubuntu-dark { background-color: var(--ubuntu-dark) !important; }
+.text-ubuntu { color: var(--ubuntu-orange) !important; }
+.footer { background: var(--ubuntu-dark) !important; }
+
+/* Mapas / iframes embebidos */
+.tab-pane iframe { background: var(--bg-card); }
+
+/* Scrollbar sutil (dark-friendly) */
+::-webkit-scrollbar { width: 9px; height: 9px; }
+::-webkit-scrollbar-thumb { background: var(--border-color); border-radius: 6px; }
+::-webkit-scrollbar-thumb:hover { background: var(--ubuntu-orange); }

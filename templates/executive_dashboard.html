@@ -344,7 +344,7 @@ function renderOperativoProgramadas(items, selector) {
         $(selector).html('<p class="text-muted">Sin programaciones</p>');
         return;
     }
-    let html = '<table class="table table-striped table-sm"><thead><tr>' +
+    let html = '<table class="table table-dense table-striped table-sm"><thead><tr>' +
         '<th>Contenedor</th><th>Cliente</th><th>CD</th><th>Hora</th><th>Conductor</th><th>Estado</th>' +
         '</tr></thead><tbody>';
     items.forEach(p => {
@@ -496,7 +496,7 @@ function renderOperativoVacios(items) {
         container.html('<p class="text-muted mb-0">No hay contenedores vacíos en este momento.</p>');
         return;
     }
-    let html = '<table class="table table-striped table-sm"><thead><tr>' +
+    let html = '<table class="table table-dense table-striped table-sm"><thead><tr>' +
         '<th>Contenedor</th><th>Estado</th><th>Posición Física</th><th>Cliente</th>' +
         '</tr></thead><tbody>';
     items.forEach(c => {
@@ -617,7 +617,7 @@ function loadOperacionesData() {
             }
             
             let tableHtml = `
-                <table class="table table-striped">
+                <table class="table table-dense table-striped">
                     <thead>
                         <tr>
                             <th>Contenedor</th>
@@ -666,7 +666,7 @@ function loadConductoresData() {
             const drivers = data.results || data;
             
             let tableHtml = `
-                <table class="table table-striped">
+                <table class="table table-dense table-striped">
                     <thead>
                         <tr>
                             <th>Conductor</th>

@@ -848,7 +848,7 @@ function loadContaineresAsignados() {
                                         </div>
                                         <div class="col-md-6">
                                             <h6><i class="fas fa-clock"></i> Información de Tiempos</h6>
-                                            <table class="table table-sm table-borderless">
+                                            <table class="table table-dense table-sm table-borderless">
                                                 <tr>
                                                     <td><i class="fas fa-calendar-check"></i> <strong>Programación:</strong></td>
                                                     <td>${formatDate(cont.fecha_programacion)}</td>
@@ -1211,7 +1211,7 @@ function renderPreasignacionResult(data) {
             <h5 class="mb-3">📊 Resultado ML — Pre-Asignación</h5>
             <div class="row">
                 <div class="col-md-6">
-                    <table class="table table-sm table-borderless mb-0">
+                    <table class="table table-dense table-sm table-borderless mb-0">
                         <tr><td><strong>ETA estimado</strong></td><td><strong>${ml.eta_minutos} min</strong> (${(ml.distancia_km).toFixed(1)} km)</td></tr>
                         <tr><td><strong>Confianza</strong></td><td class="${confianzaColor}"><strong>${(ml.confianza * 100).toFixed(0)}%</strong></td></tr>
                         <tr><td><strong>Fuente</strong></td><td>${fuenteLabel} ${ml.muestras_ml > 0 ? `(n=${ml.muestras_ml})` : ''}</td></tr>
@@ -1451,7 +1451,7 @@ function loadProgramacionesList() {
                 return;
             }
             
-            let html = '<div class="table-responsive"><table class="table table-striped"><thead class="table-dark"><tr>';
+            let html = '<div class="table-responsive"><table class="table table-dense table-striped"><thead class="table-dark"><tr>';
             html += '<th>Contenedor</th><th>Conductor</th><th>Fecha Programada</th><th>Estado</th><th>Acciones</th>';
             html += '</tr></thead><tbody>';
             
