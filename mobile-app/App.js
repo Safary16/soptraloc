@@ -23,7 +23,11 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import axios from 'axios';
 
 // Configuración del servidor backend
-const API_BASE_URL = 'https://soptraloc.onrender.com';
+// Configurable vía EXPO_PUBLIC_API_URL o el archivo de configuración del proyecto;
+// se mantiene el valor actual como fallback para no romper builds existentes.
+import { Platform } from 'react-native';
+
+const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'https://soptraloc.onrender.com';
 
 const App = () => {
   const [patente, setPatente] = useState('');

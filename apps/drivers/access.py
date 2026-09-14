@@ -36,10 +36,14 @@ def asegurar_acceso(driver):
 
     temp_password = generar_password_temporal()
     if not driver.user:
+        names = driver.nombre.split()
+        first_name = names[0][:30] if names else ''
+        last_name = ' '.join(names[1:])[:30] if len(names) > 1 else ''
         user = User.objects.create_user(
             username=username,
             password=temp_password,
-            first_name=driver.nombre[:30]
+            first_name=first_name,
+            last_name=last_name,
         )
         driver.user = user
         driver.save()

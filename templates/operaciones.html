@@ -364,6 +364,13 @@
 </div>
 
 <script>
+// Escape HTML (anti-XSS): única fuente de sanitización de este template.
+function e(s) {
+    return s == null ? '' : String(s).replace(/[&<>"']/g, function(m) {
+        return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m];
+    });
+}
+
 let selectedContainer = null;
 let selectedDriver = null;
 let selectedContainerForProgramming = null;
@@ -404,10 +411,10 @@ function loadContaineresLiberados() {
                         <div class="card-body">
                             <div class="d-flex justify-content-between align-items-start">
                                 <div>
-                                    <h6 class="mb-1"><strong>${cont.container_id_formatted || cont.container_id}</strong></h6>
+                                    <h6 class="mb-1"><strong>${e(cont.container_id_formatted || cont.container_id)}</strong></h6>
                                     <p class="mb-1 small text-muted">
                                         <i class="fas fa-ship"></i> ${cont.nave || 'N/A'}<br>
-                                        <i class="fas fa-map-marker-alt"></i> ${cont.posicion_fisica || 'Sin ubicación'}<br>
+                                        <i class="fas fa-map-marker-alt"></i> ${e(cont.posicion_fisica || 'Sin ubicación')}<br>
                                         <i class="fas fa-calendar"></i> Liberado: ${cont.fecha_liberacion ? new Date(cont.fecha_liberacion).toLocaleDateString('es-CL') : 'N/A'}
                                     </p>
                                     ${demurrageBadge}
@@ -513,10 +520,10 @@ function abrirModalProgramar(containerId, containerIdStr) {
         .then(response => response.json())
         .then(container => {
             document.getElementById('programar-container-info').innerHTML = `
-                <h6><i class="fas fa-box"></i> ${container.container_id_formatted || container.container_id}</h6>
+                <h6><i class="fas fa-box"></i> ${e(container.container_id_formatted || container.container_id)}</h6>
                 <p class="mb-1"><i class="fas fa-ship"></i> Nave: ${container.nave || 'N/A'}</p>
                 <p class="mb-1"><i class="fas fa-weight"></i> Peso: ${container.peso_total ? (container.peso_total/1000).toFixed(2) + ' ton' : 'N/A'}</p>
-                <p class="mb-0"><i class="fas fa-map-marker-alt"></i> Ubicación: ${container.posicion_fisica || 'Sin ubicación'}</p>
+                <p class="mb-0"><i class="fas fa-map-marker-alt"></i> Ubicación: ${e(container.posicion_fisica || 'Sin ubicación')}</p>
             `;
             
             // Pre-llenar cliente si existe
@@ -536,7 +543,7 @@ function abrirModalProgramar(containerId, containerIdStr) {
                 data.results.forEach(cd => {
                     const option = document.createElement('option');
                     option.value = cd.id;
-                    option.textContent = `${cd.nombre} - ${cd.comuna}`;
+                    option.textContent = `${e(cd.nombre)} - ${e(cd.comuna)}`;
                     select.appendChild(option);
                 });
             }
@@ -613,7 +620,7 @@ function confirmarProgramacion() {
                         const detalles = `\nDetalles de la programación existente:\n` +
                             `- ID: ${prog.id}\n` +
                             `- Fecha: ${new Date(prog.fecha_programada).toLocaleString('es-CL')}\n` +
-                            `- CD: ${prog.cd || 'N/A'}\n` +
+                            `- CD: ${e(prog.cd) || 'N/A'}\n` +
                             `- ${prog.tiene_conductor ? 'Ya tiene conductor asignado' : 'Sin conductor asignado'}`;
                         throw new Error(err.error + detalles);
                     }
@@ -696,7 +703,7 @@ function loadContainersSinAsignar() {
                                     <p class="mb-1 small text-muted">
                                         <i class="fas fa-ship"></i> ${nave}<br>
                                         <i class="fas fa-calendar"></i> ${fechaProg ? new Date(fechaProg).toLocaleDateString('es-CL') : 'Sin fecha'}<br>
-                                        <i class="fas fa-building"></i> ${prog.cd_nombre || 'Sin CD'}
+                                        <i class="fas fa-building"></i> ${e(prog.cd_nombre) || 'Sin CD'}
                                     </p>
                                 </div>
                                 <div>
@@ -743,7 +750,7 @@ function loadConductoresDisponibles() {
                         <div class="card-body py-2">
                             <div class="d-flex justify-content-between align-items-center">
                                 <div>
-                                    <strong>${driver.nombre}</strong><br>
+                                    <strong>${e(driver.nombre)}</strong><br>
                                     <small class="text-muted">
                                         Entregas: ${driver.num_entregas_dia}/${driver.max_entregas_dia} 
                                         | Cumpl: ${driver.cumplimiento_porcentaje}%
@@ -817,7 +824,7 @@ function loadContaineresAsignados() {
                                         <div class="col-md-6">
                                             <h5><i class="fas fa-box"></i> ${cont.container_id_formatted || cont.container_id}</h5>
                                             <p class="mb-1"><i class="fas fa-ship"></i> <strong>Nave:</strong> ${cont.nave || 'N/A'}</p>
-                                            <p class="mb-1"><i class="fas fa-building"></i> <strong>CD:</strong> ${cont.cd_entrega_nombre || 'N/A'}</p>
+                                            <p class="mb-1"><i class="fas fa-building"></i> <strong>CD:</strong> ${e(cont.cd_entrega_nombre) || 'N/A'}</p>
                                             <p class="mb-0"><span class="badge bg-${cont.estado === 'asignado' ? 'warning' : 'info'}">${cont.estado_display}</span></p>
                                         </div>
                                         <div class="col-md-6">
@@ -906,8 +913,8 @@ function asignarManualProg(progId) {
             data.results.forEach(driver => {
                 content += `
                     <button class="list-group-item list-group-item-action" 
-                            onclick="confirmarAsignacionManualProg(${progId}, ${driver.id}, '${driver.nombre}')">
-                        <strong>${driver.nombre}</strong><br>
+                            onclick="confirmarAsignacionManualProg(${progId}, ${driver.id}, encodeURIComponent(driver.nombre || ''))">
+                        <strong>${e(driver.nombre)}</strong><br>
                         <small>Entregas: ${driver.num_entregas_dia}/${driver.max_entregas_dia} | 
                         Cumplimiento: ${driver.cumplimiento_porcentaje}%</small>
                     </button>
@@ -939,6 +946,7 @@ function asignarManualProg(progId) {
 }
 
 function confirmarAsignacionManualProg(progId, driverId, driverNombre) {
+    driverNombre = decodeURIComponent(driverNombre);
     fetch(`/api/programaciones/${progId}/asignar_conductor/`, {
         method: 'POST',
         headers: {
@@ -1149,7 +1157,7 @@ async function crearPreAsignacion() {
 
         if (data.success) {
             renderPreasignacionResult(data);
-            mostrarToast(`✅ Pre-asignación creada para ${data.driver.nombre}`, 'success');
+            mostrarToast(`✅ Pre-asignación creada para ${e(data.driver.nombre)}`, 'success');
         } else {
             mostrarToast(`❌ ${data.error}`, 'danger');
         }
@@ -1202,7 +1210,7 @@ function renderPreasignacionResult(data) {
                             <strong>ETA alternativo:</strong> ${optimo.eta_min} min (confianza ${(optimo.confianza * 100).toFixed(0)}%)
                         </div>
                     ` : ''}
-                    <p class="mb-1 small"><strong>Driver:</strong> ${data.driver.nombre} — ${data.driver.patente}</p>
+                    <p class="mb-1 small"><strong>Driver:</strong> ${e(data.driver.nombre)} — ${e(data.driver.patente)}</p>
                     <p class="mb-1 small"><strong>Service ID:</strong> <code>${data.service_id}</code></p>
                 </div>
             </div>

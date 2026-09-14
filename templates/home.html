@@ -188,6 +188,13 @@
 </div>
 
 <script>
+// Escape HTML (anti-XSS): única fuente de sanitización de este template.
+function e(s) {
+    return s == null ? '' : String(s).replace(/[&<>"']/g, function(m) {
+        return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m];
+    });
+}
+
 // Función para cargar programaciones prioritarias
 async function cargarProgramacionesPrioritarias() {
     try {
@@ -218,9 +225,9 @@ async function cargarProgramacionesPrioritarias() {
             
             html += `
                 <tr>
-                    <td><strong>${prog.container_id_formatted || prog.container_id}</strong></td>
-                    <td>${prog.cd || 'N/A'}</td>
-                    <td>${prog.conductor || '<span class="text-muted">Sin asignar</span>'}</td>
+                    <td><strong>${e(prog.container_id_formatted || prog.container_id)}</strong></td>
+                    <td>${e(prog.cd || 'N/A')}</td>
+                    <td>${prog.conductor ? e(prog.conductor) : '<span class="text-muted">Sin asignar</span>'}</td>
                     <td>
                         ${prog.dias_hasta_programacion !== null ? 
                           (prog.dias_hasta_programacion > 0 ? 

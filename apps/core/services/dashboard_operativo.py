@@ -200,7 +200,9 @@ def riesgo_encadenamiento(desde, hasta) -> list[dict]:
     Si llega tarde -> alerta con déficit en minutos y alternativas de cambio.
     """
     from math import asin, cos, radians, sin, sqrt
-    from time import sleep
+
+    # Caché por (origen, destino): evita llamadas repetidas a Mapbox en el bucle.
+    _cache_tramo = {}
 
     def _haversine_km(lat1, lng1, lat2, lng2):
         R = 6371.0
@@ -268,8 +270,16 @@ def riesgo_encadenamiento(desde, hasta) -> list[dict]:
         # Destino del tramo: CD de B (punto donde debe estar para la 2ª entrega).
         destino = (float(prog_b.cd.lat), float(prog_b.cd.lng))
 
-        viaje_min, km, fuente = _tiempo_viaje_min(origen, destino)
+        clave_tramo = (origen, destino)
+        viaje_min, km, fuente = _cache_tramo.get(
+            clave_tramo, _tiempo_viaje_min(origen, destino)
+        )
+        _cache_tramo[clave_tramo] = (viaje_min, km, fuente)
         llegada_estimada = fin_a + timedelta(minutes=viaje_min + BUFFER_MANIOBRA_MIN)
+        if timezone.is_naive(llegada_estimada):
+            llegada_estimada = timezone.make_aware(llegada_estimada)
+        if timezone.is_naive(prog_b.fecha_programada):
+            prog_b.fecha_programada = timezone.make_aware(prog_b.fecha_programada)
         deficit = (llegada_estimada - prog_b.fecha_programada).total_seconds() / 60
         if deficit <= 0:
             continue  # Alcanza justo o sobra tiempo; no es riesgo.

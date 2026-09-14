@@ -73,11 +73,13 @@ class ConductorImporter:
     
     def es_operativo(self, asistencia):
         """Determina si el conductor está operativo según asistencia"""
+        import re
         if pd.isna(asistencia):
             return False
-        
+
         asistencia_str = str(asistencia).upper().strip()
-        return 'OPERATIVO' in asistencia_str or 'SI' in asistencia_str
+        # Búsqueda con límites de palabra: evita falsos positivos (ej: 'SI' dentro de 'ASISTE').
+        return bool(re.search(r'\b(OPERATIVO|SI|SÍ)\b', asistencia_str))
     
     def procesar(self):
         """Procesa el archivo Excel y crea/actualiza conductores"""

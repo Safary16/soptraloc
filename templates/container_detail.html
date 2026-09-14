@@ -455,6 +455,13 @@
 </div>
 
 <script>
+// Escape HTML (anti-XSS): única fuente de sanitización de este template.
+function e(s) {
+    return s == null ? '' : String(s).replace(/[&<>"']/g, function(m) {
+        return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m];
+    });
+}
+
 function toggleRetornoDestino() {
     const tipo = document.getElementById('retornoDestinoTipo').value;
     document.getElementById('retornoDepositoDiv').style.display = tipo === 'deposito' ? 'block' : 'none';
@@ -566,9 +573,9 @@ document.addEventListener('DOMContentLoaded', function() {
                 html += '<h6><i class="fas fa-calendar-check text-primary"></i> Información de Programación</h6>';
                 html += '<table class="table table-sm">';
                 html += '<tr><td><strong>Fecha Programada:</strong></td><td>' + formatDate(programacion.fecha_programada) + '</td></tr>';
-                html += '<tr><td><strong>Cliente:</strong></td><td>' + (programacion.cliente || 'N/A') + '</td></tr>';
-                html += '<tr><td><strong>CD Destino:</strong></td><td>' + (programacion.cd_nombre || 'N/A') + '</td></tr>';
-                html += '<tr><td><strong>Conductor:</strong></td><td>' + (programacion.driver_nombre || 'No asignado') + '</td></tr>';
+                html += '<tr><td><strong>Cliente:</strong></td><td>' + e(programacion.cliente || 'N/A') + '</td></tr>';
+                html += '<tr><td><strong>CD Destino:</strong></td><td>' + e(programacion.cd_nombre || 'N/A') + '</td></tr>';
+                html += '<tr><td><strong>Conductor:</strong></td><td>' + e(programacion.driver_nombre || 'No asignado') + '</td></tr>';
                 if (programacion.fecha_asignacion) html += '<tr><td><strong>Fecha Asignación:</strong></td><td>' + formatDate(programacion.fecha_asignacion) + '</td></tr>';
                 html += '</table></div>';
                 html += '<div class="col-md-6 mb-3">';
@@ -583,7 +590,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     }
                 }
                 if (programacion.distancia_km) html += '<tr><td><strong>Distancia:</strong></td><td>' + parseFloat(programacion.distancia_km).toFixed(2) + ' km</td></tr>';
-                if (programacion.patente_confirmada) html += '<tr><td><strong>Patente:</strong></td><td>' + programacion.patente_confirmada + '</td></tr>';
+                if (programacion.patente_confirmada) html += '<tr><td><strong>Patente:</strong></td><td>' + e(programacion.patente_confirmada) + '</td></tr>';
                 if (!programacion.eta_minutos && !programacion.fecha_inicio_ruta) html += '<tr><td colspan="2"><em class="text-muted">Sin datos de ruta aún</em></td></tr>';
                 html += '</table></div></div>';
                 const hoy = new Date().toDateString();

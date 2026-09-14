@@ -16,6 +16,8 @@ ALLOWED_HOSTS = config('ALLOWED_HOSTS', default='*', cast=lambda v: [s.strip() f
 CSRF_TRUSTED_ORIGINS = [
     "https://*.github.dev",
     "https://localhost:8000",
+    "https://soptraloc.onrender.com",
+    "https://soptraloc.up.railway.app",
 ]
 
 # Render.com automatic hostname

@@ -123,6 +123,10 @@ class Container(models.Model):
     fecha_vacio = models.DateTimeField('Fecha Vacío', null=True, blank=True, help_text='Contenedor vacío listo para retiro')
     fecha_vacio_ruta = models.DateTimeField('Fecha Vacío en Ruta', null=True, blank=True, help_text='Iniciando retorno a depósito')
     fecha_devolucion = models.DateTimeField('Fecha Devolución', null=True, blank=True, help_text='Devuelto a depósito naviera')
+    fecha_incidente = models.DateTimeField('Fecha Incidente', null=True, blank=True, help_text='Registrado cuando el contenedor entra a estado incidente')
+    fecha_cancelado = models.DateTimeField('Fecha Cancelación', null=True, blank=True, help_text='Registrado cuando el contenedor entra a estado cancelado')
+    fecha_en_ccti = models.DateTimeField('Fecha En CCTI', null=True, blank=True, help_text='Registrado cuando el contenedor vacío ingresa a CCTI')
+    fecha_secuenciado = models.DateTimeField('Fecha Secuenciado', null=True, blank=True, help_text='Registrado cuando el contenedor entra a estado secuenciado')
     vacio_contabilizado = models.BooleanField(
         'Vacío contabilizado en CD', default=False,
         help_text='Evita incrementar más de una vez el inventario de vacíos del CD.'
@@ -268,6 +272,7 @@ class Container(models.Model):
         timestamp_map = {
             'por_arribar': 'fecha_arribo',
             'liberado': 'fecha_liberacion',
+            'secuenciado': 'fecha_secuenciado',
             'programado': 'fecha_programacion',
             'asignado': 'fecha_asignacion',
             'en_ruta': 'fecha_inicio_ruta',
@@ -276,7 +281,10 @@ class Container(models.Model):
             'descargado': 'fecha_descarga',
             'vacio': 'fecha_vacio',
             'vacio_en_ruta': 'fecha_vacio_ruta',
+            'en_ccti': 'fecha_en_ccti',
             'devuelto': 'fecha_devolucion',
+            'incidente': 'fecha_incidente',
+            'cancelado': 'fecha_cancelado',
         }
         
         if nuevo_estado in timestamp_map:

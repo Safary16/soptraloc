@@ -200,6 +200,13 @@
 </div>
 
 <script>
+// Escape HTML (anti-XSS): única fuente de sanitización de este template.
+function e(s) {
+    return s == null ? '' : String(s).replace(/[&<>"']/g, function(m) {
+        return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m];
+    });
+}
+
 // Variables globales
 let programaciones = [];
 let programacionSeleccionada = null;
@@ -306,8 +313,8 @@ function renderizarProgramaciones() {
                 <div class="card-body py-2">
                     <div class="row align-items-center">
                         <div class="col-md-3">
-                            <strong class="text-primary">${prog.container_id_formatted || prog.container_id || 'N/A'}</strong><br>
-                            <small class="text-muted"><i class="fas fa-building"></i> ${prog.cd_nombre || 'N/A'}</small>
+                            <strong class="text-primary">${e(prog.container_id_formatted || prog.container_id) || 'N/A'}</strong><br>
+                            <small class="text-muted"><i class="fas fa-building"></i> ${e(prog.cd_nombre) || 'N/A'}</small>
                         </div>
                         <div class="col-md-3">
                             <small class="text-muted">Programado:</small><br>
@@ -430,9 +437,9 @@ function renderizarConductores() {
                             ${esMejor ? '<div class="mt-1"><span class="badge bg-success"><i class="fas fa-star"></i> Mejor</span></div>' : ''}
                         </div>
                         <div class="col-md-6">
-                            <h6 class="mb-1">${conductor.nombre || 'N/A'}</h6>
+                            <h6 class="mb-1">${e(conductor.nombre) || 'N/A'}</h6>
                             <small class="text-muted">
-                                <i class="fas fa-car"></i> ${conductor.patente || 'Sin patente'}<br>
+                                <i class="fas fa-car"></i> ${e(conductor.patente) || 'Sin patente'}<br>
                                 <i class="fas fa-tasks"></i> ${conductor.num_entregas_dia || 0}/${conductor.max_entregas_dia || 0} entregas
                             </small>
                             <div class="mt-2">
@@ -445,7 +452,7 @@ function renderizarConductores() {
                             </div>
                         </div>
                         <div class="col-md-3 text-end">
-                            <button class="btn btn-ubuntu w-100" onclick="asignarManual(${programacionSeleccionada}, ${conductor.id}, '${conductor.nombre || 'N/A'}')">
+                            <button class="btn btn-ubuntu w-100" onclick="asignarManual(${programacionSeleccionada}, ${conductor.id}, encodeURIComponent(conductor.nombre || 'N/A'))">
                                 <i class="fas fa-check"></i> Asignar
                             </button>
                         </div>
@@ -498,6 +505,7 @@ async function asignarAutomatico(progId) {
 
 // Asignar manualmente
 async function asignarManual(progId, driverId, driverNombre) {
+    driverNombre = decodeURIComponent(driverNombre);
     if (!confirm(`¿Asignar a ${driverNombre}?`)) {
         return;
     }

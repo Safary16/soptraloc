@@ -186,7 +186,7 @@ class MLTimePredictor:
                 # Sin origen conocido, usar estimación conservadora
                 tiempo_viaje = 60  # 1 hora default
             
-            if 'origen_coords' in locals():
+            if origen_coords is not None:
                 destino_coords = (cd.lat, cd.lng)
                 prediccion_viaje = cls.predecir_tiempo_viaje(
                     origen_coords=origen_coords,

@@ -173,6 +173,13 @@
 </div>
 
 <script>
+// Escape HTML (anti-XSS)
+function e(s) {
+    return s == null ? '' : String(s).replace(/[&<>"']/g, function(m) {
+        return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m];
+    });
+}
+
 let operacionesData = [];
 let filtroActual = 'all';
 let fechaSeleccionada = null;
@@ -299,8 +306,8 @@ function mostrarOperaciones() {
                         <div class="col-md-3">
                             <h5><i class="fas fa-box"></i> ${op.container_id}</h5>
                             <p class="mb-1"><strong>Tipo:</strong> ${op.container_tipo}</p>
-                            <p class="mb-1"><strong>CD:</strong> ${op.cd_nombre}</p>
-                            <p class="mb-1"><strong>Cliente:</strong> ${op.cliente || 'N/A'}</p>
+                            <p class="mb-1"><strong>CD:</strong> ${e(op.cd_nombre)}</p>
+                            <p class="mb-1"><strong>Cliente:</strong> ${e(op.cliente) || 'N/A'}</p>
                             <span class="badge estado-badge-custom ${getEstadoBadge(op.estado_container)}">${op.estado_display}</span>
                         </div>
                         
@@ -308,8 +315,8 @@ function mostrarOperaciones() {
                         <div class="col-md-3">
                             <h6><i class="fas fa-user"></i> Conductor</h6>
                             ${op.conductor ? `
-                                <p class="mb-1"><strong>${op.conductor}</strong></p>
-                                <p class="mb-0"><i class="fas fa-car"></i> ${op.patente || 'Sin patente'}</p>
+                                <p class="mb-1"><strong>${e(op.conductor)}</strong></p>
+                                <p class="mb-0"><i class="fas fa-car"></i> ${e(op.patente) || 'Sin patente'}</p>
                             ` : '<p class="text-danger"><i class="fas fa-exclamation-triangle"></i> Sin asignar</p>'}
                         </div>
                         

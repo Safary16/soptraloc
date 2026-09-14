@@ -165,7 +165,7 @@ def analytics_conductores(request):
             'max_entregas_dia': driver.max_entregas_dia,
             'total_entregas': driver.total_entregas,
             'entregas_a_tiempo': driver.entregas_a_tiempo,
-            'cumplimiento_porcentaje': float(driver.cumplimiento_porcentaje),
+            'cumplimiento_porcentaje': float(driver.cumplimiento_porcentaje or 0),
             'ocupacion_porcentaje': float(driver.ocupacion_porcentaje),
             'programaciones_completadas': programaciones_completadas,
             'perfil_velocidad_ml': perfil_ml,
@@ -204,7 +204,7 @@ def analytics_eficiencia(request):
     # Calcular tasa de cumplimiento general
     drivers = Driver.objects.all()
     if drivers.exists():
-        tasa_cumplimiento = sum(float(d.cumplimiento_porcentaje) for d in drivers) / drivers.count()
+        tasa_cumplimiento = sum(float(d.cumplimiento_porcentaje or 0) for d in drivers) / drivers.count()
     else:
         tasa_cumplimiento = 0
     

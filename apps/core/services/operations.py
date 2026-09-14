@@ -13,7 +13,11 @@ class OperationalFlowService:
         ).exists():
             return None
         estimated = programacion.cd.tiempo_promedio_descarga_min or 60
-        actual = max(1, int((finished_at - started_at).total_seconds() / 60))
+        delta_min = int((finished_at - started_at).total_seconds() / 60)
+        if delta_min <= 0:
+            # Reloj erróneo o datos inconsistentes: no dejar 1 min que envenene el ML.
+            delta_min = max(1, estimated)
+        actual = max(1, delta_min)
         return TiempoOperacion.objects.create(
             cd=programacion.cd,
             conductor=programacion.driver,

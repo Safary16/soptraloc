@@ -46,7 +46,9 @@ class OperationalLearningEngine:
     def _weighted_factor(cls, rows, departure, driver=None, route_signature=None):
         weighted = []
         for row in rows:
-            factor = max(0.45, min(2.5, row.calcular_factor_correccion()))
+            factor = row.calcular_factor_correccion()
+            factor = factor if factor == factor else 1.0  # NaN guard
+            factor = max(0.45, min(2.5, factor))
             age_days = max(0, (timezone.now().date() - row.fecha).days)
             weight = exp(-age_days / 75)
             hour_distance = cls._circular_hour_distance(row.hora_del_dia, departure.hour)

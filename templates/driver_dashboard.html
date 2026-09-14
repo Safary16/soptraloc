@@ -218,6 +218,13 @@
     </a>
     
     <script>
+// Escape HTML (anti-XSS): única fuente de sanitización de este template.
+function e(s) {
+    return s == null ? '' : String(s).replace(/[&<>"']/g, function(m) {
+        return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m];
+    });
+}
+
         const driverId = {{ driver.id }};
         let watchId = null;
         let gpsActive = false;
@@ -614,7 +621,7 @@
                     // Nueva asignación detectada
                     showNotification(
                         '🚚 Nueva Asignación',
-                        `Contenedor ${assignment.contenedor || 'N/A'} - Cliente: ${assignment.cliente || 'N/A'}`
+                        `Contenedor ${e(assignment.contenedor) || 'N/A'} - Cliente: ${e(assignment.cliente) || 'N/A'}`
                     );
                 }
             });
@@ -685,13 +692,13 @@
                     <div class="container-item" data-prog-id="${prog.id}">
                         <div class="d-flex justify-content-between align-items-center">
                             <div class="container-number">
-                                <i class="fas fa-box"></i> ${prog.contenedor || 'N/A'}
+                                <i class="fas fa-box"></i> ${e(prog.contenedor || 'N/A')}
                             </div>
                             <span class="badge bg-${statusColor} badge-status">${prog.estado}</span>
                         </div>
                         
                         <div class="mt-2">
-                            <strong>Cliente:</strong> ${prog.cliente || 'N/A'}
+                            <strong>Cliente:</strong> ${e(prog.cliente || 'N/A')}
                         </div>
                         
                         ${fechaProgramada ? `
@@ -718,8 +725,8 @@
                         ${prog.cd ? `
                         <div class="cd-info">
                             <h6><i class="fas fa-map-marker-alt"></i> Presentarse en:</h6>
-                            <p><strong>${prog.cd}</strong></p>
-                            <p><i class="fas fa-map"></i> ${prog.cd_direccion || 'N/A'}</p>
+                            <p><strong>${e(prog.cd)}</strong></p>
+                            <p><i class="fas fa-map"></i> ${e(prog.cd_direccion || 'N/A')}</p>
                             
                             ${prog.cd_direccion ? `
                             <a href="https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(prog.cd_direccion)}" 
