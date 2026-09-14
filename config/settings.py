@@ -174,3 +174,32 @@ LOGIN_REDIRECT_URL = '/driver/dashboard/'
 LOGOUT_REDIRECT_URL = '/driver/login/'
 
 SITE_URL = config('SITE_URL', default='http://localhost:8000')
+
+# Logging para capturar cualquier error 500 en producción (Render)
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'handlers': {
+        'console': {
+            'level': 'INFO',
+            'class': 'logging.StreamHandler',
+        },
+    },
+    'root': {
+        'handlers': ['console'],
+        'level': 'INFO',
+    },
+    'loggers': {
+        'django': {
+            'handlers': ['console'],
+            'level': 'INFO',
+            'propagate': True,
+        },
+        'django.request': {
+            'handlers': ['console'],
+            'level': 'ERROR',
+            'propagate': False,
+        },
+    },
+}
+
