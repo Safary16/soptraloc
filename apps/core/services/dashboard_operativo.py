@@ -249,7 +249,7 @@ def riesgo_encadenamiento(desde, hasta) -> list[dict]:
             driver=prog_b.driver,
             fecha_programada__lt=prog_b.fecha_programada,
             container__estado__in=ESTADOS_CONTAINER_ACTIVOS,
-        ).exclude(pk=prog_b.pk).order_by('-fecha_programada').select_related('cd').first()
+        ).exclude(pk=prog_b.pk).order_by('-fecha_programada').select_related('cd', 'container').first()
         if not anterior or not anterior.cd:
             continue
 
