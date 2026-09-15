@@ -58,7 +58,7 @@ class ContainerViewSet(viewsets.ModelViewSet):
     permission_classes = [AllowAny]
 
     def get_permissions(self):
-        public_actions = {'list', 'retrieve', 'export_stock', 'export_liberacion_excel'}
+        public_actions = {'list', 'retrieve', 'export_stock', 'export_liberacion_excel', 'vacios'}
         classes = [AllowAny] if self.action in public_actions else [IsAdminUser]
         return [permission() for permission in classes]
 
@@ -665,9 +665,7 @@ class ContainerViewSet(viewsets.ModelViewSet):
     
     @action(detail=False, methods=['get'], url_path='liberados')
     def liberados(self, request):
-        """
-        Lista contenedores liberados disponibles para programar
-        """
+        """Lista contenedores liberados disponibles para programar"""
         containers = Container.objects.filter(
             estado='liberado'
         ).select_related('cd_entrega').order_by('-fecha_liberacion')
@@ -678,6 +676,19 @@ class ContainerViewSet(viewsets.ModelViewSet):
             'success': True,
             'total': containers.count(),
             'containers': serializer.data
+        })
+
+    @action(detail=False, methods=['get'], url_path='vacios')
+    def vacios(self, request):
+        """Contenedores vacíos para el reporte de retornos (con ubicación, tamaño y depósito)"""
+        qs = Container.objects.filter(
+            estado__in=['vacio', 'vacio_en_ruta']
+        ).select_related('cd_entrega', 'retorno_destino_cd').order_by('deposito_devolucion', 'container_id')
+        serializer = ContainerListSerializer(qs, many=True)
+        return Response({
+            'success': True,
+            'total': qs.count(),
+            'vacios': serializer.data
         })
     
     @action(detail=True, methods=['post'], permission_classes=[AllowAny])

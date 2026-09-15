@@ -20,7 +20,7 @@ from apps.cds.views import CDViewSet
 from apps.core.views import (
     inicio, home, asignacion, estados, importar, 
     containers_list, container_detail,
-    operaciones, drivers_list, cds_list, executive_dashboard,
+    operaciones, operaciones_panel, drivers_list, cds_list, executive_dashboard,
     operaciones_diarias as operaciones_diarias_view,
     auditoria
 )
@@ -51,6 +51,7 @@ urlpatterns = [
     path('containers/', containers_list, name='containers_list'),
     path('container/<str:container_id>/', container_detail, name='container_detail'),
     path('operaciones/', operaciones, name='operaciones'),
+    path('operaciones/panel/', operaciones_panel, name='operaciones_panel'),
     path('drivers/', drivers_list, name='drivers_list'),
     path('cds/', cds_list, name='cds_list'),
     path('executive/', executive_dashboard, name='executive_dashboard'),

@@ -23,6 +23,8 @@ class ProgramacionListSerializer(serializers.ModelSerializer):
     container_id = serializers.CharField(source='container.container_id', read_only=True)
     container_id_formatted = serializers.CharField(source='container.container_id_formatted', read_only=True)
     driver_nombre = serializers.CharField(source='driver.nombre', read_only=True, allow_null=True)
+    driver_patente = serializers.CharField(source='driver.patente', read_only=True, allow_null=True)
+    container_tipo = serializers.CharField(source='container.tipo', read_only=True, allow_null=True)
     cd_nombre = serializers.CharField(source='cd.nombre', read_only=True)
     cd_lat = serializers.DecimalField(source='cd.lat', max_digits=9, decimal_places=6, read_only=True)
     cd_lng = serializers.DecimalField(source='cd.lng', max_digits=9, decimal_places=6, read_only=True)
@@ -33,7 +35,7 @@ class ProgramacionListSerializer(serializers.ModelSerializer):
         model = Programacion
         fields = [
             'id', 'container_id', 'container_id_formatted', 'fecha_programada', 'cliente', 'cd_nombre', 'cd_lat', 'cd_lng',
-            'driver_nombre', 'requiere_alerta', 'horas_hasta_programacion',
+            'driver_nombre', 'driver_patente', 'container_tipo', 'requiere_alerta', 'horas_hasta_programacion',
             'estado_container', 'fecha_asignacion', 'fecha_inicio_ruta',
             'fecha_arribo_cd', 'gps_arribo_lat', 'gps_arribo_lng', 'origen_arribo',
             'eta_minutos', 'distancia_km', 'patente_confirmada',

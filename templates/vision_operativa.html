@@ -1,0 +1,376 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Visión del Día - SoptraLoc{% endblock %}
+
+{% block extra_css %}
+<style>
+    .vision-clock {
+        font-size: 1.9rem;
+        font-weight: 700;
+        letter-spacing: 0.03em;
+        font-variant-numeric: tabular-nums;
+        color: var(--ubuntu-orange);
+    }
+    .vision-date-label {
+        font-size: 1.02rem;
+        color: var(--text-muted);
+    }
+    .day-picker .btn { border-radius: 8px; }
+    .sin-asignar-badge {
+        background: #dc3545;
+        color: #fff;
+        font-weight: 600;
+        font-size: 0.72rem;
+        padding: 0.28em 0.6em;
+        border-radius: 20px;
+        animation: pulse-red 1.8s infinite;
+    }
+    @keyframes pulse-red {
+        0%, 100% { box-shadow: 0 0 0 0 rgba(220,53,69,.45); }
+        50% { box-shadow: 0 0 0 6px rgba(220,53,69,0); }
+    }
+    .asignado-badge {
+        background: #28a745;
+        color: #fff;
+        font-weight: 600;
+        font-size: 0.75rem;
+        padding: 0.28em 0.6em;
+        border-radius: 20px;
+    }
+    .table-dense td { vertical-align: middle; }
+    .vacio-row td { vertical-align: middle; }
+    .th-sort { cursor: pointer; user-select: none; white-space: nowrap; }
+    .th-sort:hover { color: var(--ubuntu-orange); }
+    .th-sort i { font-size: 0.75rem; margin-left: 3px; opacity: .6; }
+    .driver-option { cursor: pointer; transition: background .15s ease; }
+    .driver-option:hover { background: rgba(233,84,32,.08); }
+    .suggested-tag { font-size: 0.68rem; background: #E95420; color: #fff; border-radius: 10px; padding: 2px 8px; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <!-- Cabecera: reloj + selector de día -->
+    <div class="row mb-3 align-items-center">
+        <div class="col-md-5">
+            <div class="d-flex align-items-center gap-3">
+                <div class="vision-clock" id="visionClock">--:--:--</div>
+                <div>
+                    <div class="vision-date-label" id="visionDateLabel"></div>
+                    <small class="text-muted">{{ hoy|date:"l d M Y" }}</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-7">
+            <div class="d-flex flex-wrap justify-content-md-end align-items-center gap-2 day-picker">
+                <button class="btn btn-outline-secondary btn-sm" onclick="shiftDia(-1)" title="Día anterior"><i class="fas fa-chevron-left"></i></button>
+                <button class="btn btn-outline-secondary btn-sm" onclick="setDia('hoy')">Hoy</button>
+                <button class="btn btn-outline-secondary btn-sm" onclick="setDia('manana')">Mañana</button>
+                <input type="date" id="fechaInput" class="form-control form-control-sm" style="width:auto" onchange="setDia('custom')">
+                <button class="btn btn-outline-secondary btn-sm" onclick="shiftDia(1)" title="Día siguiente"><i class="fas fa-chevron-right"></i></button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Servicios programados del día -->
+    <div class="card mb-4">
+        <div class="card-header d-flex justify-content-between align-items-center" style="background:var(--bg-table-head);color:var(--text-primary)">
+            <span><i class="fas fa-clipboard-list"></i> <strong>Servicios del Día</strong>
+                <span class="badge bg-warning text-dark ms-1" id="totalDia">0</span>
+                <span class="badge bg-danger ms-1" id="totalSinAsignar">0</span>
+            </span>
+            <span class="d-flex gap-1 flex-wrap">
+                <button class="btn btn-sm btn-outline-secondary th-sort" onclick="ordenarTabla('hora')"><i class="fas fa-clock"></i> Hora</button>
+                <button class="btn btn-sm btn-outline-secondary th-sort" onclick="ordenarTabla('cliente')"><i class="fas fa-building"></i> Cliente</button>
+                <button class="btn btn-sm btn-outline-secondary th-sort" onclick="ordenarTabla('asig')"><i class="fas fa-user-check"></i> Asignación</button>
+            </span>
+        </div>
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-dense table-hover mb-0">
+                    <thead style="background:var(--bg-table-head);color:var(--text-primary)">
+                        <tr>
+                            <th class="th-sort" onclick="ordenarTabla('hora')">Hora <i class="fas fa-sort"></i></th>
+                            <th>Contenedor</th>
+                            <th class="th-sort" onclick="ordenarTabla('cliente')">Cliente <i class="fas fa-sort"></i></th>
+                            <th>CD</th>
+                            <th>Tamaño</th>
+                            <th>Estado</th>
+                            <th class="th-sort" onclick="ordenarTabla('asig')">Conductor <i class="fas fa-sort"></i></th>
+                            <th>Acción</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tablaDia">
+                        <tr><td colspan="8" class="text-center text-muted py-4">Cargando servicios del día…</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Reporte de vacíos -->
+    <div class="card">
+        <div class="card-header d-flex justify-content-between align-items-center" style="background:var(--bg-table-head);color:var(--text-primary)">
+            <span><i class="fas fa-box-open"></i> <strong>Contenedores Vacíos</strong>
+                <span class="badge bg-info text-dark ms-1" id="totalVacios">0</span>
+            </span>
+            <button class="btn btn-sm btn-outline-secondary th-sort" onclick="ordenarVacios()"><i class="fas fa-sort"></i> Ordenar por lugar de devolución</button>
+        </div>
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-dense table-hover mb-0">
+                    <thead style="background:var(--bg-table-head);color:var(--text-primary)">
+                        <tr>
+                            <th>Contenedor</th>
+                            <th>Tamaño</th>
+                            <th>Ubicación</th>
+                            <th>Devuelve a</th>
+                            <th>Estado</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tablaVacios">
+                        <tr><td colspan="5" class="text-center text-muted py-4">Cargando vacíos…</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <div class="mt-3">
+        <a href="/operaciones/panel/" class="btn btn-sm btn-outline-secondary"><i class="fas fa-tasks"></i> Panel completo (liberación, ciclo, preasignación)</a>
+    </div>
+</div>
+
+<!-- Modal asignar conductor -->
+<div class="modal fade" id="asignarModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="fas fa-user-plus"></i> Asignar Conductor</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p class="small text-muted" id="modalProgDesc"></p>
+                <div id="conductoresList" class="list-group">
+                    <p class="text-muted text-center py-3 mb-0">Cargando conductores disponibles…</p>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-outline-secondary" data-bs-dismiss="modal">Cerrar</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// ================= Estado =================
+let fechaActual = new Date();
+fechaActual.setHours(0,0,0,0);
+let servicios = [];
+let vacios = [];
+let orden = 'hora';
+let modalProg = null;
+
+// ================= Reloj =================
+function tickReloj() {
+    const n = new Date();
+    const hh = String(n.getHours()).padStart(2,'0');
+    const mm = String(n.getMinutes()).padStart(2,'0');
+    const ss = String(n.getSeconds()).padStart(2,'0');
+    document.getElementById('visionClock').textContent = `${hh}:${mm}:${ss}`;
+    document.getElementById('visionDateLabel').textContent = n.toLocaleDateString('es-CL', {weekday:'long', day:'numeric', month:'long'});
+}
+setInterval(tickReloj, 1000);
+tickReloj();
+
+// ================= Día =================
+function fmtFecha(d) {
+    return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+}
+function setDia(tipo) {
+    if (tipo === 'hoy') { fechaActual = new Date(); fechaActual.setHours(0,0,0,0); }
+    else if (tipo === 'manana') { fechaActual = new Date(); fechaActual.setDate(fechaActual.getDate()+1); fechaActual.setHours(0,0,0,0); }
+    else if (tipo === 'custom') {
+        const v = document.getElementById('fechaInput').value;
+        if (v) { fechaActual = new Date(v + 'T00:00:00'); }
+    }
+    document.getElementById('fechaInput').value = fmtFecha(fechaActual);
+    cargarDia();
+}
+function shiftDia(n) {
+    fechaActual.setDate(fechaActual.getDate() + n);
+    document.getElementById('fechaInput').value = fmtFecha(fechaActual);
+    cargarDia();
+}
+
+// ================= Carga de datos =================
+function cargarDia() {
+    document.getElementById('tablaDia').innerHTML = '<tr><td colspan="8" class="text-center text-muted py-4">Cargando…</td></tr>';
+    fetch(`/api/programaciones/por-dia/?fecha=${fmtFecha(fechaActual)}`)
+        .then(r => r.json())
+        .then(d => {
+            if (!d.success) throw new Error(d.error || 'error');
+            servicios = d.programaciones || [];
+            renderTabla();
+            document.getElementById('totalDia').textContent = servicios.length;
+            const sin = servicios.filter(s => !s.driver_nombre).length;
+            document.getElementById('totalSinAsignar').textContent = sin ? `⚠ ${sin} sin asignar` : 'todos asignados';
+            document.getElementById('totalSinAsignar').className = sin ? 'badge bg-danger ms-1' : 'badge bg-success ms-1';
+        })
+        .catch(e => {
+            document.getElementById('tablaDia').innerHTML = `<tr><td colspan="8" class="text-center text-danger py-4">Error: ${e.message}</td></tr>`;
+        });
+    cargarVacios();
+}
+function cargarVacios() {
+    fetch('/api/containers/vacios/')
+        .then(r => r.json())
+        .then(d => {
+            vacios = (d && d.vacios) || [];
+            document.getElementById('totalVacios').textContent = vacios.length;
+            renderVacios();
+        })
+        .catch(() => {
+            document.getElementById('tablaVacios').innerHTML = '<tr><td colspan="5" class="text-center text-danger py-4">Error cargando vacíos</td></tr>';
+        });
+}
+
+// ================= Render =================
+function estadoBadge(est) {
+    const colores = {por_arribar:'secondary',liberado:'info',secuenciado:'dark',programado:'primary',asignado:'warning',en_ruta:'info',entregado:'success',descargado:'success',vacio:'secondary',vacio_en_ruta:'secondary',devuelto:'secondary'};
+    const c = colores[est] || 'secondary';
+    return `<span class="badge bg-${c}">${est ? est.replace(/_/g,' ') : '—'}</span>`;
+}
+function renderTabla() {
+    const filas = ordenar(servicios, orden);
+    const tbody = document.getElementById('tablaDia');
+    if (!filas.length) {
+        tbody.innerHTML = '<tr><td colspan="8" class="text-center text-success py-4"><i class="fas fa-check-circle"></i> Sin servicios programados para este día</td></tr>';
+        return;
+    }
+    tbody.innerHTML = filas.map(s => {
+        const hora = s.fecha_programada ? new Date(s.fecha_programada).toLocaleTimeString('es-CL', {hour:'2-digit', minute:'2-digit'}) : '—';
+        const conductor = s.driver_nombre
+            ? `<span class="asignado-badge"><i class="fas fa-user-check"></i> ${esc(s.driver_nombre)} · ${esc(s.driver_patente || 's/patente')}</span>`
+            : `<span class="sin-asignar-badge"><i class="fas fa-exclamation-triangle"></i> SIN ASIGNAR</span>`;
+        const accion = s.driver_nombre
+            ? `<button class="btn btn-sm btn-outline-warning" onclick="abrirAsignar(${s.id}, '${esc(s.container_id_formatted || s.container_id || '')}')"><i class="fas fa-exchange-alt"></i> Cambiar</button>`
+            : `<button class="btn btn-sm btn-ubuntu" onclick="abrirAsignar(${s.id}, '${esc(s.container_id_formatted || s.container_id || '')}')"><i class="fas fa-user-plus"></i> Asignar</button>`;
+        return `<tr>
+            <td><strong>${hora}</strong></td>
+            <td>${esc(s.container_id_formatted || s.container_id)}</td>
+            <td>${esc(s.cliente || '—')}</td>
+            <td>${esc(s.cd_nombre || '—')}</td>
+            <td>${esc(s.container_tipo || '—')}</td>
+            <td>${estadoBadge(s.estado_container)}</td>
+            <td>${conductor}</td>
+            <td>${accion}</td>
+        </tr>`;
+    }).join('');
+}
+function renderVacios() {
+    const tbody = document.getElementById('tablaVacios');
+    if (!vacios.length) {
+        tbody.innerHTML = '<tr><td colspan="5" class="text-center text-success py-4"><i class="fas fa-check-circle"></i> Sin contenedores vacíos pendientes</td></tr>';
+        return;
+    }
+    tbody.innerHTML = vacios.map(c => {
+        const ubicacion = c.posicion_fisica || c.comuna || '—';
+        const devuelve = c.deposito_devolucion || c.retorno_destino_cd_nombre || '—';
+        return `<tr class="vacio-row">
+            <td><strong>${esc(c.container_id_formatted || c.container_id)}</strong></td>
+            <td>${esc(c.tipo || '—')}</td>
+            <td>${esc(ubicacion)}</td>
+            <td>${esc(devuelve)}</td>
+            <td>${estadoBadge(c.estado)}</td>
+        </tr>`;
+    }).join('');
+}
+
+// ================= Orden =================
+function ordenar(lista, modo) {
+    const copia = [...lista];
+    switch (modo) {
+        case 'cliente': copia.sort((a,b) => (a.cliente||'').localeCompare(b.cliente||'')); break;
+        case 'asig': copia.sort((a,b) => (a.driver_nombre?1:0) - (b.driver_nombre?1:0)); break;
+        default: copia.sort((a,b) => new Date(a.fecha_programada) - new Date(b.fecha_programada));
+    }
+    return copia;
+}
+function ordenarTabla(modo) { orden = modo; renderTabla(); }
+let vaciosAsc = true;
+function ordenarVacios() {
+    vaciosAsc = !vaciosAsc;
+    const x = vaciosAsc ? 1 : -1;
+    vacios.sort((a,b) => ((a.deposito_devolucion||a.retorno_destino_cd_nombre||'') + '').localeCompare(((b.deposito_devolucion||b.retorno_destino_cd_nombre||'') + '')) * x);
+    renderVacios();
+}
+
+// ================= Asignación =================
+function abrirAsignar(progId, containerDesc) {
+    modalProg = progId;
+    document.getElementById('modalProgDesc').textContent = `Contenedor: ${containerDesc}`;
+    document.getElementById('conductoresList').innerHTML = '<p class="text-muted text-center py-3 mb-0">Cargando conductores disponibles…</p>';
+    const modal = new bootstrap.Modal(document.getElementById('asignarModal'));
+    modal.show();
+    fetch(`/api/programaciones/${progId}/conductores_disponibles/`)
+        .then(r => r.json())
+        .then(d => {
+            const lista = (d && d.conductores) || [];
+            if (!lista.length) {
+                document.getElementById('conductoresList').innerHTML = '<p class="text-warning text-center py-3 mb-0">No hay conductores disponibles ahora</p>';
+                return;
+            }
+            document.getElementById('conductoresList').innerHTML = lista.map((dr, i) => {
+                const score = (dr.score !== undefined && dr.score !== null) ? Math.round(dr.score) : '—';
+                const sugerido = i === 0 ? `<span class="suggested-tag ms-1">★ sugerido</span>` : '';
+                return `<button class="list-group-item list-group-item-action driver-option" onclick="asignar(${dr.id})">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <span><i class="fas fa-user"></i> <strong>${esc(dr.nombre)}</strong> ${sugerido}<br>
+                        <small class="text-muted"><i class="fas fa-car"></i> ${esc(dr.patente || 's/patente')} · ${dr.num_entregas_dia}/${dr.max_entregas_dia} entregas · cumpl. ${dr.cumplimiento_porcentaje}%</small></span>
+                        <span class="badge bg-info">score ${score}</span>
+                    </div>
+                </button>`;
+            }).join('');
+        })
+        .catch(() => {
+            document.getElementById('conductoresList').innerHTML = '<p class="text-danger text-center py-3 mb-0">Error cargando conductores</p>';
+        });
+}
+function asignar(driverId) {
+    if (!modalProg) return;
+    fetch(`/api/programaciones/${modalProg}/asignar_conductor/`, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json', 'X-CSRFToken': getCookie('csrftoken')},
+        body: JSON.stringify({driver_id: driverId})
+    })
+    .then(r => r.json())
+    .then(d => {
+        if (d.success) {
+            bootstrap.Modal.getInstance(document.getElementById('asignarModal')).hide();
+            cargarDia();
+        } else {
+            alert('❌ ' + (d.error || 'No se pudo asignar'));
+        }
+    })
+    .catch(() => alert('❌ Error al asignar conductor'));
+}
+
+// ================= util =================
+function esc(s) {
+    if (s === null || s === undefined) return '';
+    return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+function getCookie(name) {
+    let v = document.cookie.match('(^|;)\\s*' + name + '\\s*=\\s*([^;]+)');
+    return v ? v.pop() : '';
+}
+
+// ================= init =================
+document.getElementById('fechaInput').value = fmtFecha(fechaActual);
+cargarDia();
+</script>
+{% endblock %}

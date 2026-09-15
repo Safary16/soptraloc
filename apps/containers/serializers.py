@@ -41,6 +41,8 @@ class ContainerListSerializer(serializers.ModelSerializer):
     urgencia_demurrage = serializers.ReadOnlyField()
     tiene_programacion = serializers.SerializerMethodField()
     
+    retorno_destino_cd_nombre = serializers.CharField(source='retorno_destino_cd.nombre', read_only=True, allow_null=True)
+
     class Meta:
         model = Container
         fields = [
@@ -50,7 +52,7 @@ class ContainerListSerializer(serializers.ModelSerializer):
             'posicion_fisica', 'comuna', 'secuenciado', 'fecha_programacion',
             'fecha_eta', 'fecha_liberacion', 'fecha_demurrage', 'dias_para_demurrage', 'urgencia_demurrage',
             'deposito_devolucion', 'tipo_movimiento', 'tipo_movimiento_display',
-            'retorno_destino_tipo', 'retorno_destino_cd',
+            'retorno_destino_tipo', 'retorno_destino_cd', 'retorno_destino_cd_nombre',
             'cd_entrega', 'cd_entrega_nombre', 'fecha_descarga',
             # Timestamps del ciclo de vida (para operaciones)
             'fecha_asignacion', 'fecha_inicio_ruta', 'fecha_entrega', 'fecha_arribo',

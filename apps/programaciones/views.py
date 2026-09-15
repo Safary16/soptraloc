@@ -59,6 +59,35 @@ class ProgramacionViewSet(viewsets.ModelViewSet):
         serializer = self.get_serializer(programacion)
         return Response({'found': True, 'programacion': serializer.data})
 
+    @action(detail=False, methods=['get'], url_path='por-dia')
+    def por_dia(self, request):
+        """
+        Programaciones del día (default hoy) con su conductor, CD, cliente y
+        estado, listas para la vista operacional. Acepta ?fecha=YYYY-MM-DD.
+        """
+        from datetime import datetime
+        from datetime import timedelta as _td
+        fecha_str = request.query_params.get('fecha')
+        if fecha_str:
+            try:
+                dia = datetime.strptime(fecha_str, '%Y-%m-%d').date()
+            except ValueError:
+                return Response({'success': False, 'error': 'Formato de fecha inválido, use YYYY-MM-DD'}, status=400)
+        else:
+            dia = timezone.now().date()
+
+        qs = self.queryset.filter(
+            fecha_programada__date=dia
+        ).order_by('fecha_programada')
+
+        serializer = ProgramacionListSerializer(qs, many=True)
+        return Response({
+            'success': True,
+            'fecha': dia.isoformat(),
+            'total': qs.count(),
+            'programaciones': serializer.data
+        })
+
     @action(detail=False, methods=['get'])
     def alertas(self, request):
         """

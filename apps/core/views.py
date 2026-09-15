@@ -126,8 +126,15 @@ def container_detail(request, container_id):
 
 
 def operaciones(request):
-    """Panel de operaciones para asignación y gestión de ciclo de vida"""
-    # Ensure CSRF token is in context for the template
+    """Visión operacional del día: reloj, servicios programados, vacíos y asignación"""
+    from django.middleware.csrf import get_token
+    get_token(request)
+    from django.utils import timezone as _tz
+    return render(request, 'vision_operativa.html', {'hoy': _tz.now()})
+
+
+def operaciones_panel(request):
+    """Panel operativo completo (liberación, ciclo de vida, preasignación)"""
     from django.middleware.csrf import get_token
     get_token(request)
     return render(request, 'operaciones.html')
