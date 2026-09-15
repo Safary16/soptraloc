@@ -928,6 +928,8 @@ class ProgramacionViewSet(viewsets.ModelViewSet):
         
         # Calcular y guardar ETA híbrido (Mapbox + aprendizaje histórico).
         from apps.core.services.learning_engine import OperationalLearningEngine
+        from apps.core.services.ml_predictor import MLTimePredictor
+        eta_ok = False
         try:
             recomendacion = OperationalLearningEngine.recommend(
                 (float(lat), float(lng)),
@@ -952,19 +954,53 @@ class ProgramacionViewSet(viewsets.ModelViewSet):
                     'driver_profile': prediccion.get('driver_profile'),
                     'explanation': recomendacion['explanation'],
                 }
-                programacion.save(update_fields=[
-                    'eta_minutos', 'distancia_km', 'ruta_geojson', 'ruta_firma',
-                    'prediccion_ml', 'updated_at'
-                ])
+                eta_ok = True
         except Exception as e:
             import logging
             logger = logging.getLogger(__name__)
-            logger.warning(f"Error calculando ETA para programación: {str(e)}")
+            logger.warning(f"Error calculando ETA (recommend) para programación: {str(e)}")
         
-        # Crear notificación con ETA
+        # Fallback: si Mapbox/ML recomendación falla, usar el predictor con fallback
+        # (siempre debe quedar una ETA operable para advertir choques y mostrar llegada).
+        if not eta_ok:
+            try:
+                pred_fb = MLTimePredictor.predecir_tiempo_viaje(
+                    (float(lat), float(lng)),
+                    (float(programacion.cd.lat), float(programacion.cd.lng)),
+                    programacion.fecha_inicio_ruta,
+                    conductor=programacion.driver,
+                )
+                programacion.eta_minutos = int(pred_fb['tiempo_estimado_min'])
+                programacion.distancia_km = pred_fb.get('distancia_km') or 0
+                programacion.prediccion_ml = {
+                    'source': pred_fb.get('fuente', 'fallback'),
+                    'mapbox_minutes': pred_fb.get('tiempo_mapbox_min', 0),
+                    'predicted_minutes': programacion.eta_minutos,
+                    'learned_factor': None,
+                    'samples': 0,
+                    'confidence': None,
+                    'driver_profile': None,
+                    'explanation': 'ETA de respaldo (fuente: %s).' % pred_fb.get('fuente', 'fallback'),
+                }
+                eta_ok = True
+            except Exception as e2:
+                import logging
+                logger = logging.getLogger(__name__)
+                logger.warning(f"Error calculando ETA (fallback) para programación: {str(e2)}")
+        
+        if eta_ok:
+            programacion.save(update_fields=[
+                'eta_minutos', 'distancia_km', 'ruta_geojson', 'ruta_firma',
+                'prediccion_ml', 'updated_at'
+            ])
+        
+        # Crear notificación con ETA (pasar la ETA ya calculada de la programación
+        # para no recalcular con Mapbox y quedar sin ella si Mapbox falla).
         try:
             notificacion = NotificationService.crear_notificacion_inicio_ruta(
-                programacion, programacion.driver
+                programacion, programacion.driver,
+                eta_minutos=programacion.eta_minutos,
+                distancia_km=programacion.distancia_km,
             )
             notificacion_data = {
                 'id': notificacion.id,

@@ -130,6 +130,15 @@
                 <div class="col-md-4"><label class="form-label">Posición física</label><input id="edPos" class="form-control"></div>
                 <div class="col-md-6"><label class="form-label">Comuna</label><input id="edComuna" class="form-control"></div>
                 <div class="col-md-6"><label class="form-label">Vendor</label><input id="edVendor" class="form-control"></div>
+                <div class="col-md-6">
+                    <label class="form-label"><i class="fas fa-unlock"></i> Fecha liberación</label>
+                    <input type="datetime-local" id="edFechaLib" class="form-control">
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label"><i class="fas fa-calendar-check"></i> Fecha programación</label>
+                    <input type="datetime-local" id="edFechaProg" class="form-control">
+                    <div class="form-text" id="progEditHint"></div>
+                </div>
             </div>
             <div class="form-text mt-2" id="editMsg"></div>
         </div>
@@ -267,8 +276,19 @@ function confirmarProgramar(){
 }
 
 let editData = null;
+let editProgId = null;
+
+function toDateTimeLocal(s){
+    if (!s) return '';
+    const d = new Date(s);
+    if (isNaN(d)) return '';
+    const pad = n => String(n).padStart(2,'0');
+    return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
 function abrirEditar(id){
     editId = id;
+    editProgId = null;
     const c = stockActual.find(x=>x.id===id);
     if (!c) return;
     editData = c;
@@ -279,6 +299,26 @@ function abrirEditar(id){
     document.getElementById('edPos').value = c.posicion_fisica||'';
     document.getElementById('edComuna').value = c.comuna||'';
     document.getElementById('edVendor').value = c.vendor||'';
+    document.getElementById('edFechaLib').value = toDateTimeLocal(c.fecha_liberacion);
+    document.getElementById('edFechaProg').value = '';
+    document.getElementById('progEditHint').textContent = '';
+    // Buscar la programación de la unidad para permitir mover su fecha
+    if (c.container_id) {
+        fetch(`/api/programaciones/por-container/${encodeURIComponent(c.container_id)}/`)
+            .then(r=>r.json())
+            .then(d=>{
+                const prog = d && d.found ? d.programacion : null;
+                if (prog && prog.id) {
+                    editProgId = prog.id;
+                    document.getElementById('edFechaProg').value = toDateTimeLocal(prog.fecha_programada);
+                    document.getElementById('progEditHint').textContent = 'Programación existente — puedes mover su fecha.';
+                } else {
+                    editProgId = null;
+                    document.getElementById('progEditHint').textContent = 'Sin programación activa (solo se guardará liberación).';
+                }
+            })
+            .catch(()=>{});
+    }
     document.getElementById('editMsg').textContent = '';
     new bootstrap.Modal(document.getElementById('editarModal')).show();
 }
@@ -293,16 +333,32 @@ function confirmarEditar(){
         comuna: document.getElementById('edComuna').value.trim(),
         vendor: document.getElementById('edVendor').value.trim(),
     };
-    fetch(`/api/containers/${editId}/`, {
+    const feLib = document.getElementById('edFechaLib').value;
+    if (feLib) payload.fecha_liberacion = new Date(feLib).toISOString();
+
+    const patchContainer = fetch(`/api/containers/${editId}/`, {
         method:'PATCH',
         headers:{'Content-Type':'application/json','X-CSRFToken':getCookie('csrftoken')},
         body: JSON.stringify(payload)
-    })
-    .then(r=>r.json())
-    .then(d=>{
-        if (!d.id){ document.getElementById('editMsg').textContent='❌ '+(d.estado ? JSON.stringify(d.estado) : 'no se pudo guardar'); return; }
+    }).then(r=>r.json());
+
+    // Si la unidad tiene programación y se cambió su fecha, actualizarla también
+    const feProg = document.getElementById('edFechaProg').value;
+    let patchProg = Promise.resolve(null);
+    if (editProgId && feProg) {
+        patchProg = fetch(`/api/programaciones/${editProgId}/`, {
+            method:'PATCH',
+            headers:{'Content-Type':'application/json','X-CSRFToken':getCookie('csrftoken')},
+            body: JSON.stringify({fecha_programada: new Date(feProg).toISOString()})
+        }).then(r=>r.json());
+    }
+
+    Promise.all([patchContainer, patchProg])
+    .then(([dContainer, dProg]) => {
+        if (!dContainer.id){ document.getElementById('editMsg').textContent='❌ '+(dContainer.estado ? JSON.stringify(dContainer.estado) : 'no se pudo guardar el contenedor'); return; }
+        if (editProgId && feProg && !dProg.id){ document.getElementById('editMsg').textContent='⚠️ Conteiner guardado pero la fecha de programación no se pudo actualizar'; return; }
         bootstrap.Modal.getInstance(document.getElementById('editarModal')).hide();
-        alert('✅ Unidad modificada');
+        alert('✅ Unidad modificada' + (editProgId && feProg ? ' (incl. fecha de programación)' : ''));
         cargarStock();
     });
 }

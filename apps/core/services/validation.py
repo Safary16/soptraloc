@@ -54,9 +54,15 @@ class PreAssignmentValidationService:
         tiempo_requerido = cls._calcular_tiempo_total_asignacion(programacion_nueva)
         
         # Obtener todas las programaciones activas del conductor
+        # Incluye estados que ocupan agenda real del conductor hoy
+        # (entregado/soltado/descargado recientes siguen ocupando hasta su fin llamativo
+        #  para no asignar un 2° servicio antes de que el anterior se cierre del todo)
         programaciones_activas = Programacion.objects.filter(
             driver=driver,
-            container__estado__in=['asignado', 'en_ruta', 'programado']
+            container__estado__in=[
+                'asignado', 'en_ruta', 'programado',
+                'entregado', 'soltado', 'descargado'
+            ]
         ).select_related('container', 'cd').order_by('fecha_programada')
         
         # Calcular ventanas de tiempo ocupadas
@@ -68,7 +74,8 @@ class PreAssignmentValidationService:
                 'container_id': prog.container.container_id,
                 'inicio': ventana['inicio'],
                 'fin': ventana['fin'],
-                'duracion_minutos': ventana['duracion_minutos']
+                'duracion_minutos': ventana['duracion_minutos'],
+                'estado_servicio': ventana.get('estado_servicio', 'ASIGNADO')
             })
         
         # Verificar si la nueva programación se solapa con alguna existente
@@ -87,15 +94,25 @@ class PreAssignmentValidationService:
                 retraso_min = max(0, int((ventana['fin'] - nueva_inicio).total_seconds() / 60))
                 if retraso_min > retraso_maximo_min:
                     retraso_maximo_min = retraso_min
+                # Estado operativo del servicio existente para un aviso más claro
+                estado_serv = ventana.get('estado_servicio', 'activo')
+                ctx = {
+                    'EN RUTA': 'va en ruta y según ETA terminaría a las',
+                    'ENTREGADO': 'fue entregado y quedó libre para las',
+                    'ASIGNADO': 'está programado hasta las',
+                }
+                desc_estado = ctx.get(estado_serv, 'ocupa al conductor hasta las')
                 conflictos.append({
                     'programacion_id': ventana['programacion_id'],
                     'container_id': ventana['container_id'],
+                    'estado_servicio': estado_serv,
                     'inicio_servicio_existente': ventana['inicio'].isoformat(),
                     'fin_servicio_existente': ventana['fin'].isoformat(),
                     'retraso_min': retraso_min,
                     'mensaje': (
-                        f"El conductor ya tiene {ventana['container_id']} programado hasta las "
-                        f"{ventana['fin'].strftime('%H:%M')}; este 2° servicio comenzaría a las "
+                        f"El conductor ya tiene {ventana['container_id']} ({estado_serv.replace('_', ' ').lower()}) "
+                        f"que {desc_estado} {ventana['fin'].strftime('%H:%M')} "
+                        f"(estimado ETA: {ventana['duracion_minutos']} min); este 2° servicio comenzaría a las "
                         f"{nueva_inicio.strftime('%H:%M')} → llegaría con ≈{retraso_min} min de retraso "
                         f"según estimación (viaje + descarga)."
                     ),
@@ -172,23 +189,60 @@ class PreAssignmentValidationService:
     @classmethod
     def _calcular_ventana_tiempo(cls, programacion):
         """
-        Calcula la ventana de tiempo (inicio-fin) de una programación
+        Calcula la ventana de tiempo (inicio-fin) de una programación.
         
-        Returns:
-            dict: {
-                'inicio': datetime,
-                'fin': datetime,
-                'duracion_minutos': int
-            }
+        Real / operativo:
+        - Si el contenedor YA está EN RUTA, la ventana parte del inicio real
+          (fecha_inicio_ruta) y termina en inicio + ETA calculada (eta_minutos),
+          NO en la fecha_programada teórica.
+        - Si quedó entregado/soltado/descargado recién, la ventana termina en
+          la hora real de cierre (fecha_arribo_cd/fecha_descarga) para no
+          pisar al conductor con un 2° servicio inmediato.
+        - Si está programado/asignado (aún sin salir), ventana teórica desde
+          fecha_programada.
         """
+        container = programacion.container
+        estado = container.estado
+        
+        # 1) En ruta: usar inicio real + ETA operativa (clic de la máquina)
+        if estado == 'en_ruta' and programacion.fecha_inicio_ruta:
+            inicio = programacion.fecha_inicio_ruta
+            if programacion.eta_minutos:
+                duracion = int(programacion.eta_minutos)
+            else:
+                duracion = cls._calcular_tiempo_total_asignacion(programacion)
+            fin = inicio + timedelta(minutes=duracion)
+            return {
+                'inicio': inicio,
+                'fin': fin,
+                'duracion_minutos': duracion,
+                'estado_servicio': 'EN_RUTA',
+            }
+        
+        # 2) Cerrado recién (entregado/soltado/descargado): usar fin real
+        if estado in ('entregado', 'soltado', 'descargado'):
+            fin_real = programacion.fecha_arribo_cd or programacion.fecha_inicio_ruta
+            if fin_real:
+                duracion = cls._calcular_tiempo_total_asignacion(programacion)
+                inicio = fin_real
+                # El conductor se libera al cerrar el servicio (~tiempo de descarga restante
+                # = 0 para la agenda siguiente); la ventana puntual marca el cierre.
+                return {
+                    'inicio': inicio,
+                    'fin': fin_real,
+                    'duracion_minutos': 0,
+                    'estado_servicio': 'ENTREGADO',
+                }
+        
+        # 3) Programado/asignado (sin salir aún): ventana teórica
         duracion = cls._calcular_tiempo_total_asignacion(programacion)
         inicio = programacion.fecha_programada
         fin = inicio + timedelta(minutes=duracion)
-        
         return {
             'inicio': inicio,
             'fin': fin,
-            'duracion_minutos': duracion
+            'duracion_minutos': duracion,
+            'estado_servicio': 'ASIGNADO',
         }
     
     @classmethod

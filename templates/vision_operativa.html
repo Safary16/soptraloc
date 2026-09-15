@@ -256,13 +256,22 @@ function renderTabla() {
         const conductor = s.driver_nombre
             ? `<span class="asignado-badge"><i class="fas fa-user-check"></i> ${esc(s.driver_nombre)} · ${esc(s.driver_patente || 's/patente')}</span>`
             : `<span class="sin-asignar-badge"><i class="fas fa-exclamation-triangle"></i> SIN ASIGNAR</span>`;
+        // Llegada estimada: si va en ruta, la máquina ETA ya corrió (inicio real + ETA)
+        let llegada = '';
+        if (s.estado_container === 'en_ruta' && s.fecha_inicio_ruta) {
+            const etaMin = s.eta_minutos != null ? Number(s.eta_minutos) : (s.prediccion_ml && s.prediccion_ml.eta_minutos != null ? Number(s.prediccion_ml.eta_minutos) : null);
+            if (etaMin != null && !isNaN(etaMin)) {
+                const llegadaDate = new Date(new Date(s.fecha_inicio_ruta).getTime() + etaMin * 60000);
+                llegada = `<div class="small" style="color:#0d6efd;font-weight:600;"><i class="fas fa-location-arrow"></i> lleg. est. ${llegadaDate.toLocaleTimeString('es-CL', {hour:'2-digit', minute:'2-digit'})} <span class="text-muted">(ETA ${Math.round(etaMin)} min)</span></div>`;
+            }
+        }
         const accion = s.driver_nombre
             ? `<button class="btn btn-sm btn-outline-warning" onclick="abrirAsignar(${s.id}, '${esc(s.container_id_formatted || s.container_id || '')}')"><i class="fas fa-exchange-alt"></i> Cambiar</button>`
             : `<button class="btn btn-sm btn-ubuntu" onclick="abrirAsignar(${s.id}, '${esc(s.container_id_formatted || s.container_id || '')}')"><i class="fas fa-user-plus"></i> Asignar</button>`;
         return `<tr>
             <td><strong>${hora}</strong></td>
             <td>${esc(s.container_id_formatted || s.container_id)}</td>
-            <td>${esc(s.cliente || '—')}</td>
+            <td>${esc(s.cliente || '—')}${llegada}</td>
             <td>${esc(s.cd_nombre || '—')}</td>
             <td>${esc(s.container_tipo || '—')}</td>
             <td>${estadoBadge(s.estado_container)}</td>
