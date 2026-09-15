@@ -17,6 +17,7 @@ CSRF_TRUSTED_ORIGINS = [
     "https://*.github.dev",
     "https://localhost:8000",
     "https://soptraloc.onrender.com",
+    "https://soptraloc-qiss.onrender.com",
     "https://soptraloc.up.railway.app",
 ]
 
@@ -146,7 +147,8 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 # REST Framework
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': [
-        'rest_framework.authentication.BasicAuthentication',
+        # BasicAuthentication deshabilitada: disparaba el popup HTTP Basic del
+        # navegador ('requiere usuario y contraseña') antes de llegar a Django.
         'rest_framework.authentication.SessionAuthentication',
     ],
     'DEFAULT_PERMISSION_CLASSES': [
