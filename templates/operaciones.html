@@ -924,23 +924,32 @@ function asignarAutomaticoProg(progId) {
 
 function asignarManualProg(progId) {
     selectedContainer = progId;  // Store progId instead
-    
-    fetch(`/api/drivers/?activo=true&presente=true`)
+
+    // Propuesta informada: conductores ordenados por score ML (sugerido primero)
+    fetch(`/api/programaciones/${progId}/conductores_disponibles/`)
         .then(response => response.json())
         .then(data => {
-            let content = '<h6>Seleccione un conductor:</h6><div class="list-group">';
+            const conductores = (data && data.conductores) || [];
+            let content = '<h6>Seleccione un conductor:</h6>';
+            if (conductores.length) {
+                content += '<small class="text-muted">★ El primer conductor es la <strong>sugerencia del sistema</strong> según histórico y estimación ML. Usted puede elegir a cualquiera.</small>';
+            }
+            content += '<div class="list-group mt-2">';
             
-            data.results.forEach(driver => {
+            conductores.forEach((driver, idx) => {
+                const score = driver.score !== undefined && driver.score !== null ? Math.round(driver.score * 100) : '—';
+                const sugerido = idx === 0 ? ' <span class="badge bg-warning text-dark">★ Sugerido</span>' : '';
+                const clasif = driver.clasificacion ? ` | ${driver.clasificacion.replace(/_/g, ' ')}` : '';
                 content += `
                     <button class="list-group-item list-group-item-action" 
                             onclick="confirmarAsignacionManualProg(${progId}, ${driver.id}, encodeURIComponent(driver.nombre || ''))">
-                        <strong>${e(driver.nombre)}</strong><br>
+                        <strong>${e(driver.nombre)}</strong>${sugerido}<br>
                         <small>Entregas: ${driver.num_entregas_dia}/${driver.max_entregas_dia} | 
-                        Cumplimiento: ${driver.cumplimiento_porcentaje}%</small>
+                        Cumplimiento: ${driver.cumplimiento_porcentaje}% | Score: ${score}${clasif}</small>
                     </button>
                 `;
             });
-            
+
             content += '</div>';
             document.getElementById('modal-content').innerHTML = content;
             
@@ -967,7 +976,8 @@ function asignarManualProg(progId) {
 
 function confirmarAsignacionManualProg(progId, driverId, driverNombre) {
     driverNombre = decodeURIComponent(driverNombre);
-    fetch(`/api/programaciones/${progId}/asignar_conductor/`, {
+    // 1. Validar choque de agenda antes de asignar (estimación ML + histórico)
+    fetch(`/api/programaciones/${progId}/validar_asignacion/`, {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
@@ -976,32 +986,94 @@ function confirmarAsignacionManualProg(progId, driverId, driverNombre) {
         body: JSON.stringify({ driver_id: driverId })
     })
     .then(response => response.json())
-    .then(result => {
-        if (result.success) {
-            alert(`✅ ${driverNombre} asignado exitosamente`);
-            // Cerrar modal - verificar Bootstrap
-            if (typeof bootstrap !== 'undefined') {
-                bootstrap.Modal.getInstance(document.getElementById('asignacionModal')).hide();
-            } else {
-                // Fallback: cerrar manualmente
-                const modalElement = document.getElementById('asignacionModal');
-                modalElement.classList.remove('show');
-                modalElement.style.display = 'none';
-                modalElement.removeAttribute('aria-modal');
-                modalElement.removeAttribute('role');
-                const backdrop = document.getElementById('modal-backdrop-asignacion');
-                if (backdrop) backdrop.remove();
-                document.body.classList.remove('modal-open');
+    .then(validacion => {
+        const choques = (validacion && validacion.conflictos) || [];
+        if (validacion.success && choques.length > 0) {
+            // 2. Hay choque → avisar y dejar que el operador decida
+            const retraso = validacion.retraso_maximo_min || (choques[0] && choques[0].retraso_min) || '—';
+            const detalle = choques.map(c => '• ' + (c.mensaje || c)).join('\n');
+            const perfil = (validacion.perfil_ml && validacion.perfil_ml.label)
+                ? `\n\nHistórico del conductor (ML): ${validacion.perfil_ml.label} (factor ${validacion.perfil_ml.factor}, confianza ${Math.round((validacion.perfil_ml.confidence||0)*100)}%)`
+                : '';
+            if (!confirm(`⚠️ CONFLICTO DE AGENDA\n\nEl conductor ${driverNombre} ya tiene servicios que se superponen con este:\n${detalle}\n\nRetraso estimado: ~${retraso} min\n${perfil}\n\n¿Asignar de todas formas?`)) {
+                return;
             }
-            loadContainersSinAsignar();
-            loadConductoresDisponibles();
-        } else {
-            alert(`❌ Error: ${result.error || result.mensaje}`);
         }
+        // 3. Asignar (con o sin choque, según decisión del operador)
+        fetch(`/api/programaciones/${progId}/asignar_conductor/`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCookie('csrftoken')
+            },
+            body: JSON.stringify({ driver_id: driverId })
+        })
+        .then(response => response.json())
+        .then(result => {
+            if (result.success) {
+                alert(`✅ ${driverNombre} asignado exitosamente`);
+                // Cerrar modal - verificar Bootstrap
+                if (typeof bootstrap !== 'undefined') {
+                    bootstrap.Modal.getInstance(document.getElementById('asignacionModal')).hide();
+                } else {
+                    // Fallback: cerrar manualmente
+                    const modalElement = document.getElementById('asignacionModal');
+                    modalElement.classList.remove('show');
+                    modalElement.style.display = 'none';
+                    modalElement.removeAttribute('aria-modal');
+                    modalElement.removeAttribute('role');
+                    const backdrop = document.getElementById('modal-backdrop-asignacion');
+                    if (backdrop) backdrop.remove();
+                    document.body.classList.remove('modal-open');
+                }
+                loadContainersSinAsignar();
+                loadConductoresDisponibles();
+            } else {
+                alert(`❌ Error: ${result.error || result.mensaje}`);
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('❌ Error al asignar conductor');
+        });
     })
     .catch(error => {
-        console.error('Error:', error);
-        alert('❌ Error al asignar conductor');
+        // Si la validación falla, asignar igual (no bloquear la operación)
+        console.error('Error validando:', error);
+        fetch(`/api/programaciones/${progId}/asignar_conductor/`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCookie('csrftoken')
+            },
+            body: JSON.stringify({ driver_id: driverId })
+        })
+        .then(response => response.json())
+        .then(result => {
+            if (result.success) {
+                alert(`✅ ${driverNombre} asignado exitosamente`);
+                if (typeof bootstrap !== 'undefined') {
+                    bootstrap.Modal.getInstance(document.getElementById('asignacionModal')).hide();
+                } else {
+                    const modalElement = document.getElementById('asignacionModal');
+                    modalElement.classList.remove('show');
+                    modalElement.style.display = 'none';
+                    modalElement.removeAttribute('aria-modal');
+                    modalElement.removeAttribute('role');
+                    const backdrop = document.getElementById('modal-backdrop-asignacion');
+                    if (backdrop) backdrop.remove();
+                    document.body.classList.remove('modal-open');
+                }
+                loadContainersSinAsignar();
+                loadConductoresDisponibles();
+            } else {
+                alert(`❌ Error: ${result.error || result.mensaje}`);
+            }
+        })
+        .catch(err => {
+            console.error('Error:', err);
+            alert('❌ Error al asignar conductor');
+        });
     });
 }
 

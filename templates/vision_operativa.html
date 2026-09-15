@@ -342,6 +342,35 @@ function abrirAsignar(progId, containerDesc) {
 }
 function asignar(driverId) {
     if (!modalProg) return;
+    // 1. Validar primero: ¿el conductor choca con otro servicio según ML/histórico?
+    fetch(`/api/programaciones/${modalProg}/validar_asignacion/`, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json', 'X-CSRFToken': getCookie('csrftoken')},
+        body: JSON.stringify({driver_id: driverId})
+    })
+    .then(r => r.json())
+    .then(v => {
+        const choques = (v && v.conflictos) || [];
+        if (v.success && choques.length > 0) {
+            // 2. Hay choque → mostrar advertencia y dejar que el operador decida
+            const retraso = v.retraso_maximo_min || (choques[0].retraso_min) || '—';
+            const detalle = choques.map(c => '• ' + (c.mensaje || c)).join('\n');
+            const perfil = (v.perfil_ml && v.perfil_ml.label) ? `\n\nHistórico del conductor (ML): ${v.perfil_ml.label} (factor ${v.perfil_ml.factor}, confianza ${Math.round((v.perfil_ml.confidence||0)*100)}%)` : '';
+            if (confirm(`⚠️ CONFLICTO DE AGENDA\n\nEl conductor ${v.conductor.nombre} ya tiene servicios que se superponen con este:\n${detalle}\n\nRetraso estimado: ~${retraso} min\n${perfil}\n\n¿Asignar de todas formas?`)) {
+                enviarAsignacion(driverId, v.conductor.nombre);
+            }
+        } else {
+            // 3. Sin choque → asignar directo
+            enviarAsignacion(driverId, v && v.conductor ? v.conductor.nombre : null);
+        }
+    })
+    .catch(() => {
+        // Si falla la validación, asignar igual (no bloquear la operación)
+        enviarAsignacion(driverId, null);
+    });
+}
+function enviarAsignacion(driverId, nombreConductor) {
+    if (!modalProg) return;
     fetch(`/api/programaciones/${modalProg}/asignar_conductor/`, {
         method: 'POST',
         headers: {'Content-Type': 'application/json', 'X-CSRFToken': getCookie('csrftoken')},

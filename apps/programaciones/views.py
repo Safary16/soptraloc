@@ -812,14 +812,28 @@ class ProgramacionViewSet(viewsets.ModelViewSet):
             driver, programacion
         )
         
+        # Perfil ML del conductor para la advertencia (histórico real)
+        perfil_ml = None
+        try:
+            from apps.core.services.learning_engine import OperationalLearningEngine
+            perfil_ml = OperationalLearningEngine.driver_profile(driver)
+        except Exception:
+            pass
+        
         return Response({
             'success': True,
             'disponible': resultado['disponible'],
             'conflictos': resultado['conflictos'],
+            'retraso_maximo_min': resultado.get('retraso_maximo_min'),
             'tiempo_requerido': resultado['tiempo_requerido'],
             'ventana_ocupada': resultado['ventana_ocupada'],
             'nueva_ventana': resultado.get('nueva_ventana'),
-            'conductor': driver.nombre
+            'conductor': {
+                'id': driver.id,
+                'nombre': driver.nombre,
+                'patente': driver.patente,
+            },
+            'perfil_ml': perfil_ml,
         })
     
     @action(detail=True, methods=['post'])

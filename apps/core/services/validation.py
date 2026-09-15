@@ -39,9 +39,15 @@ class PreAssignmentValidationService:
         if not driver.esta_disponible:
             return {
                 'disponible': False,
-                'conflictos': ['Conductor no disponible (presente=False o asignaciones completas)'],
+                'conflictos': [{
+                    'container_id': '—',
+                    'retraso_min': 0,
+                    'mensaje': 'Conductor no disponible (presente=False o asignaciones completas)'
+                }],
+                'retraso_maximo_min': 0,
                 'tiempo_requerido': 0,
-                'ventana_ocupada': None
+                'ventana_ocupada': None,
+                'nueva_ventana': None
             }
         
         # Calcular tiempo requerido para la nueva asignación
@@ -70,17 +76,35 @@ class PreAssignmentValidationService:
         nueva_fin = nueva_inicio + timedelta(minutes=tiempo_requerido + buffer_minutos)
         
         conflictos = []
+        retraso_maximo_min = 0
         for ventana in ventanas_ocupadas:
             # Verificar solapamiento
             if cls._hay_solapamiento(nueva_inicio, nueva_fin, ventana['inicio'], ventana['fin']):
-                conflictos.append(
-                    f"Conflicto con {ventana['container_id']}: "
-                    f"{ventana['inicio'].strftime('%H:%M')}-{ventana['fin'].strftime('%H:%M')}"
-                )
+                # Déficit real: cuántos minutos arranca el 2° servicio después de que
+                # debería terminar el 1° (según viaje + descarga estimados).
+                # Si el conductor sigue ocupado hasta esa hora, el 2° servicio
+                # parte tarde con ese déficit.
+                retraso_min = max(0, int((ventana['fin'] - nueva_inicio).total_seconds() / 60))
+                if retraso_min > retraso_maximo_min:
+                    retraso_maximo_min = retraso_min
+                conflictos.append({
+                    'programacion_id': ventana['programacion_id'],
+                    'container_id': ventana['container_id'],
+                    'inicio_servicio_existente': ventana['inicio'].isoformat(),
+                    'fin_servicio_existente': ventana['fin'].isoformat(),
+                    'retraso_min': retraso_min,
+                    'mensaje': (
+                        f"El conductor ya tiene {ventana['container_id']} programado hasta las "
+                        f"{ventana['fin'].strftime('%H:%M')}; este 2° servicio comenzaría a las "
+                        f"{nueva_inicio.strftime('%H:%M')} → llegaría con ≈{retraso_min} min de retraso "
+                        f"según estimación (viaje + descarga)."
+                    ),
+                })
         
         return {
             'disponible': len(conflictos) == 0,
             'conflictos': conflictos,
+            'retraso_maximo_min': retraso_maximo_min,
             'tiempo_requerido': tiempo_requerido,
             'ventana_ocupada': ventanas_ocupadas if ventanas_ocupadas else None,
             'nueva_ventana': {

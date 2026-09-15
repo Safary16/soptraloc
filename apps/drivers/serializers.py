@@ -161,6 +161,6 @@ class DriverDisponibleSerializer(serializers.ModelSerializer):
     class Meta:
         model = Driver
         fields = [
-            'id', 'nombre', 'rut', 'telefono', 'cumplimiento_porcentaje',
+            'id', 'nombre', 'rut', 'telefono', 'patente', 'cumplimiento_porcentaje',
             'num_entregas_dia', 'max_entregas_dia', 'esta_disponible', 'score_total'
         ]
