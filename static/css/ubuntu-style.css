@@ -87,8 +87,8 @@ body {
     height: 32px;
     border-radius: 50%;
     object-fit: cover;
-    border: 2px solid rgba(255,255,255,0.9);
-    background: #fff;
+    border: 1px solid rgba(255,255,255,0.35);
+    background: rgba(233,84,32,0.12);
 }
 
 /* ---------- Cards ---------- */
@@ -271,13 +271,30 @@ input:focus-visible, select:focus-visible, textarea:focus-visible,
 
 /* Logo integrado: parte del sistema, sin resaltar por encima */
 .navbar-logo {
-    box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.35), 0 1px 3px rgba(0,0,0,0.25);
+    box-shadow: 0 0 0 1px rgba(233,84,32,0.25), 0 1px 2px rgba(0,0,0,0.18);
     border-width: 1px;
-    opacity: 0.96;
+    opacity: 0.94;
+    transition: opacity .15s ease, box-shadow .15s ease;
+}
+.navbar-brand:hover .navbar-logo {
+    opacity: 1;
+    box-shadow: 0 0 0 2px rgba(233,84,32,0.35), 0 1px 2px rgba(0,0,0,0.18);
 }
 .landing-logo {
-    box-shadow: 0 4px 16px rgba(0,0,0,0.10), 0 0 0 2px rgba(233,84,32,0.12);
-    border: 1px solid rgba(233,84,32,0.18);
+    box-shadow: 0 6px 18px rgba(0,0,0,0.12), 0 0 0 1px rgba(233,84,32,0.14);
+    border: 1px solid rgba(233,84,32,0.12);
+}
+
+/* El logo vive dentro del degradado del sistema: mismo lenguaje de color */
+@media (prefers-color-scheme: dark) {
+    .navbar-logo {
+        background: rgba(233,84,32,0.10);
+        box-shadow: 0 0 0 1px rgba(233,84,32,0.30), 0 1px 2px rgba(0,0,0,0.30);
+    }
+}
+[data-theme="dark"] .navbar-logo {
+    background: rgba(233,84,32,0.10);
+    box-shadow: 0 0 0 1px rgba(233,84,32,0.30), 0 1px 2px rgba(0,0,0,0.30);
 }
 
 /* Estado del navbar: gradiente Ubuntu conservado, sombra liviana */
