@@ -31,7 +31,7 @@ class ProgramacionViewSet(viewsets.ModelViewSet):
     """
     queryset = Programacion.objects.select_related('container', 'driver', 'cd').all()
     serializer_class = ProgramacionSerializer
-    filterset_fields = ['fecha_programada', 'requiere_alerta', 'driver', 'cd']
+    filterset_fields = ['fecha_programada', 'requiere_alerta', 'driver', 'cd', 'cliente']
     search_fields = ['container__container_id', 'cliente']
     ordering_fields = ['fecha_programada', 'created_at']
     ordering = ['fecha_programada']

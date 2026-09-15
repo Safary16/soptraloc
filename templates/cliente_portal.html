@@ -70,6 +70,28 @@
     </div>
 </div>
 
+<!-- Tabla de servicios en movimiento del cliente (con llegada estimada ETA) -->
+<div class="card mt-4">
+    <div class="card-header" style="background:var(--bg-table-head);color:var(--text-primary)">
+        <strong><i class="fas fa-truck-moving"></i> Mis Servicios en Movimiento</strong>
+        <span class="text-muted small ms-2" id="svcClienteLbl"></span>
+    </div>
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover mb-0 align-middle">
+                <thead style="background:var(--bg-table-head);color:var(--text-primary)">
+                    <tr>
+                        <th>Contenedor</th><th>Hora</th><th>CD</th><th>Estado</th><th>Conductor</th><th>Llegada estimada</th>
+                    </tr>
+                </thead>
+                <tbody id="tablaServicios">
+                    <tr><td colspan="6" class="text-center text-muted py-3">Cargando servicios…</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
 <!-- Modal Programar -->
 <div class="modal fade" id="programarModal" tabindex="-1">
     <div class="modal-dialog">
@@ -212,6 +234,7 @@ function programarUnidad() {
             document.getElementById('programarMsg').textContent = '✅ ' + d.mensaje;
             bootstrap.Modal.getInstance(document.getElementById('programarModal')).hide();
             cargarLiberados();
+            cargarServicios();
         } else {
             document.getElementById('programarMsg').textContent = '❌ ' + (d.error || 'No se pudo programar');
         }
@@ -219,8 +242,65 @@ function programarUnidad() {
     .catch(() => { btn.disabled = false; document.getElementById('programarMsg').textContent = '❌ Error al programar'; });
 }
 
-document.getElementById('clienteSelect').addEventListener('change', cargarLiberados);
+// ── Servicios del cliente (incluye ETA real cuando el servicio va en ruta) ──
+function cargarServicios() {
+    const cliente = document.getElementById('clienteSelect').value;
+    if (!cliente) {
+        document.getElementById('tablaServicios').innerHTML = '<tr><td colspan="6" class="text-center text-muted py-3">Seleccione su cliente para ver los servicios en movimiento.</td></tr>';
+        document.getElementById('svcClienteLbl').textContent = '';
+        return;
+    }
+    document.getElementById('svcClienteLbl').textContent = `· ${cliente}`;
+    fetch(`/api/programaciones/?cliente=${encodeURIComponent(cliente)}&ordering=fecha_programada`)
+        .then(r => r.json())
+        .then(d => {
+            const servicios = d.results || d || [];
+            renderServicios(servicios);
+        })
+        .catch(() => {
+            document.getElementById('tablaServicios').innerHTML = '<tr><td colspan="6" class="text-center text-danger py-3">Error cargando servicios</td></tr>';
+        });
+}
+
+function renderServicios(servicios) {
+    const tb = document.getElementById('tablaServicios');
+    if (!servicios.length) {
+        tb.innerHTML = '<tr><td colspan="6" class="text-center text-success py-3"><i class="fas fa-check-circle"></i> Sin servicios para este cliente</td></tr>';
+        return;
+    }
+    tb.innerHTML = servicios.map(s => {
+        const hora = s.fecha_programada ? new Date(s.fecha_programada).toLocaleTimeString('es-CL', {hour:'2-digit', minute:'2-digit'}) : '—';
+        const est = s.estado_container || '';
+        const badges = {por_arribar:'secondary',liberado:'info',secuenciado:'dark',programado:'primary',asignado:'warning',en_ruta:'primary',entregado:'success',soltado:'success',descargado:'success',vacio:'secondary',devuelto:'dark'};
+        const badge = badges[est] || 'secondary';
+        const conductor = s.driver_nombre ? `${esc(s.driver_nombre)} ${s.driver_patente ? '('+esc(s.driver_patente)+')' : ''}` : '<span class="text-muted">—</span>';
+        // Llegada estimada: si va en ruta → inicio real + ETA (máquina); si asignado → hora programada
+        let llegada = '—';
+        if (est === 'en_ruta' && s.fecha_inicio_ruta) {
+            const eta = s.eta_minutos != null ? Number(s.eta_minutos) : null;
+            if (eta != null && !isNaN(eta)) {
+                const lleg = new Date(new Date(s.fecha_inicio_ruta).getTime() + eta*60000);
+                llegada = `<strong class="text-primary"><i class="fas fa-location-arrow"></i> ${lleg.toLocaleTimeString('es-CL', {hour:'2-digit', minute:'2-digit'})}</strong> <span class="text-muted small">(ETA ${Math.round(eta)} min)</span>`;
+            }
+        } else if (est === 'asignado' || est === 'programado') {
+            llegada = `<span class="text-muted">${hora}</span>`;
+        } else if (est === 'entregado' || est === 'soltado' || est === 'descargado') {
+            llegada = '<span class="text-success"><i class="fas fa-check"></i> Entregado</span>';
+        }
+        return `<tr>
+            <td><strong>${esc(s.container_id_formatted || s.container_id)}</strong></td>
+            <td>${hora}</td>
+            <td>${esc(s.cd_nombre || '—')}</td>
+            <td><span class="badge bg-${badge}">${esc(est.replace(/_/g,' ') || '—')}</span></td>
+            <td>${conductor}</td>
+            <td>${llegada}</td>
+        </tr>`;
+    }).join('');
+}
+
+document.getElementById('clienteSelect').addEventListener('change', () => { cargarLiberados(); cargarServicios(); });
 cargarClientes();
 cargarLiberados();
+cargarServicios();
 </script>
 {% endblock %}
