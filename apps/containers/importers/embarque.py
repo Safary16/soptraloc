@@ -232,4 +232,4 @@ class EmbarqueImporter:
         
         except Exception as e:
             logger.exception('import_embarque_failed', extra={'usuario': self.usuario})
-            raise Exception(f"Error al procesar archivo de embarque: {str(e)}")
+            raise ValueError(f"Error al procesar archivo de embarque: {str(e)}")

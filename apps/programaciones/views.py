@@ -180,7 +180,14 @@ class ProgramacionViewSet(viewsets.ModelViewSet):
             )
         
         usuario = request.user.username if request.user.is_authenticated else 'operador_manual'
-        programacion.asignar_conductor(driver, usuario)
+        from django.core.exceptions import ValidationError as DjangoValidationError
+        try:
+            programacion.asignar_conductor(driver, usuario)
+        except DjangoValidationError as exc:
+            return Response(
+                {'error': '; '.join(exc.messages) if hasattr(exc, 'messages') else str(exc)},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
         
         serializer = self.get_serializer(programacion)
         return Response({
@@ -751,6 +758,12 @@ class ProgramacionViewSet(viewsets.ModelViewSet):
                 'detalles': resultados['detalles']
             })
         
+        except ValueError as e:
+            logger.warning('import_programacion_endpoint_value_error', extra={'usuario': usuario, 'detalle': str(e)})
+            return Response(
+                {'error': str(e)},
+                status=status.HTTP_400_BAD_REQUEST
+            )
         except Exception as e:
             logger.exception('import_programacion_endpoint_failed', extra={'usuario': usuario})
             return Response(

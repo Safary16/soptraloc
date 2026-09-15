@@ -388,4 +388,4 @@ class ProgramacionImporter:
         
         except Exception as e:
             logger.exception('import_programacion_failed', extra={'usuario': self.usuario})
-            raise Exception(f"Error al procesar archivo de programación: {str(e)}")
+            raise ValueError(f"Error al procesar archivo de programación: {str(e)}")

@@ -125,6 +125,12 @@ class ContainerViewSet(viewsets.ModelViewSet):
                 'detalles': resultados['detalles']
             })
         
+        except ValueError as e:
+            logger.warning(f"Embarque: archivo con formato inválido: {str(e)}", exc_info=True)
+            return Response(
+                {'error': str(e)},
+                status=status.HTTP_400_BAD_REQUEST
+            )
         except Exception as e:
             logger.error(f"Error importando embarque: {str(e)}", exc_info=True)
             return Response(
@@ -188,6 +194,12 @@ class ContainerViewSet(viewsets.ModelViewSet):
                 'detalles': resultados['detalles']
             })
         
+        except ValueError as e:
+            logger.warning(f"Liberación: archivo con formato inválido: {str(e)}", exc_info=True)
+            return Response(
+                {'error': str(e)},
+                status=status.HTTP_400_BAD_REQUEST
+            )
         except Exception as e:
             logger.error(f"Error importando liberación: {str(e)}", exc_info=True)
             return Response(
@@ -254,6 +266,12 @@ class ContainerViewSet(viewsets.ModelViewSet):
                 'detalles': resultados['detalles']
             })
         
+        except ValueError as e:
+            logger.warning(f"Programación: archivo con formato inválido: {str(e)}", exc_info=True)
+            return Response(
+                {'error': str(e)},
+                status=status.HTTP_400_BAD_REQUEST
+            )
         except Exception as e:
             logger.error(f"Error importando programación: {str(e)}", exc_info=True)
             return Response(

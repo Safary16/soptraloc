@@ -304,4 +304,4 @@ class LiberacionImporter:
         
         except Exception as e:
             logger.exception('import_liberacion_failed', extra={'usuario': self.usuario})
-            raise Exception(f"Error al procesar archivo de liberación: {str(e)}")
+            raise ValueError(f"Error al procesar archivo de liberación: {str(e)}")
