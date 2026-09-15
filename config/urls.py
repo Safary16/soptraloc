@@ -22,7 +22,7 @@ from apps.core.views import (
     containers_list, container_detail,
     operaciones, operaciones_panel, drivers_list, cds_list, executive_dashboard,
     operaciones_diarias as operaciones_diarias_view,
-    auditoria
+    auditoria, cliente_portal
 )
 
 # Import API views
@@ -52,6 +52,7 @@ urlpatterns = [
     path('container/<str:container_id>/', container_detail, name='container_detail'),
     path('operaciones/', operaciones, name='operaciones'),
     path('operaciones/panel/', operaciones_panel, name='operaciones_panel'),
+    path('cliente/', cliente_portal, name='cliente_portal'),
     path('drivers/', drivers_list, name='drivers_list'),
     path('cds/', cds_list, name='cds_list'),
     path('executive/', executive_dashboard, name='executive_dashboard'),

@@ -1,0 +1,226 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Portal Cliente · SoptraLoc{% endblock %}
+
+{% block extra_css %}
+<style>
+    .client-header { display:flex; flex-wrap:wrap; align-items:center; gap:12px; justify-content:space-between; margin-bottom:1.25rem; }
+    .client-header h4 { margin:0; }
+    .client-card { background:var(--bg-card); border:1px solid var(--border-color); border-top:4px solid #2563eb; border-radius:12px; padding:1rem 1.2rem; box-shadow:var(--shadow-card); }
+    .client-stat { text-align:center; padding:.4rem 0; }
+    .client-stat .num { font-size:1.5rem; font-weight:700; color:#2563eb; }
+    .client-stat .lbl { font-size:.75rem; color:var(--text-muted); text-transform:uppercase; letter-spacing:.03em; }
+    .btn-programar { background:#2563eb; color:#fff; border:none; border-radius:8px; padding:.35rem .8rem; font-size:.82rem; font-weight:600; }
+    .btn-programar:hover { background:#1d4ed8; color:#fff; }
+    .filtro-cliente select { border-radius:8px; }
+    .demurrage-critico { color:#dc2626; font-weight:700; }
+    .demurrage-alto { color:#ea580c; font-weight:600; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="client-header">
+    <div>
+        <h4><i class="fas fa-store"></i> Portal Cliente</h4>
+        <small class="text-muted">Unidades liberadas disponibles para programar. Al programar, la unidad pasa de <strong>Liberado → Programado</strong>.</small>
+    </div>
+    <div class="d-flex gap-2 align-items-center filtro-cliente">
+        <select id="clienteSelect" class="form-select form-select-sm" style="min-width:220px">
+            <option value="">Todos los clientes</option>
+        </select>
+        <button class="btn btn-outline-secondary btn-sm" onclick="cargarLiberados()" title="Refrescar"><i class="fas fa-sync-alt"></i> Refrescar</button>
+    </div>
+</div>
+
+<!-- Resumen -->
+<div class="row g-3 mb-3" id="statsRow">
+    <div class="col-md-3 col-6"><div class="client-card client-stat"><div class="num" id="statTotal">0</div><div class="lbl">Liberadas</div></div></div>
+    <div class="col-md-3 col-6"><div class="client-card client-stat"><div class="num" id="statDemurrage">0</div><div class="lbl">Demurrage crítico</div></div></div>
+    <div class="col-md-3 col-6"><div class="client-card client-stat"><div class="num" id="stat40hc">0</div><div class="lbl">40HC</div></div></div>
+    <div class="col-md-3 col-6"><div class="client-card client-stat"><div class="num" id="statProgramadas">0</div><div class="lbl">Hoy programadas</div></div></div>
+</div>
+
+<!-- Tabla de stock liberado -->
+<div class="card">
+    <div class="card-header" style="background:var(--bg-table-head);color:var(--text-primary)">
+        <strong><i class="fas fa-box-open"></i> Stock Disponible para Programar</strong>
+        <span class="badge bg-primary ms-1" id="totalBadge">0</span>
+    </div>
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover mb-0 align-middle">
+                <thead style="background:var(--bg-table-head);color:var(--text-primary)">
+                    <tr>
+                        <th>Contenedor</th>
+                        <th>Cliente</th>
+                        <th>Tipo</th>
+                        <th>Nave</th>
+                        <th>Posición</th>
+                        <th>Liberación</th>
+                        <th>Demurrage</th>
+                        <th class="text-end">Acción</th>
+                    </tr>
+                </thead>
+                <tbody id="tablaStock">
+                    <tr><td colspan="8" class="text-center text-muted py-4">Cargando stock liberado…</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Programar -->
+<div class="modal fade" id="programarModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="fas fa-calendar-check"></i> Programar Unidad</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p class="mb-1"><strong>Contenedor:</strong> <span id="progContainer"></span></p>
+                <p class="mb-3"><strong>Cliente:</strong> <span id="progCliente"></span></p>
+                <div class="mb-3">
+                    <label class="form-label">Centro de Distribución (CD)</label>
+                    <select id="progCd" class="form-select">
+                        <option value="">Seleccione CD…</option>
+                    </select>
+                </div>
+                <div class="mb-2">
+                    <label class="form-label">Fecha y hora de programación</label>
+                    <input type="datetime-local" id="progFecha" class="form-control">
+                </div>
+                <div class="form-text" id="programarMsg"></div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button class="btn btn-primary" id="btnConfirmarProgramar" onclick="programarUnidad()"><i class="fas fa-check"></i> Programar</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+let liberados = [];
+let contenedorProgramar = null;
+
+function esc(s) {
+    if (s === null || s === undefined) return '';
+    return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+function getCookie(name) {
+    let v = document.cookie.match('(^|;)\\s*' + name + '\\s*=\\s*([^;]+)');
+    return v ? v.pop() : '';
+}
+
+function demurrageHtml(c) {
+    const dias = c.dias_para_demurrage;
+    if (dias === null || dias === undefined) return '<span class="text-muted">sin fecha</span>';
+    const u = c.urgencia_demurrage;
+    const cls = (u === 'vencido' || u === 'critico') ? 'demurrage-critico' : (u === 'alto' ? 'demurrage-alto' : '');
+    return `<span class="${cls}">${dias < 0 ? 'vencido' : dias + ' día' + (dias === 1 ? '' : 's')}</span>`;
+}
+
+function cargarClientes() {
+    fetch('/api/containers/liberados/')
+        .then(r => r.json())
+        .then(d => {
+            const clientes = [...new Set((d.containers || []).map(x => (x.cliente || '').trim()).filter(Boolean))].sort();
+            const sel = document.getElementById('clienteSelect');
+            sel.innerHTML = '<option value="">Todos los clientes</option>' + clientes.map(c => `<option value="${esc(c)}">${esc(c)}</option>`).join('');
+        })
+        .catch(() => {});
+}
+
+function cargarLiberados() {
+    const cliente = document.getElementById('clienteSelect').value;
+    const url = '/api/containers/liberados/' + (cliente ? `?cliente=${encodeURIComponent(cliente)}` : '');
+    fetch(url)
+        .then(r => r.json())
+        .then(d => {
+            liberados = d.containers || [];
+            renderTabla();
+            document.getElementById('statTotal').textContent = liberados.length;
+            document.getElementById('totalBadge').textContent = liberados.length;
+            document.getElementById('statDemurrage').textContent = liberados.filter(c => c.urgencia_demurrage === 'vencido' || c.urgencia_demurrage === 'critico').length;
+            document.getElementById('stat40hc').textContent = liberados.filter(c => c.tipo === '40HC').length;
+        })
+        .catch(() => {
+            document.getElementById('tablaStock').innerHTML = '<tr><td colspan="8" class="text-center text-danger py-4">Error cargando stock</td></tr>';
+        });
+}
+
+function renderTabla() {
+    const tb = document.getElementById('tablaStock');
+    if (!liberados.length) {
+        tb.innerHTML = '<tr><td colspan="8" class="text-center text-success py-4"><i class="fas fa-check-circle"></i> Sin unidades liberadas disponibles</td></tr>';
+        return;
+    }
+    tb.innerHTML = liberados.map(c => `<tr>
+        <td><strong>${esc(c.container_id_formatted || c.container_id)}</strong></td>
+        <td>${esc(c.cliente || '—')}</td>
+        <td>${esc(c.tipo || '—')}</td>
+        <td>${esc(c.nave || '—')}</td>
+        <td>${esc(c.posicion_fisica || '—')}</td>
+        <td>${c.fecha_liberacion ? new Date(c.fecha_liberacion).toLocaleDateString('es-CL') : '—'}</td>
+        <td>${demurrageHtml(c)}</td>
+        <td class="text-end">
+            <button class="btn-programar" onclick="abrirProgramarModal(${c.id}, '${esc(c.container_id_formatted || c.container_id)}', '${esc(c.cliente || '')}')">
+                <i class="fas fa-calendar-check"></i> Programar
+            </button>
+        </td>
+    </tr>`).join('');
+}
+
+function abrirProgramarModal(id, containerDisplay, cliente) {
+    contenedorProgramar = id;
+    document.getElementById('progContainer').textContent = containerDisplay;
+    document.getElementById('progCliente').textContent = cliente || '—';
+    document.getElementById('programarMsg').textContent = 'Al programar, la unidad pasará de Liberado a Programado.';
+    document.getElementById('progFecha').value = '';
+    // Cargar CDs
+    fetch('/api/cds/?activo=true')
+        .then(r => r.json())
+        .then(d => {
+            const cds = d.results || [];
+            const sel = document.getElementById('progCd');
+            sel.innerHTML = '<option value="">Seleccione CD…</option>' + cds.map(x => `<option value="${x.id}">${esc(x.nombre)} (${x.comuna || ''})</option>`).join('');
+        })
+        .catch(() => {});
+    new bootstrap.Modal(document.getElementById('programarModal')).show();
+}
+
+function programarUnidad() {
+    const cdId = document.getElementById('progCd').value;
+    const fecha = document.getElementById('progFecha').value;
+    if (!cdId) { document.getElementById('programarMsg').textContent = '⚠️ Seleccione un CD.'; return; }
+    if (!fecha) { document.getElementById('programarMsg').textContent = '⚠️ Seleccione fecha y hora.'; return; }
+    const btn = document.getElementById('btnConfirmarProgramar');
+    btn.disabled = true;
+    fetch(`/api/containers/${contenedorProgramar}/programar/`, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json', 'X-CSRFToken': getCookie('csrftoken')},
+        body: JSON.stringify({cd_id: parseInt(cdId), fecha_programada: new Date(fecha).toISOString()})
+    })
+    .then(r => r.json())
+    .then(d => {
+        btn.disabled = false;
+        if (d.success) {
+            document.getElementById('programarMsg').textContent = '✅ ' + d.mensaje;
+            bootstrap.Modal.getInstance(document.getElementById('programarModal')).hide();
+            cargarLiberados();
+        } else {
+            document.getElementById('programarMsg').textContent = '❌ ' + (d.error || 'No se pudo programar');
+        }
+    })
+    .catch(() => { btn.disabled = false; document.getElementById('programarMsg').textContent = '❌ Error al programar'; });
+}
+
+document.getElementById('clienteSelect').addEventListener('change', cargarLiberados);
+cargarClientes();
+cargarLiberados();
+</script>
+{% endblock %}

@@ -684,16 +684,20 @@ class ContainerViewSet(viewsets.ModelViewSet):
     
     @action(detail=False, methods=['get'], url_path='liberados')
     def liberados(self, request):
-        """Lista contenedores liberados disponibles para programar"""
-        containers = Container.objects.filter(
+        """Lista contenedores liberados disponibles para programar.
+        Acepta ?cliente= para filtrar por cliente (Walmart, Easy, ...)."""
+        qs = Container.objects.filter(
             estado='liberado'
         ).select_related('cd_entrega').order_by('-fecha_liberacion')
-        
-        serializer = ContainerListSerializer(containers, many=True)
+        cliente = (request.query_params.get('cliente') or '').strip()
+        if cliente:
+            qs = qs.filter(cliente__icontains=cliente)
+        serializer = ContainerListSerializer(qs, many=True)
         
         return Response({
             'success': True,
-            'total': containers.count(),
+            'total': qs.count(),
+            'cliente_filtro': cliente or None,
             'containers': serializer.data
         })
 

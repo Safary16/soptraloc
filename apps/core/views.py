@@ -162,6 +162,16 @@ def operaciones_diarias(request):
     return render(request, 'operaciones_diarias.html')
 
 
+def cliente_portal(request):
+    """Portal separado del cliente: stock liberado disponible para programar.
+    El cliente ve las unidades liberadas (sus o todas) y programa; ese cambio
+    lleva el contenedor de 'liberado' a 'programado', igual que en Operaciones.
+    """
+    from django.middleware.csrf import get_token
+    get_token(request)  # CSRF listo para las llamadas fetch
+    return render(request, 'cliente_portal.html')
+
+
 @staff_member_required
 def auditoria(request):
     """Panel de auditoría: trazabilidad de eventos del sistema."""
