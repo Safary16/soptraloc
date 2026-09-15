@@ -22,7 +22,7 @@
     <!-- KPIs Críticos -->
     <div class="row mb-4">
         <div class="col-lg-3 col-md-6 mb-3">
-            <a href="/containers/?estado=programado" class="text-decoration-none">
+            <a href="/gestion/?estado=programado" class="text-decoration-none">
                 <div class="card stat-card orange fade-in" style="cursor: pointer; transition: transform 0.2s;" onmouseover="this.style.transform='scale(1.05)'" onmouseout="this.style.transform='scale(1)'">
                     <div class="stat-icon">
                         <i class="fas fa-calendar-check"></i>
@@ -33,7 +33,7 @@
             </a>
         </div>
         <div class="col-lg-3 col-md-6 mb-3">
-            <a href="/containers/?estado=en_ruta" class="text-decoration-none">
+            <a href="/gestion/?estado=en_ruta" class="text-decoration-none">
                 <div class="card stat-card purple fade-in" style="cursor: pointer; transition: transform 0.2s;" onmouseover="this.style.transform='scale(1.05)'" onmouseout="this.style.transform='scale(1)'">
                     <div class="stat-icon">
                         <i class="fas fa-truck-moving"></i>
@@ -56,7 +56,7 @@
             </a>
         </div>
         <div class="col-lg-3 col-md-6 mb-3">
-            <a href="/containers/" class="text-decoration-none">
+            <a href="/gestion/" class="text-decoration-none">
                 <div class="card stat-card {% if stats.con_demurrage > 0 %}bg-danger text-white{% else %}dark{% endif %} fade-in" style="cursor: pointer; transition: transform 0.2s;" onmouseover="this.style.transform='scale(1.05)'" onmouseout="this.style.transform='scale(1)'">
                     <div class="stat-icon">
                         <i class="fas fa-dollar-sign"></i>
@@ -123,7 +123,7 @@
                             <span class="badge badge-urgencia-alta ms-1">ALTA</span>
                             <span class="badge badge-urgencia-media ms-1">MEDIA</span>
                         </small>
-                        <a href="/containers/" class="btn btn-sm btn-ubuntu-outline">
+                        <a href="/gestion/" class="btn btn-sm btn-ubuntu-outline">
                             Ver Todos <i class="fas fa-arrow-right"></i>
                         </a>
                     </div>
@@ -170,6 +170,11 @@
             </a>
         </div>
         <div class="col-md-3 mb-2">
+            <a href="/gestion/" class="btn btn-ubuntu w-100">
+                <i class="fas fa-tower-broadcast me-2"></i>Gestión de stock
+            </a>
+        </div>
+        <div class="col-md-3 mb-2">
             <a href="/monitoring/" class="btn btn-ubuntu w-100">
                 <i class="fas fa-map-marked-alt me-2"></i>Monitoreo GPS
             </a>
@@ -177,11 +182,6 @@
         <div class="col-md-3 mb-2">
             <a href="/driver/login/" class="btn btn-ubuntu w-100">
                 <i class="fas fa-id-card me-2"></i>Portal Conductores
-            </a>
-        </div>
-        <div class="col-md-3 mb-2">
-            <a href="/admin/" class="btn btn-outline-secondary w-100">
-                <i class="fas fa-cog me-2"></i>Administración
             </a>
         </div>
     </div>

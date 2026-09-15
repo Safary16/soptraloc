@@ -312,6 +312,17 @@ document.getElementById('fCliente').addEventListener('change', cargarStock);
 document.getElementById('fNave').addEventListener('keydown', e=>{ if(e.key==='Enter') cargarStock(); });
 document.getElementById('fSearch').addEventListener('keydown', e=>{ if(e.key==='Enter') cargarStock(); });
 
+// Permitir pre-filtros por URL (?estado=liberado&cliente=WALMART&nave=...&search=...)
+(function initFiltrosUrl(){
+    try {
+        const p = new URLSearchParams(window.location.search);
+        if (p.get('estado')) document.getElementById('fEstado').value = p.get('estado');
+        if (p.get('cliente')) document.getElementById('fCliente').value = p.get('cliente');
+        if (p.get('nave')) document.getElementById('fNave').value = p.get('nave');
+        if (p.get('search')) document.getElementById('fSearch').value = p.get('search');
+    } catch (e) { /* URL inválida: carga normal */ }
+})();
+
 cargarStock();
 </script>
 {% endblock %}

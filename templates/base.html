@@ -60,13 +60,13 @@
                         </a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link" href="/containers/">
-                            <i class="fas fa-boxes"></i> Contenedores
+                        <a class="nav-link" href="/gestion/">
+                            <i class="fas fa-tower-broadcast"></i> Gestión
                         </a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link" href="/drivers/">
-                            <i class="fas fa-users"></i> Conductores
+                        <a class="nav-link nav-driver-portal" href="/driver/login/">
+                            <i class="fas fa-id-card"></i> Portal Conductores
                         </a>
                     </li>
                     <li class="nav-item dropdown">
@@ -74,39 +74,22 @@
                             <i class="fas fa-database"></i> Datos maestros
                         </a>
                         <ul class="dropdown-menu">
-                            <li><a class="dropdown-item" href="/drivers/">Conductores</a></li>
-                            <li><a class="dropdown-item" href="/cds/">Centros de distribución</a></li>
+                            <li><a class="dropdown-item" href="/containers/"><i class="fas fa-boxes"></i> Contenedores</a></li>
+                            <li><a class="dropdown-item" href="/drivers/"><i class="fas fa-users"></i> Conductores</a></li>
+                            <li><a class="dropdown-item" href="/cds/"><i class="fas fa-warehouse"></i> Centros de distribución</a></li>
                         </ul>
                     </li>
-                    <li class="nav-item">
-                        <a class="nav-link nav-driver-portal" href="/driver/login/">
-                            <i class="fas fa-id-card"></i> Portal Conductores
+                    <li class="nav-item dropdown">
+                        <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown">
+                            <i class="fas fa-cog"></i> Sistema
                         </a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="/executive/">
-                            <i class="fas fa-chart-line"></i> Ejecutivo
-                        </a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="/auditoria/">
-                            <i class="fas fa-clipboard-list"></i> Auditoría
-                        </a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="/importar/">
-                            <i class="fas fa-file-excel"></i> Importar
-                        </a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="/admin/">
-                            <i class="fas fa-cog"></i> Admin
-                        </a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="/api/">
-                            <i class="fas fa-code"></i> API
-                        </a>
+                        <ul class="dropdown-menu">
+                            <li><a class="dropdown-item" href="/executive/"><i class="fas fa-chart-line"></i> Ejecutivo</a></li>
+                            <li><a class="dropdown-item" href="/auditoria/"><i class="fas fa-clipboard-list"></i> Auditoría</a></li>
+                            <li><a class="dropdown-item" href="/importar/"><i class="fas fa-file-excel"></i> Importar</a></li>
+                            <li><a class="dropdown-item" href="/admin/"><i class="fas fa-lock"></i> Admin</a></li>
+                            <li><a class="dropdown-item" href="/api/"><i class="fas fa-code"></i> API</a></li>
+                        </ul>
                     </li>
                     <li class="nav-item ms-lg-2">
                         <button id="theme-toggle" class="btn btn-ubuntu-outline btn-sm" type="button" title="Cambiar tema (claro/oscuro)">
