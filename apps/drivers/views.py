@@ -338,6 +338,12 @@ class DriverViewSet(viewsets.ModelViewSet):
                 'detalles': resultados['detalles']
             })
         
+        except ValueError as e:
+            # Errores de formato/columnas en el archivo → 400 con el motivo real
+            return Response(
+                {'error': str(e)},
+                status=status.HTTP_400_BAD_REQUEST
+            )
         except Exception as e:
             return Response(
                 {'error': str(e)},

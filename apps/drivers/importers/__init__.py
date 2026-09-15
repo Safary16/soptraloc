@@ -179,4 +179,4 @@ class ConductorImporter:
             return self.resultados
         
         except Exception as e:
-            raise Exception(f"Error al procesar archivo: {str(e)}")
+            raise ValueError(f"Error al procesar archivo: {str(e)}")
