@@ -75,18 +75,24 @@ class EmbarqueImporter:
         return normalize_columns(df, mapeo)
     
     def validar_tipo(self, tipo):
-        """Valida y normaliza el tipo de contenedor"""
+        """Valida y normaliza el tipo de contenedor.
+        Formato naviero real: '40', '40H', '40HC', '40HQ', '20', '20HC', '45', '45H'.
+        '40H'/'40HQ' son High Cube de 40' → se normalizan a 40HC.
+        """
         if pd.isna(tipo):
             return '40'
-        
+
         tipo_str = str(tipo).upper().strip().replace("'", "").replace('"', '')
-        
+
         if '20' in tipo_str:
             return '20'
         elif '45' in tipo_str:
-            return '45'
-        elif 'HC' in tipo_str or 'HIGH' in tipo_str:
+            return '45' if 'H' not in tipo_str else '40HC' if '40' in tipo_str and '45' not in tipo_str else '45'
+        elif 'H' in tipo_str or 'HC' in tipo_str or 'HIGH' in tipo_str:
+            # 40H / 40HQ / 40HC / 40 HIGH → High Cube de 40'
             return '40HC'
+        elif '40' in tipo_str:
+            return '40'
         else:
             return '40'
 
@@ -162,11 +168,18 @@ class EmbarqueImporter:
                         # Agregar fecha_eta si está disponible
                         if 'fecha_eta' in row.index and pd.notna(row['fecha_eta']):
                             try:
+                                from django.utils import timezone as dj_timezone
                                 # Convertir a datetime si no lo es ya
                                 if isinstance(row['fecha_eta'], str):
                                     fecha_eta = pd.to_datetime(row['fecha_eta'])
                                 else:
                                     fecha_eta = row['fecha_eta']
+                                # pandas → datetime de Python
+                                if hasattr(fecha_eta, 'to_pydatetime'):
+                                    fecha_eta = fecha_eta.to_pydatetime()
+                                # Evitar naive datetime (falla/desfasaje en PostgreSQL c/ USE_TZ)
+                                if dj_timezone.is_naive(fecha_eta):
+                                    fecha_eta = dj_timezone.make_aware(fecha_eta)
                                 datos['fecha_eta'] = fecha_eta
                             except Exception as fecha_error:
                                 raise ValueError(
