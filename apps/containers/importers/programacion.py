@@ -251,8 +251,15 @@ class ProgramacionImporter:
                             })
                             continue
 
-                        # Cliente (puede venir de Programacion pero actualizar Container)
-                        cliente = str(row.get('cliente', 'N/A')).strip() if pd.notna(row.get('cliente')) else 'N/A'
+                        # Cliente: la unidad YA trae su cliente desde el embarque.
+                        # Si el Excel de programación no lo indica, se hereda el de
+                        # la unidad (nunca pisarlo con 'N/A').
+                        cliente_excel = None
+                        if 'cliente' in df.columns and pd.notna(row.get('cliente')):
+                            cliente_excel = str(row['cliente']).strip()
+                        cliente = cliente_excel or container.cliente or 'N/A'
+                        if cliente_excel and not container.cliente:
+                            container.cliente = cliente_excel
 
                         # Actualizar datos del contenedor desde programación
                         if 'contenido' in df.columns and pd.notna(row.get('contenido')):
