@@ -724,6 +724,7 @@ function loadContainersSinAsignar() {
                                         <i class="fas fa-calendar"></i> ${fechaProg ? new Date(fechaProg).toLocaleDateString('es-CL') : 'Sin fecha'}<br>
                                         <i class="fas fa-building"></i> ${e(prog.cd_nombre) || 'Sin CD'}
                                     </p>
+                                    <span class="badge bg-warning text-dark"><i class="fas fa-user-slash"></i> Sin conductor asignado</span>
                                 </div>
                                 <div>
                                     <button class="btn btn-sm btn-success action-btn" onclick="asignarAutomaticoProg(${prog.id})">
@@ -1262,7 +1263,7 @@ async function confirmarPreAsignacion(programacionId) {
         const data = await response.json();
         if (data.success) {
             mostrarToast(`✅ Conductor asignado: ${data.mensaje}`, 'success');
-            if (typeof loadContainersPorAsignar === 'function') loadContainersPorAsignar();
+            if (typeof loadContainersSinAsignar === 'function') loadContainersSinAsignar();
             if (typeof loadContaineresAsignados === 'function') loadContaineresAsignados();
             descartarPreasignacion();
         } else {

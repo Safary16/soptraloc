@@ -8,6 +8,9 @@ echo "=========================================="
 echo "🚀 SOPTRALOC TMS - ARRANQUE"
 echo "=========================================="
 
+echo "🗄️ Verificando/creando la base de datos..."
+python manage.py ensure_database
+
 echo "📦 Ejecutando migraciones de base de datos..."
 python manage.py migrate --no-input
 
