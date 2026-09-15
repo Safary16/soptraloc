@@ -95,6 +95,29 @@ def importar(request):
     })
 
 
+def gestion(request):
+    """Panel de Gestión / Control (Customer Service):
+    - Visión de todo el stock (todas las unidades, con filtros)
+    - Liberar, programar y modificar unidades manualmente desde la misma vista
+    - Carga masiva (importación) accesible desde aquí
+    """
+    from django.middleware.csrf import get_token
+    from apps.containers.models import Container
+    from apps.programaciones.models import Programacion
+    get_token(request)
+    clientes = set()
+    for c in Container.objects.exclude(cliente__isnull=True).exclude(cliente='').values_list('cliente', flat=True):
+        if c and c.strip():
+            clientes.add(c.strip())
+    for c in Programacion.objects.exclude(cliente__isnull=True).exclude(cliente='').values_list('cliente', flat=True):
+        if c and c.strip():
+            clientes.add(c.strip())
+    return render(request, 'gestion.html', {
+        'clientes_conocidos': sorted(clientes),
+        'estados': [e[0] for e in Container.ESTADOS],
+    })
+
+
 @staff_member_required
 def containers_list(request):
     """Listado de contenedores con filtros"""

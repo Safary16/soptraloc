@@ -1,0 +1,317 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Gestión / Control · SoptraLoc{% endblock %}
+
+{% block extra_css %}
+<style>
+    .ges-header { display:flex; flex-wrap:wrap; gap:12px; align-items:center; justify-content:space-between; margin-bottom:1rem; }
+    .ges-chips { display:flex; gap:6px; flex-wrap:wrap; }
+    .ges-chip { background:var(--bg-card); border:1px solid var(--border-color); border-radius:18px; padding:3px 12px; font-size:.8rem; font-weight:600; color:var(--text-muted); }
+    .ges-chip b { color:var(--ubuntu-orange); }
+    .btn-accion { font-size:.78rem; padding:.25rem .6rem; border-radius:7px; border:1px solid var(--border-color); background:var(--bg-card); color:var(--text-primary); }
+    .btn-accion:hover { border-color:var(--ubuntu-orange); color:var(--ubuntu-orange); }
+    .stock-alta { color:#b45309; font-weight:600; }
+    .acciones-cell { white-space:nowrap; }
+    .filtros-row { display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-bottom:.9rem; }
+    .filtros-row select, .filtros-row input { max-width:190px; border-radius:8px; font-size:.85rem; }
+    .subseccion { margin-top:1.6rem; }
+    .subseccion-title { font-size:.8rem; font-weight:700; text-transform:uppercase; letter-spacing:.04em; color:var(--text-muted); border-bottom:1px solid var(--border-color); padding-bottom:6px; margin-bottom:.9rem; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="ges-header">
+    <div>
+        <h4 class="mb-0"><i class="fas fa-tower-broadcast"></i> Gestión / Control</h4>
+        <small class="text-muted">Customer Service: carga unidades, libera, programa y modifica el stock.</small>
+    </div>
+    <div class="ges-chips" id="gesChips"></div>
+</div>
+
+<!-- Filtros -->
+<div class="filtros-row">
+    <select id="fEstado" class="form-select form-select-sm">
+        <option value="">Todos los estados</option>
+        {% for e in estados %}
+        <option value="{{ e }}">{{ e }}</option>
+        {% endfor %}
+    </select>
+    <select id="fCliente" class="form-select form-select-sm">
+        <option value="">Todos los clientes</option>
+        {% for cl in clientes_conocidos %}
+        <option value="{{ cl }}">{{ cl }}</option>
+        {% endfor %}
+    </select>
+    <input type="text" id="fNave" class="form-control form-control-sm" placeholder="Nave…">
+    <input type="text" id="fSearch" class="form-control form-control-sm" placeholder="Contenedor / búsqueda…">
+    <button class="btn btn-ubuntu btn-sm" onclick="cargarStock()"><i class="fas fa-filter"></i> Filtrar</button>
+    <button class="btn btn-outline-secondary btn-sm" onclick="limpiarFiltros()">Limpiar</button>
+</div>
+
+<!-- Tabla de stock -->
+<div class="card">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <strong><i class="fas fa-boxes"></i> Unidades en stock</strong>
+        <span class="badge bg-primary" id="totalBadge">0</span>
+    </div>
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-dense table-hover mb-0 align-middle">
+                <thead>
+                    <tr>
+                        <th>Contenedor</th><th>Cliente</th><th>Nave</th><th>Tipo</th><th>Estado</th>
+                        <th>Posición</th><th>Liberación</th><th>Demurrage</th><th class="text-end">Acciones</th>
+                    </tr>
+                </thead>
+                <tbody id="tablaStock">
+                    <tr><td colspan="9" class="text-center text-muted py-4">Cargando unidades…</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- Carga masiva -->
+<div class="subseccion">
+    <div class="subseccion-title"><i class="fas fa-file-excel"></i> Carga masiva (importar Excel)</div>
+    <div class="d-flex gap-3 flex-wrap">
+        <a href="/importar/#embarque" class="btn btn-outline-secondary btn-sm"><i class="fas fa-ship"></i> Embarque</a>
+        <a href="/importar/#liberacion" class="btn btn-outline-secondary btn-sm"><i class="fas fa-unlock"></i> Liberación</a>
+        <a href="/importar/#programacion" class="btn btn-outline-secondary btn-sm"><i class="fas fa-calendar"></i> Programación</a>
+        <a href="/importar/#conductores" class="btn btn-outline-secondary btn-sm"><i class="fas fa-users"></i> Conductores</a>
+    </div>
+</div>
+
+<!-- Modal Programar -->
+<div class="modal fade" id="programarModal" tabindex="-1">
+    <div class="modal-dialog"><div class="modal-content">
+        <div class="modal-header">
+            <h5 class="modal-title"><i class="fas fa-calendar-check"></i> Programar unidad</h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+            <p class="mb-1"><strong>Contenedor:</strong> <span id="progContainer"></span></p>
+            <p class="mb-2"><strong>Cliente:</strong> <span id="progCliente"></span></p>
+            <div class="mb-3">
+                <label class="form-label">CD destino</label>
+                <select id="progCd" class="form-select"><option value="">Seleccione CD…</option></select>
+            </div>
+            <div class="mb-2">
+                <label class="form-label">Fecha y hora</label>
+                <input type="datetime-local" id="progFecha" class="form-control">
+            </div>
+            <div class="form-text" id="progMsg"></div>
+        </div>
+        <div class="modal-footer">
+            <button class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
+            <button class="btn btn-primary" id="btnProg" onclick="confirmarProgramar()"><i class="fas fa-check"></i> Programar</button>
+        </div>
+    </div></div>
+</div>
+
+<!-- Modal Modificar -->
+<div class="modal fade" id="editarModal" tabindex="-1">
+    <div class="modal-dialog modal-lg"><div class="modal-content">
+        <div class="modal-header">
+            <h5 class="modal-title"><i class="fas fa-edit"></i> Modificar unidad</h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+            <div class="row g-3">
+                <div class="col-md-6"><label class="form-label">Cliente</label><input id="edCliente" class="form-control"></div>
+                <div class="col-md-6"><label class="form-label">Nave</label><input id="edNave" class="form-control"></div>
+                <div class="col-md-4"><label class="form-label">Tipo</label>
+                    <select id="edTipo" class="form-select">
+                        <option value="20">20</option><option value="40">40</option>
+                        <option value="40HC">40HC</option><option value="45">45</option>
+                    </select></div>
+                <div class="col-md-4"><label class="form-label">Peso carga (kg)</label><input id="edPeso" type="number" class="form-control"></div>
+                <div class="col-md-4"><label class="form-label">Posición física</label><input id="edPos" class="form-control"></div>
+                <div class="col-md-6"><label class="form-label">Comuna</label><input id="edComuna" class="form-control"></div>
+                <div class="col-md-6"><label class="form-label">Vendor</label><input id="edVendor" class="form-control"></div>
+            </div>
+            <div class="form-text mt-2" id="editMsg"></div>
+        </div>
+        <div class="modal-footer">
+            <button class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
+            <button class="btn btn-primary" onclick="confirmarEditar()"><i class="fas fa-save"></i> Guardar</button>
+        </div>
+    </div></div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+let stockActual = [];
+let progId = null;
+let editId = null;
+
+function esc(s){ return s==null?'':String(s).replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m])); }
+function getCookie(n){ const v=document.cookie.match('(^|;)\\s*'+n+'\\s*=\\s*([^;]+)'); return v?v.pop():''; }
+function fmtFecha(s){ if(!s) return '—'; const d=new Date(s); return isNaN(d)?'—':d.toLocaleDateString('es-CL'); }
+
+const ESTADOS_OK = {
+    'liberado':'liberado','programado':'programado','secuenciado':'programado',
+    'asignado':'programado','en_ruta':'programado','entregado':'entregado',
+    'soltado':'entregado','descargado':'descargado','vacio':'vacio','vacio_en_ruta':'vacio',
+    'devuelto':'devuelto'
+};
+
+function chipEstado(c){
+    const n = ESTADOS_OK[c]||c;
+    return `<span class="ges-chip">${n} <b>${stockActual.filter(x=>x.estado===c).length}</b></span>`;
+}
+
+function renderChips(){
+    const chips = {};
+    stockActual.forEach(x=>{ const k = ESTADOS_OK[x.estado]||x.estado; chips[k]=(chips[k]||0)+1; });
+    document.getElementById('gesChips').innerHTML = Object.keys(chips).map(k=>`<span class="ges-chip">${k} <b>${chips[k]}</b></span>`).join('')
+        + `<span class="ges-chip">total <b>${stockActual.length}</b></span>`;
+}
+
+function cargarStock(){
+    const params = new URLSearchParams();
+    if (document.getElementById('fEstado').value) params.set('estado', document.getElementById('fEstado').value);
+    if (document.getElementById('fCliente').value) params.set('cliente', document.getElementById('fCliente').value);
+    if (document.getElementById('fNave').value.trim()) params.set('nave', document.getElementById('fNave').value.trim());
+    if (document.getElementById('fSearch').value.trim()) params.set('search', document.getElementById('fSearch').value.trim());
+
+    fetch('/api/containers/?' + params.toString())
+        .then(r=>r.json())
+        .then(d=>{
+            stockActual = d.results || d || [];
+            renderChips();
+            document.getElementById('totalBadge').textContent = d.count !== undefined ? d.count : stockActual.length;
+            renderTabla();
+        })
+        .catch(()=>{ document.getElementById('tablaStock').innerHTML = '<tr><td colspan="9" class="text-center text-danger py-4">Error cargando stock</td></tr>'; });
+}
+
+function renderTabla(){
+    const tb = document.getElementById('tablaStock');
+    if (!stockActual.length){ tb.innerHTML = '<tr><td colspan="9" class="text-center text-muted py-4">Sin unidades con estos filtros</td></tr>'; return; }
+    tb.innerHTML = stockActual.map(c=>{
+        const puedeLiberar = c.estado === 'por_arribar';
+        const puedeProgramar = ['liberado','secuenciado'].includes(c.estado);
+        const acciones = [];
+        if (puedeLiberar) acciones.push(`<button class="btn-accion" onclick="liberarUnidad(${c.id},'${esc(c.container_id)}')"><i class="fas fa-unlock"></i> Liberar</button>`);
+        if (puedeProgramar) acciones.push(`<button class="btn-accion" onclick="abrirProgramar(${c.id},'${esc(c.container_id_formatted||c.container_id)}','${esc(c.cliente||'')}')"><i class="fas fa-calendar-check"></i> Programar</button>`);
+        acciones.push(`<button class="btn-accion" onclick="abrirEditar(${c.id})"><i class="fas fa-edit"></i> Modificar</button>`);
+        const dem = c.urgencia_demurrage==='vencido'||c.urgencia_demurrage==='critico';
+        return `<tr>
+            <td><strong>${esc(c.container_id_formatted||c.container_id)}</strong></td>
+            <td>${esc(c.cliente||'—')}</td>
+            <td>${esc(c.nave||'—')}</td>
+            <td>${esc(c.tipo||'—')}</td>
+            <td><span class="badge-estado estado-${esc(c.estado)}">${esc(c.estado||'—')}</span></td>
+            <td>${esc(c.posicion_fisica||'—')}</td>
+            <td>${fmtFecha(c.fecha_liberacion)}</td>
+            <td class="${dem?'stock-alta':''}">${c.dias_para_demurrage!=null?c.dias_para_demurrage+'d':'—'}</td>
+            <td class="text-end acciones-cell">${acciones.join(' ')}</td>
+        </tr>`;
+    }).join('');
+}
+
+function limpiarFiltros(){
+    ['fEstado','fCliente','fNave','fSearch'].forEach(id=>document.getElementById(id).value='');
+    cargarStock();
+}
+
+function postAccion(url, payload){
+    return fetch(url, { method:'POST', headers:{'Content-Type':'application/json','X-CSRFToken':getCookie('csrftoken')}, body:JSON.stringify(payload||{}) })
+        .then(r=>r.json());
+}
+
+function liberarUnidad(id, containerId){
+    if (!confirm(`¿Liberar ${containerId}?`)) return;
+    postAccion(`/api/containers/${id}/marcar_liberado/`).then(d=>{
+        alert(d.success ? `✅ ${containerId} liberado` : '❌ '+(d.error||'no se pudo'));
+        cargarStock();
+    });
+}
+
+function abrirProgramar(id, containerDisplay, cliente){
+    progId = id;
+    document.getElementById('progContainer').textContent = containerDisplay;
+    document.getElementById('progCliente').textContent = cliente || '—';
+    document.getElementById('progMsg').textContent = '';
+    document.getElementById('progFecha').value = '';
+    fetch('/api/cds/?activo=true')
+        .then(r=>r.json())
+        .then(d=>{
+            const cds = d.results || [];
+            document.getElementById('progCd').innerHTML = '<option value="">Seleccione CD…</option>'
+                + cds.map(x=>`<option value="${x.id}">${esc(x.nombre)} (${esc(x.comuna||'')})</option>`).join('');
+        });
+    new bootstrap.Modal(document.getElementById('programarModal')).show();
+}
+
+function confirmarProgramar(){
+    const cd = document.getElementById('progCd').value;
+    const fecha = document.getElementById('progFecha').value;
+    if (!cd){ document.getElementById('progMsg').textContent='⚠️ Seleccione CD.'; return; }
+    if (!fecha){ document.getElementById('progMsg').textContent='⚠️ Seleccione fecha.'; return; }
+    document.getElementById('btnProg').disabled = true;
+    postAccion(`/api/containers/${progId}/programar/`, {cd_id:parseInt(cd), fecha_programada:new Date(fecha).toISOString()})
+        .then(d=>{
+            document.getElementById('btnProg').disabled = false;
+            if (d.success){
+                bootstrap.Modal.getInstance(document.getElementById('programarModal')).hide();
+                alert('✅ '+d.mensaje);
+                cargarStock();
+            } else {
+                document.getElementById('progMsg').textContent = '❌ '+(d.error||'no se pudo');
+            }
+        });
+}
+
+let editData = null;
+function abrirEditar(id){
+    editId = id;
+    const c = stockActual.find(x=>x.id===id);
+    if (!c) return;
+    editData = c;
+    document.getElementById('edCliente').value = c.cliente||'';
+    document.getElementById('edNave').value = c.nave||'';
+    document.getElementById('edTipo').value = c.tipo||'40';
+    document.getElementById('edPeso').value = c.peso_carga||'';
+    document.getElementById('edPos').value = c.posicion_fisica||'';
+    document.getElementById('edComuna').value = c.comuna||'';
+    document.getElementById('edVendor').value = c.vendor||'';
+    document.getElementById('editMsg').textContent = '';
+    new bootstrap.Modal(document.getElementById('editarModal')).show();
+}
+
+function confirmarEditar(){
+    const payload = {
+        cliente: document.getElementById('edCliente').value.trim(),
+        nave: document.getElementById('edNave').value.trim(),
+        tipo: document.getElementById('edTipo').value,
+        peso_carga: document.getElementById('edPeso').value ? parseFloat(document.getElementById('edPeso').value) : null,
+        posicion_fisica: document.getElementById('edPos').value.trim(),
+        comuna: document.getElementById('edComuna').value.trim(),
+        vendor: document.getElementById('edVendor').value.trim(),
+    };
+    fetch(`/api/containers/${editId}/`, {
+        method:'PATCH',
+        headers:{'Content-Type':'application/json','X-CSRFToken':getCookie('csrftoken')},
+        body: JSON.stringify(payload)
+    })
+    .then(r=>r.json())
+    .then(d=>{
+        if (!d.id){ document.getElementById('editMsg').textContent='❌ '+(d.estado ? JSON.stringify(d.estado) : 'no se pudo guardar'); return; }
+        bootstrap.Modal.getInstance(document.getElementById('editarModal')).hide();
+        alert('✅ Unidad modificada');
+        cargarStock();
+    });
+}
+
+document.getElementById('fEstado').addEventListener('change', cargarStock);
+document.getElementById('fCliente').addEventListener('change', cargarStock);
+document.getElementById('fNave').addEventListener('keydown', e=>{ if(e.key==='Enter') cargarStock(); });
+document.getElementById('fSearch').addEventListener('keydown', e=>{ if(e.key==='Enter') cargarStock(); });
+
+cargarStock();
+</script>
+{% endblock %}

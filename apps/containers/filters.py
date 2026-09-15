@@ -12,6 +12,8 @@ class ContainerFilter(django_filters.FilterSet):
     """
     estado = django_filters.CharFilter(field_name='estado', lookup_expr='exact')
     estado__in = django_filters.BaseInFilter(field_name='estado', lookup_expr='in')
+    cliente = django_filters.CharFilter(field_name='cliente', lookup_expr='icontains')
+    nave = django_filters.CharFilter(field_name='nave', lookup_expr='icontains')
     
     class Meta:
         model = Container
@@ -21,4 +23,6 @@ class ContainerFilter(django_filters.FilterSet):
             'secuenciado': ['exact'],
             'puerto': ['exact', 'icontains'],
             'posicion_fisica': ['exact', 'icontains'],
+            'cliente': ['icontains'],
+            'nave': ['icontains'],
         }
