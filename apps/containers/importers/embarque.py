@@ -31,9 +31,10 @@ class EmbarqueImporter:
     
     COLUMNAS_REQUERIDAS = ['container_id', 'tipo', 'nave']
     
-    def __init__(self, archivo_path, usuario=None):
+    def __init__(self, archivo_path, usuario=None, cliente=None):
         self.archivo_path = archivo_path
         self.usuario = usuario
+        self.cliente = (cliente or '').strip() or None
         self.resultados = {
             'creados': 0,
             'actualizados': 0,
@@ -164,6 +165,10 @@ class EmbarqueImporter:
                             'puerto': str(row.get('puerto')).strip() if pd.notna(row.get('puerto')) else 'San Antonio',
                             'estado': 'por_arribar',
                         }
+                        # El archivo de embarque NO trae el cliente final; se asigna
+                        # el seleccionado por el operador en la pantalla de importar.
+                        if self.cliente:
+                            datos['cliente'] = self.cliente
 
                         # Agregar fecha_eta si está disponible
                         if 'fecha_eta' in row.index and pd.notna(row['fecha_eta']):

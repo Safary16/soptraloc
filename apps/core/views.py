@@ -80,7 +80,19 @@ def estados(request):
 
 def importar(request):
     """Página de importación de Excel"""
-    return render(request, 'importar.html')
+    from apps.containers.models import Container
+    from apps.programaciones.models import Programacion
+    # Clientes conocidos (para sugerir en el campo de embarque)
+    clientes = set()
+    for c in Container.objects.exclude(cliente__isnull=True).exclude(cliente='').values_list('cliente', flat=True):
+        if c and c.strip():
+            clientes.add(c.strip())
+    for c in Programacion.objects.exclude(cliente__isnull=True).exclude(cliente='').values_list('cliente', flat=True):
+        if c and c.strip():
+            clientes.add(c.strip())
+    return render(request, 'importar.html', {
+        'clientes_conocidos': sorted(clientes),
+    })
 
 
 @staff_member_required

@@ -51,6 +51,21 @@
                         {% csrf_token %}
                         <div class="mb-3">
                             <label class="form-label fw-bold">
+                                <i class="fas fa-store"></i> ¿Para qué cliente es esta nave?
+                            </label>
+                            <input type="text" class="form-control" name="cliente" list="clientes-conocidos"
+                                   placeholder="Ej: WALMART, EASY, BROWNE…" required>
+                            <datalist id="clientes-conocidos">
+                                {% for cl in clientes_conocidos %}
+                                <option value="{{ cl }}">
+                                {% endfor %}
+                            </datalist>
+                            <div class="form-text text-muted">
+                                El archivo de la nave no trae el cliente final; se asignará a todos los contenedores de este embarque.
+                            </div>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label fw-bold">
                                 <i class="fas fa-file-excel"></i> Archivo Excel
                             </label>
                             <input type="file" class="form-control" name="file" accept=".xlsx,.xls" required>

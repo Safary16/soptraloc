@@ -105,6 +105,9 @@ class ContainerViewSet(viewsets.ModelViewSet):
         
         usuario = request.user.username if request.user.is_authenticated else None
         
+        # El archivo de embarque no trae el cliente final; lo asigna el operador
+        cliente = (request.POST.get('cliente') or request.data.get('cliente') or '').strip() or None
+        
         # Guardar temporalmente
         with tempfile.NamedTemporaryFile(delete=False, suffix='.xlsx') as tmp:
             for chunk in archivo.chunks():
@@ -113,12 +116,14 @@ class ContainerViewSet(viewsets.ModelViewSet):
         
         try:
             # Procesar con el importador
-            importer = EmbarqueImporter(tmp_path, usuario)
+            importer = EmbarqueImporter(tmp_path, usuario, cliente=cliente)
             resultados = importer.procesar()
             
             return Response({
                 'success': True,
-                'mensaje': f'Importación completada',
+                'mensaje': f'Importación completada'
+                           + (f' (cliente: {cliente})' if cliente else ''),
+                'cliente': cliente,
                 'creados': resultados['creados'],
                 'actualizados': resultados['actualizados'],
                 'errores': resultados['errores'],
