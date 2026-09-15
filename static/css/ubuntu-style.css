@@ -81,6 +81,16 @@ body {
     flex-shrink: 0;
 }
 
+/* Logo real (imagen SAFARY) en la navbar */
+.navbar-logo {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    object-fit: cover;
+    border: 2px solid rgba(255,255,255,0.9);
+    background: #fff;
+}
+
 /* ---------- Cards ---------- */
 .stat-card {
     border-radius: 12px;

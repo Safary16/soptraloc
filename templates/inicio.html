@@ -1,0 +1,137 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}SoptraLoc · Elige cómo quieres ingresar{% endblock %}
+
+{% block extra_css %}
+<style>
+    .landing-wrap {
+        min-height: calc(100vh - 90px);
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        padding: 2.5rem 1rem 3rem;
+        text-align: center;
+        background:
+            radial-gradient(ellipse at 50% -20%, rgba(233, 84, 32, 0.08), transparent 55%),
+            var(--bg-body);
+    }
+    .landing-logo {
+        width: 118px;
+        height: 118px;
+        border-radius: 50%;
+        object-fit: cover;
+        box-shadow: 0 6px 24px rgba(0,0,0,0.18), 0 0 0 4px rgba(233,84,32,0.15);
+        margin-bottom: 1.1rem;
+        background: #fff;
+        padding: 3px;
+    }
+    .landing-brand {
+        font-size: 2rem;
+        font-weight: 700;
+        letter-spacing: .04em;
+        background: var(--navbar-gradient);
+        -webkit-background-clip: text;
+        background-clip: text;
+        color: transparent;
+        margin-bottom: .25rem;
+    }
+    .landing-sub {
+        color: var(--text-muted);
+        font-size: 1.05rem;
+        margin-bottom: 2.4rem;
+    }
+    .roles-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+        gap: 1.25rem;
+        width: 100%;
+        max-width: 1060px;
+    }
+    .role-card {
+        background: var(--bg-card);
+        border: 1px solid var(--border-color);
+        border-top: 4px solid var(--rc, #666);
+        border-radius: 14px;
+        padding: 1.5rem 1.4rem;
+        text-align: left;
+        text-decoration: none !important;
+        color: var(--text-primary);
+        box-shadow: var(--shadow-card);
+        transition: transform .18s ease, box-shadow .18s ease;
+        display: flex;
+        flex-direction: column;
+        gap: .5rem;
+    }
+    .role-card:hover {
+        transform: translateY(-4px);
+        box-shadow: 0 10px 26px rgba(0,0,0,0.15);
+    }
+    .role-card .role-icon {
+        font-size: 1.7rem;
+        color: var(--rc, #666);
+    }
+    .role-card .role-title {
+        font-weight: 700;
+        font-size: 1.05rem;
+    }
+    .role-card .role-desc {
+        color: var(--text-muted);
+        font-size: .85rem;
+        line-height: 1.5;
+        flex-grow: 1;
+    }
+    .role-card .role-link {
+        font-size: .85rem;
+        font-weight: 600;
+        color: var(--rc, #666);
+    }
+    .landing-note {
+        margin-top: 2.2rem;
+        font-size: .78rem;
+        color: var(--text-muted);
+        max-width: 560px;
+        opacity: .8;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="landing-wrap">
+    <img class="landing-logo" src="{% static 'img/logo.png' %}" alt="Logo SoptraLoc (Safary)">
+    <div class="landing-brand">SAFARY</div>
+    <div class="landing-sub">SoptraLoc · Elige cómo quieres ingresar</div>
+
+    <div class="roles-grid">
+        <a class="role-card" href="/containers/" style="--rc:#2563eb;">
+            <i class="fas fa-folder-open role-icon"></i>
+            <div class="role-title">Cliente</div>
+            <div class="role-desc">Revisa tu stock, solicita ventanas de recepción y comunica situaciones a Operaciones.</div>
+            <span class="role-link">Entrar al portal <i class="fas fa-arrow-right"></i></span>
+        </a>
+        <a class="role-card" href="/operaciones/" style="--rc:#E95420;">
+            <i class="fas fa-cogs role-icon"></i>
+            <div class="role-title">Operaciones</div>
+            <div class="role-desc">Gestiona solicitudes, programaciones, asignación de conductores y seguimiento.</div>
+            <span class="role-link">Entrar a Operaciones <i class="fas fa-arrow-right"></i></span>
+        </a>
+        <a class="role-card" href="/importar/" style="--rc:#772953;">
+            <i class="fas fa-tower-broadcast role-icon"></i>
+            <div class="role-title">Control</div>
+            <div class="role-desc">Importa naves, libera unidades, mantiene datos maestros y visualiza el servicio completo.</div>
+            <span class="role-link">Entrar a Control <i class="fas fa-arrow-right"></i></span>
+        </a>
+        <a class="role-card" href="/driver/login/" style="--rc:#16a34a;">
+            <i class="fas fa-truck role-icon"></i>
+            <div class="role-title">Conductor</div>
+            <div class="role-desc">Consulta asignaciones, inicia rutas, reporta llegada y completa el ciclo de entrega.</div>
+            <span class="role-link">Entrar como conductor <i class="fas fa-arrow-right"></i></span>
+        </a>
+    </div>
+
+    <div class="landing-note">
+        Los accesos internos comparten autorización temporalmente; los permisos finos se podrán separar sin cambiar estos flujos.
+    </div>
+</div>
+{% endblock %}

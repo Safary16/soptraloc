@@ -18,7 +18,7 @@ from apps.cds.views import CDViewSet
 
 # Import frontend views
 from apps.core.views import (
-    home, asignacion, estados, importar, 
+    inicio, home, asignacion, estados, importar, 
     containers_list, container_detail,
     operaciones, drivers_list, cds_list, executive_dashboard,
     operaciones_diarias as operaciones_diarias_view,
@@ -43,7 +43,8 @@ router.register(r'notifications', NotificationViewSet, basename='notification')
 
 urlpatterns = [
     # Frontend pages
-    path('', home, name='home'),
+    path('', inicio, name='inicio'),
+    path('dashboard/', home, name='home'),
     path('asignacion/', asignacion, name='asignacion'),
     path('estados/', estados, name='estados'),
     path('importar/', importar, name='importar'),

@@ -8,6 +8,11 @@ from apps.cds.models import CD
 from django.contrib.admin.views.decorators import staff_member_required
 
 
+def inicio(request):
+    """Página inicial: portada con logo SAFARY y tarjetas de acceso por rol"""
+    return render(request, 'inicio.html')
+
+
 def home(request):
     """Dashboard principal con estadísticas"""
     today = timezone.now().date()

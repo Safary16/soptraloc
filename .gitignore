@@ -35,6 +35,8 @@ staticfiles/
 !static/img/badge.png
 !static/img/badge-icon.png
 !static/img/truck-icon.png
+!static/img/logo.png
+!static/img/logo-pagina-inicio.jpg
 !static/img/ICONS_README.md
 !static/css/
 !static/css/ubuntu-style.css
