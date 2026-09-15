@@ -69,6 +69,18 @@ body {
 .navbar-dark .nav-link { color: rgba(255, 255, 255, 0.88); }
 .navbar-dark .nav-link:hover { color: #fff; }
 
+/* Logo circular Ubuntu de la navbar (se restauró; faltaba en el rediseño) */
+.navbar-brand .ubuntu-logo,
+.ubuntu-logo {
+    width: 32px;
+    height: 32px;
+    background: radial-gradient(circle at 30% 30%, #FFFFFF 0%, #FFFFFF 20%, var(--ubuntu-orange) 20%, var(--ubuntu-orange) 40%, #F7F7F7 40%, #F7F7F7 60%, var(--ubuntu-orange) 60%, var(--ubuntu-orange) 80%, #F7F7F7 80%);
+    border-radius: 50%;
+    border: 2px solid rgba(255,255,255,0.9);
+    display: inline-block;
+    flex-shrink: 0;
+}
+
 /* ---------- Cards ---------- */
 .stat-card {
     border-radius: 12px;

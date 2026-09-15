@@ -22,6 +22,8 @@ services:
         value: .onrender.com
       - key: PYTHONPATH
         value: "."
+      - key: MAPBOX_API_KEY
+        value: pk.eyJ1Ijoic2FmYXJ5MTYiLCJhIjoiY21naHlvYTQ5MDNlbDJrbjJjcXRtZGg1YSJ9.WCiyTSY_CCfB02N_Nfx7kg
       - key: DB_STARTUP_MAX_ATTEMPTS
         value: "12"
       - key: DB_STARTUP_RETRY_SECONDS
@@ -36,7 +38,7 @@ services:
         value: "1"
       - key: DJANGO_SUPERUSER_PASSWORD
         value: "1234"
-        sync: false
+        sync: true
 
   # Procesa liberaciones cuya fecha/hora ya llegó. El comando es idempotente.
   - type: cron
