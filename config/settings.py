@@ -97,22 +97,41 @@ TEMPLATES = [
 WSGI_APPLICATION = 'config.wsgi.application'
 
 # Database
-database_url = config('DATABASE_URL', default='')
-if not database_url or 'dpg-d9e1pj3rjlhs73bii2c0-a' in database_url:
-    # Fallback automático a SQLite si no hay DB de Render o si apunta al host antiguo eliminado
-    DATABASES = {
-        'default': {
-            'ENGINE': 'django.db.backends.sqlite3',
-            'NAME': BASE_DIR / 'db.sqlite3',
-        }
-    }
-else:
+DELETED_RENDER_DB_HOST = 'dpg-d9e1pj3rjlhs73bii2c0-a'  # Postgres free de Render eliminado (~30 días)
+IS_RENDER = (
+    os.environ.get('RENDER', '').strip().lower() == 'true'
+    or bool(os.environ.get('RENDER_EXTERNAL_HOSTNAME'))
+)
+database_url = config('DATABASE_URL', default='').strip()
+db_url_valid = bool(database_url) and DELETED_RENDER_DB_HOST not in database_url
+
+if db_url_valid:
     DATABASES = {
         'default': dj_database_url.config(
             default=database_url,
             conn_max_age=600,
             conn_health_checks=True,
         )
+    }
+elif IS_RENDER:
+    # NUNCA arrancar sobre SQLite efímero en Render: el filesystem es efímero y
+    # toda la data se pierde en cada deploy/reinicio (verificado 2026-09-15).
+    from django.core.exceptions import ImproperlyConfigured
+    raise ImproperlyConfigured(
+        'DATABASE_URL inválida o ausente en Render (host eliminado: '
+        f'{DELETED_RENDER_DB_HOST}). Render NO provisionó la base de datos.\n'
+        'SOLUCIÓN: crea el servicio con el Blueprint (render.yaml) para que Render '
+        'provisione el Postgres "soptraloc-db" e inyecte DATABASE_URL, o crea una '
+        'PostgreSQL en el dashboard y pega su connectionString en la env var '
+        'DATABASE_URL (Environment tab). Luego Manual Deploy → Clear build cache & deploy.'
+    )
+else:
+    # Desarrollo local sin Postgres → SQLite (aceptable solo fuera de Render)
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.sqlite3',
+            'NAME': BASE_DIR / 'db.sqlite3',
+        }
     }
 
 # Password validation
