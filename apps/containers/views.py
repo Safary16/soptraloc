@@ -656,6 +656,7 @@ class ContainerViewSet(viewsets.ModelViewSet):
         eliminando su programación asociada y regresándolo a estado 'liberado'.
         """
         container = self.get_object()
+        usuario = request.user.username if request.user.is_authenticated else None
         
         if container.estado != 'programado':
             return Response(
