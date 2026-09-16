@@ -10,10 +10,13 @@ services:
     envVars:
       - key: PYTHON_VERSION
         value: 3.12.0
+      # Render FREE ya NO provisiona PostgreSQL: las DB free expiran y se borran
+      # (~30 días; verificado: dpg-d9e1pj3rjlhs73bii2c0-a eliminada).
+      # La base ahora es EXTERNA de free tier (Neon o Supabase). Pega su
+      # connection string en Dashboard → Environment → DATABASE_URL.
+      # sync:false = el Blueprint no la sobrescribe ni intenta crearla.
       - key: DATABASE_URL
-        fromDatabase:
-          name: soptraloc-db
-          property: connectionString
+        sync: false
       - key: SECRET_KEY
         generateValue: true
       - key: DEBUG
@@ -52,10 +55,9 @@ services:
     envVars:
       - key: PYTHON_VERSION
         value: 3.12.0
+      # Igual que el web service: DB externa, connection string manual.
       - key: DATABASE_URL
-        fromDatabase:
-          name: soptraloc-db
-          property: connectionString
+        sync: false
       - key: SECRET_KEY
         fromService:
           name: soptraloc
@@ -64,8 +66,6 @@ services:
       - key: DEBUG
         value: false
 
-databases:
-  - name: soptraloc-db
-    databaseName: soptraloc
-    user: soptraloc
-    plan: free
+# ⚠️ El bloque databases se elimina a propósito: Render FREE ya no provisiona
+# PostgreSQL (free expira a los 30 días). La DB es externa (Neon/Supabase) y
+# llega vía env var DATABASE_URL configurada manualmente en el dashboard.
