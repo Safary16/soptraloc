@@ -3,8 +3,6 @@ Servicio de validación de pre-asignación con cálculos de tiempo
 Previene conflictos de doble asignación usando tiempos reales de Mapbox
 """
 from datetime import timedelta
-from django.utils import timezone
-from decimal import Decimal
 import logging
 
 from apps.core.services.mapbox import MapboxService
@@ -255,59 +253,3 @@ class PreAssignmentValidationService:
         """
         return inicio1 < fin2 and inicio2 < fin1
     
-    @classmethod
-    def obtener_proxima_ventana_disponible(cls, driver, duracion_minutos, fecha_minima=None):
-        """
-        Encuentra la próxima ventana de tiempo disponible para un conductor
-        
-        Args:
-            driver: Conductor
-            duracion_minutos: Duración requerida en minutos
-            fecha_minima: Fecha mínima desde donde buscar (default: ahora)
-        
-        Returns:
-            dict: {
-                'disponible': bool,
-                'fecha_sugerida': datetime o None,
-                'ocupacion_actual': list de ventanas
-            }
-        """
-        if fecha_minima is None:
-            fecha_minima = timezone.now()
-        
-        # Obtener ventanas ocupadas
-        programaciones = Programacion.objects.filter(
-            driver=driver,
-            container__estado__in=['asignado', 'en_ruta', 'programado'],
-            fecha_programada__gte=fecha_minima
-        ).order_by('fecha_programada')
-        
-        ventanas = [cls._calcular_ventana_tiempo(p) for p in programaciones]
-        
-        if not ventanas:
-            # No tiene asignaciones, puede empezar ahora
-            return {
-                'disponible': True,
-                'fecha_sugerida': fecha_minima,
-                'ocupacion_actual': []
-            }
-        
-        # Buscar huecos entre ventanas
-        fecha_actual = fecha_minima
-        for ventana in ventanas:
-            # ¿Hay espacio antes de esta ventana?
-            if fecha_actual + timedelta(minutes=duracion_minutos + 30) <= ventana['inicio']:
-                return {
-                    'disponible': True,
-                    'fecha_sugerida': fecha_actual,
-                    'ocupacion_actual': [{'inicio': v['inicio'], 'fin': v['fin']} for v in ventanas]
-                }
-            # Avanzar al final de esta ventana
-            fecha_actual = ventana['fin'] + timedelta(minutes=30)  # 30 min buffer
-        
-        # Sugerir después de la última ventana
-        return {
-            'disponible': True,
-            'fecha_sugerida': fecha_actual,
-            'ocupacion_actual': [{'inicio': v['inicio'], 'fin': v['fin']} for v in ventanas]
-        }

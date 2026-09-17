@@ -48,8 +48,3 @@ def read_excel_with_header_detection(path: str | Path, expected_aliases: Iterabl
     return pd.read_excel(path, header=best_row)
 
 
-def clean_cell(value, default=None):
-    if pd.isna(value):
-        return default
-    text = str(value).replace('\xa0', ' ').strip()
-    return text if text else default

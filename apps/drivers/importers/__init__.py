@@ -4,7 +4,6 @@ Crea objetos Driver con datos de conductores.xlsx
 """
 import pandas as pd
 from apps.core.services.excel import normalize_columns, read_excel_with_header_detection
-from django.utils import timezone
 from apps.drivers.models import Driver
 from apps.drivers.access import asegurar_acceso
 

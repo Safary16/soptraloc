@@ -4,7 +4,6 @@ from django.urls import reverse
 from django.utils import timezone
 from datetime import timedelta
 from rest_framework.test import APITestCase
-from rest_framework import status
 
 from .models import Driver, DriverLocation
 from .serializers import DriverDetailSerializer

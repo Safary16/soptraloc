@@ -5,7 +5,6 @@ from rest_framework.parsers import MultiPartParser, FormParser
 from rest_framework.permissions import AllowAny, IsAuthenticatedOrReadOnly
 from django.conf import settings
 from django.db import transaction
-from django.db.models import Q
 from django.utils import timezone
 from datetime import timedelta
 from dateutil import parser as date_parser
@@ -66,7 +65,6 @@ class ProgramacionViewSet(viewsets.ModelViewSet):
         estado, listas para la vista operacional. Acepta ?fecha=YYYY-MM-DD.
         """
         from datetime import datetime
-        from datetime import timedelta as _td
         fecha_str = request.query_params.get('fecha')
         if fecha_str:
             try:
@@ -686,7 +684,7 @@ class ProgramacionViewSet(viewsets.ModelViewSet):
         
         return Response({
             'success': True,
-            'mensaje': f'Ruta manual creada exitosamente',
+            'mensaje': 'Ruta manual creada exitosamente',
             'programacion': ProgramacionSerializer(programacion).data,
             'tipo_movimiento': tipo_movimiento,
             'origen': container.posicion_fisica,
@@ -720,7 +718,7 @@ class ProgramacionViewSet(viewsets.ModelViewSet):
         max_size = 10 * 1024 * 1024  # 10MB en bytes
         if archivo.size > max_size:
             return Response(
-                {'error': f'Archivo demasiado grande. Tamaño máximo: 10MB'},
+                {'error': 'Archivo demasiado grande. Tamaño máximo: 10MB'},
                 status=status.HTTP_400_BAD_REQUEST
             )
         
@@ -741,7 +739,7 @@ class ProgramacionViewSet(viewsets.ModelViewSet):
             
             return Response({
                 'success': True,
-                'mensaje': f'Importación de programación completada',
+                'mensaje': 'Importación de programación completada',
                 'programados': resultados['programados'],
                 'no_encontrados': resultados['no_encontrados'],
                 'cd_no_encontrado': resultados['cd_no_encontrado'],
@@ -1025,7 +1023,6 @@ class ProgramacionViewSet(viewsets.ModelViewSet):
     
     def _update_registro_operacion_on_completion(self, programacion: Programacion, estado_final: str):
         from apps.programaciones.models import RegistroOperacion, TiempoViaje
-        from django.db.models import F
         import logging
 
         logger = logging.getLogger(__name__)
@@ -1260,7 +1257,7 @@ class ProgramacionViewSet(viewsets.ModelViewSet):
         serializer = self.get_serializer(programacion)
         return Response({
             'success': True,
-            'mensaje': f'Contenedor marcado como vacío. Listo para retiro.',
+            'mensaje': 'Contenedor marcado como vacío. Listo para retiro.',
             'programacion': serializer.data,
             'nuevo_estado': 'vacio',
             'tiempo_descarga_min': timing.tiempo_real_min if timing else None,

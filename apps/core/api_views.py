@@ -8,7 +8,7 @@ from rest_framework.permissions import IsAuthenticatedOrReadOnly
 from rest_framework.response import Response
 from django.utils import timezone
 from datetime import timedelta
-from django.db.models import Avg, Count, Q, F
+from django.db.models import Avg, Count, F
 
 from apps.containers.models import Container
 from apps.drivers.models import Driver

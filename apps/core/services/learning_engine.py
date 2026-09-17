@@ -1,7 +1,6 @@
 """Motor híbrido de aprendizaje operacional, explicable y con fallback seguro."""
 from __future__ import annotations
 
-from collections import defaultdict
 from datetime import timedelta
 from math import exp
 from statistics import median
@@ -156,19 +155,3 @@ class OperationalLearningEngine:
                 f"confianza {best['confidence']:.0%}."
             ),
         }
-
-    @classmethod
-    def rank_drivers(cls, drivers, origin, destination, departure, base_route):
-        history = cls._history(origin, destination)
-        ranked = []
-        for driver in drivers:
-            prediction = cls.predict_route(
-                origin, destination, departure, base_route, driver=driver, history=history
-            )
-            ranked.append({
-                'driver': driver,
-                'predicted_minutes': prediction['predicted_minutes'],
-                'confidence': prediction['confidence'],
-                'profile': prediction['driver_profile'],
-            })
-        return sorted(ranked, key=lambda item: (item['predicted_minutes'], -item['confidence']))

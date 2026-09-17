@@ -2,9 +2,6 @@ from django.shortcuts import render, redirect
 from django.contrib.auth import authenticate, login, logout
 from django.contrib.auth.decorators import login_required
 from django.contrib import messages
-from django.http import JsonResponse
-from django.views.decorators.http import require_http_methods
-from django.views.decorators.csrf import csrf_exempt
 from django.utils import timezone
 from datetime import timedelta
 
@@ -35,7 +32,8 @@ def driver_login(request):
         if user is not None:
             # Verificar que el usuario tiene un driver asociado
             try:
-                driver = user.driver
+                # El acceso a user.driver lanza DoesNotExist si el usuario no tiene conductor
+                user.driver
                 login(request, user)
                 return redirect('driver_dashboard')
             except Driver.DoesNotExist:
@@ -304,7 +302,6 @@ class DriverViewSet(viewsets.ModelViewSet):
         POST /api/drivers/import-excel/
         Body: multipart/form-data with 'file' field
         """
-        from rest_framework.parsers import MultiPartParser, FormParser
         import tempfile
         import os
         from apps.drivers.importers import ConductorImporter
@@ -331,7 +328,7 @@ class DriverViewSet(viewsets.ModelViewSet):
             
             return Response({
                 'success': True,
-                'mensaje': f'Importación completada',
+                'mensaje': 'Importación completada',
                 'creados': resultados['creados'],
                 'actualizados': resultados['actualizados'],
                 'errores': resultados['errores'],

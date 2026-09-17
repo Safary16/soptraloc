@@ -5,8 +5,6 @@ from django.utils import timezone
 
 from apps.drivers.models import Driver
 from apps.programaciones.models import Programacion, RegistroOperacion
-from apps.core.services.mapbox import MapboxService
-from apps.core.services.ml_predictor import MLTimePredictor
 from apps.core.services.learning_engine import OperationalLearningEngine
 from apps.core.services.anomaly_detector import (
     AnomalyDetector, DelayRiskScorer, CapacityChecker, ETAEstimator, RouteFeasibilityValidator

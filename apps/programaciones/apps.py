@@ -6,4 +6,5 @@ class ProgramacionesConfig(AppConfig):
     name = "apps.programaciones"
 
     def ready(self):
-        import apps.programaciones.signals
+        import importlib
+        importlib.import_module('apps.programaciones.signals')  # registra receivers al importar

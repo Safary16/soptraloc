@@ -514,9 +514,8 @@ class TiempoViaje(models.Model):
         # Radio de búsqueda: ~1km = 0.009 grados
         radio = Decimal('0.009')
         
-        # Extraer hora y día de semana
+        # Extraer hora del día (semana no se usa en los filtros)
         hora_del_dia = hora_salida.hour
-        dia_semana = hora_salida.weekday()
         
         # Filtros base: origen/destino similares + sin anomalías + últimos 60 días
         fecha_limite = timezone.now() - timedelta(days=60)

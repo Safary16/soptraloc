@@ -279,41 +279,6 @@ class NotificationService:
         logger.info(f"Alerta de arribo próximo creada: {notification.id}")
         return notification
     
-    @classmethod
-    def crear_notificacion_llegada(cls, programacion):
-        """
-        Crea notificación cuando el conductor llega al destino
-        
-        Args:
-            programacion: Programación completada
-        
-        Returns:
-            Notification: Notificación creada
-        """
-        notification = Notification.objects.create(
-            container=programacion.container,
-            driver=programacion.driver,
-            programacion=programacion,
-            tipo='llegada',
-            prioridad='media',
-            titulo=f"Llegada Confirmada - {programacion.container.container_id}",
-            mensaje=f"Conductor {programacion.driver.nombre} ha llegado a {programacion.cd.nombre}.",
-            detalles={
-                'cd_nombre': programacion.cd.nombre,
-                'hora_llegada': timezone.now().isoformat(),
-                'fecha_programada': programacion.fecha_programada.isoformat(),
-            }
-        )
-        
-        # Archivar notificaciones anteriores de esta programación
-        Notification.objects.filter(
-            programacion=programacion,
-            tipo__in=['ruta_iniciada', 'eta_actualizado', 'arribo_proximo'],
-            estado__in=['pendiente', 'enviada']
-        ).update(estado='archivada')
-        
-        logger.info(f"Notificación de llegada creada: {notification.id}")
-        return notification
     
     @classmethod
     def obtener_notificaciones_activas(cls, limit=20):

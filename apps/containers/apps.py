@@ -6,5 +6,6 @@ class ContainersConfig(AppConfig):
     name = "apps.containers"
     
     def ready(self):
-        """Importar signals cuando la app esté lista"""
-        import apps.containers.signals
+        """Importar signals cuando la app esté lista (efecto secundario: registra receivers)"""
+        import importlib
+        importlib.import_module('apps.containers.signals')  # registra receivers al importar

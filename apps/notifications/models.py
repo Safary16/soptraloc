@@ -94,12 +94,6 @@ class Notification(models.Model):
     def __str__(self):
         return f"{self.get_tipo_display()} - {self.container.container_id} - {self.created_at.strftime('%Y-%m-%d %H:%M')}"
     
-    def marcar_enviada(self):
-        """Marca la notificación como enviada"""
-        if self.estado == 'pendiente':
-            self.estado = 'enviada'
-            self.enviada_at = timezone.now()
-            self.save(update_fields=['estado', 'enviada_at'])
     
     def marcar_leida(self):
         """Marca la notificación como leída"""

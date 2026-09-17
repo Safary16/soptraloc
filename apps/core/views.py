@@ -1,10 +1,9 @@
 # Core views for frontend pages
-from django.shortcuts import render, get_object_or_404, redirect
+from django.shortcuts import render, get_object_or_404
 from django.utils import timezone
 from datetime import timedelta
 from apps.containers.models import Container
 from apps.drivers.models import Driver
-from apps.cds.models import CD
 from django.contrib.admin.views.decorators import staff_member_required
 
 
@@ -16,8 +15,6 @@ def inicio(request):
 def home(request):
     """Dashboard principal con estadísticas"""
     today = timezone.now().date()
-    tomorrow = today + timedelta(days=1)
-    two_days_from_now = today + timedelta(days=2)
     ahora = timezone.now()
     
     # Calculate stats for dashboard

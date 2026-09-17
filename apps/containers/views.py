@@ -99,7 +99,7 @@ class ContainerViewSet(viewsets.ModelViewSet):
         max_size = 10 * 1024 * 1024  # 10MB en bytes
         if archivo.size > max_size:
             return Response(
-                {'error': f'Archivo demasiado grande. Tamaño máximo: 10MB'},
+                {'error': 'Archivo demasiado grande. Tamaño máximo: 10MB'},
                 status=status.HTTP_400_BAD_REQUEST
             )
         
@@ -121,7 +121,7 @@ class ContainerViewSet(viewsets.ModelViewSet):
             
             return Response({
                 'success': True,
-                'mensaje': f'Importación completada'
+                'mensaje': 'Importación completada'
                            + (f' (cliente: {cliente})' if cliente else ''),
                 'cliente': cliente,
                 'creados': resultados['creados'],
@@ -174,7 +174,7 @@ class ContainerViewSet(viewsets.ModelViewSet):
         max_size = 10 * 1024 * 1024  # 10MB en bytes
         if archivo.size > max_size:
             return Response(
-                {'error': f'Archivo demasiado grande. Tamaño máximo: 10MB'},
+                {'error': 'Archivo demasiado grande. Tamaño máximo: 10MB'},
                 status=status.HTTP_400_BAD_REQUEST
             )
         
@@ -191,7 +191,7 @@ class ContainerViewSet(viewsets.ModelViewSet):
             
             return Response({
                 'success': True,
-                'mensaje': f'Importación de liberación completada',
+                'mensaje': 'Importación de liberación completada',
                 'liberados': resultados['liberados'],
                 'por_liberar': resultados.get('por_liberar', 0),
                 'no_encontrados': resultados['no_encontrados'],
@@ -245,7 +245,7 @@ class ContainerViewSet(viewsets.ModelViewSet):
         max_size = 10 * 1024 * 1024  # 10MB en bytes
         if archivo.size > max_size:
             return Response(
-                {'error': f'Archivo demasiado grande. Tamaño máximo: 10MB'},
+                {'error': 'Archivo demasiado grande. Tamaño máximo: 10MB'},
                 status=status.HTTP_400_BAD_REQUEST
             )
         
@@ -262,7 +262,7 @@ class ContainerViewSet(viewsets.ModelViewSet):
             
             return Response({
                 'success': True,
-                'mensaje': f'Importación de programación completada',
+                'mensaje': 'Importación de programación completada',
                 'programados': resultados['programados'],
                 'no_encontrados': resultados['no_encontrados'],
                 'cd_no_encontrado': resultados['cd_no_encontrado'],
@@ -895,10 +895,6 @@ class ContainerViewSet(viewsets.ModelViewSet):
         
         Automáticamente crea registro TiempoOperacion para ML
         """
-        from django.utils import timezone
-        from apps.cds.models import CD
-        from apps.programaciones.models import TiempoOperacion
-        from datetime import timedelta
         
         container = self.get_object()
         
@@ -979,7 +975,6 @@ class ContainerViewSet(viewsets.ModelViewSet):
         Solo funciona si cd.permite_soltar_contenedor=True
         Cambia estado a 'descargado' y libera al conductor inmediatamente
         """
-        from django.utils import timezone
         
         container = self.get_object()
         

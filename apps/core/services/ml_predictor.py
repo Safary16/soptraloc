@@ -4,7 +4,6 @@ Servicio de predicción de tiempos usando Machine Learning
 Integra modelos ML (TiempoOperacion, TiempoViaje) con Mapbox
 para predicciones más precisas basadas en datos históricos.
 """
-from decimal import Decimal
 from datetime import datetime
 from apps.programaciones.models import TiempoOperacion, TiempoViaje
 from apps.core.services.mapbox import MapboxService
@@ -244,29 +243,3 @@ class MLTimePredictor:
                 'error': str(e)
             }
     
-    @classmethod
-    def calcular_eta_entrega(cls, driver, programacion):
-        """
-        Calcula ETA (Estimated Time of Arrival) de entrega
-        
-        Returns:
-            datetime: Hora estimada de entrega
-        """
-        try:
-            ocupacion = cls.calcular_ocupacion_conductor(driver, programacion)
-            tiempo_total = ocupacion['tiempo_total_min']
-            
-            # Si hay fecha programada, partir desde ahí
-            if programacion.fecha_programada:
-                from datetime import timedelta
-                eta = programacion.fecha_programada + timedelta(minutes=tiempo_total)
-                return eta
-            
-            # Si no, desde ahora
-            from datetime import datetime, timedelta
-            eta = datetime.now() + timedelta(minutes=tiempo_total)
-            return eta
-        
-        except Exception as e:
-            logger.error(f"Error calculando ETA: {str(e)}")
-            return None

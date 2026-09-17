@@ -170,7 +170,7 @@ def crear_programacion_automatica(sender, instance, created, **kwargs):
     
     # Crear la programación
     try:
-        programacion = Programacion.objects.create(
+        Programacion.objects.create(
             container=instance,
             cd=cd,
             fecha_programada=fecha_programada,
@@ -214,7 +214,6 @@ def alertar_demurrage_cercano(sender, instance, created, **kwargs):
         return
     
     from django.utils import timezone
-    from datetime import timedelta
     
     ahora = timezone.now()
     dias_hasta_demurrage = (instance.fecha_demurrage - ahora).total_seconds() / 86400

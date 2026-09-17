@@ -3,7 +3,6 @@ Importador de Excel de Embarque
 Crea contenedores con estado 'por_arribar'
 """
 import pandas as pd
-from django.utils import timezone
 from django.db import transaction
 import logging
 from apps.containers.models import Container
