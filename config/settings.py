@@ -13,6 +13,15 @@ SECRET_KEY = config('SECRET_KEY', default='django-insecure-change-in-production'
 DEBUG = config('DEBUG', default=True, cast=bool)
 ALLOWED_HOSTS = config('ALLOWED_HOSTS', default='*', cast=lambda v: [s.strip() for s in v.split(',')])
 
+# Guardas de producción (hardening 2026-09-17): si DEBUG=False deben existir secret y hosts concretos
+if not DEBUG:
+    if SECRET_KEY == 'django-insecure-change-in-production' or not SECRET_KEY.strip():
+        from django.core.exceptions import ImproperlyConfigured
+        raise ImproperlyConfigured('SECRET_KEY debe definirse en producción (env).')
+    if '*' in ALLOWED_HOSTS:
+        from django.core.exceptions import ImproperlyConfigured
+        raise ImproperlyConfigured('ALLOWED_HOSTS no puede ser "*" en producción.')
+
 CSRF_TRUSTED_ORIGINS = [
     "https://*.github.dev",
     "https://localhost:8000",

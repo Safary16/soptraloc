@@ -1,0 +1,54 @@
+# CI para el backend Django de SoptraLoc (2026-09-17)
+# Corre tests + lint + checks en cada push/PR a main. Gratis (GitHub Actions).
+name: Backend CI
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'apps/**'
+      - 'config/**'
+      - 'requirements.txt'
+      - 'manage.py'
+  pull_request:
+    branches: [ main ]
+    paths:
+      - 'apps/**'
+      - 'config/**'
+      - 'requirements.txt'
+      - 'manage.py'
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ['3.12']
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pyflakes
+
+      - name: Django system check
+        run: python manage.py check
+
+      - name: Migrations up to date
+        run: python manage.py makemigrations --check --dry-run
+
+      - name: Pyflakes (dead code / imports rotos)
+        run: python -m pyflakes apps config
+
+      - name: Test suite
+        run: python manage.py test --verbosity 1

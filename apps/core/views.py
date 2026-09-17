@@ -12,6 +12,19 @@ def inicio(request):
     return render(request, 'inicio.html')
 
 
+def health(request):
+    """Healthcheck para Render/monitoreo: verifica BD y responde 200/503."""
+    from django.http import JsonResponse
+    from django.db import connection
+    db_ok = True
+    try:
+        connection.ensure_connection()
+    except Exception:
+        db_ok = False
+    payload = {'status': 'ok' if db_ok else 'degraded', 'db': db_ok}
+    return JsonResponse(payload, status=200 if db_ok else 503)
+
+
 def home(request):
     """Dashboard principal con estadísticas"""
     today = timezone.now().date()

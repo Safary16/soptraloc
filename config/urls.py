@@ -22,7 +22,8 @@ from apps.core.views import (
     containers_list, container_detail,
     operaciones, operaciones_panel, drivers_list, cds_list, executive_dashboard,
     operaciones_diarias as operaciones_diarias_view,
-    auditoria, cliente_portal, gestion
+    auditoria, cliente_portal, gestion,
+    health,
 )
 
 # Import API views
@@ -44,6 +45,7 @@ router.register(r'notifications', NotificationViewSet, basename='notification')
 urlpatterns = [
     # Frontend pages
     path('', inicio, name='inicio'),
+    path('health/', health, name='health'),
     path('dashboard/', home, name='home'),
     path('asignacion/', asignacion, name='asignacion'),
     path('estados/', estados, name='estados'),
