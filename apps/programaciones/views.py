@@ -429,19 +429,11 @@ class ProgramacionViewSet(viewsets.ModelViewSet):
         resultado = AssignmentService.asignar_mejor_conductor(programacion, usuario)
         
         if resultado['success']:
-            # Cambiar estado del contenedor a 'asignado'
-            usuario = request.user.username if request.user.is_authenticated else 'operador_manual'
-            programacion.container.cambiar_estado('asignado', usuario)
-            
-            # Crear evento de auditoría
-            from apps.events.models import Event
-            Event.objects.create(
-                container=programacion.container,
-                event_type='asignacion_automatica',
-                detalles={'conductor': resultado['driver'].nombre, 'programacion_id': programacion.id},
-                usuario=usuario
-            )
-            
+            # La asignación de conductor, el cambio de estado a 'asignado',
+            # el incremento de contador y el evento de auditoría ya los hace
+            # Programacion.asignar_conductor() dentro del servicio.
+            # No duplicar transición ni evento aquí (auditado 2026-09-17).
+
             serializer = self.get_serializer(programacion)
             return Response({
                 'success': True,
@@ -1549,7 +1541,8 @@ class ProgramacionViewSet(viewsets.ModelViewSet):
 
         usuario = request.user.username if request.user.is_authenticated else 'operador_manual'
         resultado = AssignmentService.asignar_mejor_conductor(programacion, usuario)
-        return Response({'success': True, 'resultado': resultado})
+        # success real refleja si la asignación concretó o requiere operador (auditado 2026-09-17)
+        return Response({'success': resultado.get('success', False), 'resultado': resultado})
     
     @action(detail=True, methods=['post'], permission_classes=[AllowAny])
     def reportar_incidente(self, request, pk=None):

@@ -247,7 +247,9 @@ class AssignmentService:
         programacion.eta_recalculado_min = mejor['eta_estimado_min']
         programacion.timestamp_despacho = timezone.now()
         programacion.save(update_fields=[
-            'driver', 'score_por_dimension', 'clasificacion_sistema', 'nivel_confianza',
+            # driver NO se asigna aquí: solo se persiste la recomendación (scores).
+            # La asignación real ocurre en Programacion.asignar_conductor() (FSM + evento).
+            'score_por_dimension', 'clasificacion_sistema', 'nivel_confianza',
             'anomalias_detectadas', 'similitud_historica_usada', 'eta_recalculado_min', 'timestamp_despacho'
         ])
 
