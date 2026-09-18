@@ -838,7 +838,10 @@ class ContainerViewSet(viewsets.ModelViewSet):
         except ValueError as exc:
             return Response({'error': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
         
-        if container.estado != 'devuelto':
+        # CCTI es un lugar físico: el vacío queda en 'en_ccti' (no cierra el ciclo).
+        # 'devuelto' (cierre) solo aplica a depósito de naviera, y complete() ya lo dejó así.
+        # No forzar la transición aquí: antes rompía con 500 (en_ccti → devuelto inválida).
+        if container.retorno_destino_tipo == 'deposito' and container.estado != 'devuelto':
             container.cambiar_estado('devuelto', usuario)
             container.save()
 

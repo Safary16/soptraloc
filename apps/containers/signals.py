@@ -36,6 +36,8 @@ def sincronizar_estado_con_programacion(sender, instance, created, **kwargs):
     
     # Si el contenedor vuelve a 'programado' pero tiene conductor asignado
     if instance.estado == 'programado' and programacion.driver:
+        # Liberar la capacidad del conductor (decrementa num_entregas_dia; idempotente)
+        programacion.liberar_conductor()
         # Limpiar asignación del conductor
         programacion.driver = None
         programacion.fecha_asignacion = None

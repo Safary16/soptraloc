@@ -215,6 +215,9 @@ class ProgramacionViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST
             )
         
+        # Liberar capacidad del conductor ANTES de limpiar la asignación:
+        # liberar_conductor() decrementa num_entregas_dia (idempotente vía fecha_liberacion_conductor).
+        programacion.liberar_conductor()
         programacion.driver = None
         programacion.fecha_asignacion = None
         programacion.save(update_fields=['driver', 'fecha_asignacion'])
