@@ -25,7 +25,7 @@ def auditoria_events(request):
     if container_id:
         from apps.containers.models import Container
         norm = Container.normalize_container_id(container_id)
-        qs = qs.filter(container_id=norm)
+        qs = qs.filter(container__container_id=norm)
 
     event_type = request.query_params.get('event_type', '').strip()
     if event_type:

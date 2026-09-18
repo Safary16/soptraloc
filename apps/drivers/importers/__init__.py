@@ -124,18 +124,26 @@ class ConductorImporter:
                     # Determinar si está presente (operativo)
                     presente = self.es_operativo(row.get('asistencia'))
                     
-                    # Buscar o crear conductor
-                    driver, created = Driver.objects.get_or_create(
-                        nombre=nombre,
-                        defaults={
-                            'rut': rut,
-                            'telefono': telefono,
-                            'patente': ppu,
-                            'presente': presente,
-                            'activo': True,
-                            'max_entregas_dia': 8,  # Valor por defecto
-                        }
-                    )
+                    # Buscar o crear conductor: el RUT es la identidad única; el
+                    # nombre actúa como fallback (auditoría 2026-09-18: antes se usaba
+                    # get_or_create por nombre y un cambio de RUT generaba duplicados).
+                    driver = None
+                    if rut:
+                        driver = Driver.objects.filter(rut=rut).first()
+                    if driver is None:
+                        driver = Driver.objects.filter(nombre=nombre).first()
+                    created = driver is None
+                    if created:
+                        driver = Driver(
+                            nombre=nombre,
+                            rut=rut,
+                            telefono=telefono,
+                            patente=ppu,
+                            presente=presente,
+                            activo=True,
+                            max_entregas_dia=8,  # Valor por defecto
+                        )
+                        driver.save()
                     
                     if created:
                         acceso = asegurar_acceso(driver)
@@ -148,7 +156,7 @@ class ConductorImporter:
                             'acceso_temporal': acceso,
                         })
                     else:
-                        # Actualizar datos existentes
+                        # Actualizar datos que vengan en la planilla
                         if rut:
                             driver.rut = rut
                         if telefono:

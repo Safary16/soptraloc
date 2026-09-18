@@ -58,10 +58,8 @@ INSTALLED_APPS = [
     
     # Third party
     'rest_framework',
-    'rest_framework_simplejwt',
     'django_filters',
     'corsheaders',
-    'drf_yasg',
     
     # Local apps
     'apps.core',
@@ -198,15 +196,14 @@ CORS_ALLOW_CREDENTIALS = True
 # Mapbox
 MAPBOX_API_KEY = config('MAPBOX_API_KEY', default=None)
 
-# Alertas
-ALERTA_PROGRAMACION_DIAS = config('ALERTA_PROGRAMACION_DIAS', default=2, cast=int)
-ALERTA_DEMURRAGE_DIAS = config('ALERTA_DEMURRAGE_DIAS', default=2, cast=int)
-
-# Asignación automática
-PESO_DISPONIBILIDAD = config('PESO_DISPONIBILIDAD', default=0.30, cast=float)
-PESO_OCUPACION = config('PESO_OCUPACION', default=0.25, cast=float)
-PESO_CUMPLIMIENTO = config('PESO_CUMPLIMIENTO', default=0.30, cast=float)
-PESO_PROXIMIDAD = config('PESO_PROXIMIDAD', default=0.15, cast=float)
+# Asignación automática — nombres coherentes con los que lee AssignmentService
+# (auditoría 2026-09-18: antes eran PESO_DISPONIBILIDAD/OCUPACION/CUMPLIMIENTO/PROXIMIDAD,
+# que el código nunca leyó; los ALERTA_* sin uso fueron eliminados).
+PESO_DISPONIBILIDAD_CONFIRMADA = config('PESO_DISPONIBILIDAD_CONFIRMADA', default=0.30, cast=float)
+PESO_RIESGO_ATRASO = config('PESO_RIESGO_ATRASO', default=0.25, cast=float)
+PESO_ADECUACION_VEHICULO_CARGA = config('PESO_ADECUACION_VEHICULO_CARGA', default=0.20, cast=float)
+PESO_HISTORIAL_OPERATIVO = config('PESO_HISTORIAL_OPERATIVO', default=0.15, cast=float)
+PESO_URGENCIA_SERVICIO = config('PESO_URGENCIA_SERVICIO', default=0.10, cast=float)
 
 # Login URLs
 LOGIN_URL = '/driver/login/'

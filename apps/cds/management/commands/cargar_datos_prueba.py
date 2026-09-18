@@ -19,13 +19,15 @@ class Command(BaseCommand):
     def handle(self, *args, **options):
         self.stdout.write(self.style.SUCCESS('Cargando datos de prueba...'))
         
-        # Crear CCTIs adicionales (para testing - además del CCTI principal)
+        # Crear CCTIs adicionales (para testing - además del CCTI principal).
+        # Códigos NEUTROS: ZEAL/CLEP son posiciones físicas de terminales en el
+        # dominio (ver posicion_fisica/anomaly_detector), NO etiquetas de CCTIs.
         self.stdout.write('Creando CCTIs...')
         ccti_zeal, _ = CD.objects.get_or_create(
-            codigo='ZEAL',
+            codigo='PRUEBA1',
             defaults={
-                'nombre': 'CCTI ZEAL',
-                'direccion': 'Zona Extra portuaria, Valparaíso',
+                'nombre': 'CCTI Prueba Norte',
+                'direccion': 'Zona de prueba 1',
                 'comuna': 'Valparaíso',
                 'tipo': 'ccti',
                 'lat': Decimal('-33.0458'),
@@ -36,10 +38,10 @@ class Command(BaseCommand):
         )
         
         ccti_clep, _ = CD.objects.get_or_create(
-            codigo='CLEP',
+            codigo='PRUEBA2',
             defaults={
-                'nombre': 'CCTI CLEP',
-                'direccion': 'Padre Hurtado, Santiago',
+                'nombre': 'CCTI Prueba Sur',
+                'direccion': 'Zona de prueba 2',
                 'comuna': 'Padre Hurtado',
                 'tipo': 'ccti',
                 'lat': Decimal('-33.5733'),
@@ -180,6 +182,9 @@ class Command(BaseCommand):
         ]
         
         for data in conductores_data:
+            # Los conductores de prueba se crean con 0 entregas del día para no
+            # inflar la ocupación real (auditoría 2026-09-18).
+            data = {**data, 'num_entregas_dia': 0}
             Driver.objects.get_or_create(
                 rut=data['rut'],
                 defaults=data

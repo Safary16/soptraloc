@@ -43,6 +43,11 @@ class Command(BaseCommand):
         
         run_all = options['all']
         
+        # Rutina diaria central (mantenimiento_diario): reset de entregas + purga
+        # de DriverLocation + archivo de notificaciones (fuente única de verdad).
+        if run_all:
+            call_command('mantenimiento_diario')
+        
         # Clean up old GPS data
         if options['cleanup_old_data'] or run_all:
             self.stdout.write("\n🗑️  Cleaning old GPS tracking data...")
@@ -71,29 +76,23 @@ class Command(BaseCommand):
         self.stdout.write("="*60 + "\n")
 
     def _cleanup_old_gps_data(self):
-        """Clean up GPS tracking data older than 30 days"""
+        """Purga el HISTORIAL de posiciones (DriverLocation) mayor a 30 días.
+
+        NUNCA toca ultima_posicion_lat/lng del Driver: esa es la posición viva
+        que usan ETA/origen/rutas (antes este método la borraba — destructivo,
+        verificado en auditoría 2026-09-18).
+        """
         try:
-            from apps.drivers.models import Driver
-            
+            from apps.drivers.models import DriverLocation
             cutoff_date = timezone.now() - timedelta(days=30)
-            
-            # Clear old GPS positions from drivers
             with transaction.atomic():
-                drivers_updated = Driver.objects.filter(
-                    ultima_actualizacion_posicion__lt=cutoff_date
-                ).update(
-                    ultima_posicion_lat=None,
-                    ultima_posicion_lng=None
-                )
-            
+                purged, _ = DriverLocation.objects.filter(timestamp__lt=cutoff_date).delete()
             self.stdout.write(
-                self.style.SUCCESS(
-                    f"✅ Cleaned GPS data from {drivers_updated} drivers (older than 30 days)"
-                )
+                self.style.SUCCESS(f"🗑️  Purgadas {purged} posiciones históricas (>30 días)")
             )
         except Exception as e:
             self.stdout.write(
-                self.style.ERROR(f"❌ Error cleaning GPS data: {e}")
+                self.style.ERROR(f"❌ Error purgando posiciones: {e}")
             )
 
     def _cleanup_sessions(self):
