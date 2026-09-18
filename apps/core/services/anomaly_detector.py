@@ -158,15 +158,16 @@ class AnomalyDetector:
 
         if not programacion.container.vendor:
             anomalies.append(OperationalAnomaly(
-                "ANOM_OPS_003", "P0",
-                "Carrier sin confirmación de disponibilidad.",
-                "Solicitar confirmación antes de despachar."
+                "ANOM_OPS_003", "P2",
+                "Carrier sin confirmación de disponibilidad (vendor vacío).",
+                "Completar vendor para habilitar trazabilidad y confirmación."
             ))
 
-        if programacion.container.peso_total_tons > 28:
+        capacidad_ton = float(getattr(driver, 'capacidad_ton', None) or 28)
+        if programacion.container.peso_total_tons > capacidad_ton:
             anomalies.append(OperationalAnomaly(
                 "ANOM_OPS_006", "P0",
-                "Capacidad de carga insuficiente para operación estándar.",
+                f"Capacidad de carga insuficiente para operación estándar (límite {capacidad_ton:.0f} t).",
                 "Asignar recurso de mayor capacidad."
             ))
 

@@ -48,6 +48,19 @@ class Container(models.Model):
         'devuelto': set(),
         'cancelado': set(),
     }
+
+    # Reversiones administrativas explícitas: únicas transiciones que pueden
+    # saltarse el FSM (permitir_reversion) cuando un importador/operador corrige
+    # el ciclo (ej: planilla de liberación con fecha futura). Nada más puede revertir.
+    REVERSIONES_VALIDAS = {
+        'liberado': {'por_arribar'},
+        'secuenciado': {'por_arribar', 'liberado'},
+        'programado': {'liberado', 'secuenciado'},
+        'asignado': {'programado'},
+        'en_ruta': {'asignado'},
+        'soltado': {'entregado'},
+        'en_ccti': {'vacio_en_ruta'},
+    }
     
     TIPOS = [
         ('20', "20'"),
@@ -261,10 +274,13 @@ class Container(models.Model):
         if nuevo_estado == estado_anterior:
             return self
         permitidos = self.TRANSICIONES_VALIDAS.get(estado_anterior, set())
-        if nuevo_estado not in permitidos and not permitir_reversion:
-            raise ValidationError(
-                f"Transición inválida: {estado_anterior} → {nuevo_estado}"
-            )
+        if nuevo_estado not in permitidos:
+            # Reversión: solo si la transición inversa está explícitamente permitida.
+            reversion_permitida = nuevo_estado in self.REVERSIONES_VALIDAS.get(estado_anterior, set())
+            if not (permitir_reversion and reversion_permitida):
+                raise ValidationError(
+                    f"Transición inválida: {estado_anterior} → {nuevo_estado}"
+                )
         self.estado = nuevo_estado
         
         # Actualizar timestamp según el nuevo estado

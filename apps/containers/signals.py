@@ -237,7 +237,7 @@ def alertar_demurrage_cercano(sender, instance, created, **kwargs):
                 from apps.events.models import Event
                 Event.objects.create(
                     container=instance,
-                    event_type='alerta_48h',
+                    event_type='demurrage_cercano',
                     detalles={
                         'fecha_demurrage': instance.fecha_demurrage.isoformat(),
                         'dias_restantes': round(dias_hasta_demurrage, 1),

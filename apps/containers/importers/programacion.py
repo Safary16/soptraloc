@@ -331,7 +331,7 @@ class ProgramacionImporter:
                             self.resultados['alertas_generadas'] += 1
                             Event.objects.create(
                                 container=container,
-                                event_type='alerta_48h',
+                                event_type='sin_conductor',
                                 detalles={
                                     'fecha_programada': fecha_programada.isoformat(),
                                     'horas_restantes': programacion.horas_hasta_programacion,

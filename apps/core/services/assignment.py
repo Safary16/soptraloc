@@ -46,7 +46,11 @@ class AssignmentService:
 
     @classmethod
     def _score_adecuacion(cls, programacion: Programacion, driver: Driver) -> float:
-        capacidad_base_ton = float(getattr(settings, 'VEHICLE_DEFAULT_CAPACITY_TON', cls.DEFAULT_VEHICLE_CAPACITY_TON))
+        capacidad_base_ton = float(
+            driver.capacidad_ton
+            if driver and driver.capacidad_ton
+            else getattr(settings, 'VEHICLE_DEFAULT_CAPACITY_TON', cls.DEFAULT_VEHICLE_CAPACITY_TON)
+        )
         peso = float(programacion.container.peso_total_tons)
         if peso <= 0:
             return 0.7
@@ -100,7 +104,7 @@ class AssignmentService:
         return f"Intervención requerida por score bajo ({score:.2f})."
 
     @classmethod
-    def calcular_score_total(cls, driver: Driver, programacion: Programacion):
+    def calcular_score_total(cls, driver: Driver, programacion: Programacion, _similar_cases_cache=None):
         base_weights = cls._get_base_weights()
         dyn_weights = ContextualReasoningService.dynamic_weights(base_weights, programacion)
 
@@ -113,7 +117,8 @@ class AssignmentService:
         }
 
         deterministic = sum(dimensions[k] * dyn_weights[k] for k in dimensions)
-        similar_cases = ContextualReasoningService.similar_cases(programacion, top_n=5)
+        similar_cases = _similar_cases_cache if _similar_cases_cache is not None else \
+            ContextualReasoningService.similar_cases(programacion, top_n=5)
         confidence = ContextualReasoningService.confidence(similar_cases)
         similar_boost = (sum(c.similarity for c in similar_cases) / len(similar_cases)) if similar_cases else 0.0
         final_score = round((deterministic * 0.8) + (similar_boost * 0.2), 3)
@@ -145,10 +150,17 @@ class AssignmentService:
 
     @classmethod
     def obtener_conductores_disponibles_con_score(cls, programacion: Programacion):
-        drivers = Driver.objects.filter(activo=True, presente=True)
+        drivers = list(Driver.objects.filter(activo=True, presente=True))
+        if not drivers:
+            return []
+
+        # N+1 fix: los casos similares solo dependen de la programación, NO del conductor.
+        # Se calculan una vez y se reutilizan para todos los drivers.
+        similar_cases = ContextualReasoningService.similar_cases(programacion, top_n=5)
+
         resultados = []
         for driver in drivers:
-            score_data = cls.calcular_score_total(driver, programacion)
+            score_data = cls.calcular_score_total(driver, programacion, _similar_cases_cache=similar_cases)
             resultados.append({
                 'driver': driver,
                 'score': score_data['score_total'],
@@ -212,7 +224,7 @@ class AssignmentService:
 
         Event.objects.create(
             container=programacion.container,
-            event_type='alerta_48h',
+            event_type='model_review_trigger',
             detalles={
                 'tipo': 'MODEL_REVIEW_TRIGGER',
                 'eta_error_pct_30d': eta_error_pct,

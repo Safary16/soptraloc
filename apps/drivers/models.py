@@ -26,6 +26,16 @@ class Driver(models.Model):
     # Disponibilidad
     presente = models.BooleanField(default=True, verbose_name='Presente', help_text='¿Está disponible hoy?')
     activo = models.BooleanField(default=True, verbose_name='Activo')
+
+    # Capacidad del vehículo (toneladas). Si es None, se usa el default de 28t.
+    capacidad_ton = models.DecimalField(
+        max_digits=5,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        verbose_name='Capacidad Vehículo (ton)',
+        help_text='Capacidad real del camión; si se deja vacío se usa 28 en el scoring.'
+    )
     
     # Métricas de desempeño
     cumplimiento_porcentaje = models.DecimalField(
