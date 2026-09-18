@@ -8,6 +8,7 @@ class Event(models.Model):
         ('import_embarque', 'Importación Embarque'),
         ('import_liberacion', 'Importación Liberación'),
         ('import_programacion', 'Importación Programación'),
+        ('programacion_manual', 'Programación Manual'),
         ('asignacion_driver', 'Asignación de Conductor'),
         ('inicio_ruta', 'Inicio de Ruta'),
         ('arribo_cd', 'Arribo a CD'),

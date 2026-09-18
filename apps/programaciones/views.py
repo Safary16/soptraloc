@@ -4,7 +4,6 @@ from rest_framework.response import Response
 from rest_framework.parsers import MultiPartParser, FormParser
 from rest_framework.permissions import AllowAny, IsAuthenticatedOrReadOnly
 from django.conf import settings
-from django.db import transaction
 from django.utils import timezone
 from datetime import timedelta
 from dateutil import parser as date_parser
@@ -293,8 +292,8 @@ class ProgramacionViewSet(viewsets.ModelViewSet):
                 pass
 
         if not origen_coords:
-            if hasattr(driver, 'ultima_lat') and driver.ultima_lat:
-                origen_coords = (float(driver.ultima_lat), float(driver.ultima_lng))
+            if driver.ultima_posicion_lat is not None and driver.ultima_posicion_lng is not None:
+                origen_coords = (float(driver.ultima_posicion_lat), float(driver.ultima_posicion_lng))
             else:
                 origen_coords = (-33.4489, -70.6693)  # Santiago fallback
 
@@ -1083,53 +1082,19 @@ class ProgramacionViewSet(viewsets.ModelViewSet):
             logger.error(f"Error actualizando RegistroOperacion para Programacion {programacion.id}: {str(e)}", exc_info=True)
 
     def _registrar_arribo(self, programacion, lat, lng, origen, usuario=None):
-        """Registra una sola vez el arribo, sea manual o disparado por geocerca."""
-        from apps.events.models import Event
+        """Registra una sola vez el arribo, sea manual o disparado por geocerca.
 
-        with transaction.atomic():
-            locked = Programacion.objects.select_for_update().select_related(
-                'container', 'driver', 'cd'
-            ).get(pk=programacion.pk)
+        Delega en el servicio operacional central (OperationalFlowService): una única
+        fuente de verdad compartida con el flujo de containers (fix duplicación de caminos).
+        """
+        from apps.core.services.operations import OperationalFlowService
 
-            if locked.fecha_arribo_cd:
-                return locked, False
-            if locked.container.estado != 'en_ruta':
-                raise ValueError(
-                    f'Contenedor debe estar en ruta. Estado actual: {locked.container.get_estado_display()}'
-                )
-
-            arrived_at = timezone.now()
-            locked.driver.actualizar_posicion(lat, lng)
-            locked.fecha_arribo_cd = arrived_at
-            locked.gps_arribo_lat = lat
-            locked.gps_arribo_lng = lng
-            locked.origen_arribo = origen
-            locked.posicion_actual_lat = lat
-            locked.posicion_actual_lng = lng
-            locked.ultima_actualizacion_tracking = arrived_at
-            locked.save(update_fields=[
-                'fecha_arribo_cd', 'gps_arribo_lat', 'gps_arribo_lng', 'origen_arribo',
-                'posicion_actual_lat', 'posicion_actual_lng', 'ultima_actualizacion_tracking',
-                'updated_at',
-            ])
-            locked.container.cambiar_estado('entregado', usuario)
-
-            Event.objects.create(
-                container=locked.container,
-                event_type='arribo_cd',
-                detalles={
-                    'conductor': locked.driver.nombre,
-                    'cd': locked.cd.nombre,
-                    'gps_lat': str(lat),
-                    'gps_lng': str(lng),
-                    'timestamp': arrived_at.isoformat(),
-                    'origen': origen,
-                },
-                usuario=usuario or ('system_geocerca' if origen == 'geocerca' else 'conductor'),
-            )
-
-        self._update_registro_operacion_on_completion(locked, 'ENTREGADO')
-        return locked, True
+        locked, created = OperationalFlowService.registrar_arribo(
+            programacion, lat, lng, origen, usuario
+        )
+        if created:
+            self._update_registro_operacion_on_completion(locked, 'ENTREGADO')
+        return locked, created
 
     @staticmethod
     def _usuario_puede_operar_viaje(request, programacion):
@@ -1240,7 +1205,9 @@ class ProgramacionViewSet(viewsets.ModelViewSet):
             return Response({'error': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
 
         # 🆕 Actualizar RegistroOperacion con estado final
-        self._update_registro_operacion_on_completion(programacion, 'PARCIAL') # Ojo: PARCIAL porque aún no se devuelve el vacío
+        # La entrega del contenedor LLENO se completó: la devolución del vacío es
+        # un servicio posterior que se registra aparte (semántica de negocio).
+        self._update_registro_operacion_on_completion(programacion, 'ENTREGADO')
         
         # Crear evento de vacío
         from apps.events.models import Event
@@ -1315,8 +1282,9 @@ class ProgramacionViewSet(viewsets.ModelViewSet):
         except ValueError as exc:
             return Response({'error': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
         
-        # El viaje lleno terminó, pero la descarga sigue pendiente en el CD.
-        self._update_registro_operacion_on_completion(programacion, 'PARCIAL')
+        # El viaje lleno terminó: la entrega se completó; la descarga pendiente
+        # del CD se registra con su propio timing (coherencia de estado_final).
+        self._update_registro_operacion_on_completion(programacion, 'ENTREGADO')
         
         # Crear evento de contenedor soltado
         from apps.events.models import Event
@@ -1487,12 +1455,47 @@ class ProgramacionViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=['post'])
     def confirmar_recomendacion(self, request, pk=None):
-        """Confirma recomendación del sistema y permite despacho según clasificación."""
+        """Confirma la recomendación y CONCRETA la asignación del conductor recomendado.
+
+        Cierra el ciclo preasignación → confirmar: si la predicción ML dejó un
+        driver recomendado y aún no hay asignación, se asigna (validando disponibilidad).
+        """
+        from django.core.exceptions import ValidationError as DjangoValidationError
         programacion = self.get_object()
         programacion.decision_operador = 'CONFIRMAR'
         programacion.motivo_override = ''
         programacion.save(update_fields=['decision_operador', 'motivo_override'])
-        return Response({'success': True, 'mensaje': 'Recomendación confirmada por operador.'})
+
+        if not programacion.driver:
+            driver_id = (programacion.prediccion_ml or {}).get('driver_id')
+            if driver_id:
+                try:
+                    from apps.drivers.models import Driver
+                    driver = Driver.objects.get(pk=driver_id)
+                    programacion.asignar_conductor(
+                        driver, request.user.username if request.user.is_authenticated else 'operador_manual'
+                    )
+                except Driver.DoesNotExist:
+                    programacion.refresh_from_db()
+                    return Response(
+                        {'success': False, 'error': 'El conductor recomendado ya no existe. Re-evaluar.'},
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
+                except DjangoValidationError as exc:
+                    programacion.refresh_from_db()
+                    return Response(
+                        {'success': False, 'error': '; '.join(exc.messages) if hasattr(exc, 'messages') else str(exc)},
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
+
+        serializer = self.get_serializer(programacion)
+        return Response({
+            'success': True,
+            'mensaje': 'Recomendación confirmada por operador.'
+                       + (' Conductor asignado.' if programacion.driver else ''),
+            'conductor_asignado': programacion.driver.nombre if programacion.driver else None,
+            'programacion': serializer.data,
+        })
 
     @action(detail=True, methods=['post'])
     def rechazar_recomendacion(self, request, pk=None):

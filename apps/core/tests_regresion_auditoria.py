@@ -150,3 +150,22 @@ class VendorNoBloqueaDespachoTest(TestCase):
         vendor = [a for a in anomalias if a['code'] == 'ANOM_OPS_003']
         self.assertTrue(vendor, 'debería existir la anomalía de vendor')
         self.assertEqual(vendor[0]['severity'], 'P2')
+
+
+class MantenimientoDiarioTest(TestCase):
+    """El comando de mantenimiento diario resetea entregas y purga posiciones."""
+
+    def test_resetea_entregas_y_purga_posiciones(self):
+        from django.core.management import call_command
+        from apps.drivers.models import DriverLocation
+        suf = _sufijo()
+        d = Driver.objects.create(nombre=f"M {suf}", rut=f"12{suf[:6]}", num_entregas_dia=4, max_entregas_dia=3)
+        loc_vieja = DriverLocation.objects.create(driver=d, lat=-33.45, lng=-70.66)
+        DriverLocation.objects.filter(pk=loc_vieja.pk).update(
+            timestamp=timezone.now() - timedelta(days=90)
+        )
+        # entregas fuera de rango (>=4) y posición vieja de 90 días
+        call_command('mantenimiento_diario')
+        d.refresh_from_db()
+        self.assertEqual(d.num_entregas_dia, 0)
+        self.assertFalse(DriverLocation.objects.filter(pk=loc_vieja.pk).exists())

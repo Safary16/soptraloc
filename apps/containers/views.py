@@ -753,7 +753,18 @@ class ContainerViewSet(viewsets.ModelViewSet):
             )
         
         usuario = request.user.username if request.user.is_authenticated else None
-        container.cambiar_estado('descargado', usuario)
+        from apps.core.services.operations import OperationalFlowService
+        prog = getattr(container, 'programacion', None)
+        if prog:
+            # Camino rico unificado: registra TiempoOperacion y libera al conductor
+            # según el tipo de CD (coherente con ProgramacionViewSet.notificar_vacio).
+            try:
+                prog, _timing, _ = OperationalFlowService.complete_discharge(prog, usuario, source='operador')
+            except ValueError as exc:
+                return Response({'error': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+            container = prog.container
+        else:
+            container.cambiar_estado('descargado', usuario)
         
         serializer = self.get_serializer(container)
         return Response({
@@ -774,7 +785,18 @@ class ContainerViewSet(viewsets.ModelViewSet):
             )
         
         usuario = request.user.username if request.user.is_authenticated else None
-        container.cambiar_estado('vacio', usuario)
+        from apps.core.services.operations import OperationalFlowService
+        prog = getattr(container, 'programacion', None)
+        if prog:
+            # Camino rico unificado: mark_empty cierra descarga + vacío con timing ML
+            # (coherente con ProgramacionViewSet.notificar_vacio).
+            try:
+                prog, _timing = OperationalFlowService.mark_empty(prog, usuario, source='operador')
+            except ValueError as exc:
+                return Response({'error': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+            container = prog.container
+        else:
+            container.cambiar_estado('vacio', usuario)
         
         serializer = self.get_serializer(container)
         return Response({
@@ -869,7 +891,31 @@ class ContainerViewSet(viewsets.ModelViewSet):
             )
         
         usuario = request.user.username if request.user.is_authenticated else None
-        container.cambiar_estado('entregado', usuario)
+        from apps.core.services.operations import OperationalFlowService
+        prog = getattr(container, 'programacion', None)
+        if prog:
+            # Camino rico unificado: lock + idempotencia + GPS + evento (misma
+            # lógica que ProgramacionViewSet.notificar_arribo). El GPS cae a la
+            # posición conocida si no viene en el payload, para no romper la API.
+            lat = request.data.get('lat')
+            lng = request.data.get('lng')
+            if (lat is None or lng is None):
+                lat = prog.gps_inicio_lat or (float(container.posicion_actual_lat) if container.posicion_actual_lat is not None else None)
+                lng = prog.gps_inicio_lng or (float(container.posicion_actual_lng) if container.posicion_actual_lng is not None else None)
+            if (lat is None or lng is None) and container.cd_entrega:
+                lat, lng = float(container.cd_entrega.lat), float(container.cd_entrega.lng)
+            if lat is None or lng is None:
+                return Response(
+                    {'error': 'No se pudo determinar el GPS. Envía lat/lng.'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            try:
+                prog, _ = OperationalFlowService.registrar_arribo(prog, lat, lng, 'manual', usuario)
+            except ValueError as exc:
+                return Response({'error': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+            container = prog.container
+        else:
+            container.cambiar_estado('entregado', usuario)
 
         eta_real = None
         prog = getattr(container, 'programacion', None)

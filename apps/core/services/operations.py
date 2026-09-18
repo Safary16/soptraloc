@@ -33,6 +33,63 @@ class OperationalFlowService:
 
     @classmethod
     @transaction.atomic
+    def registrar_arribo(cls, programacion, lat, lng, origen='manual', usuario=None):
+        """Registra una sola vez el arribo (manual o geocerca), con lock e idempotencia.
+
+        Fuente única de verdad para el flujo containers y programaciones: evita la
+        duplicación de caminos con distinta riqueza (arribo simple vs rico).
+        Devuelve (programacion_lockeada, creado: bool).
+        """
+        from apps.events.models import Event
+
+        locked = cls._lock_programacion(programacion)
+        if locked.fecha_arribo_cd:
+            return locked, False
+        if locked.container.estado != 'en_ruta':
+            raise ValueError(
+                f'Contenedor debe estar en ruta. Estado actual: {locked.container.get_estado_display()}'
+            )
+
+        arrived_at = timezone.now()
+        if locked.driver:
+            locked.driver.actualizar_posicion(lat, lng)
+        locked.fecha_arribo_cd = arrived_at
+        locked.gps_arribo_lat = lat
+        locked.gps_arribo_lng = lng
+        locked.origen_arribo = origen
+        locked.posicion_actual_lat = lat
+        locked.posicion_actual_lng = lng
+        locked.ultima_actualizacion_tracking = arrived_at
+        locked.save(update_fields=[
+            'fecha_arribo_cd', 'gps_arribo_lat', 'gps_arribo_lng', 'origen_arribo',
+            'posicion_actual_lat', 'posicion_actual_lng', 'ultima_actualizacion_tracking',
+            'updated_at',
+        ])
+        locked.container.cambiar_estado('entregado', usuario)
+
+        Event.objects.create(
+            container=locked.container,
+            event_type='arribo_cd',
+            detalles={
+                'conductor': locked.driver.nombre if locked.driver else None,
+                'cd': locked.cd.nombre if locked.cd else None,
+                'gps_lat': str(lat),
+                'gps_lng': str(lng),
+                'timestamp': arrived_at.isoformat(),
+                'origen': origen,
+            },
+            usuario=usuario or ('system_geocerca' if origen == 'geocerca' else 'conductor'),
+        )
+        return locked, True
+
+    @staticmethod
+    def _lock_programacion(programacion):
+        return Programacion.objects.select_for_update().select_related(
+            'container', 'driver', 'cd'
+        ).get(pk=programacion.pk)
+
+    @classmethod
+    @transaction.atomic
     def drop_container(cls, programacion, usuario=None):
         """Drop & hook deja carga en CD; no declara vacío antes de la descarga."""
         locked = Programacion.objects.select_for_update().select_related(

@@ -89,12 +89,14 @@ def dashboard_alertas(request):
     """
     alertas = []
     
-    # Alertas de demurrage - SOLO para contenedores liberados (sin programar)
+    # Alertas de demurrage - contenedores en estados activos con riesgo de vencimiento
+    # (coherente con programaciones.views.alertas_demurrage: visibilidad completa del
+    # riesgo; los vaciados/devueltos ya cerraron el viaje lleno).
     fecha_limite = timezone.now() + timedelta(days=2)
     containers_riesgo = Container.objects.filter(
         fecha_demurrage__isnull=False,
         fecha_demurrage__lte=fecha_limite,
-        estado='liberado'  # Solo liberados, no programados ni asignados
+        estado__in=['liberado', 'programado', 'asignado', 'en_ruta', 'entregado']
     ).select_related('cd_entrega')
     
     for container in containers_riesgo:
