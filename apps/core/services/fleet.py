@@ -27,7 +27,7 @@ class FleetStatusService:
 
             if available_drivers == 0:
                 logger.warning("No hay conductores disponibles en la flota.")
-                return 1.0  # Se considera la flota 100% utilizada si no hay nadie disponible
+                return 0.0  # Sin conductores no hay utilización (docstring coherente)
 
             # Programaciones que ocupan activamente a un conductor
             active_assignments = Programacion.objects.filter(

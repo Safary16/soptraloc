@@ -5,7 +5,7 @@ Integra modelos ML (TiempoOperacion, TiempoViaje) con Mapbox
 para predicciones más precisas basadas en datos históricos.
 """
 from datetime import datetime
-from apps.programaciones.models import TiempoOperacion, TiempoViaje
+from apps.programaciones.models import TiempoOperacion
 from apps.core.services.mapbox import MapboxService
 import logging
 
@@ -103,18 +103,26 @@ class MLTimePredictor:
             tiempo_mapbox = int(mapbox_resultado['duration_minutes'])
             distancia_km = mapbox_resultado.get('distance_km', 0)
             
-            # 2. Intentar ajustar con ML
+            # 2. Ajustar con el motor ÚNICO de aprendizaje (OperationalLearningEngine):
+            #    mezcla Mapbox + histórico por ruta/hora/día/conductor.
+            from apps.core.services.learning_engine import OperationalLearningEngine
             try:
-                tiempo_ml = TiempoViaje.obtener_tiempo_aprendido(
-                    origen_coords=origen_coords,
-                    destino_coords=destino_coords,
-                    tiempo_mapbox=tiempo_mapbox,
-                    hora_salida=hora_salida or datetime.now(),
-                    conductor=conductor
+                base_route = {
+                    'duration_minutes': tiempo_mapbox,
+                    'distance_km': distancia_km,
+                    'route_signature': None,
+                }
+                prediccion = OperationalLearningEngine.predict_route(
+                    origin=origen_coords,
+                    destination=destino_coords,
+                    departure=hora_salida or datetime.now(),
+                    base_route=base_route,
+                    driver=conductor,
                 )
+                tiempo_ml = prediccion['predicted_minutes']
                 
                 # Si ML devolvió algo diferente, usarlo
-                if tiempo_ml != tiempo_mapbox:
+                if tiempo_ml != tiempo_mapbox and tiempo_ml > 0:
                     factor = tiempo_ml / tiempo_mapbox if tiempo_mapbox > 0 else 1.0
                     logger.debug(f"Tiempo ajustado por ML: {tiempo_mapbox}min → {tiempo_ml}min (factor {factor:.2f}x)")
                     
@@ -123,7 +131,7 @@ class MLTimePredictor:
                         'distancia_km': distancia_km,
                         'fuente': 'ml',
                         'tiempo_mapbox_min': tiempo_mapbox,
-                        'factor_correccion': round(factor, 2)
+                        'factor_correccion': round(factor, 2),
                     }
             
             except Exception as e:

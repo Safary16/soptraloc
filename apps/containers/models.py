@@ -283,6 +283,14 @@ class Container(models.Model):
                 )
         self.estado = nuevo_estado
         
+        # Mantener coherente la bandera de "secuenciado" con el estado del FSM:
+        # el admin marca la cola manualmente, y el FSM también la representa;
+        # así nunca hay dos fuentes de verdad desincronizadas.
+        if nuevo_estado == 'secuenciado':
+            self.secuenciado = True
+        elif estado_anterior == 'secuenciado' and nuevo_estado != 'secuenciado':
+            self.secuenciado = False
+        
         # Actualizar timestamp según el nuevo estado
         now = timezone.now()
         timestamp_map = {
@@ -334,15 +342,3 @@ class Container(models.Model):
         except Exception:
             # Si hay cualquier error (DoesNotExist, AttributeError, etc.)
             return False
-    
-    def get_programacion_safe(self):
-        """
-        Obtiene la programación del contenedor de forma segura
-        
-        Returns:
-            Programacion|None: La programación si existe, None si no
-        """
-        try:
-            return self.programacion
-        except Exception:
-            return None

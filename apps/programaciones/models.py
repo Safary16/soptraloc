@@ -201,19 +201,20 @@ class Programacion(models.Model):
             self.driver = locked_driver
             self.fecha_asignacion = programacion.fecha_asignacion
 
-        # Crear evento de asignación
-        Event.objects.create(
-            container=self.container,
-            event_type='asignacion_conductor',
-            detalles={
-                'driver_id': self.driver.id,
-                'driver_nombre': self.driver.nombre,
-                'asignado_por': usuario or 'system',
-            },
-            usuario=usuario or 'system'
-        )
-        
-        # Crear notificación para el conductor
+            # Crear evento de asignación DENTRO de la transacción:
+            # si la trazabilidad falla, la asignación NO debe quedar hecha a medias.
+            Event.objects.create(
+                container=self.container,
+                event_type='asignacion_conductor',
+                detalles={
+                    'driver_id': self.driver.id,
+                    'driver_nombre': self.driver.nombre,
+                    'asignado_por': usuario or 'system',
+                },
+                usuario=usuario or 'system'
+            )
+
+        # Crear notificación para el conductor (fuera del lock; fallo no revierte la asignación)
         try:
             from apps.notifications.services import NotificationService
             NotificationService.crear_notificacion_asignacion(self, self.driver)
