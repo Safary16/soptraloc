@@ -4,12 +4,13 @@ from rest_framework.response import Response
 from rest_framework.parsers import MultiPartParser, FormParser
 from rest_framework.permissions import AllowAny, IsAdminUser
 from django.utils import timezone
-from django.db.models import Q
+from django.db.models import Exists, OuterRef, Q
 import tempfile
 import os
 import logging
 
 from .models import Container
+from apps.programaciones.models import Programacion
 from .serializers import (
     ContainerSerializer, 
     ContainerListSerializer,
@@ -49,13 +50,24 @@ class ContainerViewSet(viewsets.ModelViewSet):
     """
     ViewSet para gestión de contenedores
     """
-    queryset = Container.objects.all()
     serializer_class = ContainerSerializer
     filterset_class = ContainerFilter
     search_fields = ['container_id', 'nave', 'vendor', 'comuna']
     ordering_fields = ['created_at', 'fecha_programacion', 'fecha_liberacion']
     ordering = ['-created_at']
     permission_classes = [AllowAny]
+
+    def get_queryset(self):
+        """Base con anti-N+1 para listas: FKs de nombres del serializer y
+        flag tiene_programacion anotado con Exists (sin query por fila).
+        El annotate no afecta retrieve/admin (campo extra inofensivo).
+        """
+        prog_exists = Programacion.objects.filter(container_id=OuterRef('pk'))
+        return (
+            Container.objects.all()
+            .select_related('cd_entrega', 'retorno_destino_cd')
+            .annotate(tiene_programacion_annot=Exists(prog_exists))
+        )
 
     def get_permissions(self):
         public_actions = {'list', 'retrieve', 'export_stock', 'export_liberacion_excel', 'vacios'}
@@ -900,8 +912,10 @@ class ContainerViewSet(viewsets.ModelViewSet):
             lat = request.data.get('lat')
             lng = request.data.get('lng')
             if (lat is None or lng is None):
-                lat = prog.gps_inicio_lat or (float(container.posicion_actual_lat) if container.posicion_actual_lat is not None else None)
-                lng = prog.gps_inicio_lng or (float(container.posicion_actual_lng) if container.posicion_actual_lng is not None else None)
+                lat = prog.gps_inicio_lat or prog.posicion_actual_lat
+                lng = prog.gps_inicio_lng or prog.posicion_actual_lng
+                lat = float(lat) if lat is not None else None
+                lng = float(lng) if lng is not None else None
             if (lat is None or lng is None) and container.cd_entrega:
                 lat, lng = float(container.cd_entrega.lat), float(container.cd_entrega.lng)
             if lat is None or lng is None:
@@ -915,7 +929,17 @@ class ContainerViewSet(viewsets.ModelViewSet):
                 return Response({'error': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
             container = prog.container
         else:
-            container.cambiar_estado('entregado', usuario)
+            # Sin programación: mismo rastro de auditoría vía el servicio central
+            # (evento arribo_cd con GPS degradado y CD asociado).
+            try:
+                container, _ = OperationalFlowService.registrar_arribo_directo(
+                    container,
+                    lat=request.data.get('lat'),
+                    lng=request.data.get('lng'),
+                    usuario=usuario,
+                )
+            except ValueError as exc:
+                return Response({'error': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
 
         eta_real = None
         prog = getattr(container, 'programacion', None)

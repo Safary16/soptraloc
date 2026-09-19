@@ -2,6 +2,7 @@
 from django.db import transaction
 from django.utils import timezone
 
+from apps.containers.models import Container
 from apps.programaciones.models import Programacion, TiempoOperacion
 
 
@@ -87,6 +88,49 @@ class OperationalFlowService:
         return Programacion.objects.select_for_update().select_related(
             'container', 'driver', 'cd'
         ).get(pk=programacion.pk)
+
+    @classmethod
+    @transaction.atomic
+    def registrar_arribo_directo(cls, container, lat=None, lng=None, usuario=None):
+        """Arribo sin programación asociada: mismo rastro de auditoría que el
+        camino rico (evento arribo_cd con GPS/CD/origen), pero solo cambia el
+        estado del contenedor. Fuente única junto a registrar_arribo; evita
+        que el flujo simple quede sin evento específico de arribo.
+
+        Devuelve (container_lockeado, creado: bool).
+        """
+        from apps.events.models import Event
+
+        locked = Container.objects.select_for_update().get(pk=container.pk)
+        if locked.estado != 'en_ruta':
+            raise ValueError(
+                f'Contenedor debe estar en_ruta. Estado actual: {locked.get_estado_display()}'
+            )
+
+        arrived_at = timezone.now()
+        # GPS: explícito → ubicación del CD de entrega (Container no guarda
+        # posición GPS; la posición viva del vehículo vive en
+        # Programacion.posicion_actual_*). El CD de entrega es donde arriba.
+        if lat is None or lng is None:
+            if locked.cd_entrega_id:
+                lat, lng = float(locked.cd_entrega.lat), float(locked.cd_entrega.lng)
+
+        locked.cambiar_estado('entregado', usuario)
+
+        Event.objects.create(
+            container=locked,
+            event_type='arribo_cd',
+            detalles={
+                'conductor': None,
+                'cd': locked.cd_entrega.nombre if locked.cd_entrega_id else None,
+                'gps_lat': str(lat) if lat is not None else None,
+                'gps_lng': str(lng) if lng is not None else None,
+                'timestamp': arrived_at.isoformat(),
+                'origen': 'manual_sin_programacion',
+            },
+            usuario=usuario or 'operador',
+        )
+        return locked, True
 
     @classmethod
     @transaction.atomic

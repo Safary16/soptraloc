@@ -8,6 +8,7 @@ from django.utils import timezone
 from datetime import timedelta
 from dateutil import parser as date_parser
 import logging
+import uuid
 
 from .models import Programacion
 from .serializers import (
@@ -1474,6 +1475,19 @@ class ProgramacionViewSet(viewsets.ModelViewSet):
                     driver = Driver.objects.get(pk=driver_id)
                     programacion.asignar_conductor(
                         driver, request.user.username if request.user.is_authenticated else 'operador_manual'
+                    )
+                    # Trazabilidad: la confirmación del operador queda en la
+                    # bitácora (la preasignación creó el registro inicial;
+                    # aquí se cierra el ciclo con su decisión).
+                    from apps.programaciones.models import RegistroOperacion
+                    RegistroOperacion.objects.create(
+                        programacion=programacion,
+                        service_id=f"confirm-{programacion.id}-{uuid.uuid4().hex[:8]}",
+                        recurso_asignado=driver.nombre,
+                        clasificacion_sistema='REVISION_OPERADOR',
+                        decision_operador='CONFIRMAR',
+                        motivo_override='',
+                        timestamp_despacho=timezone.now(),
                     )
                 except Driver.DoesNotExist:
                     programacion.refresh_from_db()
