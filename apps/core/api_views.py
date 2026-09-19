@@ -1,6 +1,14 @@
 """
 API Views para el core del sistema
 Endpoints de dashboard y estadísticas
+
+Notas de rendimiento (auditoría N+1 2026-09-19):
+- dashboard_stats: ~17 queries separadas consolidadas en 3 (dos agregados
+  por estado + un agregado de notificaciones). Mismas claves del payload,
+  mismo orden; solo cambia la estrategia de consulta.
+- analytics_conductores: sin queries por fila. programaciones_completadas
+  pasa a un annotate del queryset de drivers y driver_profile recibe las
+  filas de TiempoViaje prefetchadas (acepta rows= para eso).
 """
 from rest_framework import status
 from rest_framework.decorators import api_view, permission_classes
@@ -8,12 +16,38 @@ from rest_framework.permissions import IsAuthenticatedOrReadOnly
 from rest_framework.response import Response
 from django.utils import timezone
 from datetime import timedelta
-from django.db.models import Avg, Count, F
+from django.db.models import Avg, Count, F, Q
 
 from apps.containers.models import Container
 from apps.drivers.models import Driver
 from apps.programaciones.models import Programacion, TiempoOperacion, TiempoViaje
 from apps.notifications.models import Notification
+
+
+# Estados considerados "en ciclo activo" para demurrage (coherente con
+# dashboard_alertas y programaciones.views.alertas_demurrage).
+_ESTADOS_DEMURRAGE = ['liberado', 'programado', 'asignado']
+
+
+def _container_stats_dict(conteo_estados, aggregates):
+    """Arma el dict de stats desde {estado: count} + aggregates anotados."""
+    total_activos = sum(
+        n for estado, n in conteo_estados.items() if estado != 'devuelto'
+    )
+    vacios = conteo_estados.get('vacio', 0) + conteo_estados.get('vacio_en_ruta', 0)
+    return {
+        'contenedores_total': sum(conteo_estados.values()),
+        'con_demurrage': aggregates['con_demurrage'],
+        'liberados': conteo_estados.get('liberado', 0),
+        'en_ruta': conteo_estados.get('en_ruta', 0),
+        'por_arribar': conteo_estados.get('por_arribar', 0),
+        'programados': conteo_estados.get('programado', 0),
+        'asignados': conteo_estados.get('asignado', 0),
+        'entregados': conteo_estados.get('entregado', 0),
+        'descargados': conteo_estados.get('descargado', 0),
+        'vacios': vacios,
+        'total_activos': total_activos,
+    }
 
 
 @api_view(['GET'])
@@ -23,54 +57,65 @@ def dashboard_stats(request):
     Estadísticas generales para el dashboard
     """
     today = timezone.now().date()
-    
-    stats = {
-        # Métricas principales
-        'contenedores_total': Container.objects.count(),
-        'conductores': Driver.objects.count(),
-        'conductores_disponibles': Driver.objects.filter(
-            activo=True,
-            presente=True,
-            num_entregas_dia__lt=F('max_entregas_dia')
-        ).count(),
-        
+
+    # Query 1: conteo por estado (cubre total, total_activos, vacios y las
+    # métricas por estado con UNA pasada).
+    conteo_estados = dict(
+        Container.objects.values_list('estado').annotate(n=Count('id'))
+    )
+
+    # Query 2: métricas que cruzan estado + fecha (no reducibles al conteo
+    # por estado puro).
+    aggregates = Container.objects.aggregate(
+        programados_hoy=Count(
+            'id',
+            filter=Q(estado='programado', fecha_programacion__date=today),
+        ),
+        con_demurrage=Count(
+            'id',
+            filter=Q(
+                fecha_demurrage__isnull=False,
+                estado__in=_ESTADOS_DEMURRAGE,
+            ),
+        ),
+        sin_asignar=Count(
+            'id',
+            filter=Q(
+                estado='programado',
+                fecha_programacion__lte=timezone.now() + timedelta(hours=48),
+            ),
+        ),
+    )
+
+    # Query 3: conductores (total + disponibles con la misma condición de
+    # negocio que usa el motor de asignación).
+    driver_agg = Driver.objects.aggregate(
+        conductores=Count('id'),
+        conductores_disponibles=Count(
+            'id',
+            filter=Q(
+                activo=True,
+                presente=True,
+                num_entregas_dia__lt=F('max_entregas_dia'),
+            ),
+        ),
+    )
+
+    # Query 4: notificaciones activas.
+    notificaciones_activas = Notification.objects.filter(
+        estado__in=['pendiente', 'enviada']
+    ).count()
+
+    stats = _container_stats_dict(conteo_estados, aggregates)
+    stats.update({
+        'conductores': driver_agg['conductores'],
+        'conductores_disponibles': driver_agg['conductores_disponibles'],
         # Métricas específicas requeridas
-        'programados_hoy': Container.objects.filter(
-            estado='programado',
-            fecha_programacion__date=today
-        ).count(),
-        
-        'con_demurrage': Container.objects.filter(
-            fecha_demurrage__isnull=False,
-            estado__in=['liberado', 'programado', 'asignado']
-        ).exclude(estado='devuelto').count(),
-        
-        'liberados': Container.objects.filter(estado='liberado').count(),
-        'en_ruta': Container.objects.filter(estado='en_ruta').count(),
-        
-        # Alertas de no asignados
-        'sin_asignar': Container.objects.filter(
-            estado='programado',
-            fecha_programacion__lte=timezone.now() + timedelta(hours=48)
-        ).count(),
-        
-        # Totales por estado (excluyendo devueltos)
-        'por_arribar': Container.objects.filter(estado='por_arribar').count(),
-        'programados': Container.objects.filter(estado='programado').count(),
-        'asignados': Container.objects.filter(estado='asignado').count(),
-        'entregados': Container.objects.filter(estado='entregado').count(),
-        'descargados': Container.objects.filter(estado='descargado').count(),
-        'vacios': Container.objects.filter(estado__in=['vacio', 'vacio_en_ruta']).count(),
-        
-        # Total excluyendo devueltos
-        'total_activos': Container.objects.exclude(estado='devuelto').count(),
-        
-        # Notificaciones activas
-        'notificaciones_activas': Notification.objects.filter(
-            estado__in=['pendiente', 'enviada']
-        ).count(),
-    }
-    
+        'programados_hoy': aggregates['programados_hoy'],
+        'sin_asignar': aggregates['sin_asignar'],
+        'notificaciones_activas': notificaciones_activas,
+    })
+
     return Response({
         'success': True,
         'stats': stats
@@ -146,19 +191,38 @@ def dashboard_alertas(request):
 def analytics_conductores(request):
     """
     Analíticas de rendimiento de conductores
+
+    Sin N+1: completadas por annotate, perfil ML con filas prefetchadas
+    (OperationalLearningEngine.driver_profile acepta rows=).
     """
-    drivers = Driver.objects.all()
-    
-    analytics = []
     from apps.core.services.learning_engine import OperationalLearningEngine
+
+    drivers = Driver.objects.annotate(
+        completadas=Count(
+            'programaciones',
+            filter=Q(
+                programaciones__container__estado__in=['descargado', 'devuelto'],
+            ),
+            distinct=True,
+        )
+    )
+
+    # Prefetch de las últimas 40 filas por conductor para el perfil ML
+    # (mismo corte que hace driver_profile internamente).
+    per_driver_rows = {}
+    for row in (
+        TiempoViaje.objects.filter(conductor__isnull=False, anomalia=False)
+        .order_by('conductor_id', '-fecha', '-hora_salida')
+    ):
+        rows = per_driver_rows.setdefault(row.conductor_id, [])
+        if len(rows) < 40:
+            rows.append(row)
+
+    analytics = []
     for driver in drivers:
-        # Calcular estadísticas
-        programaciones_completadas = Programacion.objects.filter(
-            driver=driver,
-            container__estado__in=['descargado', 'devuelto']
-        ).count()
-        
-        perfil_ml = OperationalLearningEngine.driver_profile(driver)
+        perfil_ml = OperationalLearningEngine.driver_profile(
+            driver, rows=per_driver_rows.get(driver.id, [])
+        )
         analytics.append({
             'driver_id': driver.id,
             'nombre': driver.nombre,
@@ -169,7 +233,7 @@ def analytics_conductores(request):
             'entregas_a_tiempo': driver.entregas_a_tiempo,
             'cumplimiento_porcentaje': float(driver.cumplimiento_porcentaje or 0),
             'ocupacion_porcentaje': float(driver.ocupacion_porcentaje),
-            'programaciones_completadas': programaciones_completadas,
+            'programaciones_completadas': driver.completadas,
             'perfil_velocidad_ml': perfil_ml,
         })
     

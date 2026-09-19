@@ -1,5 +1,8 @@
 from rest_framework import serializers
+from django.db.models import Exists, OuterRef
+
 from .models import Container
+from apps.programaciones.models import Programacion
 
 
 class ContainerSerializer(serializers.ModelSerializer):
@@ -61,7 +64,15 @@ class ContainerListSerializer(serializers.ModelSerializer):
         ]
     
     def get_tiene_programacion(self, obj):
-        """Indica si el contenedor tiene una programación asociada"""
+        """Indica si el contenedor tiene una programación asociada.
+
+        Usa el flag anotado en get_queryset del ViewSet (Exists) para evitar
+        una query por fila; si no viene anotado (uso directo del serializer),
+        cae al método del modelo.
+        """
+        annotada = getattr(obj, 'tiene_programacion_annot', None)
+        if annotada is not None:
+            return annotada
         return obj.tiene_programacion()
 
 
