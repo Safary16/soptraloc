@@ -158,6 +158,12 @@ class Container(models.Model):
             models.Index(fields=['estado']),
             models.Index(fields=['fecha_programacion']),
             models.Index(fields=['secuenciado']),
+            # Alertas/stats filtran por estado activo + demurrage próximo
+            # (dashboard_alertas, dashboard_stats, alertas_demurrage).
+            models.Index(
+                fields=['estado', 'fecha_demurrage'],
+                name='cont_estado_demurrage_idx',
+            ),
         ]
     
     def __str__(self):

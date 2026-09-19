@@ -159,6 +159,16 @@ class Programacion(models.Model):
             models.Index(fields=['fecha_programada']),
             models.Index(fields=['alerta_48h_enviada', 'requiere_alerta']),
             models.Index(fields=['driver']),
+            # Dashboards/alertas cruzan conductor con vigencia y estado del
+            # container (asignaciones activas, riesgo ML hoy/mañana).
+            models.Index(
+                fields=['driver', 'fecha_liberacion_conductor'],
+                name='prog_driver_vigencia_idx',
+            ),
+            models.Index(
+                fields=['container', 'driver'],
+                name='prog_container_driver_idx',
+            ),
         ]
     
     def __str__(self):
