@@ -4,7 +4,7 @@
     <string name="app_short_name">SoptraLoc</string>
     
     <!-- TWA Configuration -->
-    <string name="twa_url">https://soptraloc.onrender.com/driver/dashboard/</string>
+    <string name="twa_url">https://soptraloc-qiss.onrender.com/driver/dashboard/</string>
     
     <!-- Digital Asset Links para verificación del dominio -->
     <string name="asset_statements">
@@ -12,21 +12,21 @@
             \"relation\": [\"delegate_permission/common.handle_all_urls\"],
             \"target\": {
                 \"namespace\": \"web\",
-                \"site\": \"https://soptraloc.onrender.com\"
+                \"site\": \"https://soptraloc-qiss.onrender.com\"
             }
         },
         {
             \"relation\": [\"delegate_permission/common.use_as_origin\"],
             \"target\": {
                 \"namespace\": \"web\",
-                \"site\": \"https://soptraloc.onrender.com\"
+                \"site\": \"https://soptraloc-qiss.onrender.com\"
             }
         },
         {
             \"relation\": [\"delegate_permission/common.get_login_creds\"],
             \"target\": {
                 \"namespace\": \"web\",
-                \"site\": \"https://soptraloc.onrender.com\"
+                \"site\": \"https://soptraloc-qiss.onrender.com\"
             }
         }]
     </string>

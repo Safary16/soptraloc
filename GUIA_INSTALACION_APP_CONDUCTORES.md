@@ -114,7 +114,7 @@ Cuando la app está activa, verás una notificación:
 
 El administrador puede ver tu ubicación en tiempo real en:
 ```
-https://soptraloc.onrender.com/monitoring/
+https://soptraloc-qiss.onrender.com/monitoring/
 ```
 
 Pídele que confirme que ve tu ubicación actualizándose.

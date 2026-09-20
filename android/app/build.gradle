@@ -14,8 +14,8 @@ android {
         
         // Enable manifest placeholders for TWA
         manifestPlaceholders = [
-            hostName: "soptraloc.onrender.com",
-            defaultUrl: "https://soptraloc.onrender.com/driver/dashboard/",
+            hostName: "soptraloc-qiss.onrender.com",
+            defaultUrl: "https://soptraloc-qiss.onrender.com/driver/dashboard/",
             launcherName: "SoptraLoc Driver",
             appName: "SoptraLoc",
             themeColor: "#667eea",
