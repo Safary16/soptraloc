@@ -71,7 +71,7 @@ class ContainerViewSet(viewsets.ModelViewSet):
         )
 
     def get_permissions(self):
-        public_actions = {'list', 'retrieve', 'export_stock', 'export_liberacion_excel', 'vacios'}
+        public_actions = {'list', 'retrieve', 'liberados', 'export_stock', 'export_liberacion_excel', 'vacios'}
         classes = [AllowAny] if self.action in public_actions else [IsAdminUser]
         return [permission() for permission in classes]
 

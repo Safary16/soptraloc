@@ -24,7 +24,7 @@ class OperationalLearningEngine:
 
     @classmethod
     def _history(cls, origin, destination):
-        cutoff = timezone.now().date() - timedelta(days=cls.HISTORY_DAYS)
+        cutoff = timezone.localdate() - timedelta(days=cls.HISTORY_DAYS)
         rows = TiempoViaje.objects.filter(anomalia=False, fecha__gte=cutoff).select_related('conductor')
         return [
             row for row in rows
@@ -48,7 +48,7 @@ class OperationalLearningEngine:
             factor = row.calcular_factor_correccion()
             factor = factor if factor == factor else 1.0  # NaN guard
             factor = max(0.45, min(2.5, factor))
-            age_days = max(0, (timezone.now().date() - row.fecha).days)
+            age_days = max(0, (timezone.localdate() - row.fecha).days)
             weight = exp(-age_days / 75)
             hour_distance = cls._circular_hour_distance(row.hora_del_dia, departure.hour)
             weight *= exp(-hour_distance / 3.0)

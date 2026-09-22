@@ -56,7 +56,7 @@ def dashboard_stats(request):
     """
     Estadísticas generales para el dashboard
     """
-    today = timezone.now().date()
+    today = timezone.localdate()
 
     # Query 1: conteo por estado (cubre total, total_activos, vacios y las
     # métricas por estado con UNA pasada).
@@ -373,7 +373,7 @@ def operaciones_diarias(request):
                 'error': 'Formato de fecha inválido. Use YYYY-MM-DD'
             }, status=status.HTTP_400_BAD_REQUEST)
     else:
-        fecha_seleccionada = timezone.now().date()
+        fecha_seleccionada = timezone.localdate()
     
     # Obtener programaciones del día seleccionado
     programaciones_dia = Programacion.objects.filter(

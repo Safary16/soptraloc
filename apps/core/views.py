@@ -27,7 +27,7 @@ def health(request):
 
 def home(request):
     """Dashboard principal con estadísticas"""
-    today = timezone.now().date()
+    today = timezone.localdate()
     ahora = timezone.now()
     
     # Calculate stats for dashboard

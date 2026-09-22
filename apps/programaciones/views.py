@@ -73,7 +73,7 @@ class ProgramacionViewSet(viewsets.ModelViewSet):
             except ValueError:
                 return Response({'success': False, 'error': 'Formato de fecha inválido, use YYYY-MM-DD'}, status=400)
         else:
-            dia = timezone.now().date()
+            dia = timezone.localdate()
 
         qs = self.queryset.filter(
             fecha_programada__date=dia
