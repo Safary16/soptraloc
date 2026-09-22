@@ -29,6 +29,7 @@
         <select id="clienteSelect" class="form-select form-select-sm" style="min-width:220px">
             <option value="">Todos los clientes</option>
         </select>
+        <button class="btn btn-outline-secondary btn-sm" onclick="verMapaCliente()" title="Ver el mapa con los servicios de este cliente"><i class="fas fa-map-marked-alt"></i> Ver mapa de mis servicios</button>
         <button class="btn btn-outline-secondary btn-sm" onclick="cargarLiberados()" title="Refrescar"><i class="fas fa-sync-alt"></i> Refrescar</button>
     </div>
 </div>
@@ -144,6 +145,13 @@ function demurrageHtml(c) {
     const u = c.urgencia_demurrage;
     const cls = (u === 'vencido' || u === 'critico') ? 'demurrage-critico' : (u === 'alto' ? 'demurrage-alto' : '');
     return `<span class="${cls}">${dias < 0 ? 'vencido' : dias + ' día' + (dias === 1 ? '' : 's')}</span>`;
+}
+
+function verMapaCliente() {
+    const sel = document.getElementById('clienteSelect');
+    const cliente = sel ? sel.value.trim() : '';
+    if (!cliente) { alert('Selecciona un cliente para ver el mapa de sus servicios.'); return; }
+    window.open('/monitoring/?cliente=' + encodeURIComponent(cliente), '_blank');
 }
 
 function cargarClientes() {

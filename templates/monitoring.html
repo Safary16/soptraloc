@@ -49,12 +49,14 @@
     <div class="header">
         <div class="d-flex justify-content-between align-items-center">
             <div>
-                <h1><i class="fas fa-satellite-dish"></i> Seguimiento en Tiempo Real</h1>
+                <h1><i class="fas fa-satellite-dish"></i> <span id="header-titulo">Seguimiento en Tiempo Real</span></h1>
                 <div class="sub" id="header-fecha"></div>
+                <div class="sub" id="header-sub"></div>
             </div>
             <div class="d-flex gap-2">
-                <a href="/operaciones/" class="btn btn-light btn-sm"><i class="fas fa-tasks"></i> Operaciones</a>
-                <a href="/admin/" class="btn btn-light btn-sm"><i class="fas fa-cog"></i> Admin</a>
+                <a id="btn-operaciones" href="/operaciones/" class="btn btn-light btn-sm"><i class="fas fa-tasks"></i> Operaciones</a>
+                <a id="btn-admin" href="/admin/" class="btn btn-light btn-sm"><i class="fas fa-cog"></i> Admin</a>
+                <a id="btn-volver" href="/cliente/" class="btn btn-light btn-sm" style="display:none;"><i class="fas fa-store"></i> Volver al portal</a>
             </div>
         </div>
     </div>
@@ -72,9 +74,11 @@
             <div class="section-title"><i class="fas fa-clipboard-list"></i> Servicios del día <span id="svc-count" class="badge bg-secondary"></span></div>
             <div id="services-list"><p class="empty-note">Cargando servicios…</p></div>
 
-            <!-- Conductores -->
-            <div class="section-title"><i class="fas fa-users"></i> Conductores</div>
-            <div id="drivers-list"><p class="empty-note">Cargando conductores…</p></div>
+            <!-- Conductores (solo visión completa) -->
+            <div id="conductores-section">
+                <div class="section-title"><i class="fas fa-users"></i> Conductores</div>
+                <div id="drivers-list"><p class="empty-note">Cargando conductores…</p></div>
+            </div>
         </div>
 
         <div class="map-container"><div id="map"></div></div>
@@ -88,6 +92,10 @@ function escAttr(s){ return e(s).replace(/"/g,'&quot;'); }
 mapboxgl.accessToken = 'pk.eyJ1Ijoic2FmYXJ5MTYiLCJhIjoiY21naHlvYTQ5MDNlbDJrbjJjcXRtZGg1YSJ9.WCiyTSY_CCfB02N_Nfx7kg';
 const map = new mapboxgl.Map({ container:'map', style:'mapbox://styles/mapbox/streets-v12', center:[-70.6483,-33.4569], zoom:10 });
 map.addControl(new mapboxgl.NavigationControl());
+
+// Modo cliente: /monitoring/?cliente=X → solo sus servicios; sin filtro → visión completa
+const urlParams = new URLSearchParams(window.location.search);
+const CLIENTE_FILTRO = (urlParams.get('cliente') || '').trim();
 
 let markers = {};
 let cdMarkers = {};
@@ -104,11 +112,24 @@ const ESTADO_BADGE = {
 
 window.addEventListener('load', () => {
     document.getElementById('header-fecha').textContent = new Date().toLocaleDateString('es-CL',{weekday:'long',day:'numeric',month:'long'});
+    if (CLIENTE_FILTRO) {
+        // Modo cliente: solo sus servicios, sin conductores ni resumen global
+        document.getElementById('header-titulo').textContent = 'Mis Servicios';
+        document.getElementById('header-sub').textContent = 'Cliente: ' + CLIENTE_FILTRO;
+        const sec = document.getElementById('conductores-section');
+        if (sec) sec.style.display = 'none';
+        const btnOp = document.getElementById('btn-operaciones');
+        if (btnOp) btnOp.style.display = 'none';
+        const btnAdmin = document.getElementById('btn-admin');
+        if (btnAdmin) btnAdmin.style.display = 'none';
+        const btnVolver = document.getElementById('btn-volver');
+        if (btnVolver) btnVolver.style.display = '';
+    }
     refreshAll();
     setInterval(refreshAll, 15000);
 });
 
-function refreshAll(){ loadServices(); loadDrivers(); }
+function refreshAll(){ loadServices(); if (!CLIENTE_FILTRO) loadDrivers(); }
 
 function updateRefresh(text){ document.getElementById('refresh-text').textContent = text; }
 
@@ -116,10 +137,35 @@ function updateRefresh(text){ document.getElementById('refresh-text').textConten
 function loadServices(){
     updateRefresh('Actualizando…');
     const fecha = new Date().toISOString().slice(0,10);
-    fetch(`/api/programaciones/por-dia/?fecha=${fecha}`)
+    const clienteQ = CLIENTE_FILTRO ? '&cliente=' + encodeURIComponent(CLIENTE_FILTRO) : '';
+    fetch(`/api/programaciones/por-dia/?fecha=${fecha}${clienteQ}`)
         .then(r=>r.json())
-        .then(d=>{ services = d.programaciones||[]; renderServices(); updateRefresh(`Actualizado ${new Date().toLocaleTimeString()}`); })
+        .then(d=>{ services = d.programaciones||[]; renderServices(); if (CLIENTE_FILTRO) renderClientMap(); else updateMap(); updateRefresh(`Actualizado ${new Date().toLocaleTimeString()}`); })
         .catch(()=>{ document.getElementById('services-list').innerHTML='<p class="empty-note">Error cargando servicios</p>'; });
+}
+
+// Modo cliente: pintar sus servicios en el mapa (todas las programaciones, no solo en ruta)
+function renderClientMap(){
+    Object.keys(markers).forEach(id=>{ markers[id].remove(); delete markers[id]; });
+    services.forEach(s=>{
+        if (!(s.cd_lat && s.cd_lng)) return;
+        const coords=[Number(s.cd_lng), Number(s.cd_lat)];
+        const estado=s.estado_container||'';
+        const el=document.createElement('div');
+        el.innerHTML=estado==='en_ruta'
+            ? '<i class="fas fa-truck" style="color:#E95420;font-size:22px;text-shadow:0 1px 3px rgba(0,0,0,.4);"></i>'
+            : '<i class="fas fa-box" style="color:#0d6efd;font-size:20px;text-shadow:0 1px 2px rgba(0,0,0,.3);"></i>';
+        const eta=s.eta_minutos!=null?` · ⏱️ ${Math.round(s.eta_minutos)} min`:'';
+        const pop=new mapboxgl.Popup({offset:25}).setHTML(
+            `<strong>${e(s.container_id_formatted||s.container_id)}</strong><br>`+
+            `${e(s.estado_container||'')}${eta}<br>`+
+            `${e(s.cd_nombre||'')}${s.driver_nombre?`<br>🚚 ${e(s.driver_nombre)}`:''}`
+        );
+        markers['svc-'+s.id]=new mapboxgl.Marker(el).setLngLat(coords).setPopup(pop).addTo(map);
+    });
+    const b=new mapboxgl.LngLatBounds();
+    services.forEach(s=>{ if(s.cd_lat&&s.cd_lng) b.extend([Number(s.cd_lng),Number(s.cd_lat)]); });
+    if(!b.isEmpty()) map.fitBounds(b,{padding:60,maxZoom:13});
 }
 
 function renderServices(){

@@ -215,6 +215,7 @@ class DriverViewSet(viewsets.ModelViewSet):
             resultado.append({
                 'id': driver.id,
                 'nombre': driver.nombre,
+                'patente': driver.patente,
                 'lat': float(driver.ultima_posicion_lat),
                 'lng': float(driver.ultima_posicion_lng),
                 'ultima_actualizacion': driver.ultima_actualizacion_posicion,

@@ -59,7 +59,7 @@ class ContainerListSerializer(serializers.ModelSerializer):
             'cd_entrega', 'cd_entrega_nombre', 'fecha_descarga',
             # Timestamps del ciclo de vida (para operaciones)
             'fecha_asignacion', 'fecha_inicio_ruta', 'fecha_entrega', 'fecha_arribo',
-            'fecha_soltado', 'fecha_descarga', 'vacio_contabilizado',
+            'fecha_soltado', 'vacio_contabilizado',
             'tiene_programacion'
         ]
     

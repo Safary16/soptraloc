@@ -76,7 +76,11 @@ class ProgramacionViewSet(viewsets.ModelViewSet):
 
         qs = self.queryset.filter(
             fecha_programada__date=dia
-        ).order_by('fecha_programada')
+        )
+        cliente_filtro = request.query_params.get('cliente')
+        if cliente_filtro:
+            qs = qs.filter(cliente__iexact=cliente_filtro.strip())
+        qs = qs.order_by('fecha_programada')
 
         serializer = ProgramacionListSerializer(qs, many=True)
         return Response({
