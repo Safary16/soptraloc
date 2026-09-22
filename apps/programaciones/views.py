@@ -18,6 +18,7 @@ from .serializers import (
     ProgramacionCreateSerializer
 )
 from apps.core.services.assignment import AssignmentService
+from apps.core.utils import normalizar_cliente
 from apps.drivers.serializers import DriverDisponibleSerializer
 
 
@@ -77,9 +78,9 @@ class ProgramacionViewSet(viewsets.ModelViewSet):
         qs = self.queryset.filter(
             fecha_programada__date=dia
         )
-        cliente_filtro = request.query_params.get('cliente')
+        cliente_filtro = normalizar_cliente(request.query_params.get('cliente'))
         if cliente_filtro:
-            qs = qs.filter(cliente__iexact=cliente_filtro.strip())
+            qs = qs.filter(cliente__iexact=cliente_filtro)
         qs = qs.order_by('fecha_programada')
 
         serializer = ProgramacionListSerializer(qs, many=True)
@@ -664,7 +665,7 @@ class ProgramacionViewSet(viewsets.ModelViewSet):
             container=container,
             cd=cd_destino,
             fecha_programada=data['fecha_programacion'],
-            cliente=data.get('cliente', ''),
+            cliente=normalizar_cliente(data.get('cliente', '')),
             direccion_entrega=cd_destino.direccion,
             observaciones=data.get('observaciones', f'Retiro manual desde {container.posicion_fisica}')
         )

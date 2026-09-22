@@ -8,6 +8,7 @@ import logging
 from apps.containers.models import Container
 from apps.events.models import Event
 from apps.core.services.excel import normalize_columns, read_excel_with_header_detection
+from apps.core.utils import normalizar_cliente
 
 
 logger = logging.getLogger(__name__)
@@ -33,7 +34,7 @@ class EmbarqueImporter:
     def __init__(self, archivo_path, usuario=None, cliente=None):
         self.archivo_path = archivo_path
         self.usuario = usuario
-        self.cliente = (cliente or '').strip() or None
+        self.cliente = normalizar_cliente(cliente) or None
         self.resultados = {
             'creados': 0,
             'actualizados': 0,

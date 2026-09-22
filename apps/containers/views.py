@@ -20,6 +20,7 @@ from .filters import ContainerFilter
 from .importers.embarque import EmbarqueImporter
 from .importers.liberacion import LiberacionImporter
 from .importers.programacion import ProgramacionImporter
+from apps.core.utils import normalizar_cliente
 
 
 logger = logging.getLogger(__name__)
@@ -118,7 +119,7 @@ class ContainerViewSet(viewsets.ModelViewSet):
         usuario = request.user.username if request.user.is_authenticated else None
         
         # El archivo de embarque no trae el cliente final; lo asigna el operador
-        cliente = (request.POST.get('cliente') or request.data.get('cliente') or '').strip() or None
+        cliente = normalizar_cliente(request.POST.get('cliente') or request.data.get('cliente')) or None
         
         # Guardar temporalmente
         with tempfile.NamedTemporaryFile(delete=False, suffix='.xlsx') as tmp:
@@ -605,7 +606,7 @@ class ContainerViewSet(viewsets.ModelViewSet):
                     container=container,
                     cd=cd,
                     fecha_programada=fecha_programada_dt,
-                    cliente=request.data.get('cliente', container.cliente or ''),
+                    cliente=normalizar_cliente(request.data.get('cliente', container.cliente or '')),
                     direccion_entrega=cd.direccion,
                     observaciones=request.data.get('observaciones', '')
                 )
@@ -706,9 +707,9 @@ class ContainerViewSet(viewsets.ModelViewSet):
         qs = Container.objects.filter(
             estado='liberado'
         ).select_related('cd_entrega').order_by('-fecha_liberacion')
-        cliente = (request.query_params.get('cliente') or '').strip()
+        cliente = normalizar_cliente(request.query_params.get('cliente'))
         if cliente:
-            qs = qs.filter(cliente__icontains=cliente)
+            qs = qs.filter(cliente__iexact=cliente)
         serializer = ContainerListSerializer(qs, many=True)
         
         return Response({

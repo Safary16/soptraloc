@@ -6,6 +6,7 @@ from django.utils import timezone
 from apps.containers.models import Container
 from apps.drivers.models import Driver
 from apps.cds.models import CD
+from apps.core.utils import normalizar_cliente
 
 logger = logging.getLogger(__name__)
 
@@ -171,6 +172,12 @@ class Programacion(models.Model):
             ),
         ]
     
+    def save(self, *args, **kwargs):
+        """Normaliza el nombre del cliente a su forma canónica antes de guardar."""
+        if self.cliente:
+            self.cliente = normalizar_cliente(self.cliente)
+        super().save(*args, **kwargs)
+
     def __str__(self):
         return f"{self.container.container_id if self.container else 'N/A'} - {self.cliente}"
     

@@ -13,6 +13,7 @@ from apps.programaciones.models import Programacion
 from apps.cds.models import CD
 from apps.events.models import Event
 from apps.core.services.excel import normalize_columns, read_excel_with_header_detection
+from apps.core.utils import normalizar_cliente
 
 
 logger = logging.getLogger(__name__)
@@ -256,8 +257,8 @@ class ProgramacionImporter:
                         # la unidad (nunca pisarlo con 'N/A').
                         cliente_excel = None
                         if 'cliente' in df.columns and pd.notna(row.get('cliente')):
-                            cliente_excel = str(row['cliente']).strip()
-                        cliente = cliente_excel or container.cliente or 'N/A'
+                            cliente_excel = normalizar_cliente(str(row['cliente']))
+                        cliente = cliente_excel or normalizar_cliente(container.cliente) or 'N/A'
                         if cliente_excel and not container.cliente:
                             container.cliente = cliente_excel
 

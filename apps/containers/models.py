@@ -1,6 +1,7 @@
 from django.core.exceptions import ValidationError
 from django.db import models
 from django.utils import timezone
+from apps.core.utils import normalizar_cliente
 
 
 class Container(models.Model):
@@ -265,7 +266,9 @@ class Container(models.Model):
         return 'bajo'
     
     def save(self, *args, **kwargs):
-        """Override save para calcular tara si no existe"""
+        """Override save para calcular tara si no existe y normalizar cliente."""
+        if self.cliente:
+            self.cliente = normalizar_cliente(self.cliente)
         if not self.tara:
             self.tara = self.get_tara_default()
         super().save(*args, **kwargs)
