@@ -293,6 +293,18 @@ document.querySelectorAll('form').forEach(form => {
             
             const data = await response.json();
             
+            if (!response.ok && response.status === 401) {
+                alert('⚠️ Tu sesión expiró. Inicia sesión de nuevo para importar.');
+                window.location.href = '/admin/login/?next=/importar/';
+                return;
+            }
+            
+            if (!response.ok && response.status === 403) {
+                alert('⚠️ No tienes permisos para importar. Usa una cuenta de administrador:\n\n' + (data.detail || 'Acceso denegado'));
+                window.location.href = '/admin/login/?next=/importar/';
+                return;
+            }
+            
             if (data.success) {
                 const creados = data.creados || 0;
                 const actualizados = data.actualizados || 0;
@@ -320,8 +332,8 @@ document.querySelectorAll('form').forEach(form => {
                 // Recargar página para actualizar stats
                 location.reload();
             } else {
-                alert('❌ Error en la importación:\n\n' + 
-                      (data.error || data.mensaje || 'Error desconocido'));
+                alert('❌ Error en la importación (HTTP ' + response.status + '):\n\n' + 
+                      (data.error || data.detail || data.mensaje || 'Error desconocido'));
             }
         } catch (error) {
             alert('❌ Error de conexión:\n\n' + error.message);
