@@ -10,6 +10,9 @@ from dateutil import parser as date_parser
 import logging
 import uuid
 
+from django_filters.rest_framework import DjangoFilterBackend
+
+from .filters import ProgramacionFilter
 from .models import Programacion
 from .serializers import (
     ProgramacionSerializer,
@@ -31,7 +34,10 @@ class ProgramacionViewSet(viewsets.ModelViewSet):
     """
     queryset = Programacion.objects.select_related('container', 'driver', 'cd').all()
     serializer_class = ProgramacionSerializer
-    filterset_fields = ['fecha_programada', 'requiere_alerta', 'driver', 'cd', 'cliente']
+    # N3/N9 (auditoría 2026-09-22): filterset con lookups que el panel de
+    # asignación ya enviaba (driver__isnull, fecha_asignacion__gte) y cliente
+    # normalizado + iexact. Ver apps/programaciones/filters.py
+    filterset_class = ProgramacionFilter
     search_fields = ['container__container_id', 'cliente']
     ordering_fields = ['fecha_programada', 'created_at']
     ordering = ['fecha_programada']

@@ -66,6 +66,31 @@ services:
       - key: DEBUG
         value: false
 
+  # N2 (auditoría 2026-09-22): mantenimiento diario — reset num_entregas_dia,
+  # purga de posiciones GPS >30d, archivado de notificaciones. Antes NO estaba
+  # agendado en Render: cualquier fuga dejaba al conductor sin cupo para
+  # siempre, sin auto-sanación diaria. 09:00 UTC = 06:00 Chile (GMT-3).
+  - type: cron
+    name: soptraloc-mantenimiento-diario
+    runtime: python
+    env: python
+    plan: starter
+    schedule: "0 9 * * *"
+    buildCommand: "./build.sh"
+    startCommand: "python manage.py render_maintenance"
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.12.0
+      - key: DATABASE_URL
+        sync: false
+      - key: SECRET_KEY
+        fromService:
+          name: soptraloc
+          type: web
+          envVarKey: SECRET_KEY
+      - key: DEBUG
+        value: false
+
 # ⚠️ El bloque databases se elimina a propósito: Render FREE ya no provisiona
 # PostgreSQL (free expira a los 30 días). La DB es externa (Neon/Supabase) y
 # llega vía env var DATABASE_URL configurada manualmente en el dashboard.

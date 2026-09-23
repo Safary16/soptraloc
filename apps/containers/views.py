@@ -823,9 +823,11 @@ class ContainerViewSet(viewsets.ModelViewSet):
         """Inicia retorno de contenedor vacío a depósito"""
         container = self.get_object()
         
-        if container.estado != 'vacio':
+        # N8 (auditoría 2026-09-22): el servicio acepta 'vacio' y 'en_ccti';
+        # la vista exigía solo 'vacio' y bloqueaba el retorno desde CCTI.
+        if container.estado not in ('vacio', 'en_ccti'):
             return Response(
-                {'error': f'Contenedor debe estar vacío. Estado actual: {container.get_estado_display()}'},
+                {'error': f'Contenedor debe estar vacío o en CCTI. Estado actual: {container.get_estado_display()}'},
                 status=status.HTTP_400_BAD_REQUEST
             )
         

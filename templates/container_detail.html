@@ -477,7 +477,7 @@ function cargarCCTIs() {
         .then(d => {
             select.innerHTML = '<option value="">Seleccione CCTI...</option>';
             (d.results || d || []).forEach(cd => {
-                select.innerHTML += '<option value="' + cd.id + '">' + cd.nombre + '</option>';
+                select.innerHTML += '<option value="' + cd.id + '">' + e(cd.nombre) + '</option>';
             });
         })
         .catch(() => { select.innerHTML = '<option value="">Error al cargar</option>'; });
@@ -756,7 +756,7 @@ function abrirModalProgramar(containerId, containerIdStr) {
             const select = document.getElementById('progCdSelect');
             select.innerHTML = '<option value="">Seleccione CD...</option>';
             (d.results || d || []).forEach(cd => {
-                select.innerHTML += '<option value="' + cd.id + '">' + cd.nombre + '</option>';
+                select.innerHTML += '<option value="' + cd.id + '">' + e(cd.nombre) + '</option>';
             });
         })
         .catch(() => { select.innerHTML = '<option value="">Error al cargar</option>'; });

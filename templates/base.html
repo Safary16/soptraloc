@@ -131,6 +131,26 @@
     <!-- Custom JS -->
     <script src="{% static 'js/main.js' %}"></script>
     
+    <!-- CSRF global para jQuery AJAX (N6, auditoría 2026-09-22): sin esto,
+         un staff logueado recibe 403 de SessionAuthentication en POSTs $.ajax -->
+    <script>
+    (function() {
+        function getCookie(name) {
+            var v = document.cookie.match('(^|;)\\s*' + name + '\\s*=\\s*([^;]+)');
+            return v ? decodeURIComponent(v.pop()) : '';
+        }
+        if (window.jQuery) {
+            jQuery.ajaxSetup({
+                beforeSend: function(xhr, settings) {
+                    if (!/^(GET|HEAD|OPTIONS|TRACE)$/.test(settings.type) && !this.crossDomain) {
+                        xhr.setRequestHeader('X-CSRFToken', getCookie('csrftoken'));
+                    }
+                }
+            });
+        }
+    })();
+    </script>
+    
     <!-- Tema claro/oscuro -->
     <script>
     (function() {

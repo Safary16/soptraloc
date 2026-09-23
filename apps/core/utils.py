@@ -17,6 +17,8 @@ _CONECTORES = {
 _SIGLAS = {
     'CCTI', 'SAI', 'SA', 'S.A.', 'S.A', 'LTDA', 'Ltda.', 'EIRL',
     'SPA', 'S.P.A.', 'USA', 'EU', 'CNC', 'DPD', 'BCO',
+    # Agencias de aduana (siempre en mayúsculas, no son clientes)
+    'BROWNE',
 }
 
 # Aliases/typos comunes → forma canónica (antes del title case genérico).
