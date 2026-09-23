@@ -14,7 +14,6 @@ from apps.programaciones.models import Programacion, RegistroOperacion
 from apps.events.models import Event
 from apps.core.api_views import dashboard_stats, analytics_conductores
 from apps.core.services.operations import OperationalFlowService
-from apps.core.services.assignment import AssignmentService
 
 
 class DashboardQueriesTest(TestCase):

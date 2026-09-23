@@ -1,8 +1,6 @@
 from rest_framework import serializers
-from django.db.models import Exists, OuterRef
 
 from .models import Container
-from apps.programaciones.models import Programacion
 
 
 class ContainerSerializer(serializers.ModelSerializer):

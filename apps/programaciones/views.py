@@ -10,8 +10,6 @@ from dateutil import parser as date_parser
 import logging
 import uuid
 
-from django_filters.rest_framework import DjangoFilterBackend
-
 from .filters import ProgramacionFilter
 from .models import Programacion
 from .serializers import (
