@@ -276,11 +276,24 @@ def riesgo_encadenamiento(desde, hasta) -> list[dict]:
         )
         _cache_tramo[clave_tramo] = (viaje_min, km, fuente)
         llegada_estimada = fin_a + timedelta(minutes=viaje_min + BUFFER_MANIOBRA_MIN)
-        if timezone.is_naive(llegada_estimada):
-            llegada_estimada = timezone.make_aware(llegada_estimada)
-        if timezone.is_naive(prog_b.fecha_programada):
-            prog_b.fecha_programada = timezone.make_aware(prog_b.fecha_programada)
-        deficit = (llegada_estimada - prog_b.fecha_programada).total_seconds() / 60
+
+        def _aware(value):
+            """Variante local de make_aware sin mutar la instancia del modelo.
+
+            Antes se hacia prog_b.fecha_programada = timezone.make_aware(...) lo cual
+            mutaba la fila del ORM en memoria (sin persistir) y contaminaba cualquier
+            reutilización posterior de prog_b dentro del mismo ciclo. Ahora se devuelve
+            un valor local y la comparación se hace con ese valor.
+            """
+            if value is None:
+                return None
+            if timezone.is_naive(value):
+                return timezone.make_aware(value)
+            return value
+
+        llegada_estimada = _aware(llegada_estimada)
+        fecha_programada_b = _aware(prog_b.fecha_programada)
+        deficit = (llegada_estimada - fecha_programada_b).total_seconds() / 60
         if deficit <= 0:
             continue  # Alcanza justo o sobra tiempo; no es riesgo.
 

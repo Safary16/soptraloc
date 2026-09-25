@@ -90,7 +90,7 @@ class ContextualReasoningService:
             candidates = base_qs.filter(
                 Q(cd_id=programacion.cd_id) |
                 Q(container__tipo=programacion.container.tipo)
-            ).order_by('-fecha_programada')[:150]
+            ).select_related('container', 'cd', 'driver').order_by('-fecha_programada')[:150]
 
             if not candidates:
                 logger.info(f"No se encontraron casos similares para la programación {programacion.id}.")
