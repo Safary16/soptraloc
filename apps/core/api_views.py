@@ -208,10 +208,23 @@ def analytics_conductores(request):
     )
 
     # Prefetch de las últimas 40 filas por conductor para el perfil ML
-    # (mismo corte que hace driver_profile internamente).
+    # (mismo corte que hace driver_profile internamente). Filtramos por la
+    # ventana de history_days (120 por defecto) y proyectamos solo las
+    # columnas que necesita el perfil para matar el N+1 / over-fetch.
+    history_days = getattr(OperationalLearningEngine, 'HISTORY_DAYS', 120)
+    cutoff_date = timezone.now().date() - timedelta(days=history_days)
     per_driver_rows = {}
     for row in (
-        TiempoViaje.objects.filter(conductor__isnull=False, anomalia=False)
+        TiempoViaje.objects.filter(
+            conductor__isnull=False,
+            anomalia=False,
+            fecha__gte=cutoff_date,
+        )
+        .only(
+            'id', 'conductor_id', 'ruta', 'origen', 'destino',
+            'tiempo_estimado_min', 'tiempo_real_min', 'distancia_km',
+            'anomalia', 'fecha',
+        )
         .order_by('conductor_id', '-fecha', '-hora_salida')
     ):
         rows = per_driver_rows.setdefault(row.conductor_id, [])
