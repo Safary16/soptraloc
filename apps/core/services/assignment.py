@@ -1,6 +1,8 @@
 from decimal import Decimal
 from datetime import timedelta
+import logging
 from django.conf import settings
+from django.db import transaction
 from django.utils import timezone
 
 from apps.drivers.models import Driver
@@ -12,6 +14,8 @@ from apps.core.services.anomaly_detector import (
 from apps.core.services.contextual_reasoning import ContextualReasoningService
 from apps.core.services.openclaw import OpenClawService
 from apps.events.models import Event
+
+logger = logging.getLogger(__name__)
 
 
 class AssignmentService:
@@ -249,26 +253,45 @@ class AssignmentService:
         mejor = conductores[0]
         driver = mejor['driver']
 
-        programacion.score_por_dimension = mejor['desglose']
-        programacion.clasificacion_sistema = mejor['classification']
-        programacion.nivel_confianza = Decimal(str(round(mejor['confidence'] * 100, 2)))
-        programacion.anomalias_detectadas = mejor['anomalies']
-        programacion.similitud_historica_usada = mejor['similar_cases']
-        programacion.eta_recalculado_min = mejor['eta_estimado_min']
-        programacion.timestamp_despacho = timezone.now()
-        programacion.save(update_fields=[
-            # driver NO se asigna aquí: solo se persiste la recomendación (scores).
-            # La asignación real ocurre en Programacion.asignar_conductor() (FSM + evento).
-            'score_por_dimension', 'clasificacion_sistema', 'nivel_confianza',
-            'anomalias_detectadas', 'similitud_historica_usada', 'eta_recalculado_min', 'timestamp_despacho'
-        ])
+        # Bloque transaccional unico: persistimos scores + asignacion real + bitacora.
+        # Si algo falla (incluida la asignacion_conductor), nada queda parcial en BD.
+        # La llamada a OpenClaw queda FUERA del atomic (es I/O externa; su fallo no
+        # debe revertir la transaccion) y se envuelve en try/except.
+        pending_operator_review = False
+        with transaction.atomic():
+            programacion.score_por_dimension = mejor['desglose']
+            programacion.clasificacion_sistema = mejor['classification']
+            programacion.nivel_confianza = Decimal(str(round(mejor['confidence'] * 100, 2)))
+            programacion.anomalias_detectadas = mejor['anomalies']
+            programacion.similitud_historica_usada = mejor['similar_cases']
+            programacion.eta_recalculado_min = mejor['eta_estimado_min']
+            programacion.timestamp_despacho = timezone.now()
+            programacion.save(update_fields=[
+                'score_por_dimension', 'clasificacion_sistema', 'nivel_confianza',
+                'anomalias_detectadas', 'similitud_historica_usada', 'eta_recalculado_min', 'timestamp_despacho'
+            ])
 
-        if mejor['classification'] != 'DESPACHO_DIRECTO':
-            cls._persist_operation_log(programacion, mejor, decision_operador='PENDIENTE')
-            
-            # Solicitar revisión vía OpenClaw para casos amarillos o rojos
-            OpenClawService.request_review(programacion, mejor)
-            
+            if mejor['classification'] != 'DESPACHO_DIRECTO':
+                cls._persist_operation_log(programacion, mejor, decision_operador='PENDIENTE')
+                pending_operator_review = True
+            else:
+                programacion.asignar_conductor(driver, usuario)
+                cls._persist_operation_log(programacion, mejor, decision_operador='CONFIRMAR')
+
+        # OpenClaw I/O externo: fuera del lock y del atomic; el fallo NO revierte la
+        # asignacion. Si OpenClaw esta caido, el operador ve la alerta en el panel
+        # igualmente porque la bitacora ya quedo persistida arriba.
+        if pending_operator_review:
+            try:
+                OpenClawService.request_review(programacion, mejor)
+            except Exception:
+                logger.exception(
+                    'OpenClaw.request_review fallo para programacion %s; '
+                    'la asignacion y bitacora quedaron registradas localmente.',
+                    programacion.id,
+                )
+
+        if pending_operator_review:
             return {
                 'success': False,
                 'requires_operator': True,
@@ -291,8 +314,6 @@ class AssignmentService:
                 ],
             }
 
-        programacion.asignar_conductor(driver, usuario)
-        cls._persist_operation_log(programacion, mejor, decision_operador='CONFIRMAR')
         return {
             'success': True,
             'driver': driver,
