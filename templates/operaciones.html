@@ -1530,14 +1530,31 @@ function loadProgramacionesList() {
             
             data.results.forEach(prog => {
                 // Get formatted container ID - try different fields based on serializer
-                const containerId = prog.container_id_formatted || prog.container_id || 
+                const containerId = prog.container_id_formatted || prog.container_id ||
                     (prog.container && (prog.container.container_id_formatted || prog.container.container_id)) || 'N/A';
-                
+
+                // prog.estado NO existe en el modelo Programacion (modelo sin ese campo);
+                // el estado 'completado' nunca era true → TODAS las filas quedaban en amarillo.
+                // Renderizamos el estado final de la programación si existe, o el estado
+                // vigente del contenedor como referencia operativa.
+                const estadoFinal = prog.estado_final || null;
+                const containerEstado = (prog.container_detail && prog.container_detail.estado) ||
+                                        (prog.container && prog.container.estado) || null;
+                const estadoLabel = estadoFinal || containerEstado || 'Pendiente';
+                const estadosExito = new Set(['entregado', 'descargado', 'devuelto', 'vacio']);
+                const estadosProblema = new Set(['incidente', 'cancelado']);
+                let badgeClass = 'warning';
+                if (estadoFinal === 'ENTREGADO' || (containerEstado && estadosExito.has(containerEstado))) {
+                    badgeClass = 'success';
+                } else if (containerEstado && estadosProblema.has(containerEstado)) {
+                    badgeClass = 'danger';
+                }
+
                 html += `<tr>
                     <td><strong>${containerId}</strong></td>
                     <td>${prog.driver_nombre || 'Sin asignar'}</td>
                     <td>${prog.fecha_programada ? new Date(prog.fecha_programada).toLocaleString('es-CL') : 'Sin fecha'}</td>
-                    <td><span class="badge bg-${prog.estado === 'completado' ? 'success' : 'warning'}">${prog.estado || 'Pendiente'}</span></td>
+                    <td><span class="badge bg-${badgeClass}">${estadoLabel}</span></td>
                     <td>
                         <button class="btn btn-sm btn-danger" onclick="eliminarPreAsignacion(${prog.id})" title="Eliminar">
                             <i class="fas fa-trash"></i>

@@ -48,6 +48,55 @@ class ProgramacionViewSet(viewsets.ModelViewSet):
             return ProgramacionCreateSerializer
         return ProgramacionSerializer
 
+    def perform_destroy(self, instance):
+        """Elimina una programación evitando IntegrityError por la relación
+        OneToOne entre Container y Programacion y por filas hijas que
+        referencian al contenedor asociado.
+
+        Comportamiento:
+        1. Deslinkea el contenedor (libera container.estado, limpia fechas y
+           el OneToOne inverso para evitar UNIQUE collisions si el operador
+           re-crea inmediatamente la programacion).
+        2. Borra la programacion (cascade a RegistroOperacion, SET_NULL en
+           TiempoViaje/TiempoOperacion, CASCADE en Eventos).
+
+        Sin esto, el DELETE del frontend (operaciones.html → eliminarPreAsignacion)
+        podia fallar con IntegrityError en escenarios de re-asignacion inmediata.
+        """
+        from django.db import transaction
+        with transaction.atomic():
+            container = getattr(instance, 'container', None)
+            if container is not None:
+                # Limpiar estado y timestamps del contenedor para que no quede
+                # colgado en 'programado'/'asignado' tras la baja. Usamos
+                # cambiar_estado que respeta el FSM; si el estado no permite
+                # transicion directa, forzar via atributo y save (caso admin).
+                try:
+                    estado_actual = getattr(container, 'estado', None)
+                    if estado_actual in ('programado', 'asignado', 'secuenciado', 'incidente'):
+                        # Cancelado es el destino valido desde varios estados FSM.
+                        container.cambiar_estado('cancelado')
+                    elif estado_actual in ('en_ccti', 'por_arribar', 'liberado'):
+                        # No requiere cambio de estado; solo limpia timestamps stale.
+                        pass
+                    # Reset timestamps operativos sobre el contenedor.
+                    update_fields = []
+                    for f in (
+                        'fecha_programacion', 'fecha_secuenciado', 'fecha_asignacion',
+                        'fecha_incidente', 'fecha_inicio_ruta',
+                    ):
+                        if getattr(container, f, None) is not None:
+                            setattr(container, f, None)
+                            update_fields.append(f)
+                    if update_fields:
+                        container.save(update_fields=update_fields)
+                except Exception:
+                    logger.exception(
+                        'No se pudo limpiar el contenedor asociado a la programacion %s; '
+                        'se procede al DELETE igualmente.', instance.pk,
+                    )
+            instance.delete()
+
     @action(detail=False, methods=['get'], url_path='por-container/(?P<container_id>[^/.]+)')
     def por_container(self, request, container_id=None):
         from apps.containers.models import Container
