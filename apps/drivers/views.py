@@ -67,7 +67,14 @@ def driver_dashboard(request):
 
 def monitoring(request):
     """Página de monitoreo en tiempo real de conductores"""
-    return render(request, 'monitoring.html')
+    from django.conf import settings
+    return render(request, 'monitoring.html', {
+        # Token público de Mapbox: si no hay env configurada, se usa el
+        # fallback interno del settings (no se imprime en logs). El token es
+        # de dominio público de Mapbox y se debe restringir por dominio/URL
+        # en el panel de Mapbox para limitar uso no autorizado.
+        'MAPBOX_PUBLIC_TOKEN': getattr(settings, 'MAPBOX_PUBLIC_TOKEN', None),
+    })
 
 
 # ============================================

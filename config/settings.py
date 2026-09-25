@@ -194,7 +194,12 @@ CORS_ALLOW_ALL_ORIGINS = DEBUG
 CORS_ALLOW_CREDENTIALS = True
 
 # Mapbox
+# - MAPBOX_API_KEY: token privado (server-side, usado por apps.core.services.mapbox).
+# - MAPBOX_PUBLIC_TOKEN: token público 'pk.*' que se inyecta en templates/monitoring.html.
+#   Si no se define, monitoring cae a un token por defecto solo para dev; en producción
+#   es OBLIGATORIO configurarlo (las claves pk.* son públicas pero conviene rotarlas).
 MAPBOX_API_KEY = config('MAPBOX_API_KEY', default=None)
+MAPBOX_PUBLIC_TOKEN = config('MAPBOX_PUBLIC_TOKEN', default='pk.eyJ1Ijoic2FmYXJ5MTYiLCJhIjoiY21naHlvYTQ5MDNlbDJrbjJjcXRtZGg1YSJ9.WCiyTSY_CCfB02N_Nfx7kg')
 
 # Asignación automática — nombres coherentes con los que lee AssignmentService
 # (auditoría 2026-09-18: antes eran PESO_DISPONIBILIDAD/OCUPACION/CUMPLIMIENTO/PROXIMIDAD,

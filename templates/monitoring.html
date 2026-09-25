@@ -89,7 +89,7 @@
 function e(s){ return s==null?'':String(s).replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m])); }
 function escAttr(s){ return e(s).replace(/"/g,'&quot;'); }
 
-mapboxgl.accessToken = 'pk.eyJ1Ijoic2FmYXJ5MTYiLCJhIjoiY21naHlvYTQ5MDNlbDJrbjJjcXRtZGg1YSJ9.WCiyTSY_CCfB02N_Nfx7kg';
+mapboxgl.accessToken = '{{ MAPBOX_PUBLIC_TOKEN|default_if_none:"" }}';
 const map = new mapboxgl.Map({ container:'map', style:'mapbox://styles/mapbox/streets-v12', center:[-70.6483,-33.4569], zoom:10 });
 map.addControl(new mapboxgl.NavigationControl());
 
@@ -241,18 +241,25 @@ function renderDrivers(){
     cont.innerHTML = drivers.map(d=>{
         const min = Math.round((new Date()-new Date(d.ultima_actualizacion))/60000);
         const ok = min<30;
+        // Antes: drivers.find(x=>x.id===d.id) buscaba en todo el array -> O(n²)
+        // sobre docenas de conductores. Como d es el item actual del propio map(),
+        // d.patente ya esta disponible y no requiere busqueda.
         return `<div class="driver-item" onclick="focusDriver(${d.id})">
             <div class="d-flex justify-content-between">
                 <span class="name"><span class="dot ${ok?'on':'off'}"></span>${e(d.nombre)}</span>
                 <span class="badge bg-light text-dark">${d.num_entregas_dia}/${d.max_entregas_dia}</span>
             </div>
-            <div class="meta"><i class="fas fa-clock"></i> ${min<1?'Ahora':`Hace ${min} min`} · <i class="fas fa-truck"></i> ${e((drivers.find(x=>x.id===d.id)||{}).patente||'')}</div>
+            <div class="meta"><i class="fas fa-clock"></i> ${min<1?'Ahora':`Hace ${min} min`} · <i class="fas fa-truck"></i> ${e(d.patente||'')}</div>
         </div>`;
     }).join('');
 }
 
 function updateMap(){
-    Object.keys(markers).forEach(id=>{ if(!drivers.find(d=>d.id==id)){ markers[id].remove(); delete markers[id]; } });
+    // Set de IDs activos para busqueda O(1) en lugar de O(n) por marker.
+    const driverIds = new Set(drivers.map(d=>String(d.id)));
+    Object.keys(markers).forEach(id=>{
+        if(!driverIds.has(id)){ markers[id].remove(); delete markers[id]; }
+    });
     drivers.forEach(d=>{
         const coords=[d.lng,d.lat];
         if(markers[d.id]){ markers[d.id].setLngLat(coords); }

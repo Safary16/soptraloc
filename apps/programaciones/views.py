@@ -868,8 +868,15 @@ class ProgramacionViewSet(viewsets.ModelViewSet):
         try:
             from apps.core.services.learning_engine import OperationalLearningEngine
             perfil_ml = OperationalLearningEngine.driver_profile(driver)
-        except Exception:
-            pass
+        except Exception as exc:
+            # Antes: 'except Exception: pass' silenciaba el fallo del ML.
+            # Si el ML rompe por un bug, el operador ve advertencias incompletas
+            # sin pista de por qué. Logueamos para diagnosticar y devolvemos
+            # sin el bloque ML (la validacion sigue funcionando).
+            logger.warning(
+                'No se pudo cargar el perfil ML para conductor %s: %s',
+                getattr(driver, 'id', None), exc,
+            )
         
         return Response({
             'success': True,
