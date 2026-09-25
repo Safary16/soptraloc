@@ -22,10 +22,12 @@ class Command(BaseCommand):
         password = os.environ.get('DJANGO_SUPERUSER_PASSWORD') or FALLBACK_PASSWORD
 
         allow_weak = os.environ.get('DJANGO_SUPERUSER_ALLOW_WEAK', '1') in ('1', 'true', 'True', 'yes')
-        if len(password) < (4 if allow_weak else 12):
+        # Longitud mínima configurable: en desarrollo (DJANGO_SUPERUSER_ALLOW_WEAK=1)
+        # aceptamos el fallback admin/1234; en producción exigimos al menos 12 chars.
+        min_len = 4 if allow_weak else 12
+        if len(password) < min_len:
             self.stdout.write(self.style.ERROR(
-                'La contraseña del superusuario debe tener al menos '
-                f'{"4" if allow_weak else "12"} caracteres '
+                f'La contraseña del superusuario debe tener al menos {min_len} caracteres '
                 '(usa DJANGO_SUPERUSER_ALLOW_WEAK=1 solo en pruebas).'
             ))
             return
@@ -62,4 +64,11 @@ class Command(BaseCommand):
             driver.save()
             self.stdout.write(self.style.SUCCESS(f'Driver demo ya vinculado a "{username}" (reactivado).'))
 
-        self.stdout.write(self.style.SUCCESS(f'➡️  Login del sistema: usuario="{username}" clave="{password}"'))
+        # NUNCA imprimir la contraseña real en stdout/logs: si el usuario la olvidó,
+        # debe mirar su variable de entorno DJANGO_SUPERUSER_PASSWORD o regenerarla
+        # con `python manage.py reset_admin --username <u> --password <p>`.
+        self.stdout.write(self.style.SUCCESS(
+            f'➡️  Login del sistema listo para usuario="{username}". '
+            f'La contraseña proviene de DJANGO_SUPERUSER_PASSWORD o del fallback interno '
+            f'(no se imprime por seguridad).'
+        ))
