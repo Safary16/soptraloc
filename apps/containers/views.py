@@ -5,6 +5,10 @@ from rest_framework.parsers import MultiPartParser, FormParser
 from rest_framework.permissions import AllowAny, IsAdminUser
 from django.utils import timezone
 from django.db.models import Exists, OuterRef, Q
+from django.db import transaction, IntegrityError
+from django.http import HttpResponse
+from datetime import datetime
+from dateutil import parser as date_parser
 import tempfile
 import os
 import logging
@@ -328,10 +332,8 @@ class ContainerViewSet(viewsets.ModelViewSet):
         Exporta contenedores liberados y por liberar a Excel
         Incluye: ID, Nave, Estado, Peso Total, Contenido, Demurrage, etc.
         """
-        from django.http import HttpResponse
         import openpyxl
         from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
-        from datetime import datetime
         
         # Filtrar contenedores liberados y por arribar
         containers = Container.objects.filter(
@@ -517,7 +519,6 @@ class ContainerViewSet(viewsets.ModelViewSet):
         from apps.programaciones.models import Programacion
         from apps.cds.models import CD
         from apps.events.models import Event
-        from django.db import transaction, IntegrityError
         
         container = self.get_object()
         
@@ -569,12 +570,10 @@ class ContainerViewSet(viewsets.ModelViewSet):
             )
         
         # Parsear fecha
-        from dateutil import parser as date_parser
         try:
             fecha_programada_dt = date_parser.parse(fecha_programada)
         except Exception as e:
             # Log the detailed error internally but show generic message to user
-            import logging
             logger = logging.getLogger(__name__)
             logger.warning(f"Error parseando fecha '{fecha_programada}': {str(e)}")
             return Response(
@@ -640,7 +639,6 @@ class ContainerViewSet(viewsets.ModelViewSet):
                 
         except IntegrityError as e:
             # Manejar violación de constraint de unicidad (OneToOne)
-            import logging
             logger = logging.getLogger(__name__)
             logger.error(f"IntegrityError al programar contenedor {container.container_id}: {str(e)}")
             return Response(
@@ -650,7 +648,6 @@ class ContainerViewSet(viewsets.ModelViewSet):
         except Exception as e:
             # Manejar otros errores inesperados
             # Log detallado internamente pero mensaje genérico al usuario por seguridad
-            import logging
             logger = logging.getLogger(__name__)
             logger.error(f"Error inesperado al programar contenedor {container.container_id}: {str(e)}", exc_info=True)
             return Response(

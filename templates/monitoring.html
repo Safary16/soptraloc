@@ -126,7 +126,28 @@ window.addEventListener('load', () => {
         if (btnVolver) btnVolver.style.display = '';
     }
     refreshAll();
-    setInterval(refreshAll, 15000);
+    // Polling cada 15s con Page Visibility API: si la pestaña esta oculta,
+    // se pausa el refresco para no quemar ~40 req/min inútiles por usuario.
+    let _pollTimer = null;
+    function _startPoll() {
+        if (_pollTimer) return;
+        _pollTimer = setInterval(refreshAll, 15000);
+    }
+    function _stopPoll() {
+        if (_pollTimer) {
+            clearInterval(_pollTimer);
+            _pollTimer = null;
+        }
+    }
+    document.addEventListener('visibilitychange', () => {
+        if (document.hidden) {
+            _stopPoll();
+        } else {
+            refreshAll();  // refresco inmediato al volver
+            _startPoll();
+        }
+    });
+    _startPoll();
 });
 
 function refreshAll(){ loadServices(); if (!CLIENTE_FILTRO) loadDrivers(); }
