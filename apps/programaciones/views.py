@@ -1751,34 +1751,71 @@ class ProgramacionViewSet(viewsets.ModelViewSet):
         if lat and lng:
             incidente_data['gps_lat'] = str(lat)
             incidente_data['gps_lng'] = str(lng)
-        
-        # Añadir a la lista de incidentes registrados
-        programacion.incidentes_registrados = (programacion.incidentes_registrados or []) + [incidente_data]
-        programacion.save(update_fields=['incidentes_registrados'])
 
-        # Crear evento de auditoría
+        # Append atómico sobre `incidentes_registrados` (JSONField): bloqueamos la
+        # fila con select_for_update, re-leemos la lista vigente bajo el lock y
+        # hacemos append + save dentro de transaction.atomic. Sin el lock, dos
+        # incidentes concurrentes pueden leer la misma lista base y pisarse mutuamente
+        # perdiendo uno. JSONField no soporta F() nativo de forma segura para append.
         from apps.events.models import Event
-        Event.objects.create(
-            container=programacion.container,
-            event_type='incidente_reportado',
-            detalles=incidente_data,
-            usuario=request.user.username if request.user.is_authenticated else 'anonimo'
-        )
+        try:
+            with transaction.atomic():
+                locked = Programacion.objects.select_for_update().get(pk=programacion.pk)
+                lista_actual = locked.incidentes_registrados or []
+                lista_actual.append(incidente_data)
+                locked.incidentes_registrados = lista_actual
+                locked.save(update_fields=['incidentes_registrados'])
 
-        # Opcional: Notificar a operadores vía OpenClaw si es de alta gravedad
-        if gravedad in ['ALTA', 'CRITICA']:
-            from apps.core.services.openclaw import OpenClawService
-            OpenClawService.notify_anomaly(
-                programacion,
-                [
-                    {
-                        'code': f"INCIDENTE_{gravedad}",
-                        'severity': 'P0' if gravedad == 'CRITICA' else 'P1',
-                        'message': f"Incidente reportado: {tipo_incidente} - {descripcion}",
-                        'recommended_action': "Revisar de inmediato y coordinar asistencia."
-                    }
-                ]
+                # Propagar la lista actualizada al objeto que devolvemos al caller
+                # para que el serializer refleje el incidente recién agregado.
+                programacion.incidentes_registrados = lista_actual
+
+                # Crear evento de auditoría dentro del mismo lock para que la
+                # trazabilidad sea consistente con el append.
+                Event.objects.create(
+                    container=locked.container,
+                    event_type='incidente_reportado',
+                    detalles=incidente_data,
+                    usuario=request.user.username if request.user.is_authenticated else 'anonimo'
+                )
+        except Exception as _lock_exc:
+            logger.error(
+                'reportar_incidente_lock_failure programacion_id=%s detalle=%s',
+                getattr(programacion, 'pk', None),
+                _lock_exc,
+                exc_info=True,
             )
+            return Response(
+                {'error': 'No se pudo registrar el incidente de forma atómica. Reintente.'},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
+
+        # Notificar a operadores vía OpenClaw si es de alta gravedad. Se hace
+        # FUERA del atomic para no mantener el row lock durante la llamada de red;
+        # un fallo de notificación no debe revertir el incidente ya persistido.
+        # Se sigue el patrón del fix e9e88b46 (asignar_automatico).
+        if gravedad in ['ALTA', 'CRITICA']:
+            try:
+                from apps.core.services.openclaw import OpenClawService
+                OpenClawService.notify_anomaly(
+                    programacion,
+                    [
+                        {
+                            'code': f"INCIDENTE_{gravedad}",
+                            'severity': 'P0' if gravedad == 'CRITICA' else 'P1',
+                            'message': f"Incidente reportado: {tipo_incidente} - {descripcion}",
+                            'recommended_action': "Revisar de inmediato y coordinar asistencia."
+                        }
+                    ]
+                )
+            except Exception as _openclaw_exc:
+                # Notificación fallida no rompe el flujo; el incidente ya está guardado.
+                logger.warning(
+                    'reportar_incidente_openclaw_notify_failed programacion_id=%s gravedad=%s detalle=%s',
+                    getattr(programacion, 'pk', None),
+                    gravedad,
+                    _openclaw_exc,
+                )
 
         serializer = self.get_serializer(programacion)
         return Response({
