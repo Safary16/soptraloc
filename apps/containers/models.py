@@ -165,6 +165,12 @@ class Container(models.Model):
                 fields=['estado', 'fecha_demurrage'],
                 name='cont_estado_demurrage_idx',
             ),
+            # Búsquedas por cliente (search_fields en admin + filtros DRF por
+            # cliente normalizado); índice compuesto para soportar LIKE prefijo.
+            models.Index(
+                fields=['cliente', 'estado'],
+                name='cont_cliente_estado_idx',
+            ),
         ]
     
     def __str__(self):
