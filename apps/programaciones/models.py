@@ -281,29 +281,29 @@ class Programacion(models.Model):
     def verificar_alerta(self):
         """
         Verifica si la programación requiere alerta (< 48h sin conductor) y actualiza el campo
-        
+
         Returns:
             bool: True si se debe generar alerta, False en caso contrario
         """
-        if self.driver:
-            # Si ya tiene conductor, no requiere alerta
-            if self.pk:  # Solo guardar si el objeto ya existe en la DB
-                self.requiere_alerta = False
-                self.save(update_fields=['requiere_alerta'])
-            return False
-        
         horas = self.horas_hasta_programacion
-        if horas is None:
+        # Logica aislada del save: primero decidimos el boolean, despues escribimos
+        # con .update() atomico para no entrar en carrera entre dos llamadas concurrentes
+        # (el save() clásico reload + compare era vulnerable si dos hilos pasaban a la vez).
+        if self.driver:
+            requiere = False
+        elif horas is None:
             return False
-        
-        # Requiere alerta si faltan menos de 48 horas y no tiene conductor
-        requiere = horas < 48 and horas > 0
-        
-        # Actualizar el campo si cambió (solo si el objeto existe en la DB)
+        else:
+            requiere = horas < 48 and horas > 0
+
         if self.pk and self.requiere_alerta != requiere:
+            # .update() atómico con filtro en pk garantiza una sola escritura aunque
+            # otro hilo ya haya actualizado el flag.
+            Programacion.objects.filter(pk=self.pk, requiere_alerta=self.requiere_alerta).update(
+                requiere_alerta=requiere
+            )
             self.requiere_alerta = requiere
-            self.save(update_fields=['requiere_alerta'])
-        
+
         return requiere
     
     @classmethod

@@ -84,7 +84,7 @@ class ETAEstimator:
                 hora_salida=programacion.fecha_programada,
                 conductor=driver
             )
-            tiempo_viaje = prediccion['tiempo_estimado_min']
+            tiempo_viaje = prediccion.get('tiempo_estimado_min')
         else:
             tiempo_viaje = 60 # Default si no hay coordenadas
 
@@ -94,6 +94,11 @@ class ETAEstimator:
             conductor=driver
         )
 
+        # Manejo defensivo: si el predictor devolvio None (sin Mapbox ni ML),
+        # preferimos None sobre un entero ficticio (60). El operador ve la
+        # advertencia via requires_attention en lugar de una ETA inventada.
+        if tiempo_viaje is None or tiempo_op is None:
+            return None
         return int(tiempo_viaje + tiempo_op)
 
 
@@ -172,7 +177,15 @@ class AnomalyDetector:
             ))
 
         eta_min = ETAEstimator.estimate_minutes(programacion, driver)
-        if not RouteFeasibilityValidator.is_feasible(programacion, eta_min):
+        # Si el estimador no tiene dato (Mapbox/ML cayeron o faltan coords),
+        # marcamos P0 de atencion en vez de inventar un ETA. El operador decide.
+        if eta_min is None:
+            anomalies.append(OperationalAnomaly(
+                "ANOM_OPS_010", "P1",
+                "ETA no disponible: Mapbox/ML sin respuesta. Verificar antes de despachar.",
+                "Asignar manualmente o reintentar la consulta predictiva."
+            ))
+        elif not RouteFeasibilityValidator.is_feasible(programacion, eta_min):
             anomalies.append(OperationalAnomaly(
                 "ANOM_OPS_005", "P0",
                 "ETA mínimo posible supera la ventana horaria requerida.",

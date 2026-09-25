@@ -42,19 +42,25 @@ class MLTimePredictor:
                 tipo_operacion=tipo_operacion,
                 conductor=conductor
             )
-            
+
             logger.debug(f"Tiempo ML para {cd.nombre} ({tipo_operacion}): {tiempo_ml} min")
             return tiempo_ml
-        
+
         except Exception as e:
-            logger.warning(f"Error obteniendo tiempo ML: {str(e)}. Usando default.")
-            
-            # Fallback a tiempo default del CD
-            if tipo_operacion == 'descarga_cd' and cd.tiempo_promedio_descarga_min:
-                return cd.tiempo_promedio_descarga_min
-            
-            # Default genérico
-            return 60
+            logger.warning(f"Error obteniendo tiempo ML: {str(e)}. Sin default ficticio.")
+
+            # Antes: retornabamos 60 ficticio, contaminando los cálculos aguas abajo.
+            # Ahora: retornamos None y marcamos requires_attention=True para que las
+            # vistas (anomaly_detector.ETAEstimator, programaciones/views) decidan
+            # como manejar el caso (mostrar advertencia al operador vs asignar ciegamente).
+            try:
+                if tipo_operacion == 'descarga_cd' and getattr(cd, 'tiempo_promedio_descarga_min', None):
+                    # Si tenemos un dato específico del CD, devolvemos ese con flag
+                    # (no es ficticio, es metadata operativa del CD).
+                    return cd.tiempo_promedio_descarga_min
+            except Exception:
+                pass
+            return None
     
     @classmethod
     def predecir_tiempo_viaje(cls, origen_coords, destino_coords, hora_salida=None, conductor=None):
@@ -90,14 +96,18 @@ class MLTimePredictor:
                 origen_lng, origen_lat,
                 destino_lng, destino_lat
             )
-            
+
             if not mapbox_resultado or 'duration_minutes' not in mapbox_resultado:
                 logger.error("Mapbox no devolvió tiempo válido")
+                # Antes: tiempo_estimado_min=60 ficticio. Ahora: None + requires_attention
+                # para que el operador vea la advertencia en lugar de un ETA inventado.
                 return {
-                    'tiempo_estimado_min': 60,  # Default
-                    'distancia_km': 0,
-                    'fuente': 'default',
-                    'tiempo_mapbox_min': 0
+                    'tiempo_estimado_min': None,
+                    'distancia_km': None,
+                    'fuente': 'error',
+                    'tiempo_mapbox_min': None,
+                    'requires_attention': True,
+                    'error': 'mapbox_sin_tiempo_valido',
                 }
             
             tiempo_mapbox = int(mapbox_resultado['duration_minutes'])
@@ -147,12 +157,15 @@ class MLTimePredictor:
         
         except Exception as e:
             logger.error(f"Error prediciendo tiempo de viaje: {str(e)}")
+            # Antes: tiempo_estimado_min=60 ficticio. Ahora: None + requires_attention
+            # para que la vista muestre advertencia y NO asigne ETA falsa.
             return {
-                'tiempo_estimado_min': 60,
-                'distancia_km': 0,
+                'tiempo_estimado_min': None,
+                'distancia_km': None,
                 'fuente': 'error',
-                'tiempo_mapbox_min': 0,
-                'error': str(e)
+                'tiempo_mapbox_min': None,
+                'requires_attention': True,
+                'error': str(e),
             }
     
     

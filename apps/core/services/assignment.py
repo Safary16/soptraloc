@@ -158,8 +158,10 @@ class AssignmentService:
                 for c in similar_cases
             ],
             'reason': reason,
+            # Si el estimador cae a None (Mapbox/ML sin respuesta), propagamos None
+            # y marcamos 'requires_attention' para que la vista muestre advertencia.
             'eta_estimado_min': ETAEstimator.estimate_minutes(programacion, driver),
-            'factible': RouteFeasibilityValidator.is_feasible(programacion, ETAEstimator.estimate_minutes(programacion, driver)),
+            'factible': (lambda eta: RouteFeasibilityValidator.is_feasible(programacion, eta) if eta is not None else False)(ETAEstimator.estimate_minutes(programacion, driver)),
         }
 
     @classmethod

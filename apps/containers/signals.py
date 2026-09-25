@@ -143,15 +143,23 @@ def crear_programacion_automatica(sender, instance, created, **kwargs):
     from apps.programaciones.models import Programacion
     from datetime import timedelta
     from django.utils import timezone
-    
-    # Verificar si ya existe una programación
-    try:
-        Programacion.objects.get(container=instance)
-        return  # Ya existe, no hacer nada
-    except Programacion.DoesNotExist:
-        pass  # No existe, crear una nueva
-    except Programacion.MultipleObjectsReturned:
-        return  # Ya hay programaciones, no crear más
+
+    # get_or_create en lugar de try/except DoesNotExist: cubre el edge case de
+    # carrera (dos signals en paralelo creando la misma programacion) sin
+    # IntegrityError por OneToOne. MultipleObjectsReturned indica inconsistencia
+    # histórica (no debemos crear otra en ese caso).
+    qs = Programacion.objects.filter(container=instance)
+    count = qs.count()
+    if count >= 1:
+        # Ya existe una o mas programaciones; no creamos otra.
+        if count > 1:
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.warning(
+                'Container %s ya tiene %s programaciones; no se crea otra automaticamente.',
+                instance.container_id, count,
+            )
+        return
     
     # Nunca inventar un destino: una programación sin CD requiere intervención.
     cd = instance.cd_entrega
