@@ -279,10 +279,48 @@ class ProgramacionViewSet(viewsets.ModelViewSet):
         programacion.driver = None
         programacion.fecha_asignacion = None
         programacion.save(update_fields=['driver', 'fecha_asignacion'])
-        
+
+        # Regresar el contenedor a 'programado' vía el FSM atómico. Esto:
+        # 1) Bloquea la fila con select_for_update (evita race con asignaciones
+        #    concurrentes que podrian re-asignar entre nuestro read y write).
+        # 2) Emite Event('cambio_estado') en apps.events, requerido por auditoría.
+        # 3) Actualiza fecha_programacion (timestamp del nuevo estado) a now.
+        # Adicionalmente limpiamos container.fecha_asignacion explícitamente
+        # porque cambiar_estado conserva el timestamp del estado_anterior
+        # como referencia histórica; en este caso la asignación ya no existe
+        # en la programación, así que el timestamp del contenedor debe ir a None.
         if container:
-            container.estado = 'programado'
-            container.save(update_fields=['estado'])
+            try:
+                container.cambiar_estado(
+                    'programado',
+                    request.user.username if request.user.is_authenticated else 'operador_manual',
+                )
+            except Exception as _fsm_exc:
+                # Fallback defensivo: si por algún motivo el FSM rechaza la
+                # transición directa (estado no contemplado), replicar el flujo
+                # manual antiguo + emitir Event para no perder auditoría.
+                logger.warning(
+                    'desasignar_fsm_fallback container_id=%s estado=%s detalle=%s',
+                    getattr(container, 'container_id', None),
+                    getattr(container, 'estado', None),
+                    _fsm_exc,
+                )
+                from apps.events.models import Event as _EventFallback
+                container.estado = 'programado'
+                container.fecha_asignacion = None
+                container.save(update_fields=['estado', 'fecha_asignacion'])
+                _EventFallback.objects.create(
+                    container=container,
+                    event_type='cambio_estado',
+                    detalles={'estado_anterior': 'asignado', 'estado_nuevo': 'programado'},
+                    usuario=request.user.username if request.user.is_authenticated else 'operador_manual',
+                )
+            else:
+                # FSM aplicado correctamente; igualamos fecha_asignacion a None
+                # porque ya no hay conductor asignado en la programación.
+                if container.fecha_asignacion is not None:
+                    container.fecha_asignacion = None
+                    container.save(update_fields=['fecha_asignacion'])
         
         return Response({
             'success': True,
