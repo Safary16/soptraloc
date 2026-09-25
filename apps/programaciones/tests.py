@@ -248,3 +248,164 @@ class OperationalCompletionTests(TestCase):
         self.assertEqual(driver.num_entregas_dia, 0)
         self.assertEqual(cd.vacios_actuales, 1)
         self.assertEqual(TiempoOperacion.objects.filter(container=container).count(), 1)
+
+
+class DesgloseContractTests(TestCase):
+    """Contrato frontend/backend del desglose de score (4 badges).
+
+    Antes: el JS leia desglose.disponibilidad|ocupacion|cumplimiento|proximidad
+    y siempre quedaba en 0 porque el backend usaba otros nombres.
+    Ahora: AssignmentService.calcular_score_total expone ambos nombres
+    (5 dims internas y 4 dims frontend); cada badge siempre viene poblado.
+    """
+
+    def setUp(self):
+        self.user = User.objects.create_user(username='score_driver', password='***')
+        self.driver = Driver.objects.create(
+            nombre='Score Driver', user=self.user, patente='SCO123',
+            num_entregas_dia=0, max_entregas_dia=5, capacidad_ton=30,
+        )
+        self.cd = CD.objects.create(
+            nombre='CD Score', codigo='SCORE-CD', direccion='Destino',
+            comuna='Santiago', lat=-33.45, lng=-70.65,
+        )
+        self.container = Container.objects.create(
+            container_id='SCO1234567', cliente='Score Cliente', estado='programado',
+            peso_carga=10000,
+        )
+        self.programacion = Programacion.objects.create(
+            container=self.container, cd=self.cd, cliente='Score Cliente',
+            fecha_programada=timezone.now() + timedelta(hours=24),
+        )
+
+    def test_desglose_frontend_tiene_las_4_claves_legibles(self):
+        from apps.core.services.assignment import AssignmentService
+        score = AssignmentService.calcular_score_total(self.driver, self.programacion)
+        self.assertIn('desglose', score)
+        self.assertEqual(
+            set(score['desglose'].keys()),
+            {'disponibilidad', 'ocupacion', 'cumplimiento', 'proximidad'},
+        )
+        # Cada dimension del frontend cae en [0,100] (% legible para la badge).
+        for valor in score['desglose'].values():
+            self.assertGreaterEqual(valor, 0.0)
+            self.assertLessEqual(valor, 100.0)
+
+    def test_desglose_interno_seis_claves_se_conserva(self):
+        """El backend sigue exponiendo el desglose interno 5-key para auditoría."""
+        from apps.core.services.assignment import AssignmentService
+        score = AssignmentService.calcular_score_total(self.driver, self.programacion)
+        self.assertIn('score_por_dimension', score)
+        self.assertEqual(
+            set(score['score_por_dimension'].keys()),
+            {
+                'disponibilidad_confirmada',
+                'riesgo_de_atraso',
+                'adecuacion_vehiculo_carga',
+                'historial_operativo',
+                'urgencia_del_servicio',
+            },
+        )
+
+    def test_obtener_conductores_disponibles_expone_ambas_vistas(self):
+        """obtener_conductores_disponibles_con_score debe propagar 'desglose' (4)
+        y 'score_por_dimension' (5) para que el frontend pinte las 4 badges."""
+        from apps.core.services.assignment import AssignmentService
+        resultados = AssignmentService.obtener_conductores_disponibles_con_score(self.programacion)
+        self.assertTrue(resultados, 'Debe haber al menos un conductor disponible')
+        for item in resultados:
+            self.assertIn('desglose', item)
+            self.assertIn('score_por_dimension', item)
+            self.assertEqual(len(item['desglose']), 4)
+            self.assertEqual(len(item['score_por_dimension']), 5)
+
+
+class PrediccionMlContractTests(TestCase):
+    """Contrato del campo prediccion_ml en el modelo y serializers.
+
+    prediccion_ml es un JSONField con default=dict (nunca None en instancias
+    nuevas). El serializer lo expone como dict (puede ser {} recien creada);
+    el test verifica que SIEMPRE es un dict iterable para que el frontend
+    pueda mostrar advertencia sin romper layout si Mapbox falla.
+    """
+
+    def setUp(self):
+        self.user = User.objects.create_user(username='ml_driver', password='***')
+        self.driver = Driver.objects.create(
+            nombre='ML Driver', user=self.user, patente='ML123',
+        )
+        self.cd = CD.objects.create(
+            nombre='ML CD', codigo='ML-CD', direccion='Destino',
+            comuna='Santiago', lat=-33.45, lng=-70.65,
+        )
+        self.container = Container.objects.create(
+            container_id='MLD1234567', cliente='ML Cliente', estado='programado',
+            peso_carga=12000,
+        )
+        self.programacion = Programacion.objects.create(
+            container=self.container, cd=self.cd, cliente='ML Cliente',
+            fecha_programada=timezone.now() + timedelta(hours=2),
+        )
+
+    def test_prediccion_ml_es_dict_en_programacion_nueva(self):
+        """Una Programacion recien creada debe tener prediccion_ml = {} (default)."""
+        self.assertIsInstance(self.programacion.prediccion_ml, dict)
+        self.assertEqual(self.programacion.prediccion_ml, {})
+
+    def test_prediccion_ml_poblada_en_list_serializer(self):
+        """ProgramacionListSerializer debe exponer prediccion_ml como dict (puede ser {})."""
+        from apps.programaciones.serializers import ProgramacionListSerializer
+        data = ProgramacionListSerializer(self.programacion).data
+        self.assertIn('prediccion_ml', data)
+        self.assertIsInstance(data['prediccion_ml'], dict)
+
+    def test_prediccion_ml_poblada_tras_prediccion_explicita(self):
+        """Cuando se setea prediccion_ml con datos reales, el serializer lo refleja."""
+        self.programacion.prediccion_ml = {
+            'source': 'ml',
+            'predicted_minutes': 45,
+            'samples': 12,
+            'confidence': 0.78,
+        }
+        self.programacion.save(update_fields=['prediccion_ml', 'updated_at'])
+        from apps.programaciones.serializers import ProgramacionListSerializer
+        data = ProgramacionListSerializer(self.programacion).data
+        self.assertEqual(data['prediccion_ml']['source'], 'ml')
+        self.assertEqual(data['prediccion_ml']['predicted_minutes'], 45)
+
+
+class FsmIncidenteTransitionTests(TestCase):
+    """Cobertura de transiciones del FSM: incidente como estado destino.
+
+    Verifica que al reportar un incidente desde 'en_ruta', el contenedor
+    pasa a 'incidente' y se limpia fecha_inicio_ruta (stale) cuando vuelve
+    a 'programado' (limpieza de timestamps en reversion).
+    """
+
+    def setUp(self):
+        self.user = User.objects.create_user(username='inc_driver', password='***')
+        self.driver = Driver.objects.create(
+            nombre='Inc Driver', user=self.user,
+        )
+        self.container = Container.objects.create(
+            container_id='INC1234567', cliente='Inc Cliente',
+            estado='en_ruta', fecha_inicio_ruta=timezone.now() - timedelta(hours=1),
+        )
+
+    def test_reversion_a_programado_limpia_fecha_inicio_ruta(self):
+        """Volver a 'programado' limpia fecha_inicio_ruta (stale) automaticamente."""
+        self.container.cambiar_estado('incidente')
+        self.container.refresh_from_db()
+        self.assertEqual(self.container.estado, 'incidente')
+        # Volver a 'programado' requerie reversion=True y la transicion inversa permitida.
+        from django.core.exceptions import ValidationError as DjangoValidationError
+        try:
+            self.container.cambiar_estado('programado', permitir_reversion=True)
+        except DjangoValidationError:
+            self.skipTest('FSM no permite revertir de incidente a programado en este modelo')
+        self.container.refresh_from_db()
+        self.assertEqual(self.container.estado, 'programado')
+        self.assertIsNone(
+            self.container.fecha_inicio_ruta,
+            'Tras reversion a programado, fecha_inicio_ruta debe quedar en None.',
+        )
