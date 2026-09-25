@@ -606,7 +606,7 @@ function loadOperacionesData() {
     
     // Tabla de programaciones próximas
     $.ajax({
-        url: '/api/programaciones/dashboard/',
+        url: '/api/dashboard/stats/',
         method: 'GET',
         success: function(data) {
             const programaciones = data.programaciones || [];

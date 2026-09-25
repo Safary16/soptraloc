@@ -813,7 +813,7 @@ function loadContaineresAsignados() {
             }
             
             // Also fetch programaciones to get ETA data
-            return fetch('/api/programaciones/?format=json')
+            return fetch('/api/programaciones/')
                 .then(progResponse => progResponse.json())
                 .then(progData => {
                     // Create a map of container_id to programacion

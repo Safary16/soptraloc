@@ -198,7 +198,7 @@ function e(s) {
 // Función para cargar programaciones prioritarias
 async function cargarProgramacionesPrioritarias() {
     try {
-        const response = await fetch('/api/programaciones/dashboard/');
+        const response = await fetch('/api/dashboard/stats/');
         const data = await response.json();
         
         if (!data.success || !data.programaciones || data.programaciones.length === 0) {
