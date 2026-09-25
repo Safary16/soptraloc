@@ -1,5 +1,5 @@
 from django.core.exceptions import ValidationError
-from django.db import models
+from django.db import models, transaction
 from django.utils import timezone
 from apps.core.utils import normalizar_cliente
 
@@ -269,75 +269,112 @@ class Container(models.Model):
         """Override save para calcular tara si no existe y normalizar cliente."""
         if self.cliente:
             self.cliente = normalizar_cliente(self.cliente)
-        if not self.tara:
+        # `tara` puede ser 0 explícito (caso legítimo); distinguir 0 de None.
+        if self.tara is None:
             self.tara = self.get_tara_default()
         super().save(*args, **kwargs)
-    
-    def cambiar_estado(self, nuevo_estado, usuario=None, *, permitir_reversion=False):
-        """Cambia el estado y registra el timestamp correspondiente"""
-        estados = {value for value, _ in self.ESTADOS}
-        if nuevo_estado not in estados:
-            raise ValidationError(f"Estado desconocido: {nuevo_estado}")
 
-        estado_anterior = self.estado
-        if nuevo_estado == estado_anterior:
+    # Marca de tiempo -> campo del contenedor. Las claves ausentes aquí NUNCA
+    # se limpian en reversion (ver _clear_irrelevant_timestamps abajo).
+    _TIMESTAMP_FIELD_BY_ESTADO = {
+        'por_arribar': 'fecha_arribo',
+        'liberado': 'fecha_liberacion',
+        'secuenciado': 'fecha_secuenciado',
+        'programado': 'fecha_programacion',
+        'asignado': 'fecha_asignacion',
+        'en_ruta': 'fecha_inicio_ruta',
+        'entregado': 'fecha_entrega',
+        'soltado': 'fecha_soltado',
+        'descargado': 'fecha_descarga',
+        'vacio': 'fecha_vacio',
+        'vacio_en_ruta': 'fecha_vacio_ruta',
+        'en_ccti': 'fecha_en_ccti',
+        'devuelto': 'fecha_devolucion',
+        'incidente': 'fecha_incidente',
+        'cancelado': 'fecha_cancelado',
+    }
+
+    def cambiar_estado(self, nuevo_estado, usuario=None, *, permitir_reversion=False):
+        """Cambia el estado y registra el timestamp correspondiente.
+
+        Bloquea la fila con select_for_update() dentro de @transaction.atomic
+        para que dos requests concurrentes no generen transiciones duplicadas
+        (race condition FSM). Si se hace una reversion, los timestamps de los
+        estados no aplicables al nuevo estado se devuelven a None para que no
+        queden stale (e.g. fecha_asignacion presente tras volver a programado).
+        """
+        # Re-leer la fila desde la BD con lock pesimista; trabajar sobre esa
+        # instancia garantiza que ningún otro proceso la mutó mientras esperábamos.
+        # Hacemos el reload dentro de atomic para que el lock sea efectivo.
+        def _do_change():
+            locked = Container.objects.select_for_update().get(pk=self.pk)
+            estados = {value for value, _ in self.ESTADOS}
+            if nuevo_estado not in estados:
+                raise ValidationError(f"Estado desconocido: {nuevo_estado}")
+
+            estado_anterior = locked.estado
+            if nuevo_estado == estado_anterior:
+                # Reflejar el estado sin cambios sobre la instancia externa también.
+                self.estado = locked.estado
+                return self
+            permitidos = locked.TRANSICIONES_VALIDAS.get(estado_anterior, set())
+            if nuevo_estado not in permitidos:
+                # Reversión: solo si la transición inversa está explícitamente permitida.
+                reversion_permitida = nuevo_estado in locked.REVERSIONES_VALIDAS.get(estado_anterior, set())
+                if not (permitir_reversion and reversion_permitida):
+                    raise ValidationError(
+                        f"Transición inválida: {estado_anterior} → {nuevo_estado}"
+                    )
+            locked.estado = nuevo_estado
+
+            # Mantener coherente la bandera de "secuenciado" con el estado del FSM:
+            # el admin marca la cola manualmente, y el FSM también la representa;
+            # así nunca hay dos fuentes de verdad desincronizadas.
+            if nuevo_estado == 'secuenciado':
+                locked.secuenciado = True
+            elif estado_anterior == 'secuenciado' and nuevo_estado != 'secuenciado':
+                locked.secuenciado = False
+
+            # Actualizar timestamp del nuevo estado.
+            now = timezone.now()
+            new_ts_field = locked._TIMESTAMP_FIELD_BY_ESTADO.get(nuevo_estado)
+            if new_ts_field:
+                setattr(locked, new_ts_field, now)
+
+            # Limpiar timestamps de estados no aplicables al nuevo estado.
+            # Sin esto, una reversion a 'programado' dejaba fecha_asignacion
+            # intacta aunque ya no estuviéramos 'asignado'.
+            for estado, campo in locked._TIMESTAMP_FIELD_BY_ESTADO.items():
+                if estado == nuevo_estado:
+                    continue
+                # Si el campo pertenece a un estado no vigente tras la transición
+                # y actualmente tiene valor, lo limpiamos para evitar datos stale.
+                if campo == new_ts_field:
+                    continue
+                # No tocamos el timestamp del estado_anterior (referencia histórica).
+                if campo == locked._TIMESTAMP_FIELD_BY_ESTADO.get(estado_anterior):
+                    continue
+                setattr(locked, campo, None)
+
+            locked.save()
+
+            # Registrar evento
+            from apps.events.models import Event
+            Event.objects.create(
+                container=locked,
+                event_type='cambio_estado',
+                detalles={
+                    'estado_anterior': estado_anterior,
+                    'estado_nuevo': nuevo_estado,
+                },
+                usuario=usuario
+            )
+            # Propagar el estado nuevo a la instancia externa (en memoria) para
+            # coherencia del caller; si estaba stale, el caller verá el nuevo estado.
+            self.estado = locked.estado
             return self
-        permitidos = self.TRANSICIONES_VALIDAS.get(estado_anterior, set())
-        if nuevo_estado not in permitidos:
-            # Reversión: solo si la transición inversa está explícitamente permitida.
-            reversion_permitida = nuevo_estado in self.REVERSIONES_VALIDAS.get(estado_anterior, set())
-            if not (permitir_reversion and reversion_permitida):
-                raise ValidationError(
-                    f"Transición inválida: {estado_anterior} → {nuevo_estado}"
-                )
-        self.estado = nuevo_estado
-        
-        # Mantener coherente la bandera de "secuenciado" con el estado del FSM:
-        # el admin marca la cola manualmente, y el FSM también la representa;
-        # así nunca hay dos fuentes de verdad desincronizadas.
-        if nuevo_estado == 'secuenciado':
-            self.secuenciado = True
-        elif estado_anterior == 'secuenciado' and nuevo_estado != 'secuenciado':
-            self.secuenciado = False
-        
-        # Actualizar timestamp según el nuevo estado
-        now = timezone.now()
-        timestamp_map = {
-            'por_arribar': 'fecha_arribo',
-            'liberado': 'fecha_liberacion',
-            'secuenciado': 'fecha_secuenciado',
-            'programado': 'fecha_programacion',
-            'asignado': 'fecha_asignacion',
-            'en_ruta': 'fecha_inicio_ruta',
-            'entregado': 'fecha_entrega',
-            'soltado': 'fecha_soltado',
-            'descargado': 'fecha_descarga',
-            'vacio': 'fecha_vacio',
-            'vacio_en_ruta': 'fecha_vacio_ruta',
-            'en_ccti': 'fecha_en_ccti',
-            'devuelto': 'fecha_devolucion',
-            'incidente': 'fecha_incidente',
-            'cancelado': 'fecha_cancelado',
-        }
-        
-        if nuevo_estado in timestamp_map:
-            setattr(self, timestamp_map[nuevo_estado], now)
-        
-        self.save()
-        
-        # Registrar evento
-        from apps.events.models import Event
-        Event.objects.create(
-            container=self,
-            event_type='cambio_estado',
-            detalles={
-                'estado_anterior': estado_anterior,
-                'estado_nuevo': nuevo_estado,
-            },
-            usuario=usuario
-        )
-        
-        return self
+
+        return transaction.atomic(_do_change)()
     
     def tiene_programacion(self):
         """

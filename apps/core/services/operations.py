@@ -28,7 +28,7 @@ class OperationalFlowService:
             tiempo_real_min=actual,
             hora_inicio=started_at,
             hora_fin=finished_at,
-            anomalia=actual > max(1, estimated) * 3,
+            anomalia=actual >= max(1, estimated) * 3,
             observaciones=f'Registro operacional automático: {source}',
         )
 
