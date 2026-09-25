@@ -1212,7 +1212,7 @@ class ProgramacionViewSet(viewsets.ModelViewSet):
                     dia_semana=programacion.fecha_inicio_ruta.weekday(),
                     distancia_km=programacion.distancia_km or 0,
                     ruta_firma=programacion.ruta_firma,
-                    anomalia=real_min > estimado * 3,
+                    anomalia=real_min >= estimado * 3,
                 )
             logger.info(f"RegistroOperacion {registro.id} actualizado al finalizar Programacion {programacion.id} con estado {estado_final}.")
         except Exception as e:
