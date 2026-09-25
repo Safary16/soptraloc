@@ -30,7 +30,7 @@ class Command(BaseCommand):
             default=None,
             help=(
                 'New password. If omitted, uses DJANGO_SUPERUSER_PASSWORD env var '
-                f'or internal fallback (never printed).'
+                'or internal fallback (never printed).'
             ),
         )
 
