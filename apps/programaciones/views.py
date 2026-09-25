@@ -4,6 +4,7 @@ from rest_framework.response import Response
 from rest_framework.parsers import MultiPartParser, FormParser
 from rest_framework.permissions import AllowAny, IsAuthenticatedOrReadOnly
 from django.conf import settings
+from django.db import transaction, IntegrityError
 from django.utils import timezone
 from datetime import timedelta
 from dateutil import parser as date_parser
@@ -63,7 +64,6 @@ class ProgramacionViewSet(viewsets.ModelViewSet):
         Sin esto, el DELETE del frontend (operaciones.html → eliminarPreAsignacion)
         podia fallar con IntegrityError en escenarios de re-asignacion inmediata.
         """
-        from django.db import transaction
         with transaction.atomic():
             container = getattr(instance, 'container', None)
             if container is not None:
@@ -713,35 +713,68 @@ class ProgramacionViewSet(viewsets.ModelViewSet):
         else:  # retiro_directo
             cd_destino = data['_cd_destino']
         
-        # Crear la programación
-        programacion = Programacion.objects.create(
-            container=container,
-            cd=cd_destino,
-            fecha_programada=data['fecha_programacion'],
-            cliente=normalizar_cliente(data.get('cliente', '')),
-            direccion_entrega=cd_destino.direccion,
-            observaciones=data.get('observaciones', f'Retiro manual desde {container.posicion_fisica}')
-        )
-        
-        usuario = request.user.username if request.user.is_authenticated else None
-        container.cambiar_estado('programado', usuario)
-        
-        # Crear evento de auditoría
-        from apps.events.models import Event
-        Event.objects.create(
-            container=container,
-            event_type='import_programacion',
-            usuario=request.user.username if request.user.is_authenticated else None,
-            detalles={
-                'accion': 'ruta_manual_creada',
-                'descripcion': f'Ruta manual creada: {tipo_movimiento}',
-                'tipo_movimiento': tipo_movimiento,
-                'origen': container.posicion_fisica,
-                'destino': cd_destino.nombre,
-                'programacion_id': programacion.id,
-                'fecha_programacion': data['fecha_programacion'].isoformat()
-            }
-        )
+        # Pre-validación: si el contenedor ya tiene una programación asociada,
+        # evitamos el IntegrityError del OneToOne respondiendo 400 (consistente
+        # con containers.views.programar). Hace la re-ejecución sobre el mismo
+        # contenedor idempotente para el operador en vez de un 500 opaco.
+        tiene_prog, existing_prog = Programacion.container_tiene_programacion(container)
+        if tiene_prog and existing_prog is not None:
+            return Response(
+                {
+                    'error': f'Este contenedor ya tiene una programación asociada (ID: {existing_prog.id})',
+                    'programacion_existente': {
+                        'id': existing_prog.id,
+                        'fecha_programada': existing_prog.fecha_programada.isoformat(),
+                        'cd': existing_prog.cd.nombre if existing_prog.cd else None,
+                        'tiene_conductor': existing_prog.driver is not None,
+                        'estado_container': container.estado,
+                    },
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # Crear la programación dentro de transacción atómica y capturar
+        # IntegrityError por si una carrera concurrente inserta la fila OneToOne
+        # entre la validación previa y el create().
+        try:
+            with transaction.atomic():
+                programacion = Programacion.objects.create(
+                    container=container,
+                    cd=cd_destino,
+                    fecha_programada=data['fecha_programacion'],
+                    cliente=normalizar_cliente(data.get('cliente', '')),
+                    direccion_entrega=cd_destino.direccion,
+                    observaciones=data.get('observaciones', f'Retiro manual desde {container.posicion_fisica}')
+                )
+
+                usuario = request.user.username if request.user.is_authenticated else None
+                container.cambiar_estado('programado', usuario)
+
+                # Crear evento de auditoría
+                from apps.events.models import Event
+                Event.objects.create(
+                    container=container,
+                    event_type='import_programacion',
+                    usuario=request.user.username if request.user.is_authenticated else None,
+                    detalles={
+                        'accion': 'ruta_manual_creada',
+                        'descripcion': f'Ruta manual creada: {tipo_movimiento}',
+                        'tipo_movimiento': tipo_movimiento,
+                        'origen': container.posicion_fisica,
+                        'destino': cd_destino.nombre,
+                        'programacion_id': programacion.id,
+                        'fecha_programacion': data['fecha_programacion'].isoformat()
+                    }
+                )
+        except IntegrityError:
+            logger.warning(
+                'crear_ruta_manual_integrity_error',
+                extra={'container_id': getattr(container, 'container_id', None)},
+            )
+            return Response(
+                {'error': 'Este contenedor ya tiene una programación asociada. Por favor, recargue la página.'},
+                status=status.HTTP_409_CONFLICT,
+            )
         
         return Response({
             'success': True,
