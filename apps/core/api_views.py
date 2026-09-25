@@ -221,9 +221,11 @@ def analytics_conductores(request):
             fecha__gte=cutoff_date,
         )
         .only(
-            'id', 'conductor_id', 'ruta', 'origen', 'destino',
-            'tiempo_estimado_min', 'tiempo_real_min', 'distancia_km',
-            'anomalia', 'fecha',
+            'id', 'conductor_id', 'ruta_firma',
+            'origen_lat', 'origen_lon', 'destino_lat', 'destino_lon',
+            'origen_nombre', 'destino_nombre',
+            'tiempo_mapbox_min', 'tiempo_real_min', 'distancia_km',
+            'anomalia', 'fecha', 'hora_del_dia', 'dia_semana',
         )
         .order_by('conductor_id', '-fecha', '-hora_salida')
     ):

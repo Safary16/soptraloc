@@ -139,6 +139,16 @@ class AssignmentService:
         return {
             'score_total': Decimal(str(final_score)),
             'score_por_dimension': dimensions,
+            # Mapeo para el frontend (4 badges: Disp/Ocup/Cumpl/Prox).
+            # Antes el JS leía desglose.disponibilidad|ocupacion|cumplimiento|proximidad
+            # y siempre quedaba en 0 porque el backend usaba nombres distintos
+            # (disponibilidad_confirmada, riesgo_de_atraso, etc.).
+            'desglose': {
+                'disponibilidad': round(dimensions['disponibilidad_confirmada'] * 100, 1),
+                'ocupacion': round(dimensions['adecuacion_vehiculo_carga'] * 100, 1),
+                'cumplimiento': round(dimensions['historial_operativo'] * 100, 1),
+                'proximidad': round(dimensions['riesgo_de_atraso'] * 100, 1),
+            },
             'weights': dyn_weights,
             'anomalies': anomalies,
             'classification': classification,
@@ -168,7 +178,10 @@ class AssignmentService:
             resultados.append({
                 'driver': driver,
                 'score': score_data['score_total'],
-                'desglose': score_data['score_por_dimension'],
+                # 'desglose' = 4 badges del frontend (Disp/Ocup/Cumpl/Prox).
+                # Ver calcular_score_total: la dimension interna sigue siendo 5 keys.
+                'desglose': score_data['desglose'],
+                'score_por_dimension': score_data['score_por_dimension'],
                 'weights': score_data['weights'],
                 'anomalies': score_data['anomalies'],
                 'classification': score_data['classification'],
@@ -187,7 +200,9 @@ class AssignmentService:
             programacion=programacion,
             service_id=str(programacion.id),
             recurso_asignado=driver.nombre,
-            score_por_dimension=candidate['desglose'],
+            # Persistimos el desglose interno (5 dimensiones) en la bitácora
+            # operativa. 'candidate["desglose"]' es la vista de 4 badges del frontend.
+            score_por_dimension=candidate['score_por_dimension'],
             clasificacion_sistema=candidate['classification'],
             decision_operador=decision_operador,
             motivo_override=motivo_override,
@@ -259,7 +274,10 @@ class AssignmentService:
         # debe revertir la transaccion) y se envuelve en try/except.
         pending_operator_review = False
         with transaction.atomic():
-            programacion.score_por_dimension = mejor['desglose']
+            # score_por_dimension del Programacion guarda el desglose INTERNO (5 dimensiones)
+            # para auditoría y BitácoraOperacion; el frontend lee desde el payload de la
+            # respuesta donde 'desglose' = 4 badges legibles.
+            programacion.score_por_dimension = mejor['score_por_dimension']
             programacion.clasificacion_sistema = mejor['classification']
             programacion.nivel_confianza = Decimal(str(round(mejor['confidence'] * 100, 2)))
             programacion.anomalias_detectadas = mejor['anomalies']
