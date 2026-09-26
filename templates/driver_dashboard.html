@@ -744,8 +744,14 @@ function e(s) {
                                     <i class="fas fa-clock"></i> Iniciar Ruta
                                 </button>
                             ` : prog.estado === 'asignado' ? `
-                                <button class="btn btn-primary w-100" onclick="confirmarInicioRuta(${prog.id})">
+                                <button class="btn btn-success w-100 mb-2" onclick="aceptarAsignacion(${prog.id})">
+                                    <i class="fas fa-check"></i> Aceptar Asignación
+                                </button>
+                                <button class="btn btn-primary w-100 mb-2" onclick="confirmarInicioRuta(${prog.id})">
                                     <i class="fas fa-play-circle"></i> Iniciar Ruta
+                                </button>
+                                <button class="btn btn-outline-danger w-100" onclick="reportarProblema(${prog.id})">
+                                    <i class="fas fa-exclamation-triangle"></i> Reportar Problema
                                 </button>
                             ` : prog.estado === 'en_ruta' ? `
                                 <button class="btn btn-info w-100" onclick="notificarArribo(${prog.id})">
@@ -1004,6 +1010,74 @@ function e(s) {
             });
         }
         
+        // Aceptar asignación (P0-1)
+        function aceptarAsignacion(progId) {
+            if (!confirm('✅ ¿Confirma que ACEPTA la asignación de este servicio?')) {
+                return;
+            }
+            fetch(`/api/programaciones/${progId}/aceptar_asignacion/`, {
+                method: 'POST',
+                credentials: 'include',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': getCookie('csrftoken')
+                },
+                body: JSON.stringify({})
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    alert('✅ ' + (data.mensaje || 'Asignación aceptada.'));
+                    loadAsignaciones();
+                } else {
+                    alert('❌ ' + (data.error || 'No se pudo aceptar la asignación.'));
+                }
+            })
+            .catch(error => {
+                console.error('Error aceptando asignación:', error);
+                alert('❌ Error de conexión al aceptar la asignación.');
+            });
+        }
+
+        // Reportar problema operativo (P0-2: NO cambia container.estado)
+        function reportarProblema(progId) {
+            const tipos = ['FALTA_GUIA', 'DIRECCION_INCORRECTA', 'CLIENTE_CERRADO', 'PROBLEMA_ADMINISTRATIVO', 'OTRO'];
+            const tipo = prompt('⚠️ Reportar problema operativo\n\nSeleccione el tipo (escriba el código):\n- FALTA_GUIA\n- DIRECCION_INCORRECTA\n- CLIENTE_CERRADO\n- PROBLEMA_ADMINISTRATIVO\n- OTRO');
+            if (!tipo) return;
+            const tipoNorm = tipo.trim().toUpperCase();
+            if (!tipos.includes(tipoNorm)) {
+                alert('❌ Tipo inválido. Use uno de: ' + tipos.join(', '));
+                return;
+            }
+            const descripcion = prompt('📝 Describa el problema (obligatorio):');
+            if (!descripcion || !descripcion.trim()) {
+                alert('❌ La descripción es obligatoria.');
+                return;
+            }
+            fetch(`/api/programaciones/${progId}/reportar_problema/`, {
+                method: 'POST',
+                credentials: 'include',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': getCookie('csrftoken')
+                },
+                body: JSON.stringify({tipo: tipoNorm, descripcion: descripcion.trim()})
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    alert('✅ ' + (data.mensaje || 'Problema reportado. Operador notificado.'));
+                    loadAsignaciones();
+                } else {
+                    alert('❌ ' + (data.error || 'No se pudo reportar el problema.'));
+                }
+            })
+            .catch(error => {
+                console.error('Error reportando problema:', error);
+                alert('❌ Error de conexión al reportar problema.');
+            });
+        }
+
         // Get CSRF token
         function getCookie(name) {
             let cookieValue = null;

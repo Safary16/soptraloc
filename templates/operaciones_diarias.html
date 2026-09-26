@@ -352,13 +352,24 @@ function mostrarOperaciones() {
                                     ${op.distancia_km ? `<small>Distancia: ${op.distancia_km.toFixed(1)} km</small>` : ''}
                                 </div>
                             ` : ''}
+                            ${op.eta_recalculado_min != null ? `
+                                <div class="alert alert-warning mb-2 py-2">
+                                    <strong>ETA Recalculado:</strong> ${op.eta_recalculado_min} min<br>
+                                    ${op.eta_minutos_original ? (() => {
+                                        const diff = op.eta_recalculado_min - op.eta_minutos_original;
+                                        const cls = diff > 0 ? 'text-danger' : 'text-success';
+                                        const label = diff > 0 ? `+${diff} min de retraso` : `${diff} min de adelanto`;
+                                        return `<small class="${cls}"><i class="fas fa-clock"></i> ${label}</small>`;
+                                    })() : ''}
+                                </div>
+                            ` : ''}
                             ${op.eta_minutos_restante !== null ? `
                                 <div class="alert alert-success mb-2 py-2">
                                     <strong>ETA Restante:</strong> ${op.eta_minutos_restante} min<br>
                                     <small>Transcurrido: ${op.tiempo_transcurrido_min} min</small>
                                 </div>
                             ` : ''}
-                            ${!op.eta_minutos_original && !op.eta_minutos_restante ? `
+                            ${!op.eta_minutos_original && !op.eta_minutos_restante && op.eta_recalculado_min == null ? `
                                 <p class="text-muted"><small><em>ETAs disponibles al iniciar viaje</em></small></p>
                             ` : ''}
                         </div>

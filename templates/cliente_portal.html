@@ -282,18 +282,29 @@ function renderServicios(servicios) {
         const badges = {por_arribar:'secondary',liberado:'info',secuenciado:'dark',programado:'primary',asignado:'warning',en_ruta:'primary',entregado:'success',soltado:'success',descargado:'success',vacio:'secondary',devuelto:'dark'};
         const badge = badges[est] || 'secondary';
         const conductor = s.driver_nombre ? `${esc(s.driver_nombre)} ${s.driver_patente ? '('+esc(s.driver_patente)+')' : ''}` : '<span class="text-muted">—</span>';
-        // Llegada estimada: si va en ruta → inicio real + ETA (máquina); si asignado → hora programada
+        // P0-3/P0-4: ETA recalculado tiene prioridad sobre eta_minutos original
+        // si la máquina ya recalculó el ETA en vivo (más fiel a la ruta actual).
+        // Además, si el último evento fue arribo_cd, mostramos "Entregado a las HH:MM".
         let llegada = '—';
+        const etaRecalc = s.eta_recalculado_min != null ? Number(s.eta_recalculado_min) : null;
+        const etaOrig = s.eta_minutos != null ? Number(s.eta_minutos) : null;
+        const etaEfectivo = (etaRecalc != null && !isNaN(etaRecalc)) ? etaRecalc : etaOrig;
+        const showRecalc = (etaRecalc != null && etaOrig != null && etaRecalc !== etaOrig);
         if (est === 'en_ruta' && s.fecha_inicio_ruta) {
-            const eta = s.eta_minutos != null ? Number(s.eta_minutos) : null;
-            if (eta != null && !isNaN(eta)) {
-                const lleg = new Date(new Date(s.fecha_inicio_ruta).getTime() + eta*60000);
-                llegada = `<strong class="text-primary"><i class="fas fa-location-arrow"></i> ${lleg.toLocaleTimeString('es-CL', {hour:'2-digit', minute:'2-digit'})}</strong> <span class="text-muted small">(ETA ${Math.round(eta)} min)</span>`;
+            if (etaEfectivo != null && !isNaN(etaEfectivo)) {
+                const lleg = new Date(new Date(s.fecha_inicio_ruta).getTime() + etaEfectivo*60000);
+                llegada = `<strong class="text-primary"><i class="fas fa-location-arrow"></i> ${lleg.toLocaleTimeString('es-CL', {hour:'2-digit', minute:'2-digit'})}</strong> <span class="text-muted small">(ETA ${Math.round(etaEfectivo)} min${showRecalc ? ' · recalculado' : ''})</span>`;
             }
         } else if (est === 'asignado' || est === 'programado') {
             llegada = `<span class="text-muted">${hora}</span>`;
         } else if (est === 'entregado' || est === 'soltado' || est === 'descargado') {
-            llegada = '<span class="text-success"><i class="fas fa-check"></i> Entregado</span>';
+            // P0-3: badge "Entregado a las HH:MM" cuando hay fecha_arribo_cd
+            if (s.fecha_arribo_cd) {
+                const hhmm = new Date(s.fecha_arribo_cd).toLocaleTimeString('es-CL', {hour:'2-digit', minute:'2-digit'});
+                llegada = `<span class="badge bg-success"><i class="fas fa-check"></i> Entregado a las ${hhmm}</span>`;
+            } else {
+                llegada = '<span class="text-success"><i class="fas fa-check"></i> Entregado</span>';
+            }
         }
         return `<tr>
             <td><strong>${esc(s.container_id_formatted || s.container_id)}</strong></td>

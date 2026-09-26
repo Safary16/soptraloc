@@ -81,6 +81,42 @@ class OperationalFlowService:
             },
             usuario=usuario or ('system_geocerca' if origen == 'geocerca' else 'conductor'),
         )
+
+        # P0-3: notificación visible para cliente/operador ('llegada' con prioridad alta).
+        # Se crea DENTRO de la misma transacción para que un fallo de notificación
+        # no quede con evento sin rastro, y para garantizar atomicidad con el
+        # cambio de estado del contenedor. Si la app notifications no está
+        # instalada se ignora silenciosamente.
+        try:
+            from apps.notifications.models import Notification
+            hora_local = arrived_at.strftime('%H:%M')
+            cd_nombre = locked.cd.nombre if locked.cd else 'CD'
+            Notification.objects.create(
+                container=locked.container,
+                programacion=locked,
+                tipo='llegada',
+                prioridad='alta',
+                titulo=f'Entregado a las {hora_local} - {locked.container.container_id}',
+                mensaje=(
+                    f'Contenedor {locked.container.container_id} arribó a {cd_nombre} '
+                    f'a las {hora_local} ({locked.cliente}).'
+                ),
+                detalles={
+                    'fecha_arribo': arrived_at.isoformat(),
+                    'cd': cd_nombre,
+                    'cliente': locked.cliente,
+                    'conductor': locked.driver.nombre if locked.driver else None,
+                },
+            )
+        except Exception as _notif_exc:
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.warning(
+                'registrar_arribo_notification_failed container_id=%s detalle=%s',
+                getattr(locked.container, 'container_id', None),
+                _notif_exc,
+                exc_info=True,
+            )
         return locked, True
 
     @staticmethod
@@ -88,6 +124,102 @@ class OperationalFlowService:
         return Programacion.objects.select_for_update().select_related(
             'container', 'driver', 'cd'
         ).get(pk=programacion.pk)
+
+    @classmethod
+    def _auto_assign_empty_return(cls, programacion):
+        """Crea (si aplica) una Programacion de retorno automático de un
+        contenedor vacío 'fresco' desde el CD donde se soltó.
+
+        Criterios:
+        - Conductor recién liberado (driver_id presente y con capacidad).
+        - Existe Container en estado='vacio', vacio_contabilizado=True,
+          fecha_vacio >= now-2h, y mismo CD (Container.retorno_destino_cd
+          o Container.cd_entrega == locked.cd).
+        - El conductor NO debe tener otra programacion activa.
+
+        La asignación concreta se hace via señal trigger_automatic_assignment
+        (apps/programaciones/signals.py) que ya se dispara al crear
+        Programacion, sin llamada de red adicional. Esto preserva el patrón
+        de auto-asignación que ya usa el resto del sistema.
+
+        Returns:
+            Programacion creada o None si no aplica.
+        """
+        from datetime import timedelta
+        from apps.containers.models import Container
+
+        driver = programacion.driver
+        if not driver or not driver.esta_disponible:
+            return None
+
+        cutoff = timezone.now() - timedelta(hours=2)
+        # Buscar contenedores vacíos frescos en el mismo CD donde soltó
+        # el conductor. Compatibilidad: Container.retorno_destino_cd o
+        # Container.cd_entrega equivalen al CD de la programación.
+        from django.db.models import Q
+        candidatos = Container.objects.filter(
+            estado='vacio',
+            vacio_contabilizado=True,
+            fecha_vacio__gte=cutoff,
+        ).filter(
+            # modelos.cd_entrega o retorno_destino_cd == programacion.cd
+            Q(retorno_destino_cd_id=programacion.cd_id) |
+            Q(cd_entrega_id=programacion.cd_id),
+        ).exclude(
+            # Excluir el contenedor que acabamos de soltar (estado='soltado',
+            # pero por seguridad también lo excluimos si está vacío)
+            id=programacion.container_id,
+        ).order_by('fecha_vacio')[:1]
+
+        candidato = candidatos.first()
+        if not candidato:
+            return None
+
+        # Verificar que el conductor no tiene otra programación activa
+        from apps.programaciones.models import Programacion as Prog
+        tiene_activa = Prog.objects.filter(
+            driver=driver,
+            fecha_liberacion_conductor__isnull=True,
+            container__estado__in=[
+                'asignado', 'en_ruta', 'entregado', 'descargado',
+                'vacio', 'vacio_en_ruta',
+            ],
+        ).exists()
+        if tiene_activa:
+            return None
+
+        # No re-crear si ya hay una programación activa sobre el candidato
+        if Prog.objects.filter(
+            container=candidato,
+            container__estado__in=['asignado', 'en_ruta', 'vacio_en_ruta', 'en_ccti'],
+        ).exists():
+            return None
+
+        # Determinar destino del retorno: depósito naviera preferido;
+        # fallback a cd_entrega del contenedor.
+        cd_destino = candidato.retorno_destino_cd or candidato.cd_entrega
+        fecha_programada = timezone.now() + timedelta(minutes=15)
+
+        nueva = Prog.objects.create(
+            container=candidato,
+            cd=cd_destino or programacion.cd,
+            cliente=candidato.cliente or 'RETORNO VACIO',
+            fecha_programada=fecha_programada,
+            direccion_entrega=(
+                cd_destino.direccion if cd_destino else ''
+            ),
+            urgencia_servicio='NORMAL',
+            observaciones=(
+                f'Retorno automático desde {programacion.cd.nombre} '
+                f'(drop del contenedor {programacion.container.container_id})'
+            ),
+            ventana_horaria_inicio=None,
+            ventana_horaria_fin=None,
+        )
+        # La asignación al conductor la dispara la señal post_save
+        # (apps/programaciones/signals.py: trigger_automatic_assignment).
+        return nueva
+
 
     @classmethod
     @transaction.atomic
@@ -147,7 +279,13 @@ class OperationalFlowService:
             raise ValueError('Solo se puede soltar después de registrar el arribo.')
         locked.container.cambiar_estado('soltado', usuario)
         locked.liberar_conductor()
-        return locked, True
+        # P0-5: auto-asignación de retiro de vacío desde el CD donde se soltó.
+        # Buscar un contenedor 'fresco' (vacio contabilizado en últimas 2h) en el
+        # mismo CD y crear una Programacion de retorno automático. La señal
+        # trigger_automatic_assignment (apps/programaciones/signals.py) la
+        # asignará al conductor recién liberado, sin llamada de red adicional.
+        retorno_programacion = cls._auto_assign_empty_return(locked)
+        return locked, True, retorno_programacion
 
     @classmethod
     @transaction.atomic

@@ -863,10 +863,10 @@ function loadContaineresAsignados() {
                                                     <td><i class="fas fa-route"></i> <strong>Inicio Ruta:</strong></td>
                                                     <td>${formatDate(cont.fecha_inicio_ruta)}</td>
                                                 </tr>
-                                                ${prog && prog.eta_minutos ? `
+                                                ${prog && (prog.eta_recalculado_min || prog.eta_minutos) ? `
                                                 <tr>
                                                     <td><i class="fas fa-map-marker-alt"></i> <strong>ETA:</strong></td>
-                                                    <td>${prog.eta_minutos} minutos</td>
+                                                    <td>${prog.eta_recalculado_min || prog.eta_minutos} minutos${prog.eta_recalculado_min && prog.eta_minutos && prog.eta_recalculado_min !== prog.eta_minutos ? ' <span class="text-muted small">(recalculado)</span>' : ''}</td>
                                                 </tr>
                                                 ` : ''}
                                                 ` : ''}

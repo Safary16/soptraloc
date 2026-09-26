@@ -397,7 +397,7 @@ class FsmIncidenteTransitionTests(TestCase):
         self.container.cambiar_estado('incidente')
         self.container.refresh_from_db()
         self.assertEqual(self.container.estado, 'incidente')
-        # Volver a 'programado' requerie reversion=True y la transicion inversa permitida.
+        # Volver a 'programado' requiere reversion=True y la transicion inversa permitida.
         from django.core.exceptions import ValidationError as DjangoValidationError
         try:
             self.container.cambiar_estado('programado', permitir_reversion=True)
@@ -409,3 +409,240 @@ class FsmIncidenteTransitionTests(TestCase):
             self.container.fecha_inicio_ruta,
             'Tras reversion a programado, fecha_inicio_ruta debe quedar en None.',
         )
+
+
+class FlujoConductorP0Tests(TestCase):
+    """P0: cobertura del flujo conductor visible para el dueño.
+
+    - aceptar_asignacion: conductor asignado confirma; rechaza a otro conductor.
+    - reportar_problema: NO cambia container.estado; crea notificación al operador.
+    - P0-3: notification tipo='llegada' se crea al registrar arribo.
+    - P0-5: drop_container auto-crea Programacion de retorno si hay vacío fresco
+      en el mismo CD.
+    """
+
+    def setUp(self):
+        self.user_a = User.objects.create_user(username='driver_a', password='x')
+        self.user_b = User.objects.create_user(username='driver_b', password='x')
+        self.driver_a = Driver.objects.create(
+            nombre='Driver A', user=self.user_a, num_entregas_dia=0, max_entregas_dia=3,
+        )
+        self.driver_b = Driver.objects.create(
+            nombre='Driver B', user=self.user_b, num_entregas_dia=0, max_entregas_dia=3,
+        )
+        self.cd = CD.objects.create(
+            nombre='CD P0', codigo='CD-P0', tipo='cliente',
+            direccion='CD P0 dir', lat=-33.4569, lng=-70.6483,
+            permite_soltar_contenedor=True,
+        )
+        self.container = Container.objects.create(
+            container_id='PCNT12345', cliente='P0 Cliente',
+            estado='asignado', cd_entrega=self.cd,
+        )
+        self.programacion = Programacion.objects.create(
+            container=self.container,
+            cd=self.cd,
+            driver=self.driver_a,
+            cliente='P0 Cliente',
+            fecha_programada=timezone.now() + timedelta(hours=2),
+            fecha_asignacion=timezone.now() - timedelta(minutes=15),
+        )
+
+    def _post(self, action_name):
+        factory = APIRequestFactory()
+        request = factory.post(
+            f'/api/programaciones/{self.programacion.pk}/{action_name}/',
+            data={}, format='json',
+        )
+        view = ProgramacionViewSet.as_view({'post': action_name})
+        return view(request, pk=self.programacion.pk)
+
+    # ---------- P0-1: aceptar_asignacion ----------
+    def test_aceptar_asignacion_conductor_asignado_confirma(self):
+        """El conductor asignado puede aceptar; crea evento y decision_operador=CONFIRMAR."""
+        request = APIRequestFactory().post(
+            f'/api/programaciones/{self.programacion.pk}/aceptar_asignacion/',
+            data={}, format='json',
+        )
+        force_authenticate(request, user=self.user_a)
+        view = ProgramacionViewSet.as_view({'post': 'aceptar_asignacion'})
+        response = view(request, pk=self.programacion.pk)
+        self.assertEqual(response.status_code, 201, response.data)
+        self.assertTrue(response.data['success'])
+        self.assertEqual(response.data['decision_operador'], 'CONFIRMAR')
+
+        self.programacion.refresh_from_db()
+        self.assertEqual(self.programacion.decision_operador, 'CONFIRMAR')
+
+        from apps.events.models import Event
+        eventos = Event.objects.filter(container=self.container, event_type='asignacion_conductor')
+        self.assertGreaterEqual(eventos.count(), 1)
+
+    def test_aceptar_asignacion_otro_conductor_rechaza(self):
+        """Un conductor distinto del asignado NO puede aceptar la asignación."""
+        request = APIRequestFactory().post(
+            f'/api/programaciones/{self.programacion.pk}/aceptar_asignacion/',
+            data={}, format='json',
+        )
+        force_authenticate(request, user=self.user_b)
+        view = ProgramacionViewSet.as_view({'post': 'aceptar_asignacion'})
+        response = view(request, pk=self.programacion.pk)
+        self.assertEqual(response.status_code, 403, response.data)
+        self.programacion.refresh_from_db()
+        self.assertNotEqual(self.programacion.decision_operador, 'CONFIRMAR')
+
+    # ---------- P0-2: reportar_problema ----------
+    def test_reportar_problema_no_cambia_estado_y_notifica(self):
+        """reportar_problema NO debe cambiar container.estado y debe notificar al operador."""
+        estado_inicial = self.container.estado
+        self.assertEqual(estado_inicial, 'asignado')
+
+        request = APIRequestFactory().post(
+            f'/api/programaciones/{self.programacion.pk}/reportar_problema/',
+            data={'tipo': 'FALTA_GUIA', 'descripcion': 'No estaba la guía en el CD'},
+            format='json',
+        )
+        force_authenticate(request, user=self.user_a)
+        view = ProgramacionViewSet.as_view({'post': 'reportar_problema'})
+        response = view(request, pk=self.programacion.pk)
+        self.assertEqual(response.status_code, 201, response.data)
+        self.assertTrue(response.data['success'])
+
+        self.container.refresh_from_db()
+        self.assertEqual(self.container.estado, estado_inicial,
+                         'reportar_problema NO debe cambiar container.estado')
+
+        notif = Notification.objects.filter(
+            container=self.container, tipo='problema_reportado', prioridad='alta',
+        )
+        self.assertEqual(notif.count(), 1)
+        # El tipo debe estar en el mensaje (el título es estable por container_id)
+        self.assertIn('FALTA_GUIA', notif.first().mensaje)
+        self.assertEqual(notif.first().detalles.get('tipo_problema'), 'FALTA_GUIA')
+
+    def test_reportar_problema_tipo_invalido(self):
+        """Tipo fuera de la lista canónica debe rechazarse con 400."""
+        request = APIRequestFactory().post(
+            f'/api/programaciones/{self.programacion.pk}/reportar_problema/',
+            data={'tipo': 'NO_EXISTE', 'descripcion': 'x'},
+            format='json',
+        )
+        force_authenticate(request, user=self.user_a)
+        view = ProgramacionViewSet.as_view({'post': 'reportar_problema'})
+        response = view(request, pk=self.programacion.pk)
+        self.assertEqual(response.status_code, 400, response.data)
+
+
+class FlujoConductorP03NotificacionArriboTests(TestCase):
+    """P0-3: notification tipo='llegada' se crea al registrar arribo."""
+
+    def setUp(self):
+        self.user = User.objects.create_user(username='arr_driver', password='x')
+        self.driver = Driver.objects.create(
+            nombre='Arr Driver', user=self.user, num_entregas_dia=0, max_entregas_dia=3,
+        )
+        self.cd = CD.objects.create(
+            nombre='CD Arribo', codigo='CD-ARR', tipo='cliente',
+            direccion='CD Arribo dir', lat=-33.45, lng=-70.65,
+        )
+        self.container = Container.objects.create(
+            container_id='ARRCNT001', cliente='Arribo Cliente',
+            estado='en_ruta', cd_entrega=self.cd,
+            fecha_inicio_ruta=timezone.now() - timedelta(hours=1),
+        )
+        self.programacion = Programacion.objects.create(
+            container=self.container,
+            cd=self.cd,
+            driver=self.driver,
+            cliente='Arribo Cliente',
+            fecha_programada=timezone.now() - timedelta(hours=1),
+            fecha_asignacion=timezone.now() - timedelta(hours=2),
+            fecha_inicio_ruta=timezone.now() - timedelta(hours=1),
+        )
+
+    def test_registrar_arribo_crea_notification_llegada(self):
+        """registrar_arribo debe crear una notificación tipo='llegada' con prioridad alta."""
+        notif_pre = Notification.objects.filter(tipo='llegada').count()
+        locked, created = OperationalFlowService.registrar_arribo(
+            self.programacion, -33.45, -70.65, 'manual', 'tester',
+        )
+        self.assertTrue(created)
+        notif_post = Notification.objects.filter(tipo='llegada').count()
+        self.assertEqual(notif_post, notif_pre + 1)
+
+        notif = Notification.objects.filter(tipo='llegada').first()
+        self.assertEqual(notif.prioridad, 'alta')
+        self.assertIn(self.cd.nombre, notif.mensaje)
+        self.assertIn('Entregado', notif.titulo)
+
+
+class FlujoConductorP05AutoAssignReturnTests(TestCase):
+    """P0-5: drop_container auto-asigna un retorno de vacío 'fresco' en el mismo CD."""
+
+    def setUp(self):
+        self.user = User.objects.create_user(username='drop_driver', password='x')
+        self.driver = Driver.objects.create(
+            nombre='Drop Driver', user=self.user, num_entregas_dia=0, max_entregas_dia=5,
+        )
+        self.cd = CD.objects.create(
+            nombre='CD Drop', codigo='CD-DROP', tipo='cliente',
+            direccion='CD Drop dir', lat=-33.45, lng=-70.65,
+            permite_soltar_contenedor=True,
+        )
+        self.container = Container.objects.create(
+            container_id='DROPCNT01', cliente='Drop Cliente',
+            estado='entregado', cd_entrega=self.cd,
+            fecha_entrega=timezone.now() - timedelta(minutes=10),
+        )
+        self.programacion = Programacion.objects.create(
+            container=self.container,
+            cd=self.cd,
+            driver=self.driver,
+            cliente='Drop Cliente',
+            fecha_programada=timezone.now() - timedelta(minutes=30),
+            fecha_asignacion=timezone.now() - timedelta(hours=2),
+        )
+
+    def test_drop_container_autoasigna_vacio_fresco_en_mismo_cd(self):
+        """Si hay un contenedor 'fresco' (vacio contabilizado en <2h) en el mismo CD,
+        drop_container debe crear una nueva Programacion de retorno automático."""
+        vacio = Container.objects.create(
+            container_id='VACIO0001', cliente='Vacio Cliente',
+            estado='vacio', vacio_contabilizado=True,
+            fecha_vacio=timezone.now() - timedelta(minutes=30),
+            cd_entrega=self.cd,
+            retorno_destino_cd=self.cd,
+        )
+        notif_pre_count = Notification.objects.count()
+        del notif_pre_count  # no usado: el contrato relevante es la auto-asignación
+        prog_pre_count = Programacion.objects.count()
+
+        # drop_container ahora retorna tupla de 3 (lockeada, soltado_ok, retorno)
+        locked, soltado_ok, retorno = OperationalFlowService.drop_container(
+            self.programacion, usuario='tester'
+        )
+        self.assertTrue(soltado_ok)
+        self.assertIsNotNone(retorno, 'Debe crearse una Programacion de retorno automático')
+        self.assertEqual(retorno.container_id, vacio.id)
+        self.assertEqual(retorno.cd_id, self.cd.id)
+        self.assertGreater(Programacion.objects.count(), prog_pre_count)
+
+    def test_drop_container_no_autoasigna_si_conductor_sin_capacidad(self):
+        """Si el conductor no está disponible, drop NO debe crear programación de retorno."""
+        self.driver.max_entregas_dia = 1
+        self.driver.num_entregas_dia = 1
+        self.driver.save()
+        Container.objects.create(
+            container_id='VACIO0002', cliente='Vacio SinCap Cliente',
+            estado='vacio', vacio_contabilizado=True,
+            fecha_vacio=timezone.now() - timedelta(minutes=15),
+            cd_entrega=self.cd, retorno_destino_cd=self.cd,
+        )
+        prog_pre_count = Programacion.objects.count()
+        locked, soltado_ok, retorno = OperationalFlowService.drop_container(
+            self.programacion, usuario='tester'
+        )
+        self.assertTrue(soltado_ok)
+        self.assertIsNone(retorno, 'No debe crear retorno si el conductor no está disponible')
+        self.assertEqual(Programacion.objects.count(), prog_pre_count)
+

@@ -1825,6 +1825,179 @@ class ProgramacionViewSet(viewsets.ModelViewSet):
             'programacion': serializer.data
         }, status=status.HTTP_201_CREATED)
 
+    @action(detail=True, methods=['post'])
+    def aceptar_asignacion(self, request, pk=None):
+        """
+        Permite al conductor confirmar que acepta la asignación de un servicio.
+
+        Diferencia clave con reportar_incidente: este endpoint NO cambia
+        container.estado. Solo registra la decisión del conductor para
+        trazabilidad y dispara una notificación/evento para auditoría.
+
+        Payload: {} (no requiere body; se valida request.user.driver)
+        """
+        programacion = self.get_object()
+
+        if not programacion.driver_id:
+            return Response(
+                {'error': 'La programación no tiene conductor asignado.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if container_estado := programacion.container.estado:
+            if container_estado not in ('asignado', 'programado'):
+                return Response(
+                    {'error': f'Contenedor en estado {container_estado}; solo se acepta en estado asignado/programado.'},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+        # Validación: solo el conductor asignado puede aceptar (o staff).
+        if request.user.is_authenticated and not request.user.is_staff:
+            try:
+                from apps.drivers.models import Driver
+                driver_user = Driver.objects.filter(user=request.user).first()
+            except Exception:
+                driver_user = None
+            if not driver_user or driver_user.id != programacion.driver_id:
+                return Response(
+                    {'error': 'Solo el conductor asignado puede aceptar la asignación.'},
+                    status=status.HTTP_403_FORBIDDEN,
+                )
+
+        from apps.events.models import Event
+        with transaction.atomic():
+            locked = Programacion.objects.select_for_update().get(pk=programacion.pk)
+            locked.decision_operador = 'CONFIRMAR'
+            locked.save(update_fields=['decision_operador', 'updated_at'])
+            Event.objects.create(
+                container=locked.container,
+                event_type='asignacion_conductor',
+                detalles={
+                    'driver_id': locked.driver_id,
+                    'aceptada': True,
+                    'decision_operador': 'CONFIRMAR',
+                    'reportado_por': request.user.username if request.user.is_authenticated else 'anonimo',
+                },
+                usuario=request.user.username if request.user.is_authenticated else 'anonimo',
+            )
+
+        # Propagar al objeto externo
+        programacion.decision_operador = 'CONFIRMAR'
+
+        serializer = self.get_serializer(programacion)
+        return Response({
+            'success': True,
+            'mensaje': 'Asignación aceptada por el conductor.',
+            'programacion': serializer.data,
+            'decision_operador': 'CONFIRMAR',
+        }, status=status.HTTP_201_CREATED)
+
+    @action(detail=True, methods=['post'])
+    def reportar_problema(self, request, pk=None):
+        """
+        Reporte operativo que NO cambia container.estado (a diferencia de
+        reportar_incidente que escala a estado 'incidente').
+
+        Casos de uso: guía faltante al arribo, dirección incorrecta,
+        cliente cerrado, problema administrativo u otro que requiere
+        acción del operador pero NO bloquea el flujo del contenedor.
+
+        Payload:
+        {
+            "tipo": "FALTA_GUIA" | "DIRECCION_INCORRECTA" | "CLIENTE_CERRADO"
+                    | "PROBLEMA_ADMINISTRATIVO" | "OTRO",
+            "descripcion": "Detalle del problema (obligatorio)",
+            "lat": -33.43,  // opcional
+            "lng": -70.65   // opcional
+        }
+        """
+        programacion = self.get_object()
+
+        tipos_validos = [
+            'FALTA_GUIA', 'DIRECCION_INCORRECTA', 'CLIENTE_CERRADO',
+            'PROBLEMA_ADMINISTRATIVO', 'OTRO',
+        ]
+        tipo = request.data.get('tipo')
+        descripcion = (request.data.get('descripcion') or '').strip()
+
+        if not tipo or tipo not in tipos_validos:
+            return Response(
+                {'error': f'tipo inválido. Permitidos: {", ".join(tipos_validos)}'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if not descripcion:
+            return Response(
+                {'error': 'descripcion es obligatoria.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if not self._usuario_puede_operar_viaje(request, programacion):
+            return Response(
+                {'error': 'No puede reportar problemas sobre un viaje ajeno.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        problema_data = {
+            'tipo': tipo,
+            'descripcion': descripcion,
+            'timestamp': timezone.now().isoformat(),
+            'reportado_por': request.user.username if request.user.is_authenticated else 'anonimo',
+        }
+        lat = request.data.get('lat')
+        lng = request.data.get('lng')
+        if lat and lng:
+            problema_data['gps_lat'] = str(lat)
+            problema_data['gps_lng'] = str(lng)
+
+        usuario = request.user.username if request.user.is_authenticated else 'anonimo'
+        # Append atómico sobre JSONField bajo lock (paridad con reportar_incidente)
+        from apps.events.models import Event
+        with transaction.atomic():
+            locked = Programacion.objects.select_for_update().get(pk=programacion.pk)
+            lista_actual = locked.incidentes_registrados or []
+            # Marca diferencia: tipo_problema distinto de tipo_incidente
+            problema_data['es_problema'] = True
+            lista_actual.append(problema_data)
+            locked.incidentes_registrados = lista_actual
+            locked.save(update_fields=['incidentes_registrados'])
+            programacion.incidentes_registrados = lista_actual
+
+            Event.objects.create(
+                container=locked.container,
+                event_type='reporte_problema',
+                detalles=problema_data,
+                usuario=usuario,
+            )
+
+            # Notificación alta para el operador (no cambia estado del contenedor)
+            from apps.notifications.models import Notification
+            Notification.objects.create(
+                container=locked.container,
+                programacion=locked,
+                tipo='problema_reportado',
+                prioridad='alta',
+                titulo=f'Problema reportado - {locked.container.container_id}',
+                mensaje=(
+                    f'{tipo}: {descripcion}'
+                    + (f' · CD {locked.cd.nombre}' if locked.cd else '')
+                ),
+                detalles={
+                    'tipo_problema': tipo,
+                    'descripcion': descripcion,
+                    'cd': locked.cd.nombre if locked.cd else None,
+                    'cliente': locked.cliente,
+                    'conductor': locked.driver.nombre if locked.driver else None,
+                    'es_problema': True,
+                },
+            )
+
+        serializer = self.get_serializer(programacion)
+        return Response({
+            'success': True,
+            'mensaje': 'Problema reportado. Operador notificado.',
+            'problema': problema_data,
+            'programacion': serializer.data,
+        }, status=status.HTTP_201_CREATED)
+
     @action(detail=True, methods=['get'])
     def eta(self, request, pk=None):
         """
