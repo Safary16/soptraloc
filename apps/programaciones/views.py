@@ -1009,7 +1009,11 @@ class ProgramacionViewSet(viewsets.ModelViewSet):
             )
         
         # Validar que se proporcione la patente
-        patente_ingresada = request.data.get('patente', '').strip().upper()
+        # HAL-7: el default '' solo aplica si la clave está ausente. Si el cliente
+        # envía {'patente': null}, el default no aplica y .strip() revienta con
+        # AttributeError: 'NoneType' object has no attribute 'strip'. Forzamos
+        # coalescencia a '' antes de strip().
+        patente_ingresada = (request.data.get('patente') or '').strip().upper()
         if not patente_ingresada:
             return Response(
                 {'error': 'Debe ingresar la patente del vehículo para confirmar'},
@@ -1966,6 +1970,16 @@ class ProgramacionViewSet(viewsets.ModelViewSet):
             "lat": -33.4372,
             "lng": -70.6506
         }
+
+        HAL-9 (decisión creativa): aceptar también el estado 'descargado' como
+        no-op idempotente para evitar rechazos por timing cuando el clic del
+        conductor llega después de la transición automática del CD. Esto NO rompe
+        el FSM: si fecha_inicio_descarga ya está seteada, devolvemos 409 (el
+        click original sí se respetó). Pero si el container ya pasó a 'descargado'
+        Y fecha_inicio_descarga sigue vacía, lo aceptamos como una corrección
+        operativa (caso: el operador del CD cerró la descarga mientras el
+        conductor entraba al camión) y devolvemos 200 con un flag
+        'fuera_de_secuencia' para que el panel de auditoría lo registre.
         """
         programacion = self.get_object()
         if not programacion.driver:
@@ -1978,11 +1992,15 @@ class ProgramacionViewSet(viewsets.ModelViewSet):
                 {'error': 'No puede operar un viaje ajeno.'},
                 status=status.HTTP_403_FORBIDDEN,
             )
-        if programacion.container.estado not in ('entregado', 'soltado'):
+        # HAL-9: aceptamos 'descargado' cuando el clic llega fuera de secuencia
+        # (caso de timing con el cierre del CD). El resto del FSM no se ve
+        # afectado: este endpoint sigue SIN transicionar container.estado.
+        if programacion.container.estado not in ('entregado', 'soltado', 'descargado'):
             return Response(
-                {'error': f'Contenedor debe estar entregado o soltado. Estado: {programacion.container.get_estado_display()}.'},
+                {'error': f'Contenedor debe estar entregado, soltado o descargado. Estado: {programacion.container.get_estado_display()}.'},
                 status=status.HTTP_400_BAD_REQUEST,
             )
+        fuera_de_secuencia = programacion.container.estado == 'descargado'
         if programacion.fecha_inicio_descarga:
             return Response(
                 {'error': 'La descarga ya fue marcada como iniciada.', 'fecha_inicio_descarga': programacion.fecha_inicio_descarga.isoformat()},
@@ -2013,6 +2031,12 @@ class ProgramacionViewSet(viewsets.ModelViewSet):
                 'lat': str(lat) if lat else None,
                 'lng': str(lng) if lng else None,
                 'timestamp': now.isoformat(),
+                # HAL-13: registrar siempre el evento (geocerca/directo,
+                # inicio fuera de secuencia, etc.).
+                'origen_registro': 'conductor_click',
+                # HAL-9: flag explícito cuando el inicio llega después del cierre
+                # automático (CD cerró mientras el conductor hacía clic).
+                'fuera_de_secuencia': bool(fuera_de_secuencia),
             },
             usuario=request.user.username if request.user.is_authenticated else 'conductor',
         )
@@ -2022,6 +2046,9 @@ class ProgramacionViewSet(viewsets.ModelViewSet):
             'mensaje': 'Inicio de descarga registrado.',
             'fecha_inicio_descarga': now.isoformat(),
             'programacion_id': programacion.pk,
+            # HAL-9: flag para que la UI/auditoría distinga el flujo normal del
+            # caso de timing con el CD.
+            'fuera_de_secuencia': bool(fuera_de_secuencia),
         }, status=status.HTTP_201_CREATED)
 
     @action(detail=True, methods=['post'])
@@ -2278,7 +2305,7 @@ class ProgramacionViewSet(viewsets.ModelViewSet):
             'mensaje': 'Asignación aceptada por el conductor.',
             'programacion': serializer.data,
             'decision_operador': 'CONFIRMAR',
-        }, status=status.HTTP_201_CREATED)
+        }, status=status.HTTP_200_OK)
 
     @action(detail=True, methods=['post'])
     def reportar_problema(self, request, pk=None):

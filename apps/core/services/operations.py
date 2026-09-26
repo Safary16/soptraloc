@@ -113,42 +113,72 @@ class OperationalFlowService:
             usuario=usuario or ('system_geocerca' if origen == 'geocerca' else 'conductor'),
         )
 
-        # P0-3: notificación visible para cliente/operador ('llegada' con prioridad alta).
-        # Se crea DENTRO de la misma transacción para que un fallo de notificación
-        # no quede con evento sin rastro, y para garantizar atomicidad con el
-        # cambio de estado del contenedor. Si la app notifications no está
-        # instalada se ignora silenciosamente.
+        # HAL-10: al arribar (viaje cerrado), refrescar el ETA visible para que
+        # la UI no muestre un ETA viejo (ej. 45 min) cuando ya estamos al CD.
+        # HAL-10 evita el silent bug visual: la UI de operaciones mostraba el
+        # ETA estimado inicial durante horas después del arribo.
         try:
-            from apps.notifications.models import Notification
-            hora_local = arrived_at.strftime('%H:%M')
-            cd_nombre = locked.cd.nombre if locked.cd else 'CD'
-            Notification.objects.create(
-                container=locked.container,
-                programacion=locked,
-                tipo='llegada',
-                prioridad='alta',
-                titulo=f'Entregado a las {hora_local} - {locked.container.container_id}',
-                mensaje=(
-                    f'Contenedor {locked.container.container_id} arribó a {cd_nombre} '
-                    f'a las {hora_local} ({locked.cliente}).'
-                ),
-                detalles={
-                    'fecha_arribo': arrived_at.isoformat(),
-                    'cd': cd_nombre,
-                    'cliente': locked.cliente,
-                    'conductor': locked.driver.nombre if locked.driver else None,
-                },
+            from django.db.models import F
+            Programacion.objects.filter(pk=locked.pk).update(eta_minutos=0)
+            locked.eta_minutos = 0
+        except Exception:
+            pass
+
+        # HAL-8: la Notification 'llegada' sale del atomic block del arribo.
+        # Se programa con transaction.on_commit para que se cree SOLO si el
+        # commit de la transacción padre tiene éxito. Si falla la creación del
+        # notification, NO se revierte el viaje (el container ya quedó
+        # 'entregado' con su evento y GPS persistidos).
+        # El closure captura `locked` por referencia; on_commit ejecuta la
+        # función una vez completada la transacción actual.
+        try:
+            transaction.on_commit(
+                lambda: cls._create_arribo_notification(locked, arrived_at)
             )
-        except Exception as _notif_exc:
+        except Exception as _schedule_exc:
+            # on_commit fuera de una transacción: ejecutar inline y registrar.
             import logging
-            logger = logging.getLogger(__name__)
-            logger.warning(
-                'registrar_arribo_notification_failed container_id=%s detalle=%s',
-                getattr(locked.container, 'container_id', None),
-                _notif_exc,
-                exc_info=True,
+            logging.getLogger(__name__).warning(
+                'registrar_arribo_on_commit_failed prog_id=%s detalle=%s',
+                getattr(locked, 'pk', None), _schedule_exc,
             )
+            try:
+                cls._create_arribo_notification(locked, arrived_at)
+            except Exception:
+                pass
+
         return locked, True
+
+    @classmethod
+    def _create_arribo_notification(cls, locked, arrived_at):
+        """Crea la Notification 'llegada' post-commit (HAL-8). Idempotente."""
+        from apps.notifications.models import Notification
+        # Idempotencia: nunca crear dos notificaciones de llegada para la misma
+        # programacion (geocerca + manual pueden dispararse casi simultáneos).
+        ya_existe = Notification.objects.filter(
+            programacion=locked, tipo='llegada',
+        ).exists()
+        if ya_existe:
+            return None
+        hora_local = arrived_at.strftime('%H:%M')
+        cd_nombre = locked.cd.nombre if locked.cd else 'CD'
+        return Notification.objects.create(
+            container=locked.container,
+            programacion=locked,
+            tipo='llegada',
+            prioridad='alta',
+            titulo=f'Entregado a las {hora_local} - {locked.container.container_id}',
+            mensaje=(
+                f'Contenedor {locked.container.container_id} arribó a {cd_nombre} '
+                f'a las {hora_local} ({locked.cliente}).'
+            ),
+            detalles={
+                'fecha_arribo': arrived_at.isoformat(),
+                'cd': cd_nombre,
+                'cliente': locked.cliente,
+                'conductor': locked.driver.nombre if locked.driver else None,
+            },
+        )
 
     @staticmethod
     def _lock_programacion(programacion):
