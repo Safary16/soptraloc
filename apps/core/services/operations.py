@@ -234,6 +234,13 @@ class OperationalFlowService:
         nueva = Prog.objects.create(
             container=candidato,
             cd=cd_destino or programacion.cd,
+            # Safari review (P0-5): el dueño exige MISMO conductor que soltó.
+            # Seteando driver= acá la señal post_save hace early-return
+            # (`if instance.driver: return` en signals.py:38) y NO llama al
+            # AssignmentService ML que podría elegir a otro conductor del pool.
+            # Las validaciones de capacidad/disponibilidad ya se hicieron arriba
+            # (driver.esta_disponible y Prog.objects.filter(...).exists()).
+            driver=driver,
             cliente=candidato.cliente or 'RETORNO VACIO',
             fecha_programada=fecha_programada,
             direccion_entrega=(
@@ -247,8 +254,6 @@ class OperationalFlowService:
             ventana_horaria_inicio=None,
             ventana_horaria_fin=None,
         )
-        # La asignación al conductor la dispara la señal post_save
-        # (apps/programaciones/signals.py: trigger_automatic_assignment).
         return nueva
 
 

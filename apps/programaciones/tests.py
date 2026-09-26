@@ -625,7 +625,49 @@ class FlujoConductorP05AutoAssignReturnTests(TestCase):
         self.assertIsNotNone(retorno, 'Debe crearse una Programacion de retorno automático')
         self.assertEqual(retorno.container_id, vacio.id)
         self.assertEqual(retorno.cd_id, self.cd.id)
+        # Safari review (P0-5): el conductor de la programación de retorno
+        # automático debe ser EL MISMO que soltó el contenedor, no el que
+        # elija el ML via AssignmentService.asignar_mejor_conductor.
+        self.assertEqual(
+            retorno.driver_id, self.driver.id,
+            'El conductor del retorno automático debe ser el mismo que soltó.',
+        )
         self.assertGreater(Programacion.objects.count(), prog_pre_count)
+
+    def test_drop_container_autoasigna_mismo_conductor_que_solto(self):
+        """Safari review: la Programacion de retorno automático debe llegar YA
+        con driver= seteado para que la señal post_save
+        trigger_automatic_assignment (apps/programaciones/signals.py:38)
+        haga early-return y NO llame al AssignmentService ML que podría elegir
+        otro conductor del pool.
+        """
+        # Forzar driver con capacidad para que _auto_assign_empty_return
+        # no se salga temprano.
+        self.driver.num_entregas_dia = 0
+        self.driver.max_entregas_dia = 5
+        self.driver.save()
+        Container.objects.create(
+            container_id='VACIO0003', cliente='Vacio MismoConductor',
+            estado='vacio', vacio_contabilizado=True,
+            fecha_vacio=timezone.now() - timedelta(minutes=10),
+            cd_entrega=self.cd, retorno_destino_cd=self.cd,
+        )
+        locked, soltado_ok, retorno = OperationalFlowService.drop_container(
+            self.programacion, usuario='tester'
+        )
+        self.assertTrue(soltado_ok)
+        self.assertIsNotNone(retorno)
+        self.assertIsNotNone(
+            retorno.driver,
+            'El driver debe estar seteado al CREAR la Programacion de retorno, '
+            'para que la señal post_save no la reasigne via ML.',
+        )
+        self.assertEqual(
+            retorno.driver_id, self.driver.id,
+            'El conductor de la nueva programación debe ser el MISMO que '
+            'soltó el contenedor (dueño exige: «suelta el contenedor y el '
+            'conductor queda libre para retirar vacíos desde ese mismo CD»).',
+        )
 
     def test_drop_container_no_autoasigna_si_conductor_sin_capacidad(self):
         """Si el conductor no está disponible, drop NO debe crear programación de retorno."""
