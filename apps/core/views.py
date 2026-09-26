@@ -223,6 +223,13 @@ def auditoria(request):
     return render(request, 'auditoria.html')
 
 
+# HAL-20: defensa en profundidad. @staff_member_required YA exige login+staff
+# (es más estricto que @login_required), pero el task pide explícitamente
+# agregar @login_required como segunda barrera. Aplicar ambos para que
+# cualquier cambio futuro que relaje uno (ej. tests, refactor) no deje la URL
+# pública expuesta.
+from django.contrib.auth.decorators import login_required  # noqa: E402  (import tardío intencional)
+@login_required
 @staff_member_required
 def gestion_vacios_ccti(request):
     """P2-4: panel de gestión de contenedores vacíos en CCTI.

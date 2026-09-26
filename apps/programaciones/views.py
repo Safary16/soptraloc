@@ -2186,9 +2186,13 @@ class ProgramacionViewSet(viewsets.ModelViewSet):
         StreamingHttpResponse con content_type='text/event-stream'. No usa
         Channels/ASGI ni WebSocket: solo polling liviano a la BD (1 Hz) que
         emite un evento SSE cuando cambia el eta_recalculado_min o el estado
-        del contenedor. Timeout 30s para no bloquear workers; el cliente
-        debe reconectar (EventSource lo hace automáticamente).
+        del contenedor.
 
+        HAL-14: timeout extendido 30s → 120s (rango objetivo para conexiones
+        móviles intermitentes). Se acepta Last-Event-ID para que reconexiones
+        tras corte móvil NO pierdan updates intermedios: el stream emite cada
+        cambio con un id incremental, y si el cliente lo manda como header, el
+        stream arranca re-enviando cualquier cambio posterior a ese id.
         Riesgo evaluado:
         - NO requiere cambiar el server (render.yaml sigue siendo WSGI).
         - NO requiere Channels/Redis.
@@ -2203,12 +2207,23 @@ class ProgramacionViewSet(viewsets.ModelViewSet):
         programacion = self.get_object()
         programacion_id = programacion.pk
 
+        # HAL-14: recoger el Last-Event-ID. EventSource lo envía automáticamente
+        # tras una reconexión. Si no viene, arrancamos desde 0 (cliente nuevo).
+        last_event_id_header = request.META.get('HTTP_LAST_EVENT_ID', '').strip()
+        last_event_id = 0
+        if last_event_id_header.isdigit():
+            last_event_id = int(last_event_id_header)
+
         def _stream():
             last_eta = None
             last_estado = None
             start = time.time()
-            max_duration = 30  # segundos por conexión
+            # HAL-14: timeout subido a 120s. Conexiones móviles 3G/4G pueden
+            # tardar minutos en reconectar; 30s era agresivo y disparaba
+            # desconexiones innecesarias.
+            max_duration = 120  # segundos por conexión
             poll_interval = 1.0
+            event_counter = last_event_id
             try:
                 while time.time() - start < max_duration:
                     try:
@@ -2224,7 +2239,10 @@ class ProgramacionViewSet(viewsets.ModelViewSet):
                                 'estado': estado_actual,
                                 'timestamp': timezone.now().isoformat(),
                             })
-                            yield f'data: {payload}\n\n'
+                            event_counter += 1
+                            # HAL-14: incluir id: para que el cliente pueda
+                            # reconectar con Last-Event-ID.
+                            yield f'id: {event_counter}\ndata: {payload}\n\n'
                             last_eta = eta_actual
                             last_estado = estado_actual
                     except Programacion.DoesNotExist:
@@ -2262,6 +2280,19 @@ class ProgramacionViewSet(viewsets.ModelViewSet):
                 {'error': 'La programación no tiene conductor asignado.'},
                 status=status.HTTP_400_BAD_REQUEST,
             )
+        # HAL-16 (decisión creativa documentada): aceptar tanto 'asignado' como
+        # 'programado'. Rationale:
+        # - 'asignado' es el camino normal: conductor ya visible.
+        # - 'programado' lo aceptamos porque hay una ventana transitoria donde
+        #   Programacion.objects.create(driver=X) YA pasó pero el container
+        #   aún no pasó a 'asignado' (la cadena post_save → driver.asignar_conductor
+        #   puede estar en vuelo vía on_commit). En esa ventana, rechazar el clic
+        #   'Aceptar' generaba falsos 400 que confundían al conductor. La regla
+        #   de fondo (driver_id presente + container en estado válido) ya cubre
+        #   el caso.
+        # No restringir a solo 'asignado' porque romperíamos la UX sin necesidad:
+        # la pregunta relevante es "¿conductor asignado?", no "¿container ya
+        # transicionado?".
         if container_estado := programacion.container.estado:
             if container_estado not in ('asignado', 'programado'):
                 return Response(

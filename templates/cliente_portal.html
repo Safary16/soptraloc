@@ -291,9 +291,15 @@ function renderServicios(servicios) {
         const etaEfectivo = (etaRecalc != null && !isNaN(etaRecalc)) ? etaRecalc : etaOrig;
         const showRecalc = (etaRecalc != null && etaOrig != null && etaRecalc !== etaOrig);
         if (est === 'en_ruta' && s.fecha_inicio_ruta) {
-            if (etaEfectivo != null && !isNaN(etaEfectivo)) {
+            if (etaEfectivo != null && !isNaN(etaEfectivo) && etaEfectivo > 0) {
                 const lleg = new Date(new Date(s.fecha_inicio_ruta).getTime() + etaEfectivo*60000);
                 llegada = `<strong class="text-primary"><i class="fas fa-location-arrow"></i> ${lleg.toLocaleTimeString('es-CL', {hour:'2-digit', minute:'2-digit'})}</strong> <span class="text-muted small">(ETA ${Math.round(etaEfectivo)} min${showRecalc ? ' · recalculado' : ''})</span>`;
+            }
+            // HAL-12: ETA nulo o 0 debe avisar al cliente, no quedar en silencio.
+            // Antes mostrábamos solo '—' sin contexto (silent fail). Ahora etiquetamos
+            // explícitamente 'ETA en cálculo' con icono de reloj.
+            else {
+                llegada = '<span class="text-warning"><i class="fas fa-hourglass-half"></i> ETA en cálculo</span>';
             }
         } else if (est === 'asignado' || est === 'programado') {
             llegada = `<span class="text-muted">${hora}</span>`;

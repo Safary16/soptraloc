@@ -94,15 +94,39 @@ class CD(models.Model):
         return max(0, self.capacidad_vacios - self.vacios_actuales)
     
     def recibir_vacio(self):
-        """Incrementa el contador de vacíos"""
+        """Incrementa el contador de vacíos del CD.
+
+        HAL-15 (contrato): se llama desde DOS lugares y solo uno según el camino:
+        - `apps/containers/signals.py:manejar_vacios_automaticamente` cuando un
+          Container post_save ve estado='vacio' + cd_entrega.permite_soltar_contenedor.
+          El guard `vacio_contabilizado=False` lo deja idempotente (doble evento
+          del mismo Container no lo incrementa dos veces).
+        - `apps/core/services/returns.py:EmptyReturnService.complete` cuando un
+          Container se entrega a un CCTI (retorno_destino_tipo='ccti'). El check
+          `puede_recibir_vacios` cubre la capacidad del CD.
+
+        NO recibir manualmente desde otros lados: cada Container tiene a lo más
+        una fuente de incremento y se trackinga con `Container.vacio_contabilizado`.
+        """
         if self.puede_recibir_vacios:
             self.vacios_actuales += 1
             self.save(update_fields=['vacios_actuales'])
             return True
         return False
-    
+
     def retirar_vacio(self):
-        """Decrementa el contador de vacíos"""
+        """Decrementa el contador de vacíos del CD.
+
+        HAL-15 (contrato): actualmente SOLO se llama desde
+        `apps/core/services/returns.py:EmptyReturnService.start`, dentro de un
+        bloque `select_for_update` que a su vez solo entra cuando
+        `locked.vacio_contabilizado=True`. Esto garantiza que un Container no
+        decrementa dos veces el mismo CD (el flag se pone a False dentro del
+        mismo método, antes del save).
+        Por seguridad adicional, este método es no-op cuando `vacios_actuales<=0`
+        para no envenenar el contador con valores negativos si llega a haber
+        una race condition.
+        """
         if self.vacios_actuales > 0:
             self.vacios_actuales -= 1
             self.save(update_fields=['vacios_actuales'])

@@ -13,17 +13,32 @@ class OperationalFlowService:
             container=programacion.container, tipo_operacion='descarga_cd'
         ).exists():
             return None
-        # P1-1/P1-2: preferir programacion.fecha_inicio_descarga cuando existe
-        # (clic real del conductor "Iniciar Descarga"). Si no, caer al flujo
-        # histórico (fecha_soltado o fecha_entrega). Se acepta el caller
-        # pasando started_at explícito para tests; pero si el caller pasó el
-        # default del servicio, override aquí para respetar fecha_inicio_descarga.
-        if programacion.fecha_inicio_descarga and (
-            started_at is None
-            or started_at == programacion.container.fecha_soltado
-            or started_at == programacion.container.fecha_entrega
-        ):
-            started_at = programacion.fecha_inicio_descarga
+
+        # HAL-17: prioridad explícita para resolver el clic real del conductor
+        # cuando se solapa con el flujo histórico de soltar/entregar. La idea:
+        # si la programación tiene fecha_inicio_descarga (clic real del
+        # conductor en CD), es la mejor estimación de cuándo empezó la
+        # operación física. Si no, se respeta el started_at que pasó el caller
+        # (tests, integrations). Si tampoco, caemos a fecha_soltado (drop &
+        # hook) o fecha_entrega (espera sobre camión). Este orden evita que un
+        # started_at 'default' venido de complete_discharge
+        # (que hoy elige fecha_soltado|fecha_entrega) sobrescriba el clic real.
+        fecha_inicio_real = getattr(programacion, 'fecha_inicio_descarga', None)
+        fecha_soltado = programacion.container.fecha_soltado
+        fecha_entrega = programacion.container.fecha_entrega
+        candidatos_priorizados = [
+            fecha_inicio_real,
+            started_at,
+            fecha_soltado,
+            fecha_entrega,
+        ]
+        started_at_resolved = next(
+            (c for c in candidatos_priorizados if c is not None),
+            None,
+        )
+        if started_at_resolved is not None:
+            started_at = started_at_resolved
+
         estimated = programacion.cd.tiempo_promedio_descarga_min or 60
         # P2-2: predicción viva primero (programacion.prediccion_ml.tiempo_descarga_estimado).
         # Si no hay, cae al engine (predict_discharge), y al estático del CD.
@@ -360,6 +375,7 @@ class OperationalFlowService:
     @transaction.atomic
     def complete_discharge(cls, programacion, usuario=None, source='conductor'):
         """Cierra descarga desde espera sobre camión o desde un drop previo."""
+        from apps.events.models import Event
         locked = Programacion.objects.select_for_update().select_related(
             'container', 'driver', 'cd'
         ).get(pk=programacion.pk)
@@ -373,6 +389,25 @@ class OperationalFlowService:
             raise ValueError('No existe hora de inicio para medir la descarga.')
         locked.container.cambiar_estado('descargado', usuario)
         timing = cls._record_discharge(locked, started_at, finished_at, source)
+        # HAL-13: trazabilidad del cierre de descarga como Event (origen_geocerca /
+        # directo / conductor, etc.). Se hace DENTRO del atomic para garantizar
+        # consistencia entre cambio de estado + evento + tiempo ML.
+        Event.objects.create(
+            container=locked.container,
+            event_type='fin_descarga',
+            detalles={
+                'cd': locked.cd.nombre if locked.cd else None,
+                'conductor': locked.driver.nombre if locked.driver else None,
+                'started_at': started_at.isoformat(),
+                'finished_at': finished_at.isoformat(),
+                'duracion_min': timing.tiempo_real_min if timing else None,
+                'anomalia': bool(timing.anomalia) if timing else False,
+                'source': source,
+                'origen_registro': source,
+                'permite_soltar_contenedor': bool(locked.cd.permite_soltar_contenedor),
+            },
+            usuario=usuario,
+        )
         # En espera sobre camión el conductor queda libre al finalizar la descarga.
         if not locked.cd.permite_soltar_contenedor:
             locked.liberar_conductor()
