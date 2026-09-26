@@ -1546,11 +1546,14 @@ class ProgramacionViewSet(viewsets.ModelViewSet):
             )
             if retorno_programacion is not None:
                 # HAL-4: trazabilidad del retorno automático creado por el service.
+                # El modelo Event solo conoce container (no programacion FK), por
+                # lo que la programacion de retorno va dentro de detalles para
+                # conservarla en auditoría.
                 Event.objects.create(
                     container=retorno_programacion.container,
-                    programacion=retorno_programacion,
                     event_type='retorno_vacio_autoasignado',
                     detalles={
+                        'programacion_retorno_id': retorno_programacion.id,
                         'conductor': retorno_programacion.driver.nombre if retorno_programacion.driver else None,
                         'cd': retorno_programacion.cd.nombre if retorno_programacion.cd else None,
                         'origen_drop': programacion.container.container_id,

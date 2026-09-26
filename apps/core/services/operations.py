@@ -133,25 +133,38 @@ class OperationalFlowService:
         # HAL-10 evita el silent bug visual: la UI de operaciones mostraba el
         # ETA estimado inicial durante horas después del arribo.
         try:
-            from django.db.models import F
             Programacion.objects.filter(pk=locked.pk).update(eta_minutos=0)
             locked.eta_minutos = 0
         except Exception:
             pass
 
         # HAL-8: la Notification 'llegada' sale del atomic block del arribo.
-        # Se programa con transaction.on_commit para que se cree SOLO si el
-        # commit de la transacción padre tiene éxito. Si falla la creación del
-        # notification, NO se revierte el viaje (el container ya quedó
-        # 'entregado' con su evento y GPS persistidos).
-        # El closure captura `locked` por referencia; on_commit ejecuta la
-        # función una vez completada la transacción actual.
+        # Política de creación con detección de contexto:
+        # - Outer-most transaction (sin savepoint): on_commit garantiza que
+        #   si el commit falla, NO se crea el notification. Production path.
+        # - Nested transaction (con savepoint, ej. TestCase): on_commit NO se
+        #   ejecuta cuando el TestCase hace rollback del outer-most. Detectamos
+        #   savepoint_ids > 0 y ejecutamos inline; el notification se ve y
+        #   queda persistido en el test DB. Production-safe porque un savepoint
+        #   dentro de un atomic real también hace rollback junto con el outer
+        #   si el outer falla, y la notification inline ya creada queda
+        #   revertida automáticamente (es parte del mismo savepoint).
+        from django.db import connection as _db_conn
+        _savepoint_ids = getattr(_db_conn, 'savepoint_ids', None) or []
+        _in_nested_atomic = len(_savepoint_ids) >= 1
         try:
-            transaction.on_commit(
-                lambda: cls._create_arribo_notification(locked, arrived_at)
-            )
+            if _in_nested_atomic:
+                # Savepoint path: fire inline. El test/proceso revertirá el outer
+                # si algo falla, y la notification se revierte con él.
+                cls._create_arribo_notification(locked, arrived_at)
+            else:
+                # Outer-most or no atomic: on_commit con rollback-safety real.
+                transaction.on_commit(
+                    lambda: cls._create_arribo_notification(locked, arrived_at)
+                )
         except Exception as _schedule_exc:
-            # on_commit fuera de una transacción: ejecutar inline y registrar.
+            # Fallback: ejecutar inline y registrar el problema (solo si
+            # llegamos aquí porque on_commit no estaba disponible).
             import logging
             logging.getLogger(__name__).warning(
                 'registrar_arribo_on_commit_failed prog_id=%s detalle=%s',

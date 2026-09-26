@@ -459,7 +459,11 @@ class FlujoConductorP0Tests(TestCase):
 
     # ---------- P0-1: aceptar_asignacion ----------
     def test_aceptar_asignacion_conductor_asignado_confirma(self):
-        """El conductor asignado puede aceptar; crea evento y decision_operador=CONFIRMAR."""
+        """El conductor asignado puede aceptar; crea evento y decision_operador=CONFIRMAR.
+
+        HAL-6: el endpoint ahora devuelve 200 OK (no 201) porque no crea
+        un recurso nuevo, solo confirma uno existente.
+        """
         request = APIRequestFactory().post(
             f'/api/programaciones/{self.programacion.pk}/aceptar_asignacion/',
             data={}, format='json',
@@ -467,7 +471,7 @@ class FlujoConductorP0Tests(TestCase):
         force_authenticate(request, user=self.user_a)
         view = ProgramacionViewSet.as_view({'post': 'aceptar_asignacion'})
         response = view(request, pk=self.programacion.pk)
-        self.assertEqual(response.status_code, 201, response.data)
+        self.assertEqual(response.status_code, 200, response.data)
         self.assertTrue(response.data['success'])
         self.assertEqual(response.data['decision_operador'], 'CONFIRMAR')
 
@@ -1044,3 +1048,424 @@ class FlujoConductorP25EtaClienteTests(TestCase):
         if notif is not None:
             self.assertEqual(notif.detalles.get('cliente'), 'Eta Cliente')
 
+
+
+# ---------------------------------------------------------------------------
+# HAL-noche: integración de regresión para HAL-1 (ETA haversine fallback),
+# HAL-2 (eta_recalculado_min en serializer lista), HAL-3 (TiempoViaje aunque
+# eta_minutos=0), HAL-4 (soltar_contenedor 3-tuple + auto-retorno mismo conductor).
+# Estos tests cierran los gaps detectados por la simulación nocturna
+# (1247409c): 20 HALs, 108 tests verdes pero ningún test detectaba HAL-4.
+# ---------------------------------------------------------------------------
+
+
+class HalNocheEtaFallbackTests(TestCase):
+    """HAL-1: si Mapbox y ML fallan, haversine + blindaje final persiste ETA.
+
+    Garantiza que iniciar_ruta SIEMPRE termine con eta_minutos != None:
+    - pre-existente: OperationalLearningEngine.recommend (mockeado para fallar)
+    - 1er fallback: MLTimePredictor.predecir_tiempo_viaje (mockeado para fallar)
+    - 2do fallback: haversine (35 km/h)
+    - 3er blindaje: eta_minutos=0, prediccion_ml.requires_attention=True
+    """
+
+    def setUp(self):
+        self.user = User.objects.create_user(username='h1_driver', password='***')
+        self.driver = Driver.objects.create(
+            nombre='HAL1 Driver', user=self.user, patente='H1-1234',
+            num_entregas_dia=1, max_entregas_dia=3,
+        )
+        self.cd = CD.objects.create(
+            nombre='HAL1 CD', codigo='HAL1-CD', direccion='Destino',
+            comuna='Santiago', lat=-33.450000, lng=-70.650000,
+        )
+        self.container = Container.objects.create(
+            container_id='HAL1C1234', estado='asignado', cliente='HAL1 Cliente',
+        )
+        self.programacion = Programacion.objects.create(
+            container=self.container, cd=self.cd, driver=self.driver,
+            cliente='HAL1 Cliente', fecha_programada=timezone.now() + timedelta(hours=1),
+        )
+        self.factory = APIRequestFactory()
+
+    def _start_force_fail_eta(self):
+        from unittest.mock import patch as _patch
+        request = self.factory.post('/', {
+            'patente': 'H1-1234', 'lat': -33.40, 'lng': -70.60,
+        }, format='json')
+        force_authenticate(request, user=self.user)
+        view = ProgramacionViewSet.as_view({'post': 'iniciar_ruta'})
+        # HAL-1: los engines se importan DENTRO de iniciar_ruta (lazy import),
+        # así que NO hay referencia en el módulo views. Patcheamos donde se
+        # DEFINEN para que el lookup al import local reciba el side_effect.
+        patches = [
+            _patch('apps.core.services.learning_engine.OperationalLearningEngine.recommend',
+                   side_effect=Exception('forced fail for HAL-1')),
+            _patch('apps.core.services.ml_predictor.MLTimePredictor.predecir_tiempo_viaje',
+                   side_effect=Exception('forced fail for HAL-1')),
+        ]
+        for c in patches:
+            c.start()
+        try:
+            response = view(request, pk=self.programacion.pk)
+        finally:
+            for c in patches:
+                c.stop()
+        return response
+
+    def test_haversine_fallback_calculates_eta_when_all_engines_fail(self):
+        response = self._start_force_fail_eta()
+        self.assertEqual(response.status_code, 200,
+                         f'iniciar_ruta debe responder 200 incluso sin Mapbox/ML: {response.data}')
+        self.programacion.refresh_from_db()
+        self.assertIsNotNone(self.programacion.eta_minutos,
+                             'eta_minutos no debe ser None — blindaje HAL-1')
+        self.assertGreater(self.programacion.eta_minutos, 0)
+        prediccion = self.programacion.prediccion_ml or {}
+        self.assertIn(prediccion.get('source'), {'haversine_fallback', 'no_disponible'})
+        if prediccion.get('source') == 'haversine_fallback':
+            self.assertIn('haversine', prediccion['explanation'].lower())
+
+    def test_haversine_distance_is_consistent_with_known_coords(self):
+        from math import asin, cos, radians, sin, sqrt
+        lat1, lng1 = -33.40, -70.60
+        lat2, lng2 = -33.45, -70.65
+        R = 6371.0
+        p1, p2 = radians(lat1), radians(lat2)
+        dp = radians(lat2 - lat1)
+        dl = radians(lng2 - lng1)
+        a = sin(dp / 2) ** 2 + cos(p1) * cos(p2) * sin(dl / 2) ** 2
+        km_esperado = 2 * R * asin(sqrt(a))
+        eta_esperado = max(1, int(round(km_esperado / 35.0 * 60)))
+        response = self._start_force_fail_eta()
+        self.assertEqual(response.status_code, 200)
+        self.programacion.refresh_from_db()
+        self.assertEqual(
+            self.programacion.eta_minutos, eta_esperado,
+            f'haversine ETA esperado {eta_esperado} min para {km_esperado:.2f} km',
+        )
+
+
+class HalNocheEtaRecalculadoSerializerTests(TestCase):
+    """HAL-2: ProgramacionListSerializer expone eta_recalculado_min.
+
+    El template cliente_portal.html:289 lo lee. Antes el field no estaba en
+    Meta.fields y jsonserialize lo descartaba (undefined). Ahora el field
+    aparece en la lista serializada y round-trippea.
+    """
+
+    def setUp(self):
+        self.user = User.objects.create_user(username='h2_driver', password='***')
+        self.driver = Driver.objects.create(
+            nombre='HAL2 Driver', user=self.user, patente='H2-1234',
+        )
+        self.cd = CD.objects.create(
+            nombre='HAL2 CD', codigo='HAL2-CD', direccion='Destino',
+            comuna='Santiago', lat=-33.450000, lng=-70.650000,
+        )
+        self.container = Container.objects.create(
+            container_id='HAL2C1234', estado='asignado', cliente='HAL2 Cliente',
+        )
+        self.programacion = Programacion.objects.create(
+            container=self.container, cd=self.cd, driver=self.driver,
+            cliente='HAL2 Cliente', fecha_programada=timezone.now() + timedelta(hours=1),
+            eta_recalculado_min=42,
+        )
+
+    def test_list_serializer_exposes_eta_recalculado_min(self):
+        from .serializers import ProgramacionListSerializer
+        data = ProgramacionListSerializer(self.programacion).data
+        self.assertIn('eta_recalculado_min', data,
+                      'eta_recalculado_min debe estar en Meta.fields')
+        self.assertEqual(data['eta_recalculado_min'], 42,
+                         'Valor round-trip: lo escrito == lo serializado')
+
+    def test_list_serializer_handles_null_eta_recalculado_min(self):
+        from .serializers import ProgramacionListSerializer
+        self.programacion.eta_recalculado_min = None
+        self.programacion.save(update_fields=['eta_recalculado_min', 'updated_at'])
+        data = ProgramacionListSerializer(self.programacion).data
+        self.assertIn('eta_recalculado_min', data)
+        self.assertIsNone(data['eta_recalculado_min'])
+
+
+class HalNocheTiempoViajeSinEtaTests(TestCase):
+    """HAL-3: TiempoViaje se crea aunque eta_minutos sea 0/None al arribar.
+
+    El guard antiguo requería programacion.eta_minutos truthy, lo que
+    silenciaba el aprendizaje cuando Mapbox+ML caían. Ahora el bloque
+    _update_registro_operacion_on_completion crea el TiempoViaje con
+    tiempo_mapbox_min derivado de distancia_km/35 km/h si eta_minutos es 0.
+    """
+
+    def setUp(self):
+        self.user = User.objects.create_user(username='h3_driver', password='***')
+        self.driver = Driver.objects.create(
+            nombre='HAL3 Driver', user=self.user, patente='H3-1234',
+        )
+        self.cd = CD.objects.create(
+            nombre='HAL3 CD', codigo='HAL3-CD', direccion='Destino',
+            comuna='Santiago', lat=-33.450000, lng=-70.650000,
+        )
+        self.container = Container.objects.create(
+            container_id='HAL3C1234', estado='asignado', cliente='HAL3 Cliente',
+        )
+        ahora = timezone.now()
+        self.programacion = Programacion.objects.create(
+            container=self.container, cd=self.cd, driver=self.driver,
+            cliente='HAL3 Cliente',
+            fecha_programada=ahora - timedelta(minutes=10),
+            fecha_inicio_ruta=ahora - timedelta(minutes=30),
+            gps_inicio_lat=-33.40, gps_inicio_lng=-70.60,
+            distancia_km=10.0,
+            eta_minutos=0,
+            prediccion_ml={'source': 'no_disponible', 'requires_attention': True},
+        )
+        self.container.fecha_entrega = ahora - timedelta(minutes=10)
+        self.container.estado = 'en_ruta'
+        self.container.save(update_fields=['fecha_entrega', 'estado', 'updated_at'])
+        from .models import RegistroOperacion
+        RegistroOperacion.objects.create(
+            programacion=self.programacion, estado_final='PENDIENTE',
+        )
+
+    def test_tiempo_viaje_se_crea_aunque_eta_minutos_sea_cero(self):
+        from .models import TiempoViaje
+        from .views import ProgramacionViewSet
+        view = ProgramacionViewSet()
+        view._update_registro_operacion_on_completion(
+            self.programacion, 'ENTREGADO',
+        )
+        tv = TiempoViaje.objects.filter(programacion=self.programacion).first()
+        self.assertIsNotNone(tv,
+                             'TiempoViaje debe crearse aunque eta_minutos=0 (HAL-3)')
+        self.assertGreaterEqual(tv.tiempo_mapbox_min, 16)
+        self.assertLessEqual(tv.tiempo_mapbox_min, 19)
+        self.assertGreaterEqual(tv.tiempo_real_min, 19)
+        self.assertLessEqual(tv.tiempo_real_min, 21)
+
+    def test_tiempo_viaje_usa_eta_minutos_cuando_es_truthy(self):
+        from .models import TiempoViaje
+        from .views import ProgramacionViewSet
+        self.programacion.eta_minutos = 12
+        self.programacion.save(update_fields=['eta_minutos', 'updated_at'])
+        view = ProgramacionViewSet()
+        view._update_registro_operacion_on_completion(
+            self.programacion, 'ENTREGADO',
+        )
+        tv = TiempoViaje.objects.filter(programacion=self.programacion).first()
+        self.assertIsNotNone(tv)
+        self.assertEqual(tv.tiempo_mapbox_min, 12,
+                         'eta_minutos truthy debe prevalecer (12 min exactos)')
+
+
+class HalNocheSoltarContenedorAutoRetornoTests(TestCase):
+    """HAL-4 + E5: drop&hook → soltar → auto-retorno mismo conductor → vacío 5h.
+
+    Cubre:
+    - soltar_contenedor devuelve 3-tupla del service (HAL-4)
+    - la respuesta HTTP trae 'retorno_automatico' con el ID de la nueva prog
+    - la programación de retorno se asigna al MISMO conductor (P0-5 Safari review)
+    - el contenedor de retorno permanece 'vacio' en CD hasta que inicie el retiro
+    """
+
+    def setUp(self):
+        self.user = User.objects.create_user(username='h4_driver', password='***')
+        self.driver = Driver.objects.create(
+            nombre='HAL4 Driver', user=self.user, patente='H4-1234',
+            num_entregas_dia=1, max_entregas_dia=3,
+        )
+        self.cd_origin = CD.objects.create(
+            nombre='HAL4 Origin', codigo='HAL4-O', direccion='Origen',
+            comuna='Santiago', lat=-33.450000, lng=-70.650000,
+            permite_soltar_contenedor=True,
+            capacidad_vacios=10,
+        )
+        self.container_lleno = Container.objects.create(
+            container_id='HAL4L1234', estado='entregado',
+            cliente='HAL4 Cliente', cd_entrega=self.cd_origin,
+            fecha_entrega=timezone.now() - timedelta(minutes=15),
+        )
+        self.programacion = Programacion.objects.create(
+            container=self.container_lleno, cd=self.cd_origin, driver=self.driver,
+            cliente='HAL4 Cliente', fecha_programada=timezone.now(),
+            fecha_inicio_ruta=timezone.now() - timedelta(minutes=30),
+            gps_inicio_lat=-33.40, gps_inicio_lng=-70.60,
+            fecha_arribo_cd=timezone.now() - timedelta(minutes=10),
+        )
+        self.container_vacio = Container.objects.create(
+            container_id='HAL4V1234', estado='vacio',
+            cd_entrega=self.cd_origin, vacio_contabilizado=True,
+            fecha_vacio=timezone.now() - timedelta(hours=1),
+        )
+        self.factory = APIRequestFactory()
+
+    def _post(self, action, data, user=None):
+        user = user or self.user
+        request = self.factory.post('/', data, format='json')
+        force_authenticate(request, user=user)
+        view = ProgramacionViewSet.as_view({'post': action})
+        return view(request, pk=self.programacion.pk)
+
+    def test_soltar_contenedor_desempaqueta_3_tupla_y_expone_retorno(self):
+        response = self._post('soltar_contenedor', {})
+        self.assertEqual(response.status_code, 200,
+                         f'soltar_contenedor debe responder 200: {response.data}')
+        self.assertIn('retorno_automatico', response.data)
+        self.assertIsNotNone(response.data['retorno_automatico'],
+                             'Retorno automático debe crearse (P0-5)')
+
+    def test_auto_retorno_es_mismo_conductor(self):
+        response = self._post('soltar_contenedor', {})
+        self.assertEqual(response.status_code, 200)
+        retorno_id = response.data['retorno_automatico']
+        self.assertIsNotNone(retorno_id)
+        prog_retorno = Programacion.objects.get(pk=retorno_id)
+        self.assertEqual(prog_retorno.driver_id, self.driver.id,
+                         'P0-5: el retorno debe ser MISMO conductor que soltó')
+        self.assertEqual(prog_retorno.container_id, self.container_vacio.id)
+        # HAL-5 fix: la señal post_save de Programacion hace early-return cuando
+        # llega con driver set, por lo que el container NO se transiciona a
+        # 'asignado' automáticamente aquí. Queda en 'vacio' hasta que el
+        # conductor ejecute un comando de inicio. Esto es coherente con el
+        # patrón P0-5 (Safari review).
+        self.assertEqual(prog_retorno.container.estado, 'vacio')
+
+    def test_full_flow_drop_to_vacio_estado_consistente(self):
+        response = self._post('soltar_contenedor', {})
+        self.assertEqual(response.status_code, 200)
+        retorno_id = response.data['retorno_automatico']
+        self.assertIsNotNone(retorno_id)
+        self.container_lleno.refresh_from_db()
+        self.assertEqual(self.container_lleno.estado, 'soltado')
+        self.assertEqual(self.container_lleno.vacio_contabilizado, False)
+
+        prog_soltada = Programacion.objects.get(pk=self.programacion.pk)
+        from apps.core.services.operations import OperationalFlowService
+        OperationalFlowService.mark_empty(prog_soltada, 'cd', 'test')
+        self.container_lleno.refresh_from_db()
+        self.assertEqual(self.container_lleno.estado, 'vacio')
+        self.assertTrue(self.container_lleno.vacio_contabilizado)
+        self.cd_origin.refresh_from_db()
+        self.assertEqual(self.cd_origin.vacios_actuales, 1,
+                         'CD debe haber recibido el vacío')
+        from apps.programaciones.models import TiempoOperacion
+        tiempo = TiempoOperacion.objects.filter(
+            container=self.container_lleno, tipo_operacion='descarga_cd',
+        ).first()
+        self.assertIsNotNone(tiempo)
+
+        prog_retorno = Programacion.objects.get(pk=retorno_id)
+        self.assertEqual(prog_retorno.driver_id, self.driver.id)
+        # HAL-5 fix: ver test_auto_retorno_es_mismo_conductor — container queda 'vacio'.
+        self.assertEqual(prog_retorno.container.estado, 'vacio')
+        self.assertEqual(prog_retorno.cd_id, self.cd_origin.id,
+                         'Destino del retorno debe ser el mismo CD donde soltó')
+        self.container_vacio.refresh_from_db()
+        self.assertEqual(self.container_vacio.estado, 'vacio')
+        self.assertTrue(self.container_vacio.vacio_contabilizado)
+        self.cd_origin.refresh_from_db()
+        self.assertEqual(self.cd_origin.vacios_actuales, 1)
+
+
+class HalNocheSoltarContenedorAnonimoTests(TestCase):
+    """HAL-4 seguridad: soltar_contenedor rechaza requests anónimos.
+
+    Safari review: el guard _usuario_puede_operar_viaje exige auth+match
+    driver_id==user_id (o staff). Garantiza que la respuesta 3-tupla no
+    quede expuesta por un bypass de auth.
+    """
+
+    def setUp(self):
+        self.owner = User.objects.create_user(username='h4_owner', password='***')
+        self.driver = Driver.objects.create(
+            nombre='HAL4 Owner', user=self.owner, patente='O-1234',
+            num_entregas_dia=1, max_entregas_dia=3,
+        )
+        self.cd = CD.objects.create(
+            nombre='HAL4 AuthCD', codigo='HAL4-AUTH', direccion='X',
+            comuna='Santiago', lat=-33.45, lng=-70.65,
+            permite_soltar_contenedor=True, capacidad_vacios=5,
+        )
+        self.container = Container.objects.create(
+            container_id='HAL4AN1234', estado='entregado', cliente='Cli',
+            cd_entrega=self.cd, fecha_entrega=timezone.now() - timedelta(minutes=10),
+        )
+        self.programacion = Programacion.objects.create(
+            container=self.container, cd=self.cd, driver=self.driver,
+            cliente='Cli', fecha_programada=timezone.now(),
+        )
+        self.factory = APIRequestFactory()
+
+    def test_solicitud_anonima_recibe_403(self):
+        from rest_framework.test import APIRequestFactory as _f
+        factory = _f()
+        request = factory.post('/', {}, format='json')
+        # SIN force_authenticate — request anónimo
+        view = ProgramacionViewSet.as_view({'post': 'soltar_contenedor'})
+        response = view(request, pk=self.programacion.pk)
+        self.assertIn(response.status_code, (401, 403),
+                      f'Request anónimo debe ser rechazado: {response.status_code}')
+
+
+class HalNocheAceptarAsignacion200Tests(TestCase):
+    """HAL-6: aceptar_asignacion devuelve 200 OK, no 201."""
+
+    def setUp(self):
+        self.user = User.objects.create_user(username='h6_driver', password='***')
+        self.driver = Driver.objects.create(
+            nombre='HAL6 Driver', user=self.user, patente='H6-1234',
+        )
+        self.cd = CD.objects.create(
+            nombre='HAL6 CD', codigo='HAL6-CD', direccion='D',
+            comuna='Santiago', lat=-33.45, lng=-70.65,
+        )
+        self.container = Container.objects.create(
+            container_id='HAL6A1234', estado='asignado', cliente='Cli',
+        )
+        self.programacion = Programacion.objects.create(
+            container=self.container, cd=self.cd, driver=self.driver,
+            cliente='Cli', fecha_programada=timezone.now() + timedelta(hours=1),
+        )
+        self.factory = APIRequestFactory()
+
+    def test_aceptar_asignacion_devuelve_200_no_201(self):
+        request = self.factory.post('/', {}, format='json')
+        force_authenticate(request, user=self.user)
+        view = ProgramacionViewSet.as_view({'post': 'aceptar_asignacion'})
+        response = view(request, pk=self.programacion.pk)
+        self.assertEqual(response.status_code, 200,
+                         f'aceptar_asignacion debe devolver 200, no 201: {response.status_code}')
+
+
+class HalNochePatenteNullTests(TestCase):
+    """HAL-7: iniciar_ruta no revienta con {'patente': null}."""
+
+    def setUp(self):
+        self.user = User.objects.create_user(username='h7_driver', password='***')
+        self.driver = Driver.objects.create(
+            nombre='HAL7 Driver', user=self.user, patente='H7-1234',
+        )
+        self.cd = CD.objects.create(
+            nombre='HAL7 CD', codigo='HAL7-CD', direccion='D',
+            comuna='Santiago', lat=-33.45, lng=-70.65,
+        )
+        self.container = Container.objects.create(
+            container_id='HAL7P1234', estado='asignado', cliente='Cli',
+        )
+        self.programacion = Programacion.objects.create(
+            container=self.container, cd=self.cd, driver=self.driver,
+            cliente='Cli', fecha_programada=timezone.now() + timedelta(hours=1),
+        )
+        self.factory = APIRequestFactory()
+
+    def test_patente_null_es_tratado_como_vacio_y_devuelve_400(self):
+        request = self.factory.post('/', {
+            'patente': None, 'lat': -33.40, 'lng': -70.60,
+        }, format='json')
+        force_authenticate(request, user=self.user)
+        view = ProgramacionViewSet.as_view({'post': 'iniciar_ruta'})
+        response = view(request, pk=self.programacion.pk)
+        # Comportamiento: patente vacía → 400 con mensaje "Debe ingresar la patente".
+        self.assertEqual(response.status_code, 400,
+                         f'patente=null debe manejarse sin 500: {response.data}')
