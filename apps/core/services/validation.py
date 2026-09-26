@@ -205,7 +205,11 @@ class PreAssignmentValidationService:
         # 1) En ruta: usar inicio real + ETA operativa (clic de la máquina)
         if estado == 'en_ruta' and programacion.fecha_inicio_ruta:
             inicio = programacion.fecha_inicio_ruta
-            if programacion.eta_minutos:
+            # P1-6: preferir eta_recalculado_min (viva, recalculada en ruta) sobre
+            # eta_minutos (estimación inicial). Solo si la máquina ya recalculó.
+            if programacion.eta_recalculado_min:
+                duracion = int(programacion.eta_recalculado_min)
+            elif programacion.eta_minutos:
                 duracion = int(programacion.eta_minutos)
             else:
                 duracion = cls._calcular_tiempo_total_asignacion(programacion)

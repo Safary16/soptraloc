@@ -88,11 +88,26 @@ class ETAEstimator:
         else:
             tiempo_viaje = 60 # Default si no hay coordenadas
 
-        # 2. Tiempo de operación en CD
-        tiempo_op = MLTimePredictor.predecir_tiempo_operacion(
-            cd=programacion.cd,
-            conductor=driver
-        )
+        # 2. Tiempo de operación en CD (P1-5: OperationalLearningEngine.predict_discharge
+        # reemplaza la consulta directa a TiempoOperacion. Mantiene fallback al
+        # MLTimePredictor si no hay datos en el engine).
+        tiempo_op = None
+        if programacion.cd is not None:
+            try:
+                from apps.core.services.learning_engine import OperationalLearningEngine
+                prediccion = OperationalLearningEngine.predict_discharge(
+                    programacion.cd, conductor=driver,
+                    departure=programacion.fecha_programada,
+                )
+                if isinstance(prediccion, dict):
+                    tiempo_op = prediccion.get('estimated_minutes')
+            except Exception:
+                tiempo_op = None
+        if tiempo_op is None:
+            tiempo_op = MLTimePredictor.predecir_tiempo_operacion(
+                cd=programacion.cd,
+                conductor=driver
+            )
 
         # Manejo defensivo: si el predictor devolvio None (sin Mapbox ni ML),
         # preferimos None sobre un entero ficticio (60). El operador ve la

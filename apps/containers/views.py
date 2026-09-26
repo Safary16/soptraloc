@@ -858,26 +858,93 @@ class ContainerViewSet(viewsets.ModelViewSet):
     def marcar_devuelto(self, request, pk=None):
         """Completa retorno en depósito o CCTI según el destino seleccionado."""
         container = self.get_object()
-        
+
         if container.estado != 'vacio_en_ruta':
             return Response(
                 {'error': f'Contenedor debe estar en ruta vacío. Estado actual: {container.get_estado_display()}'},
                 status=status.HTTP_400_BAD_REQUEST
             )
-        
+
         usuario = request.user.username if request.user.is_authenticated else None
         from apps.core.services.returns import EmptyReturnService
+        # Capturar timestamps antes del cambio de estado para alimentar ML
+        fecha_salida_vacio = container.fecha_vacio_ruta
+        programacion_retorno = getattr(container, 'programacion', None)
+        conductor = programacion_retorno.driver if programacion_retorno else None
+        cd_origen = container.cd_entrega
+        cd_destino = container.retorno_destino_cd
         try:
             container = EmptyReturnService.complete(container, user=usuario)
         except ValueError as exc:
             return Response({'error': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
-        
+
         # CCTI es un lugar físico: el vacío queda en 'en_ccti' (no cierra el ciclo).
         # 'devuelto' (cierre) solo aplica a depósito de naviera, y complete() ya lo dejó así.
         # No forzar la transición aquí: antes rompía con 500 (en_ccti → devuelto inválida).
         if container.retorno_destino_tipo == 'deposito' and container.estado != 'devuelto':
             container.cambiar_estado('devuelto', usuario)
             container.save()
+
+        # P1-3: crear TiempoViaje cuando el contenedor pasó por 'vacio_en_ruta'
+        # y terminó como 'devuelto' (retorno a depósito naviera). Alimenta el
+        # learning engine con tiempos reales de retorno de vacío.
+        # P1-4: también registrar TiempoOperacion tipo 'devolucion_vacio' para
+        # consolidar el ciclo completo en el modelo de aprendizaje.
+        try:
+            from django.utils import timezone as _tz
+            from apps.programaciones.models import TiempoViaje
+            finished_at = _tz.now()
+            if fecha_salida_vacio and cd_origen and cd_destino:
+                try:
+                    dest_lat = float(cd_destino.lat)
+                    dest_lng = float(cd_destino.lng)
+                except (TypeError, ValueError):
+                    dest_lat = float(cd_origen.lat) if cd_origen and cd_origen.lat else -33.45
+                    dest_lng = float(cd_origen.lng) if cd_origen and cd_origen.lng else -70.65
+                try:
+                    orig_lat = float(cd_origen.lat) if cd_origen and cd_origen.lat else -33.45
+                    orig_lng = float(cd_origen.lng) if cd_origen and cd_origen.lng else -70.65
+                except (TypeError, ValueError):
+                    orig_lat, orig_lng = -33.45, -70.65
+                delta = max(1, int((finished_at - fecha_salida_vacio).total_seconds() / 60))
+                TiempoViaje.objects.create(
+                    conductor=conductor,
+                    programacion=programacion_retorno,
+                    origen_lat=orig_lat,
+                    origen_lon=orig_lng,
+                    destino_lat=dest_lat,
+                    destino_lon=dest_lng,
+                    origen_nombre=cd_origen.nombre if cd_origen else 'CD Origen',
+                    destino_nombre=cd_destino.nombre if cd_destino else 'Depósito',
+                    tiempo_mapbox_min=delta,
+                    tiempo_real_min=delta,
+                    hora_salida=fecha_salida_vacio,
+                    hora_llegada=finished_at,
+                    hora_del_dia=fecha_salida_vacio.hour,
+                    dia_semana=fecha_salida_vacio.weekday(),
+                    distancia_km=0,
+                    tipo_operacion='retorno_vacio',
+                    anomalia=False,
+                    observaciones=f'Retorno vacío auto-registrado ({container.retorno_destino_tipo})',
+                )
+            # P1-4: TiempoOperacion devolucion_vacio
+            if fecha_salida_vacio and (cd_destino or cd_origen):
+                from apps.core.services.operations import OperationalFlowService
+                OperationalFlowService.registrar_operacion_tiempo(
+                    container=container,
+                    tipo_operacion='devolucion_vacio',
+                    started_at=fecha_salida_vacio,
+                    finished_at=finished_at,
+                    cd_origen=cd_origen,
+                    cd_destino=cd_destino,
+                    conductor=conductor,
+                    observaciones='Retorno de vacío (marcar_devuelto)',
+                )
+        except Exception as _log_exc:
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.warning('marcar_devuelto ml_logging_failed container_id=%s detalle=%s',
+                           getattr(container, 'pk', None), _log_exc, exc_info=True)
 
         _update_registro_operacion(container, estado_final='ENTREGADO')
 

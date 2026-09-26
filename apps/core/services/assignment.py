@@ -68,12 +68,26 @@ class AssignmentService:
     def _score_historial(cls, driver: Driver) -> float:
         cumplimiento = float(driver.cumplimiento_porcentaje) / 100.0
         profile = OperationalLearningEngine.driver_profile(driver)
-        # Con pocas muestras no se altera el historial declarado del conductor.
-        if profile['samples'] < OperationalLearningEngine.MIN_DRIVER_SAMPLES:
-            return round(cumplimiento, 3)
+        # P1-7: perfil de descarga del conductor alimenta el score.
+        # Conductor con descarga más rápida que la media sube el score,
+        # sin superar cumplimiento declarado.
+        discharge_profile = OperationalLearningEngine.driver_discharge_profile(driver)
+        base = round(cumplimiento, 3)
+        if profile['samples'] < OperationalLearningEngine.MIN_DRIVER_SAMPLES and \
+           discharge_profile['samples'] < OperationalLearningEngine.MIN_DISCHARGE_SAMPLES:
+            return base
         pace_score = max(0.0, min(1.0, 1.15 - (profile['factor'] - 0.85)))
         confidence = profile['confidence']
-        return round((cumplimiento * (1 - 0.35 * confidence)) + (pace_score * 0.35 * confidence), 3)
+        route_part = (cumplimiento * (1 - 0.35 * confidence)) + (pace_score * 0.35 * confidence)
+        # Sumar leve bono de descarga (max +0.05) si el conductor descarga
+        # consistentemente más rápido (factor <0.85 y confianza alta).
+        discharge_bonus = 0.0
+        if discharge_profile['samples'] >= OperationalLearningEngine.MIN_DISCHARGE_SAMPLES:
+            d_conf = discharge_profile['confidence']
+            d_factor = discharge_profile['factor']
+            # factor<1 = más rápido. Mapeo lineal en [-0.05, +0.05].
+            discharge_bonus = max(-0.05, min(0.05, (1.0 - d_factor) * 0.15 * d_conf))
+        return round(min(1.0, route_part + discharge_bonus), 3)
 
     @classmethod
     def _score_urgencia(cls, programacion: Programacion) -> float:

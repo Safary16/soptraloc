@@ -13,7 +13,29 @@ class OperationalFlowService:
             container=programacion.container, tipo_operacion='descarga_cd'
         ).exists():
             return None
+        # P1-1/P1-2: preferir programacion.fecha_inicio_descarga cuando existe
+        # (clic real del conductor "Iniciar Descarga"). Si no, caer al flujo
+        # histórico (fecha_soltado o fecha_entrega). Se acepta el caller
+        # pasando started_at explícito para tests; pero si el caller pasó el
+        # default del servicio, override aquí para respetar fecha_inicio_descarga.
+        if programacion.fecha_inicio_descarga and (
+            started_at is None
+            or started_at == programacion.container.fecha_soltado
+            or started_at == programacion.container.fecha_entrega
+        ):
+            started_at = programacion.fecha_inicio_descarga
         estimated = programacion.cd.tiempo_promedio_descarga_min or 60
+        # P1-2 (parcial): estimación viva basada en historial de descargas reales.
+        # Solo aplica si hay datos suficientes; si no, fallback al estático del CD.
+        try:
+            from apps.core.services.learning_engine import OperationalLearningEngine
+            aprendida = OperationalLearningEngine.predict_discharge(
+                programacion.cd, conductor=programacion.driver,
+            )
+            if isinstance(aprendida, dict) and aprendida.get('estimated_minutes'):
+                estimated = int(aprendida['estimated_minutes'])
+        except Exception:
+            pass
         delta_min = int((finished_at - started_at).total_seconds() / 60)
         if delta_min <= 0:
             # Reloj erróneo o datos inconsistentes: no dejar 1 min que envenene el ML.
@@ -316,3 +338,50 @@ class OperationalFlowService:
         if locked.container.estado == 'descargado':
             locked.container.cambiar_estado('vacio', usuario)
         return locked, timing
+
+    @staticmethod
+    def registrar_operacion_tiempo(container, tipo_operacion, started_at, finished_at,
+                                    cd_origen=None, cd_destino=None, conductor=None,
+                                    observaciones=''):
+        """Registra un TiempoOperacion explícito para el ciclo completo.
+
+        Usado por iniciar_retorno (devolucion_vacio), marcar_devuelto (devolucion_vacio)
+        y crear_ruta_manual (carga_ccti/retiro_puerto). Si finished_at - started_at
+        es <=0 se marca anomalía para no envenenar el ML con datos inconsistentes.
+
+        Args:
+            container: Container relacionado (puede ser None para carga_ccti previa).
+            tipo_operacion: uno de carga_ccti|descarga_cd|retiro_puerto|devolucion_vacio.
+            started_at, finished_at: datetimes del tramo.
+            cd_origen, cd_destino: CD (uno u otro obligatorio según tipo).
+            conductor: Driver opcional.
+            observaciones: nota libre para auditoría.
+
+        Returns:
+            TiempoOperacion creado o None si ya existía uno para ese container+tipo.
+        """
+        cd = cd_origen or cd_destino
+        if cd is None:
+            # Sin CD no podemos crear el registro (el modelo lo exige NOT NULL).
+            return None
+        existing = TiempoOperacion.objects.filter(
+            container=container, tipo_operacion=tipo_operacion,
+        ).exists() if container else False
+        if existing:
+            return None
+        delta_min = max(1, int((finished_at - started_at).total_seconds() / 60))
+        estimated = cd.tiempo_promedio_descarga_min if (
+            tipo_operacion == 'descarga_cd' and cd.tiempo_promedio_descarga_min
+        ) else max(1, delta_min)
+        return TiempoOperacion.objects.create(
+            cd=cd,
+            conductor=conductor,
+            container=container,
+            tipo_operacion=tipo_operacion,
+            tiempo_estimado_min=estimated,
+            tiempo_real_min=delta_min,
+            hora_inicio=started_at,
+            hora_fin=finished_at,
+            anomalia=delta_min >= max(1, estimated) * 3,
+            observaciones=observaciones or f'Registro operacional: {tipo_operacion}',
+        )

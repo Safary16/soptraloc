@@ -804,6 +804,25 @@ class ProgramacionViewSet(viewsets.ModelViewSet):
                         'fecha_programacion': data['fecha_programacion'].isoformat()
                     }
                 )
+
+                # P1-4: registrar TiempoOperacion para carga_ccti o retiro_puerto
+                # según tipo_movimiento. started_at = ahora (sin dato histórico real),
+                # finished_at = fecha_programacion (estimación del operador).
+                try:
+                    from apps.core.services.operations import OperationalFlowService
+                    tipo_op = 'carga_ccti' if tipo_movimiento == 'retiro_ccti' else 'retiro_puerto'
+                    OperationalFlowService.registrar_operacion_tiempo(
+                        container=container,
+                        tipo_operacion=tipo_op,
+                        started_at=timezone.now(),
+                        finished_at=data['fecha_programacion'],
+                        cd_origen=cd_destino,
+                        cd_destino=cd_destino,
+                        conductor=None,
+                        observaciones=f'Carga/retiro programado (ruta manual {tipo_movimiento})',
+                    )
+                except Exception as _p1_exc:
+                    logger.warning('crear_ruta_manual tiempo_operacion_failed: %s', _p1_exc)
         except IntegrityError:
             logger.warning(
                 'crear_ruta_manual_integrity_error',
@@ -1823,6 +1842,206 @@ class ProgramacionViewSet(viewsets.ModelViewSet):
             'mensaje': 'Incidente registrado exitosamente.',
             'incidente': incidente_data,
             'programacion': serializer.data
+        }, status=status.HTTP_201_CREATED)
+
+    @action(detail=True, methods=['post'])
+    def notificar_inicio_descarga(self, request, pk=None):
+        """P1-1: marca el clic "Iniciar Descarga" del conductor en CD.
+
+        Diferencia clave con notificar_arribo: este endpoint solo guarda
+        Programacion.fecha_inicio_descarga para medir la duración real de la
+        descarga cuando llegue notificar_fin_descarga. NO cambia
+        container.estado (sigue en 'entregado' o 'soltado').
+
+        Payload opcional:
+        {
+            "lat": -33.4372,
+            "lng": -70.6506
+        }
+        """
+        programacion = self.get_object()
+        if not programacion.driver:
+            return Response(
+                {'error': 'Programación no tiene conductor asignado.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if not self._usuario_puede_operar_viaje(request, programacion):
+            return Response(
+                {'error': 'No puede operar un viaje ajeno.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        if programacion.container.estado not in ('entregado', 'soltado'):
+            return Response(
+                {'error': f'Contenedor debe estar entregado o soltado. Estado: {programacion.container.get_estado_display()}.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if programacion.fecha_inicio_descarga:
+            return Response(
+                {'error': 'La descarga ya fue marcada como iniciada.', 'fecha_inicio_descarga': programacion.fecha_inicio_descarga.isoformat()},
+                status=status.HTTP_409_CONFLICT,
+            )
+
+        now = timezone.now()
+        lat = request.data.get('lat')
+        lng = request.data.get('lng')
+        with transaction.atomic():
+            locked = Programacion.objects.select_for_update().get(pk=programacion.pk)
+            locked.fecha_inicio_descarga = now
+            update_fields = ['fecha_inicio_descarga', 'updated_at']
+            if lat and lng:
+                locked.posicion_actual_lat = lat
+                locked.posicion_actual_lng = lng
+                locked.ultima_actualizacion_tracking = now
+                update_fields += ['posicion_actual_lat', 'posicion_actual_lng', 'ultima_actualizacion_tracking']
+            locked.save(update_fields=update_fields)
+
+        from apps.events.models import Event
+        Event.objects.create(
+            container=programacion.container,
+            event_type='inicio_descarga',
+            detalles={
+                'cd': programacion.cd.nombre,
+                'conductor': programacion.driver.nombre,
+                'lat': str(lat) if lat else None,
+                'lng': str(lng) if lng else None,
+                'timestamp': now.isoformat(),
+            },
+            usuario=request.user.username if request.user.is_authenticated else 'conductor',
+        )
+
+        return Response({
+            'success': True,
+            'mensaje': 'Inicio de descarga registrado.',
+            'fecha_inicio_descarga': now.isoformat(),
+            'programacion_id': programacion.pk,
+        }, status=status.HTTP_201_CREATED)
+
+    @action(detail=True, methods=['post'])
+    def notificar_fin_descarga(self, request, pk=None):
+        """P1-1: cierra la descarga del contenedor.
+
+        Usa Programacion.fecha_inicio_descarga como hora_inicio del
+        TiempoOperacion (descarga_cd). Si no existe (clic del conductor
+        faltante), cae al histórico (fecha_soltado/fecha_entrega) en el
+        servicio central.
+
+        Cambia container.estado a 'descargado' vía complete_discharge.
+        """
+        programacion = self.get_object()
+        if not programacion.driver:
+            return Response(
+                {'error': 'Programación no tiene conductor asignado.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if not self._usuario_puede_operar_viaje(request, programacion):
+            return Response(
+                {'error': 'No puede operar un viaje ajeno.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        if programacion.container.estado not in ('entregado', 'soltado'):
+            return Response(
+                {'error': f'Contenedor debe estar entregado o soltado. Estado: {programacion.container.get_estado_display()}.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        usuario = request.user.username if request.user.is_authenticated else 'conductor'
+        from apps.core.services.operations import OperationalFlowService
+        try:
+            locked, timing, created = OperationalFlowService.complete_discharge(
+                programacion, usuario=usuario, source='portal_conductor',
+            )
+        except ValueError as exc:
+            return Response({'error': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Si la programación ya estaba cerrada, retornar 409 con el timing previo
+        if not created:
+            return Response(
+                {'error': 'La descarga ya fue cerrada.', 'nuevo_estado': locked.container.estado},
+                status=status.HTTP_409_CONFLICT,
+            )
+
+        serializer = self.get_serializer(locked)
+        return Response({
+            'success': True,
+            'mensaje': 'Descarga cerrada.',
+            'programacion': serializer.data,
+            'nuevo_estado': 'descargado',
+            'tiempo_descarga_min': timing.tiempo_real_min if timing else None,
+            'anomalia': bool(timing.anomalia) if timing else False,
+        }, status=status.HTTP_201_CREATED)
+
+    @action(detail=False, methods=['post'])
+    def asignar_conductor_retiro_vacio(self, request):
+        """P1-2: asigna un conductor a un retiro de vacío.
+
+        Crea Programacion de retiro si no existe, usa destino del retorno
+        (Container.retorno_destino_cd o Container.cd_entrega) y notifica al
+        conductor.
+
+        Payload:
+        {
+            "container_id": int,   // contenedor en estado 'vacio' o 'en_ccti'
+            "driver_id": int        // conductor disponible
+        }
+        """
+        container_id = request.data.get('container_id')
+        driver_id = request.data.get('driver_id')
+        if not container_id or not driver_id:
+            return Response(
+                {'error': 'container_id y driver_id son obligatorios.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        from apps.containers.models import Container as ContainerModel
+        from apps.drivers.models import Driver as DriverModel
+        try:
+            container = ContainerModel.objects.get(pk=container_id)
+            driver = DriverModel.objects.get(pk=driver_id)
+        except (ContainerModel.DoesNotExist, DriverModel.DoesNotExist):
+            return Response(
+                {'error': 'container_id o driver_id no existen.'},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        if container.estado not in ('vacio', 'en_ccti', 'vacio_en_ruta'):
+            return Response(
+                {'error': f'Contenedor en estado {container.estado}; solo se asigna retiro si está vacío o en CCTI.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if not driver.esta_disponible:
+            return Response(
+                {'error': f'Conductor {driver.nombre} no está disponible.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        cd_destino = container.retorno_destino_cd or container.cd_entrega
+        if not cd_destino:
+            return Response(
+                {'error': 'Contenedor no tiene CD de retorno configurado.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        # Reusar programación existente si la hay; si no, crear nueva.
+        programacion = getattr(container, 'programacion', None)
+        if programacion is None:
+            programacion = Programacion.objects.create(
+                container=container,
+                cd=cd_destino,
+                cliente=container.cliente or 'RETIRO VACIO',
+                fecha_programada=timezone.now() + timedelta(minutes=15),
+                direccion_entrega=cd_destino.direccion,
+                urgencia_servicio='NORMAL',
+                observaciones='Retiro de vacío asignado por operador.',
+            )
+        try:
+            programacion.asignar_conductor(
+                driver,
+                usuario=request.user.username if request.user.is_authenticated else 'operador',
+            )
+        except Exception as exc:
+            return Response({'error': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+
+        serializer = self.get_serializer(programacion)
+        return Response({
+            'success': True,
+            'mensaje': f'Conductor {driver.nombre} asignado al retiro.',
+            'programacion': serializer.data,
         }, status=status.HTTP_201_CREATED)
 
     @action(detail=True, methods=['post'])

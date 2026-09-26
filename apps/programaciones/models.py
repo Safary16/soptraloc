@@ -98,6 +98,13 @@ class Programacion(models.Model):
     gps_inicio_lat = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True, verbose_name='GPS Inicio Latitud')
     gps_inicio_lng = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True, verbose_name='GPS Inicio Longitud')
     fecha_arribo_cd = models.DateTimeField(null=True, blank=True, verbose_name='Fecha Arribo CD')
+    fecha_inicio_descarga = models.DateTimeField(
+        null=True, blank=True, verbose_name='Fecha Inicio Descarga',
+        help_text=(
+            "Marca real del clic 'iniciar descarga' por el conductor. "
+            "Si existe, se usa como hora_inicio del TiempoOperacion descarga_cd."
+        ),
+    )
     gps_arribo_lat = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True, verbose_name='GPS Arribo Latitud')
     gps_arribo_lng = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True, verbose_name='GPS Arribo Longitud')
     origen_arribo = models.CharField(
@@ -476,6 +483,16 @@ class TiempoViaje(models.Model):
     anomalia = models.BooleanField(
         default=False,
         help_text='Marca viajes anómalos (pausas largas, desvíos) para excluir'
+    )
+    tipo_operacion = models.CharField(
+        max_length=20,
+        choices=[
+            ('viaje', 'Viaje'),
+            ('retorno_vacio', 'Retorno Vacío'),
+        ],
+        default='viaje',
+        verbose_name='Tipo Operación',
+        help_text='Tipo de viaje para análisis diferenciado (viaje lleno vs retorno vacío).',
     )
     observaciones = models.TextField(blank=True)
     

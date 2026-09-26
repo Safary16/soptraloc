@@ -646,3 +646,171 @@ class FlujoConductorP05AutoAssignReturnTests(TestCase):
         self.assertIsNone(retorno, 'No debe crear retorno si el conductor no está disponible')
         self.assertEqual(Programacion.objects.count(), prog_pre_count)
 
+
+class FlujoConductorP1InicioFinDescargaTests(TestCase):
+    """P1-1: endpoints separados inicio/fin descarga + fecha_inicio_descarga."""
+
+    def setUp(self):
+        self.user = User.objects.create_user(username='desc_driver', password='x')
+        self.driver = Driver.objects.create(
+            nombre='Desc Driver', user=self.user,
+            num_entregas_dia=0, max_entregas_dia=5,
+        )
+        self.cd = CD.objects.create(
+            nombre='CD Descarga', codigo='CD-DSC', tipo='cliente',
+            direccion='CD Dir', lat=-33.45, lng=-70.65,
+            tiempo_promedio_descarga_min=60,
+        )
+        self.container = Container.objects.create(
+            container_id='DSCCNT001', cliente='Descarga Cliente',
+            estado='entregado', cd_entrega=self.cd,
+            fecha_entrega=timezone.now() - timedelta(minutes=10),
+        )
+        self.programacion = Programacion.objects.create(
+            container=self.container,
+            cd=self.cd,
+            driver=self.driver,
+            cliente='Descarga Cliente',
+            fecha_programada=timezone.now() - timedelta(minutes=30),
+            fecha_asignacion=timezone.now() - timedelta(hours=2),
+            fecha_inicio_ruta=timezone.now() - timedelta(hours=1),
+        )
+
+    def test_inicio_descarga_persiste_timestamp_y_crea_evento(self):
+        """notificar_inicio_descarga setea fecha_inicio_descarga y crea evento inicio_descarga."""
+        request = APIRequestFactory().post(
+            f'/api/programaciones/{self.programacion.pk}/notificar_inicio_descarga/',
+            data={}, format='json',
+        )
+        force_authenticate(request, user=self.user)
+        view = ProgramacionViewSet.as_view({'post': 'notificar_inicio_descarga'})
+        response = view(request, pk=self.programacion.pk)
+        self.assertEqual(response.status_code, 201, response.data)
+        self.programacion.refresh_from_db()
+        self.assertIsNotNone(self.programacion.fecha_inicio_descarga)
+
+        from apps.events.models import Event
+        evento = Event.objects.filter(
+            container=self.container, event_type='inicio_descarga',
+        )
+        self.assertEqual(evento.count(), 1)
+
+    def test_fin_descarga_usa_fecha_inicio_descarga_para_tiempo_operacion(self):
+        """notificar_fin_descarga usa fecha_inicio_descarga como hora_inicio del TiempoOperacion.
+
+        Verifica el contrato de duración real de la descarga: con un clic del conductor
+        ~5 min antes del fin, el TiempoOperacion.tiempo_real_min debe ser ~5 min,
+        no los 30+ min de la aproximación histórica (fecha_entrega -> now).
+        """
+        self.programacion.fecha_inicio_descarga = timezone.now() - timedelta(minutes=5)
+        self.programacion.save(update_fields=['fecha_inicio_descarga', 'updated_at'])
+
+        request = APIRequestFactory().post(
+            f'/api/programaciones/{self.programacion.pk}/notificar_fin_descarga/',
+            data={}, format='json',
+        )
+        force_authenticate(request, user=self.user)
+        view = ProgramacionViewSet.as_view({'post': 'notificar_fin_descarga'})
+        response = view(request, pk=self.programacion.pk)
+        self.assertEqual(response.status_code, 201, response.data)
+
+        timing = TiempoOperacion.objects.filter(
+            container=self.container, tipo_operacion='descarga_cd',
+        ).first()
+        self.assertIsNotNone(timing, 'Debe crear TiempoOperacion')
+        self.assertGreaterEqual(timing.tiempo_real_min, 4)
+        self.assertLessEqual(timing.tiempo_real_min, 8)
+
+
+class FlujoConductorP1LearningEngineTests(TestCase):
+    """P1-5/P1-7: OperationalLearningEngine.predict_discharge + driver_discharge_profile."""
+
+    def setUp(self):
+        self.cd = CD.objects.create(
+            nombre='CD Learn', codigo='CD-LRN', tipo='cliente',
+            direccion='Dir', lat=-33.45, lng=-70.65,
+            tiempo_promedio_descarga_min=60,
+        )
+        self.driver = Driver.objects.create(
+            nombre='Learn Driver', user=User.objects.create_user(
+                username='learn_driver', password='x'),
+            num_entregas_dia=0, max_entregas_dia=5,
+        )
+
+    def test_predict_discharge_cold_start_usa_estatico(self):
+        """Sin historial: devuelve el tiempo_promedio_descarga_min del CD."""
+        from apps.core.services.learning_engine import OperationalLearningEngine
+        result = OperationalLearningEngine.predict_discharge(self.cd)
+        self.assertTrue(result['cold_start'])
+        self.assertEqual(result['estimated_minutes'], 60)
+        self.assertEqual(result['source'], 'cd_static')
+
+    def test_predict_discharge_con_historial(self):
+        """Con historial suficiente: devuelve estimación basada en datos reales."""
+        from apps.core.services.learning_engine import OperationalLearningEngine
+        # Sembrar 5 TiempoOperacion (umbral MIN_DISCHARGE_SAMPLES=3)
+        for i in range(5):
+            TiempoOperacion.objects.create(
+                cd=self.cd, conductor=self.driver,
+                container=Container.objects.create(
+                    container_id=f'LRN{i:05d}', cliente='C', estado='descargado',
+                ),
+                tipo_operacion='descarga_cd',
+                tiempo_estimado_min=60,
+                tiempo_real_min=45,
+                hora_inicio=timezone.now() - timedelta(days=i + 1),
+                hora_fin=timezone.now() - timedelta(days=i + 1) + timedelta(minutes=45),
+                anomalia=False,
+            )
+        result = OperationalLearningEngine.predict_discharge(self.cd)
+        self.assertFalse(result['cold_start'])
+        self.assertGreaterEqual(result['estimated_minutes'], 30)
+        self.assertLessEqual(result['estimated_minutes'], 60)
+        self.assertEqual(result['source'], 'hybrid_ml_history')
+
+    def test_driver_discharge_profile_sin_datos(self):
+        """Sin historial: factor=1.0, label=sin_datos_suficientes."""
+        from apps.core.services.learning_engine import OperationalLearningEngine
+        profile = OperationalLearningEngine.driver_discharge_profile(self.driver)
+        self.assertEqual(profile['factor'], 1.0)
+        self.assertEqual(profile['label'], 'sin_datos_suficientes')
+
+
+class FlujoConductorP1ValidationEtaRecalcTests(TestCase):
+    """P1-6: validation._calcular_ventana_tiempo prefiere eta_recalculado_min."""
+
+    def setUp(self):
+        self.user = User.objects.create_user(username='val_driver', password='x')
+        self.driver = Driver.objects.create(
+            nombre='Val Driver', user=self.user,
+            num_entregas_dia=0, max_entregas_dia=5,
+        )
+        self.cd = CD.objects.create(
+            nombre='CD Val', codigo='CD-VAL', tipo='cliente',
+            direccion='Dir', lat=-33.45, lng=-70.65,
+        )
+        self.container = Container.objects.create(
+            container_id='VALCNT001', cliente='Val Cliente',
+            estado='en_ruta', cd_entrega=self.cd,
+            fecha_inicio_ruta=timezone.now() - timedelta(minutes=10),
+        )
+        self.programacion = Programacion.objects.create(
+            container=self.container,
+            cd=self.cd,
+            driver=self.driver,
+            cliente='Val Cliente',
+            fecha_programada=timezone.now() - timedelta(hours=1),
+            fecha_inicio_ruta=timezone.now() - timedelta(minutes=10),
+            eta_minutos=60,  # estimación inicial
+            eta_recalculado_min=15,  # recalculado en ruta (mucho más cerca)
+        )
+
+    def test_validacion_usa_eta_recalculado_en_ruta(self):
+        """Para un servicio en_ruta, la ventana debe usar eta_recalculado_min."""
+        from apps.core.services.validation import PreAssignmentValidationService
+        ventana = PreAssignmentValidationService._calcular_ventana_tiempo(
+            self.programacion,
+        )
+        self.assertEqual(ventana['duracion_minutos'], 15)
+        self.assertEqual(ventana['estado_servicio'], 'EN_RUTA')
+

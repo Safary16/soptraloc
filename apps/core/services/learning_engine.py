@@ -8,7 +8,7 @@ from statistics import median
 from django.utils import timezone
 
 from apps.core.services.mapbox import MapboxService
-from apps.programaciones.models import TiempoViaje
+from apps.programaciones.models import TiempoViaje, TiempoOperacion
 
 
 class OperationalLearningEngine:
@@ -17,6 +17,7 @@ class OperationalLearningEngine:
     HISTORY_DAYS = 120
     MIN_ROUTE_SAMPLES = 2
     MIN_DRIVER_SAMPLES = 3
+    MIN_DISCHARGE_SAMPLES = 3
 
     @classmethod
     def _near(cls, value, target, radius=0.012):
@@ -87,6 +88,117 @@ class OperationalLearningEngine:
             'factor': round(factor, 3),
             'label': label,
             'confidence': round(min(0.95, 0.35 + samples / 30), 2),
+        }
+
+    # ---------- P1-5: descarga_cd ----------
+    @classmethod
+    def predict_discharge(cls, cd, conductor=None, departure=None):
+        """Predice la duración de descarga en CD a partir de TiempoOperacion.
+
+        Filtro: tipo_operacion='descarga_cd', anomalia=False, últimos
+        HISTORY_DAYS días. Si hay datos del conductor, pondera por él;
+        si no, cae al CD general; si no, fallback al tiempo_promedio_descarga_min
+        del CD. Devuelve dict con 'estimated_minutes', 'samples', 'confidence'
+        o 'cold_start' para auditoría.
+        """
+        departure = departure or timezone.now()
+        cutoff = timezone.localdate() - timedelta(days=cls.HISTORY_DAYS)
+        rows_qs = TiempoOperacion.objects.filter(
+            cd=cd,
+            tipo_operacion='descarga_cd',
+            anomalia=False,
+            fecha__gte=cutoff,
+        )
+        conductor_rows = []
+        if conductor is not None:
+            conductor_rows = list(
+                rows_qs.filter(conductor=conductor).order_by('-fecha')[:20]
+            )
+        cd_rows = list(rows_qs.order_by('-fecha')[:40])
+        weighted_minutes = []
+        # Si tenemos conductor con datos suficientes, ponderamos por él;
+        # siempre damos peso al CD general para suavizar.
+        samples_conductor = len(conductor_rows)
+        for row in conductor_rows:
+            if row.tiempo_real_min <= 0:
+                continue
+            age_days = max(0, (timezone.localdate() - row.fecha).days)
+            weight = exp(-age_days / 60)
+            weighted_minutes.append((row.tiempo_real_min, weight * 1.4))
+        for row in cd_rows:
+            if row.tiempo_real_min <= 0:
+                continue
+            age_days = max(0, (timezone.localdate() - row.fecha).days)
+            weight = exp(-age_days / 60)
+            weighted_minutes.append((row.tiempo_real_min, weight))
+        if not weighted_minutes:
+            # Cold start: devolver el estático del CD para que ETAEstimator tenga un fallback.
+            return {
+                'estimated_minutes': cd.tiempo_promedio_descarga_min or 60,
+                'samples': 0,
+                'confidence': 0.0,
+                'cold_start': True,
+                'source': 'cd_static',
+            }
+        total_w = sum(w for _, w in weighted_minutes)
+        estimated = sum(m * w for m, w in weighted_minutes) / max(total_w, 1e-9)
+        estimated = max(1, int(round(estimated)))
+        samples = len(weighted_minutes)
+        confidence = round(min(0.95, 0.25 + samples / 20), 2)
+        return {
+            'estimated_minutes': estimated,
+            'samples': samples,
+            'samples_conductor': samples_conductor,
+            'confidence': confidence,
+            'cold_start': False,
+            'source': 'hybrid_ml_history',
+        }
+
+    # ---------- P1-7: perfil de descarga por conductor ----------
+    @classmethod
+    def driver_discharge_profile(cls, driver):
+        """Resumen de la velocidad de descarga de un conductor.
+
+        Combina TiempoOperacion con tipo_operacion='descarga_cd' del conductor
+        para producir un factor multiplicativo sobre el tiempo estimado del CD.
+        """
+        rows = list(
+            TiempoOperacion.objects.filter(
+                conductor=driver,
+                tipo_operacion='descarga_cd',
+                anomalia=False,
+            ).order_by('-fecha')[:40]
+        )
+        samples = len(rows)
+        if samples < cls.MIN_DISCHARGE_SAMPLES:
+            return {
+                'samples': samples, 'factor': 1.0, 'label': 'sin_datos_suficientes',
+                'confidence': round(min(0.35, samples / 10), 2),
+            }
+        # Factor: mediana(tiempo_real / tiempo_estimado) usando el tiempo estimado
+        # del CD al momento del registro. Si el registro tiene tiempo_estimado_min=0
+        # cae a 1.0 (no se puede comparar).
+        ratios = []
+        for row in rows:
+            if row.tiempo_estimado_min and row.tiempo_real_min:
+                ratios.append(row.tiempo_real_min / row.tiempo_estimado_min)
+        if not ratios:
+            return {
+                'samples': samples, 'factor': 1.0, 'label': 'sin_datos_suficientes',
+                'confidence': 0.0,
+            }
+        factor = float(median(ratios))
+        if factor <= 0.85:
+            label = 'más_rápido_descargando'
+        elif factor >= 1.15:
+            label = 'más_lento_descargando'
+        else:
+            label = 'ritmo_descarga_esperado'
+        return {
+            'samples': samples,
+            'factor': round(factor, 3),
+            'label': label,
+            'confidence': round(min(0.95, 0.35 + samples / 20), 2),
         }
 
     @classmethod
