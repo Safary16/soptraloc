@@ -17,16 +17,25 @@ def trigger_automatic_assignment(sender, instance: Programacion, created: bool, 
     if not created:
         return
 
+    # HAL-5: Si la programación llega CON conductor ya seteado (admin, serializer,
+    # tests, imports de asignación manual), NO ejecutar la transición automática
+    # a 'programado' del container. El bug original era: el bloque de
+    # transición se ejecutaba ANTES de `if instance.driver: return`, lo que
+    # provocaba que el container pasara a 'programado', se disparara el handler
+    # sincronizar_estado_con_programacion() (containers/signals.py:38-42) y éste,
+    # al ver estado='programado' con driver asignado, llamaba a liberar_conductor()
+    # + ponía driver=None. Resultado: el conductor quedaba WIPEADO por una creación
+    # directa. Bug P0-5 adyacente: el early-return debe ir PRIMERO.
+    if instance.driver:
+        return
+
     # Crear una programación representa el hito de negocio «programado».
-    # Esto también protege a las creaciones directas (admin, serializer, tests):
-    # asignar luego al conductor no debe intentar saltar liberado → asignado.
+    # Esto también protege a las creaciones directas SIN driver (admin, serializer,
+    # tests): asignar luego al conductor no debe intentar saltar liberado → asignado.
     container = instance.container
     if container and container.estado in {'liberado', 'secuenciado'}:
         container.cambiar_estado('programado', usuario='system_programacion')
         instance.container = container
-
-    if instance.driver:
-        return
 
     logger.info(
         f"Nueva programación ID {instance.id} creada. "

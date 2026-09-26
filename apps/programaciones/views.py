@@ -1135,12 +1135,72 @@ class ProgramacionViewSet(viewsets.ModelViewSet):
                 import logging
                 logger = logging.getLogger(__name__)
                 logger.warning(f"Error calculando ETA (fallback) para programación: {str(e2)}")
-        
-        if eta_ok:
-            programacion.save(update_fields=[
-                'eta_minutos', 'distancia_km', 'ruta_geojson', 'ruta_firma',
-                'prediccion_ml', 'updated_at'
-            ])
+
+        # HAL-1: tercer fallback (haversine + velocidad de referencia 35 km/h).
+        # Mismo cálculo que NotificationService.actualizar_eta, para garantizar
+        # que siempre haya un eta_minutos operable (la UI muestra ETA desde
+        # fecha_inicio_ruta + eta_minutos, y sin él quedaba en silencio).
+        if not eta_ok:
+            from math import asin, cos, radians, sin, sqrt
+            from decimal import Decimal as _Dec
+            try:
+                R = 6371.0
+                p1 = radians(float(lat))
+                p2 = radians(float(programacion.cd.lat))
+                dp = radians(float(programacion.cd.lat) - float(lat))
+                dl = radians(float(programacion.cd.lng) - float(lng))
+                a = sin(dp / 2) ** 2 + cos(p1) * cos(p2) * sin(dl / 2) ** 2
+                km = 2 * R * asin(sqrt(a))
+                velocidad_kmh = 35.0
+                eta_min = max(1, int(round(km / velocidad_kmh * 60)))
+                programacion.eta_minutos = eta_min
+                programacion.distancia_km = _Dec(str(round(km, 2)))
+                programacion.prediccion_ml = {
+                    'source': 'haversine_fallback',
+                    'mapbox_minutes': None,
+                    'predicted_minutes': eta_min,
+                    'learned_factor': None,
+                    'samples': 0,
+                    'confidence': 0.0,
+                    'driver_profile': None,
+                    'explanation': (
+                        'ETA estimada por distancia haversine (35 km/h de referencia) '
+                        'porque tanto Mapbox como ML no estaban disponibles.'
+                    ),
+                }
+                eta_ok = True
+                import logging
+                _logger = logging.getLogger(__name__)
+                _logger.warning(
+                    f"HAL-1 haversine fallback activado: prog={programacion.pk} "
+                    f"km={km:.2f} eta_min={eta_min}"
+                )
+            except Exception as e3:
+                import logging
+                _logger = logging.getLogger(__name__)
+                _logger.warning(
+                    f"HAL-1 haversine fallback falló prog={programacion.pk}: {e3}"
+                )
+
+        # HAL-1: blindaje final — si llegamos aquí sin ETA, persiste algo legible
+        # en lugar de propagar None y romper la UI / int(None) downstream.
+        if not eta_ok or programacion.eta_minutos is None:
+            programacion.eta_minutos = 0
+            programacion.distancia_km = programacion.distancia_km or 0
+            programacion.prediccion_ml = {
+                **(programacion.prediccion_ml or {}),
+                'source': 'no_disponible',
+                'explanation': 'ETA no disponible (Mapbox, ML y haversine fallaron).',
+                'requires_attention': True,
+            }
+
+        # HAL-1: persisto siempre aunque eta_ok=False — la blindaja final deja
+        # prediccion_ml marcado como no_disponible y eta_minutos=0, evitando
+        # un save posterior que perdería la asignación.
+        programacion.save(update_fields=[
+            'eta_minutos', 'distancia_km', 'ruta_geojson', 'ruta_firma',
+            'prediccion_ml', 'updated_at',
+        ])
         
         # Crear notificación con ETA (pasar la ETA ya calculada de la programación
         # para no recalcular con Mapbox y quedar sin ella si Mapbox falla).
@@ -1202,18 +1262,33 @@ class ProgramacionViewSet(viewsets.ModelViewSet):
             registro.incidentes_ejecucion = programacion.incidentes_registrados # Copiar incidentes al log final
             registro.save(update_fields=['eta_real_min', 'estado_final', 'incidentes_ejecucion'])
 
-            # Alimentar la estimación adaptativa con un viaje real completo.
-            if (
+            # HAL-3: alimentar la estimación adaptativa con un viaje real completo.
+            # Guard reescrito: NO exigir programacion.eta_minutos (puede ser 0 por el
+            # blindaje HAL-1, y antes el bloque se saltaba silenciosamente). Si no hay
+            # ETA estimada, derivamos tiempo_mapbox_min de distancia_km + velocidad de
+            # referencia 35 km/h o caemos a 1 min como ground truth para no envenenar
+            # el ML con un valor ficticio 0.
+            ya_registrado = TiempoViaje.objects.filter(programacion=programacion).exists()
+            datos_minimos = (
                 programacion.fecha_inicio_ruta
                 and programacion.container.fecha_entrega
                 and programacion.gps_inicio_lat is not None
                 and programacion.gps_inicio_lng is not None
-                and programacion.cd
-                and programacion.eta_minutos
-                and not TiempoViaje.objects.filter(programacion=programacion).exists()
-            ):
+                and programacion.cd is not None
+                and programacion.driver is not None
+            )
+            if datos_minimos and not ya_registrado:
                 real_min = max(1, int((programacion.container.fecha_entrega - programacion.fecha_inicio_ruta).total_seconds() / 60))
-                estimado = max(1, int(programacion.eta_minutos))
+                # estimado: preferir eta_minutos; si es 0/None, derivar de distancia_km
+                estimado_eta = programacion.eta_minutos
+                estimado_dist = None
+                if (not estimado_eta) and programacion.distancia_km:
+                    try:
+                        km = float(programacion.distancia_km)
+                        estimado_dist = max(1, int(round(km / 35.0 * 60)))
+                    except Exception:
+                        estimado_dist = None
+                estimado = max(1, int(estimado_eta or estimado_dist or 1))
                 TiempoViaje.objects.create(
                     conductor=programacion.driver,
                     programacion=programacion,
@@ -1231,7 +1306,7 @@ class ProgramacionViewSet(viewsets.ModelViewSet):
                     dia_semana=programacion.fecha_inicio_ruta.weekday(),
                     distancia_km=programacion.distancia_km or 0,
                     ruta_firma=programacion.ruta_firma,
-                    anomalia=real_min >= estimado * 3,
+                    anomalia=real_min >= max(1, estimado) * 3,
                 )
             logger.info(f"RegistroOperacion {registro.id} actualizado al finalizar Programacion {programacion.id} con estado {estado_final}.")
         except Exception as e:
@@ -1433,15 +1508,22 @@ class ProgramacionViewSet(viewsets.ModelViewSet):
         
         usuario = request.user.username if request.user.is_authenticated else None
         from apps.core.services.operations import OperationalFlowService
+        # HAL-4: el service devuelve 3-tupla (locked, created, retorno_programacion).
+        # El unpack antiguo (programacion, created) reventaba con
+        # 'too many values to unpack (expected 2, got 3)' y abortaba el flujo
+        # completo de drop & hook. Ahora desempaquetamos 3, manejamos el retorno
+        # automático y lo exponemos al cliente para auditoría.
         try:
-            programacion, created = OperationalFlowService.drop_container(programacion, usuario)
+            programacion, created, retorno_programacion = OperationalFlowService.drop_container(
+                programacion, usuario,
+            )
         except ValueError as exc:
             return Response({'error': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
-        
+
         # El viaje lleno terminó: la entrega se completó; la descarga pendiente
         # del CD se registra con su propio timing (coherencia de estado_final).
         self._update_registro_operacion_on_completion(programacion, 'ENTREGADO')
-        
+
         # Crear evento de contenedor soltado
         from apps.events.models import Event
         if created:
@@ -1458,7 +1540,22 @@ class ProgramacionViewSet(viewsets.ModelViewSet):
                 },
                 usuario=usuario
             )
-        
+            if retorno_programacion is not None:
+                # HAL-4: trazabilidad del retorno automático creado por el service.
+                Event.objects.create(
+                    container=retorno_programacion.container,
+                    programacion=retorno_programacion,
+                    event_type='retorno_vacio_autoasignado',
+                    detalles={
+                        'conductor': retorno_programacion.driver.nombre if retorno_programacion.driver else None,
+                        'cd': retorno_programacion.cd.nombre if retorno_programacion.cd else None,
+                        'origen_drop': programacion.container.container_id,
+                        'descripcion': 'Retorno automático creado en drop_container',
+                        'automatico': True,
+                    },
+                    usuario=usuario,
+                )
+
         serializer = self.get_serializer(programacion)
         return Response({
             'success': True,
@@ -1467,6 +1564,9 @@ class ProgramacionViewSet(viewsets.ModelViewSet):
             'nuevo_estado': 'soltado',
             'conductor_liberado': True,
             'ya_registrado': not created,
+            'retorno_automatico': (
+                retorno_programacion.id if retorno_programacion is not None else None
+            ),
         })
     
     @action(detail=True, methods=['post'])
