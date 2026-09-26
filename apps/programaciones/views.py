@@ -2143,17 +2143,14 @@ class ProgramacionViewSet(viewsets.ModelViewSet):
                 )
 
         # Validación: solo el conductor asignado puede aceptar (o staff).
-        if request.user.is_authenticated and not request.user.is_staff:
-            try:
-                from apps.drivers.models import Driver
-                driver_user = Driver.objects.filter(user=request.user).first()
-            except Exception:
-                driver_user = None
-            if not driver_user or driver_user.id != programacion.driver_id:
-                return Response(
-                    {'error': 'Solo el conductor asignado puede aceptar la asignación.'},
-                    status=status.HTTP_403_FORBIDDEN,
-                )
+        # Revisión senior (Safari): usar helper canónico _usuario_puede_operar_viaje
+        # para que un request ANÓNIMO sea rechazado (403) — el guard anterior
+        # (is_authenticated and not is_staff) dejaba pasar a usuarios no autenticados.
+        if not self._usuario_puede_operar_viaje(request, programacion):
+            return Response(
+                {'error': 'Solo el conductor asignado puede aceptar la asignación.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
 
         from apps.events.models import Event
         with transaction.atomic():

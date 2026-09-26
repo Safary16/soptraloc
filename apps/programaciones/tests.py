@@ -491,6 +491,24 @@ class FlujoConductorP0Tests(TestCase):
         self.programacion.refresh_from_db()
         self.assertNotEqual(self.programacion.decision_operador, 'CONFIRMAR')
 
+    def test_aceptar_asignacion_anonimo_rechazado_403(self):
+        """Safari review: un request ANÓNIMO (no autenticado) debe ser rechazado
+        con 403. El guard anterior ('is_authenticated and not is_staff') dejaba
+        pasar a no-autenticados porque 'False and not True' es False → no entraba
+        al if. Ahora se usa el helper _usuario_puede_operar_viaje que retorna
+        False para usuarios no autenticados.
+        """
+        # Request sin force_authenticate → request.user es AnonymousUser
+        request = APIRequestFactory().post(
+            f'/api/programaciones/{self.programacion.pk}/aceptar_asignacion/',
+            data={}, format='json',
+        )
+        view = ProgramacionViewSet.as_view({'post': 'aceptar_asignacion'})
+        response = view(request, pk=self.programacion.pk)
+        self.assertEqual(response.status_code, 403, response.data)
+        self.programacion.refresh_from_db()
+        self.assertNotEqual(self.programacion.decision_operador, 'CONFIRMAR')
+
     # ---------- P0-2: reportar_problema ----------
     def test_reportar_problema_no_cambia_estado_y_notifica(self):
         """reportar_problema NO debe cambiar container.estado y debe notificar al operador."""

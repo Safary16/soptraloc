@@ -869,7 +869,11 @@ class ContainerViewSet(viewsets.ModelViewSet):
         from apps.core.services.returns import EmptyReturnService
         # Capturar timestamps antes del cambio de estado para alimentar ML
         fecha_salida_vacio = container.fecha_vacio_ruta
-        programacion_retorno = getattr(container, 'programacion', None)
+        # Revisión senior (Safari): Programacion es OneToOneField con Container →
+        # acceder al reverse sin fila lanza Programacion.DoesNotExist (no AttributeError),
+        # así que getattr(container, 'programacion', None) NO lo captura y crashearía (500).
+        # El patrón .filter(container=...).first() es el que ya se usa en este archivo.
+        programacion_retorno = Programacion.objects.filter(container=container).first()
         conductor = programacion_retorno.driver if programacion_retorno else None
         cd_origen = container.cd_entrega
         cd_destino = container.retorno_destino_cd
