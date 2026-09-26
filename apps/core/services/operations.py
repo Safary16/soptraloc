@@ -159,13 +159,15 @@ class OperationalFlowService:
     @classmethod
     def _auto_assign_empty_return(cls, programacion):
         """Crea (si aplica) una Programacion de retorno automático de un
-        contenedor vacío 'fresco' desde el CD donde se soltó.
+        contenedor vacío disponible desde el CD donde se soltó.
 
         Criterios:
         - Conductor recién liberado (driver_id presente y con capacidad).
         - Existe Container en estado='vacio', vacio_contabilizado=True,
-          fecha_vacio >= now-2h, y mismo CD (Container.retorno_destino_cd
-          o Container.cd_entrega == locked.cd).
+          en el mismo CD (Container.retorno_destino_cd o Container.cd_entrega
+          == locked.cd). SIN límite de frescura: el conductor retira cualquier
+          vacío disponible del CD (decisión del dueño 25-sep; la priorización
+          por demurrage se integrará en una iteración posterior).
         - El conductor NO debe tener otra programacion activa.
 
         La asignación concreta se hace via señal trigger_automatic_assignment
@@ -183,15 +185,16 @@ class OperationalFlowService:
         if not driver or not driver.esta_disponible:
             return None
 
-        cutoff = timezone.now() - timedelta(hours=2)
-        # Buscar contenedores vacíos frescos en el mismo CD donde soltó
+        # Buscar contenedores vacíos disponibles en el mismo CD donde soltó
         # el conductor. Compatibilidad: Container.retorno_destino_cd o
         # Container.cd_entrega equivalen al CD de la programación.
+        # Sin filtro de fecha_vacio: se toma cualquier vacío disponible
+        # (el más antiguo primero). El dueño priorizará por demurrage
+        # en una iteración futura.
         from django.db.models import Q
         candidatos = Container.objects.filter(
             estado='vacio',
             vacio_contabilizado=True,
-            fecha_vacio__gte=cutoff,
         ).filter(
             # modelos.cd_entrega o retorno_destino_cd == programacion.cd
             Q(retorno_destino_cd_id=programacion.cd_id) |

@@ -687,6 +687,38 @@ class FlujoConductorP05AutoAssignReturnTests(TestCase):
             'conductor queda libre para retirar vacíos desde ese mismo CD»).',
         )
 
+
+    def test_drop_container_autoasigna_vacio_viejo_sin_limite_frescura(self):
+        """Seba (25-sep): la misión drop & hook es soltar el FULL y retirar
+        OTRO vacío disponible del mismo CD — SIN límite de frescura.
+        Un vacío con más de 2 horas (por ejemplo 5h, de otro drop anterior)
+        también debe auto-asignarse al conductor que acaba de soltar.
+        (La priorización por demurrage se integrará en una iteración futura.)
+        """
+        self.driver.num_entregas_dia = 0
+        self.driver.max_entregas_dia = 5
+        self.driver.save()
+        Container.objects.create(
+            container_id='VACIOVIEJO', cliente='Vacio Antiguo',
+            estado='vacio', vacio_contabilizado=True,
+            # 5 horas atrás: habría quedado fuera con el antiguo cutoff de 2h
+            fecha_vacio=timezone.now() - timedelta(hours=5),
+            cd_entrega=self.cd, retorno_destino_cd=self.cd,
+        )
+        locked, soltado_ok, retorno = OperationalFlowService.drop_container(
+            self.programacion, usuario='tester'
+        )
+        self.assertTrue(soltado_ok)
+        self.assertIsNotNone(
+            retorno,
+            'Debe auto-asignar un vacío disponible del mismo CD aunque tenga >2h.',
+        )
+        self.assertEqual(retorno.container.container_id, 'VACIOVIEJO')
+        self.assertEqual(
+            retorno.driver_id, self.driver.id,
+            'El conductor que retira el vacío debe ser el MISMO que soltó.',
+        )
+
     def test_drop_container_no_autoasigna_si_conductor_sin_capacidad(self):
         """Si el conductor no está disponible, drop NO debe crear programación de retorno."""
         self.driver.max_entregas_dia = 1
