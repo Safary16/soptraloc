@@ -1,0 +1,213 @@
+{% extends "base.html" %}
+
+{% block title %}Gestión Vacíos CCTI - SoptraLoc TMS{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-3">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h2><i class="fas fa-warehouse"></i> Vacíos en CCTI</h2>
+        <span class="badge bg-info" id="totalVacios">—</span>
+    </div>
+
+    <p class="text-muted">
+        P2-4: lista de contenedores en estado <code>en_ccti</code> con botón para
+        asignar un conductor de retiro usando el endpoint
+        <code>asignar_conductor_retiro_vacio</code>.
+    </p>
+
+    <div class="row">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header bg-secondary text-white">
+                    <i class="fas fa-list"></i> Vacíos esperando retiro
+                </div>
+                <div class="card-body">
+                    <div id="loadingMsg" class="text-center py-3">
+                        <i class="fas fa-spinner fa-spin"></i> Cargando vacíos...
+                    </div>
+                    <table class="table table-sm table-striped" id="vaciosTable" style="display:none;">
+                        <thead>
+                            <tr>
+                                <th>Container</th>
+                                <th>Cliente</th>
+                                <th>Tipo</th>
+                                <th>CCTI</th>
+                                <th>En CCTI desde</th>
+                                <th>Demurrage</th>
+                                <th class="text-end">Acción</th>
+                            </tr>
+                        </thead>
+                        <tbody id="vaciosTbody"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal: asignar conductor de retiro -->
+<div class="modal fade" id="asignarModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title">Asignar Conductor de Retiro</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div id="asignarContainerInfo" class="alert alert-info"></div>
+                <div class="mb-3">
+                    <label class="form-label">Conductor disponible:</label>
+                    <select id="selectConductor" class="form-select"></select>
+                </div>
+                <div id="asignarMsg" class="text-muted small"></div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-primary" id="btnConfirmarAsignar">
+                    <i class="fas fa-check"></i> Asignar
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function getCookie(name) {
+    let cookieValue = null;
+    if (document.cookie && document.cookie !== '') {
+        const cookies = document.cookie.split(';');
+        for (let i = 0; i < cookies.length; i++) {
+            const cookie = cookies[i].trim();
+            if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                break;
+            }
+        }
+    }
+    return cookieValue;
+}
+
+function esc(s) {
+    if (s === null || s === undefined) return '—';
+    return String(s).replace(/[&<>"']/g, c => ({
+        '&': '&', '<': '<', '>': '>', '"': '"', "'": '''
+    }[c]));
+}
+
+let contenedorAsignar = null;
+let conductoresDisponibles = [];
+
+function cargarVacios() {
+    fetch('/api/containers/?estado=en_ccti&page_size=200')
+        .then(r => r.json())
+        .then(data => {
+            const vacios = data.results || data || [];
+            document.getElementById('totalVacios').textContent = `${vacios.length} vacíos`;
+            document.getElementById('loadingMsg').style.display = 'none';
+            if (!vacios.length) {
+                document.getElementById('vaciosTable').style.display = 'none';
+                document.getElementById('vaciosTbody').innerHTML =
+                    '<tr><td colspan="7" class="text-center text-success py-4">' +
+                    '<i class="fas fa-check-circle"></i> Sin vacíos en CCTI</td></tr>';
+                document.getElementById('vaciosTable').style.display = '';
+                return;
+            }
+            document.getElementById('vaciosTable').style.display = '';
+            document.getElementById('vaciosTbody').innerHTML = vacios.map(v => {
+                const fechaCcti = v.fecha_en_ccti
+                    ? new Date(v.fecha_en_ccti).toLocaleString('es-CL')
+                    : '—';
+                const demurrage = v.fecha_demurrage
+                    ? new Date(v.fecha_demurrage).toLocaleDateString('es-CL')
+                    : '—';
+                return `<tr>
+                    <td><strong>${esc(v.container_id_formatted || v.container_id)}</strong></td>
+                    <td>${esc(v.cliente || '—')}</td>
+                    <td>${esc(v.tipo || '—')}</td>
+                    <td>${esc(v.retorno_destino_cd_nombre || v.cd_entrega_nombre || '—')}</td>
+                    <td>${fechaCcti}</td>
+                    <td>${demurrage}</td>
+                    <td class="text-end">
+                        <button class="btn btn-sm btn-primary"
+                                onclick="abrirAsignar(${v.id}, '${esc(v.container_id_formatted || v.container_id)}', '${esc(v.cliente || '')}')">
+                            <i class="fas fa-truck"></i> Asignar Retiro
+                        </button>
+                    </td>
+                </tr>`;
+            }).join('');
+        })
+        .catch(() => {
+            document.getElementById('loadingMsg').innerHTML =
+                '<span class="text-danger">Error al cargar vacíos.</span>';
+        });
+}
+
+function cargarConductores() {
+    return fetch('/api/drivers/?activo=true&page_size=200')
+        .then(r => r.json())
+        .then(data => {
+            conductoresDisponibles = (data.results || data || []).filter(d => d.esta_disponible);
+            const sel = document.getElementById('selectConductor');
+            sel.innerHTML = '<option value="">Seleccione conductor…</option>' +
+                conductoresDisponibles.map(d =>
+                    `<option value="${d.id}">${esc(d.nombre)} (${esc(d.patente || 's/p')})</option>`
+                ).join('');
+        });
+}
+
+function abrirAsignar(containerId, containerDisplay, cliente) {
+    contenedorAsignar = containerId;
+    document.getElementById('asignarContainerInfo').innerHTML =
+        `<strong>Contenedor:</strong> ${esc(containerDisplay)}<br>` +
+        `<strong>Cliente:</strong> ${esc(cliente || '—')}`;
+    document.getElementById('asignarMsg').textContent = '';
+    cargarConductores().then(() => {
+        new bootstrap.Modal(document.getElementById('asignarModal')).show();
+    });
+}
+
+document.getElementById('btnConfirmarAsignar').addEventListener('click', function() {
+    const driverId = document.getElementById('selectConductor').value;
+    if (!driverId) {
+        document.getElementById('asignarMsg').textContent = '⚠️ Seleccione un conductor.';
+        return;
+    }
+    const btn = this;
+    btn.disabled = true;
+    fetch('/api/programaciones/asignar_conductor_retiro_vacio/', {
+        method: 'POST',
+        credentials: 'include',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': getCookie('csrftoken')
+        },
+        body: JSON.stringify({container_id: contenedorAsignar, driver_id: parseInt(driverId)})
+    })
+    .then(r => r.json())
+    .then(data => {
+        btn.disabled = false;
+        if (data.success) {
+            document.getElementById('asignarMsg').innerHTML =
+                '<span class="text-success">✅ ' + esc(data.mensaje) + '</span>';
+            setTimeout(() => {
+                bootstrap.Modal.getInstance(document.getElementById('asignarModal')).hide();
+                cargarVacios();
+            }, 1200);
+        } else {
+            document.getElementById('asignarMsg').innerHTML =
+                '<span class="text-danger">❌ ' + esc(data.error || 'No se pudo asignar') + '</span>';
+        }
+    })
+    .catch(() => {
+        btn.disabled = false;
+        document.getElementById('asignarMsg').innerHTML =
+            '<span class="text-danger">❌ Error de conexión</span>';
+    });
+});
+
+cargarVacios();
+setInterval(cargarVacios, 60000);  // refresca cada minuto
+</script>
+{% endblock %}

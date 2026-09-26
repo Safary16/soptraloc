@@ -18,11 +18,11 @@ from apps.cds.views import CDViewSet
 
 # Import frontend views
 from apps.core.views import (
-    inicio, home, asignacion, estados, importar, 
+    inicio, home, asignacion, estados, importar,
     containers_list, container_detail,
     operaciones, operaciones_panel, drivers_list, cds_list, executive_dashboard,
     operaciones_diarias as operaciones_diarias_view,
-    auditoria, cliente_portal, gestion,
+    auditoria, cliente_portal, gestion, gestion_vacios_ccti,
     health,
 )
 
@@ -56,6 +56,7 @@ urlpatterns = [
     path('operaciones/panel/', operaciones_panel, name='operaciones_panel'),
     path('cliente/', cliente_portal, name='cliente_portal'),
     path('gestion/', gestion, name='gestion'),
+    path('gestion/vacios-ccti/', gestion_vacios_ccti, name='gestion_vacios_ccti'),
     path('drivers/', drivers_list, name='drivers_list'),
     path('cds/', cds_list, name='cds_list'),
     path('executive/', executive_dashboard, name='executive_dashboard'),

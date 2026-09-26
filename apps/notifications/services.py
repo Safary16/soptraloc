@@ -171,19 +171,23 @@ class NotificationService:
             eta_minutos = int(resultado['duration_minutes'])
             distancia_km = Decimal(str(resultado['distance_km']))
             eta_timestamp = timezone.now() + timedelta(minutes=eta_minutos)
-        
+
+        # Capturar ETA anterior ANTES de actualizar la programación para que la
+        # comparación de "cambio >10 min" refleje el delta real del cliente.
+        eta_anterior = programacion.eta_minutos
+
         # Actualizar ETA en la programación
         programacion.eta_minutos = eta_minutos
         programacion.distancia_km = distancia_km
         programacion.save(update_fields=['eta_minutos', 'distancia_km'])
-        
+
         # Buscar notificación activa de esta programación
         notificacion_activa = Notification.objects.filter(
             programacion=programacion,
             tipo__in=['ruta_iniciada', 'eta_actualizado'],
             estado__in=['pendiente', 'enviada']
         ).first()
-        
+
         # Crear nueva notificación solo si el ETA cambió significativamente (>10 min)
         crear_nueva = False
         if notificacion_activa:
@@ -195,7 +199,47 @@ class NotificationService:
                     notificacion_activa.archivar()
         else:
             crear_nueva = True
-        
+
+        # P2-5: si el cambio es >10 min y el contenedor tiene cliente,
+        # crear notificación tipo='eta_cliente' para el cliente (portal).
+        # Se crea DENTRO de la misma transacción lógica (no transaccional DB)
+        # para que el cliente vea la actualización sin polling extra.
+        if crear_nueva and programacion.container and programacion.container.cliente:
+            try:
+                diferencia_para_cliente = (
+                    abs(eta_minutos - notificacion_activa.eta_minutos)
+                    if notificacion_activa and notificacion_activa.eta_minutos
+                    else abs(eta_minutos - (eta_anterior or 0))
+                )
+                if diferencia_para_cliente > 10:
+                    Notification.objects.create(
+                        container=programacion.container,
+                        programacion=programacion,
+                        tipo='eta_cliente',
+                        prioridad='media',
+                        titulo=(
+                            f'Actualización de ETA - {programacion.container.container_id}'
+                        ),
+                        mensaje=(
+                            f'Nueva hora estimada de arribo: {eta_timestamp.strftime("%H:%M") if eta_timestamp else "—"} '
+                            f'(~{eta_minutos} min, distancia {distancia_km} km).'
+                        ),
+                        eta_minutos=eta_minutos,
+                        eta_timestamp=eta_timestamp,
+                        distancia_km=distancia_km,
+                        detalles={
+                            'cliente': programacion.container.cliente,
+                            'cd_nombre': cd.nombre,
+                            'diferencia_min': diferencia_para_cliente,
+                        },
+                    )
+            except Exception as _cli_exc:
+                logger.warning(
+                    'actualizar_eta cliente_notification_failed programacion_id=%s detalle=%s',
+                    getattr(programacion, 'pk', None),
+                    _cli_exc,
+                )
+
         notificacion = None
         if crear_nueva:
             prioridad = 'media'

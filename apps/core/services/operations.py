@@ -25,15 +25,24 @@ class OperationalFlowService:
         ):
             started_at = programacion.fecha_inicio_descarga
         estimated = programacion.cd.tiempo_promedio_descarga_min or 60
-        # P1-2 (parcial): estimación viva basada en historial de descargas reales.
-        # Solo aplica si hay datos suficientes; si no, fallback al estático del CD.
+        # P2-2: predicción viva primero (programacion.prediccion_ml.tiempo_descarga_estimado).
+        # Si no hay, cae al engine (predict_discharge), y al estático del CD.
         try:
             from apps.core.services.learning_engine import OperationalLearningEngine
-            aprendida = OperationalLearningEngine.predict_discharge(
-                programacion.cd, conductor=programacion.driver,
-            )
-            if isinstance(aprendida, dict) and aprendida.get('estimated_minutes'):
-                estimated = int(aprendida['estimated_minutes'])
+            # 1) prediccion_ml vivo en el contenedor/programación
+            ml_viva = None
+            prediccion_ml = getattr(programacion, 'prediccion_ml', None) or {}
+            if isinstance(prediccion_ml, dict):
+                ml_viva = prediccion_ml.get('tiempo_descarga_estimado')
+            if isinstance(ml_viva, (int, float)) and ml_viva > 0:
+                estimated = int(ml_viva)
+            else:
+                # 2) OperationalLearningEngine.predict_discharge
+                aprendida = OperationalLearningEngine.predict_discharge(
+                    programacion.cd, conductor=programacion.driver,
+                )
+                if isinstance(aprendida, dict) and aprendida.get('estimated_minutes'):
+                    estimated = int(aprendida['estimated_minutes'])
         except Exception:
             pass
         delta_min = int((finished_at - started_at).total_seconds() / 60)

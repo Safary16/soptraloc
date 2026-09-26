@@ -18,8 +18,7 @@ class Migration(migrations.Migration):
                 blank=True,
                 help_text=(
                     "Marca real del clic 'iniciar descarga' por el conductor. "
-                    "Si existe, se usa como hora_inicio del TiempoOperacion "
-                    "descarga_cd (en lugar de fecha_soltado/fecha_entrega)."
+                    "Si existe, se usa como hora_inicio del TiempoOperacion descarga_cd."
                 ),
                 null=True,
                 verbose_name="Fecha Inicio Descarga",

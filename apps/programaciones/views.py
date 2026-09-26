@@ -1749,6 +1749,14 @@ class ProgramacionViewSet(viewsets.ModelViewSet):
         tipos_validos = ["ACCIDENTE", "AVERIA", "DEMORA_TRAFICO", "OTRO"]
         gravedades_validas = ["LEVE", "MODERADA", "ALTA", "CRITICA"]
 
+        # P2-3: nota de deprecación. Los 4 tipos arriba cambian container.estado a
+        # 'incidente' (FSM). Problemas operativos que NO escalan el estado (guía
+        # faltante, dirección incorrecta, cliente cerrado, problema administrativo)
+        # deben reportarse vía reportar_problema con tipos FALTA_GUIA/DIRECCION_*
+        # /CLIENTE_CERRADO/PROBLEMA_ADMINISTRATIVO/OTRO.
+        # Mantener ambos caminos para no romper integraciones existentes; este
+        # docstring queda como contrato para el frontend y operadores.
+
         if tipo_incidente not in tipos_validos:
             return Response(
                 {'error': f'Tipo de incidente inválido. Tipos permitidos: {", ".join(tipos_validos)}'},
@@ -2043,6 +2051,71 @@ class ProgramacionViewSet(viewsets.ModelViewSet):
             'mensaje': f'Conductor {driver.nombre} asignado al retiro.',
             'programacion': serializer.data,
         }, status=status.HTTP_201_CREATED)
+
+    @action(detail=True, methods=['get'], url_path='eta-stream/')
+    def eta_stream(self, request, pk=None):
+        """P2-1: SSE liviano para propagar eta_recalculado_min en tiempo (casi) real.
+
+        StreamingHttpResponse con content_type='text/event-stream'. No usa
+        Channels/ASGI ni WebSocket: solo polling liviano a la BD (1 Hz) que
+        emite un evento SSE cuando cambia el eta_recalculado_min o el estado
+        del contenedor. Timeout 30s para no bloquear workers; el cliente
+        debe reconectar (EventSource lo hace automáticamente).
+
+        Riesgo evaluado:
+        - NO requiere cambiar el server (render.yaml sigue siendo WSGI).
+        - NO requiere Channels/Redis.
+        - Cierra el ciclo de E3 sin polling agresivo del frontend.
+
+        Si en el futuro se quiere tiempo real estricto (<1s), migrar a
+        Channels/ASGI; ese cambio queda fuera de este pase por costo de
+        infraestructura (ver P2-1 nota en plan).
+        """
+        import time
+        from django.http import StreamingHttpResponse
+        programacion = self.get_object()
+        programacion_id = programacion.pk
+
+        def _stream():
+            last_eta = None
+            last_estado = None
+            start = time.time()
+            max_duration = 30  # segundos por conexión
+            poll_interval = 1.0
+            try:
+                while time.time() - start < max_duration:
+                    try:
+                        prog = Programacion.objects.only(
+                            'eta_recalculado_min', 'estado',
+                        ).select_related('container').get(pk=programacion_id)
+                        estado_actual = prog.container.estado if prog.container else 'sin_contenedor'
+                        eta_actual = prog.eta_recalculado_min
+                        if eta_actual != last_eta or estado_actual != last_estado:
+                            import json
+                            payload = json.dumps({
+                                'eta_recalculado_min': eta_actual,
+                                'estado': estado_actual,
+                                'timestamp': timezone.now().isoformat(),
+                            })
+                            yield f'data: {payload}\n\n'
+                            last_eta = eta_actual
+                            last_estado = estado_actual
+                    except Programacion.DoesNotExist:
+                        yield 'event: close\ndata: {"reason":"programacion_deleted"}\n\n'
+                        break
+                    # Comentario SSE para mantener conexión viva
+                    yield ': keepalive\n\n'
+                    time.sleep(poll_interval)
+                # Cierre ordenado del stream
+                yield 'event: close\ndata: {"reason":"timeout"}\n\n'
+            except GeneratorExit:
+                # Cliente cerró la conexión; salida silenciosa.
+                return
+
+        response = StreamingHttpResponse(_stream(), content_type='text/event-stream')
+        response['Cache-Control'] = 'no-cache'
+        response['X-Accel-Buffering'] = 'no'  # desactivar buffering en nginx
+        return response
 
     @action(detail=True, methods=['post'])
     def aceptar_asignacion(self, request, pk=None):

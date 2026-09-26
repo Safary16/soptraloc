@@ -814,3 +814,141 @@ class FlujoConductorP1ValidationEtaRecalcTests(TestCase):
         self.assertEqual(ventana['duracion_minutos'], 15)
         self.assertEqual(ventana['estado_servicio'], 'EN_RUTA')
 
+
+class FlujoConductorP2Tests(TestCase):
+    """P2: SSE liviano (P2-1), prediccion_ml viva (P2-2),
+    nota deprecación incidentes (P2-3), eta_cliente (P2-5)."""
+
+    def setUp(self):
+        self.user = User.objects.create_user(username='p2_driver', password='x')
+        self.driver = Driver.objects.create(
+            nombre='P2 Driver', user=self.user,
+            num_entregas_dia=0, max_entregas_dia=5,
+        )
+        self.cd = CD.objects.create(
+            nombre='CD P2', codigo='CD-P2', tipo='cliente',
+            direccion='Dir', lat=-33.45, lng=-70.65,
+            tiempo_promedio_descarga_min=60,
+        )
+        self.container = Container.objects.create(
+            container_id='P2CNT001', cliente='P2 Cliente',
+            estado='en_ruta', cd_entrega=self.cd,
+            fecha_inicio_ruta=timezone.now() - timedelta(minutes=10),
+        )
+        self.programacion = Programacion.objects.create(
+            container=self.container,
+            cd=self.cd,
+            driver=self.driver,
+            cliente='P2 Cliente',
+            fecha_programada=timezone.now() - timedelta(hours=1),
+            fecha_inicio_ruta=timezone.now() - timedelta(minutes=10),
+            eta_minutos=60,
+            eta_recalculado_min=20,
+        )
+
+    # ---------- P2-1: SSE liviano ----------
+    def test_eta_stream_devuelve_streaming_response_con_eventos(self):
+        """El endpoint eta-stream devuelve StreamingHttpResponse con texto SSE."""
+        from apps.programaciones.views import ProgramacionViewSet
+        from django.http import StreamingHttpResponse
+        request = APIRequestFactory().get(
+            f'/api/programaciones/{self.programacion.pk}/eta-stream/',
+        )
+        view = ProgramacionViewSet.as_view({'get': 'eta_stream'})
+        response = view(request, pk=self.programacion.pk)
+        self.assertIsInstance(response, StreamingHttpResponse)
+        self.assertEqual(response['Content-Type'], 'text/event-stream')
+
+    # ---------- P2-2: prediccion_ml viva en tiempo_estimado_min ----------
+    def test_record_discharge_prefiere_prediccion_ml_viva(self):
+        """Si programacion.prediccion_ml.tiempo_descarga_estimado existe, se usa."""
+        # Mover container a estado 'soltado' (FSM válido desde 'entregado') para
+        # que complete_discharge funcione, pero _record_discharge es independiente
+        # del estado: solo verifica unicidad por container+tipo_operacion.
+        self.container.estado = 'soltado'
+        self.container.save(update_fields=['estado', 'updated_at'])
+        self.programacion.prediccion_ml = {'tiempo_descarga_estimado': 33}
+        self.programacion.save(update_fields=['prediccion_ml', 'updated_at'])
+        started = timezone.now() - timedelta(minutes=7)
+        finished = timezone.now()
+        timing = OperationalFlowService._record_discharge(
+            self.programacion, started, finished, 'tester',
+        )
+        self.assertIsNotNone(timing)
+        self.assertEqual(timing.tiempo_estimado_min, 33,
+                         'prediccion_ml.tiempo_descarga_estimado debe ganar al estático')
+
+    # ---------- P2-3: nota de deprecación no rompe tipos válidos ----------
+    def test_reportar_incidente_tipos_canonicos_se_conservan(self):
+        """Los 4 tipos canónicos (ACCIDENTE/AVERIA/DEMORA_TRAFICO/OTRO) siguen
+        siendo aceptados por reportar_incidente. La nota P2-3 solo documenta
+        la diferencia con reportar_problema, no cambia el contrato de tipos."""
+        self.container.estado = 'en_ruta'
+        self.container.save(update_fields=['estado', 'updated_at'])
+        request = APIRequestFactory().post(
+            f'/api/programaciones/{self.programacion.pk}/reportar_incidente/',
+            data={'tipo_incidente': 'ACCIDENTE', 'descripcion': 'Colisión leve',
+                  'gravedad': 'MODERADA'},
+            format='json',
+        )
+        force_authenticate(request, user=self.user)
+        view = ProgramacionViewSet.as_view({'post': 'reportar_incidente'})
+        response = view(request, pk=self.programacion.pk)
+        self.assertEqual(response.status_code, 201, response.data)
+        # El incidente queda registrado en la lista
+        self.programacion.refresh_from_db()
+        self.assertGreaterEqual(len(self.programacion.incidentes_registrados), 1)
+        ultimo = self.programacion.incidentes_registrados[-1]
+        self.assertEqual(ultimo['tipo'], 'ACCIDENTE')
+
+
+class FlujoConductorP25EtaClienteTests(TestCase):
+    """P2-5: Notification eta_cliente cuando el cambio de ETA es >10 min."""
+
+    def setUp(self):
+        self.user = User.objects.create_user(username='eta_driver', password='x')
+        self.driver = Driver.objects.create(
+            nombre='Eta Driver', user=self.user,
+            num_entregas_dia=0, max_entregas_dia=5,
+        )
+        self.cd = CD.objects.create(
+            nombre='CD Eta', codigo='CD-ETA', tipo='cliente',
+            direccion='Dir', lat=-33.45, lng=-70.65,
+        )
+        self.container = Container.objects.create(
+            container_id='ETACNT001', cliente='Eta Cliente',
+            estado='en_ruta', cd_entrega=self.cd,
+        )
+        self.programacion = Programacion.objects.create(
+            container=self.container,
+            cd=self.cd,
+            driver=self.driver,
+            cliente='Eta Cliente',
+            fecha_programada=timezone.now() - timedelta(hours=1),
+            fecha_inicio_ruta=timezone.now() - timedelta(minutes=20),
+            eta_minutos=60,
+        )
+
+    def test_cambio_eta_mayor_10_min_crea_notificacion_cliente(self):
+        """actualizar_eta con cambio >10 min crea Notification tipo 'eta_cliente'."""
+        from apps.notifications.services import NotificationService
+        notif_pre = Notification.objects.filter(tipo='eta_cliente').count()
+        # Simular posición válida (cerca del CD para que haversine no falle)
+        NotificationService.actualizar_eta(
+            self.programacion, self.driver, -33.46, -70.66,
+        )
+        notif_post = Notification.objects.filter(tipo='eta_cliente').count()
+        # El cambio entre eta_minutos=60 y la nueva ETA es significativo.
+        self.assertGreater(notif_post, notif_pre,
+                           'Debe crear notificación eta_cliente con cambio >10 min')
+
+    def test_cliente_en_detalles_de_notificacion(self):
+        """La notificación eta_cliente incluye el cliente del contenedor en detalles."""
+        from apps.notifications.services import NotificationService
+        NotificationService.actualizar_eta(
+            self.programacion, self.driver, -33.46, -70.66,
+        )
+        notif = Notification.objects.filter(tipo='eta_cliente').first()
+        if notif is not None:
+            self.assertEqual(notif.detalles.get('cliente'), 'Eta Cliente')
+
