@@ -223,8 +223,12 @@ class ProgramacionImporter:
                                 # Intentar parsear hora (puede venir como datetime, time, o string)
                                 hora_prog = row['hora_programada']
                                 if isinstance(hora_prog, str):
-                                    # Si es string, intentar parsear
-                                    hora_time = pd.to_datetime(hora_prog, format='%H:%M:%S').time()
+                                    # Si es string, aceptar HH:MM:SS y HH:MM
+                                    hora_str = hora_prog.strip()
+                                    try:
+                                        hora_time = pd.to_datetime(hora_str, format='%H:%M:%S').time()
+                                    except ValueError:
+                                        hora_time = pd.to_datetime(hora_str, format='%H:%M').time()
                                 elif hasattr(hora_prog, 'time'):
                                     # Si es datetime, extraer time
                                     hora_time = hora_prog.time()
@@ -285,7 +289,8 @@ class ProgramacionImporter:
                                 elif medida == '20':
                                     container.tipo = '20'
                                 elif medida == '45':
-                                    container.tipo = '45'
+                                    # Regla de negocio: el 45' de las planillas es un 40' High Cube (40HC).
+                                    container.tipo = '40HC'
 
                         container.save()
 

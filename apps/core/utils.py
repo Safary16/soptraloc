@@ -54,6 +54,11 @@ def normalizar_cliente(valor) -> str:
     texto = ' '.join(str(valor).split())  # colapsa espacios
     if not texto:
         return ''
+    # 'N/A', 'NA', '-' etc. significan 'sin dato': no son un cliente real.
+    # Así la programación hereda el cliente que el contenedor ya trae (de la liberación)
+    # en vez de pisarlo con el literal 'N/A'.
+    if texto.lower() in {'n/a', 'na', '-', 'sin dato', 'ninguno', 'sn'}:
+        return ''
     clave = texto.lower()
     if clave in _ALIASES:
         return _ALIASES[clave]

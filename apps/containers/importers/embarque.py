@@ -88,7 +88,8 @@ class EmbarqueImporter:
         if '20' in tipo_str:
             return '20'
         elif '45' in tipo_str:
-            return '45' if 'H' not in tipo_str else '40HC' if '40' in tipo_str and '45' not in tipo_str else '45'
+            # Regla de negocio: el 45' de las planillas es un 40' High Cube (40HC).
+            return '40HC'
         elif 'H' in tipo_str or 'HC' in tipo_str or 'HIGH' in tipo_str:
             # 40H / 40HQ / 40HC / 40 HIGH → High Cube de 40'
             return '40HC'
@@ -176,7 +177,7 @@ class EmbarqueImporter:
                                 from django.utils import timezone as dj_timezone
                                 # Convertir a datetime si no lo es ya
                                 if isinstance(row['fecha_eta'], str):
-                                    fecha_eta = pd.to_datetime(row['fecha_eta'])
+                                    fecha_eta = pd.to_datetime(row['fecha_eta'], dayfirst=True)
                                 else:
                                     fecha_eta = row['fecha_eta']
                                 # pandas → datetime de Python

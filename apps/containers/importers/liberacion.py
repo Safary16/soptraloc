@@ -165,19 +165,26 @@ class LiberacionImporter:
                         fecha_liberacion = None
                         if 'fecha_liberacion' in df.columns and pd.notna(row.get('fecha_liberacion')):
                             try:
-                                fecha_lib = pd.to_datetime(row['fecha_liberacion'])
+                                fecha_lib = pd.to_datetime(row['fecha_liberacion'], dayfirst=True)
                                 # Combinar con hora si está disponible
                                 if 'hora_liberacion' in df.columns and pd.notna(row.get('hora_liberacion')):
                                     try:
-                                        # Intentar parsear hora (puede venir como datetime o string)
-                                        if isinstance(row['hora_liberacion'], str):
-                                            hora_lib = pd.to_datetime(row['hora_liberacion'], format='%H:%M:%S').time()
+                                        # Intentar parsear hora (datetime/time nativo, HH:MM o HH:MM:SS)
+                                        valor_hora = row['hora_liberacion']
+                                        if isinstance(valor_hora, str):
+                                            hora_str = valor_hora.strip()
+                                            try:
+                                                hora_lib = pd.to_datetime(hora_str, format='%H:%M:%S').time()
+                                            except ValueError:
+                                                hora_lib = pd.to_datetime(hora_str, format='%H:%M').time()
                                         else:
-                                            hora_lib = pd.to_datetime(row['hora_liberacion']).time()
+                                            hora_lib = pd.to_datetime(valor_hora).time()
                                         fecha_liberacion = timezone.make_aware(datetime.combine(fecha_lib.date(), hora_lib))
-                                    except Exception:
-                                        # Si falla el parseo de hora, usar solo fecha
-                                        fecha_liberacion = timezone.make_aware(fecha_lib) if timezone.is_naive(fecha_lib) else fecha_lib
+                                    except Exception as hora_error:
+                                        # Hora presente pero ilegible: error explícito, nunca 00:00 silencioso
+                                        raise ValueError(
+                                            f"Hora de liberación inválida '{row.get('hora_liberacion')}': {str(hora_error)}"
+                                        )
                                 else:
                                     fecha_liberacion = timezone.make_aware(fecha_lib) if timezone.is_naive(fecha_lib) else fecha_lib
                             except Exception as fecha_error:
@@ -224,7 +231,9 @@ class LiberacionImporter:
 
                         # Cliente y referencia
                         if 'cliente' in df.columns and pd.notna(row.get('cliente')):
-                            container.cliente = normalizar_cliente(str(row['cliente']))
+                            cliente_norm = normalizar_cliente(str(row['cliente']))
+                            if cliente_norm:
+                                container.cliente = cliente_norm
 
                         if 'referencia' in df.columns and pd.notna(row.get('referencia')):
                             container.referencia = str(row['referencia']).strip()
@@ -234,9 +243,9 @@ class LiberacionImporter:
                         if 'fecha_salida' in df.columns and pd.notna(row.get('fecha_salida')):
                             try:
                                 if isinstance(row['fecha_salida'], str):
-                                    pd.to_datetime(row['fecha_salida'])
+                                    pd.to_datetime(row['fecha_salida'], dayfirst=True)
                                 else:
-                                    pd.to_datetime(row['fecha_salida'])
+                                    pd.to_datetime(row['fecha_salida'], dayfirst=True)
                             except Exception as salida_error:
                                 raise ValueError(
                                     f"Fecha salida inválida '{row.get('fecha_salida')}': {str(salida_error)}"
