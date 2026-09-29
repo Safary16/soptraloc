@@ -4,6 +4,104 @@ from django.utils import timezone
 from apps.core.utils import normalizar_cliente
 
 
+class Deposit(models.Model):
+    """Catálogo de depósitos de devolución (genérico: cualquier empresa/operador).
+
+    Reemplaza el texto libre `Container.deposito_devolucion` como fuente de
+    verdad para comparaciones: con catálogo + aliases es posible detectar
+    divergencias entre lo declarado por el cliente y lo informado por el
+    depósito (p. ej. "SITRANS ALTO SAI" vs "SITRANS SAI").
+    """
+
+    name = models.CharField('Nombre', max_length=200, unique=True)
+    aliases = models.CharField(
+        'Aliases', max_length=500, null=True, blank=True,
+        help_text='Nombres alternativos separados por coma (normalización de texto libre)'
+    )
+    activo = models.BooleanField('Activo', default=True)
+    created_at = models.DateTimeField('Creado', auto_now_add=True)
+    updated_at = models.DateTimeField('Actualizado', auto_now=True)
+
+    class Meta:
+        ordering = ['name']
+        verbose_name = 'Depósito'
+        verbose_name_plural = 'Depósitos'
+
+    def __str__(self):
+        return self.name
+
+    @classmethod
+    def resolver(cls, texto):
+        """Resuelve texto libre a un Deposit por nombre o alias (case-insensitive).
+
+        Returns:
+            Deposit | None
+        """
+        if not texto:
+            return None
+        candidato = str(texto).strip().upper()
+        for dep in cls.objects.filter(activo=True):
+            if dep.name.strip().upper() == candidato:
+                return dep
+            if dep.aliases:
+                for alias in dep.aliases.split(','):
+                    if alias.strip().upper() == candidato:
+                        return dep
+        return None
+
+
+class EvidenceDocument(models.Model):
+    """Documento de evidencia adjunto a un contenedor (genérico).
+
+    Evidencia externa del ciclo de vida (p. ej. un EIR de ingreso/devolución
+    emitido por un depósito): archivo, hash MD5 para deduplicación e
+    integridad, fuente emisora y tipo ampliable. Sin acople a ningún portal
+    específico: la fuente es texto libre normalizable contra Deposit.
+    """
+
+    TIPOS = [
+        ('eir_in', 'EIR Ingreso'),
+        ('eir_out', 'EIR Devolución'),
+        ('otro', 'Otro'),
+    ]
+
+    container = models.ForeignKey(
+        'containers.Container', on_delete=models.CASCADE,
+        related_name='evidencias', verbose_name='Contenedor'
+    )
+    archivo = models.FileField('Archivo', upload_to='evidencias/%Y/%m/')
+    md5 = models.CharField('MD5', max_length=32, db_index=True)
+    tipo = models.CharField('Tipo', max_length=20, choices=TIPOS, default='otro')
+    fuente = models.CharField(
+        'Fuente', max_length=200, null=True, blank=True,
+        help_text='Nombre del emisor (depósito/portal) que emitió el documento'
+    )
+    fecha_programacion = models.DateTimeField(
+        'Fecha Programación', null=True, blank=True,
+        help_text='Fecha de programación/viaje al que corresponde la evidencia'
+    )
+    duplicado_de = models.ForeignKey(
+        'self', on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='duplicados', verbose_name='Duplicado de'
+    )
+    uploaded_at = models.DateTimeField('Subido', auto_now_add=True)
+    uploaded_by = models.CharField(
+        'Subido por', max_length=150, null=True, blank=True
+    )
+
+    class Meta:
+        ordering = ['-uploaded_at']
+        verbose_name = 'Documento de Evidencia'
+        verbose_name_plural = 'Documentos de Evidencia'
+        indexes = [
+            models.Index(fields=['container', 'tipo']),
+            models.Index(fields=['container', 'md5']),
+        ]
+
+    def __str__(self):
+        return f"{self.container.container_id} · {self.get_tipo_display()} · {self.md5[:8]}"
+
+
 class Container(models.Model):
     """Modelo principal de contenedores con ciclo de vida completo"""
     
@@ -149,6 +247,27 @@ class Container(models.Model):
     # Auditoría
     created_at = models.DateTimeField('Creado', auto_now_add=True)
     updated_at = models.DateTimeField('Actualizado', auto_now=True)
+
+    # Verificación externa (estado declarado vs verificado)
+    # `estado` es el estado DECLARADO (FSM interno / importaciones). Los
+    # siguientes campos registran la última vez que una fuente externa
+    # (portal de depósito, informe del operador) confirmó o desmintió ese estado.
+    estado_verificado = models.CharField(
+        'Estado Verificado', max_length=20, choices=ESTADOS, null=True, blank=True,
+        help_text='Último estado confirmado por fuente externa'
+    )
+    fuente_verificacion = models.CharField(
+        'Fuente de Verificación', max_length=200, null=True, blank=True,
+        help_text='Fuente externa que informó el estado verificado (portal, operador)'
+    )
+    verificado_en = models.DateTimeField(
+        'Verificado En', null=True, blank=True,
+        help_text='Momento de la última verificación externa'
+    )
+    deposito_verificado = models.ForeignKey(
+        'containers.Deposit', on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='contenedores_verificados', verbose_name='Depósito Verificado'
+    )
     
     class Meta:
         ordering = ['-created_at']
@@ -385,7 +504,7 @@ class Container(models.Model):
     def tiene_programacion(self):
         """
         Verifica de forma segura si el contenedor tiene una programación
-        
+
         Returns:
             bool: True si tiene programación, False si no
         """
@@ -394,3 +513,57 @@ class Container(models.Model):
         except Exception:
             # Si hay cualquier error (DoesNotExist, AttributeError, etc.)
             return False
+
+    def marcar_verificacion_externa(self, estado_externo, fuente, deposito_texto=None):
+        """Registra verificación de estado contra una fuente externa.
+
+        El FSM interno queda intacto (el estado declarado no se pisa): la
+        divergencia queda registrada para conciliación. Si el texto de
+        depósito coincide con el catálogo, también se registra el depósito
+        verificado.
+
+        Args:
+            estado_externo: código de estado informado por la fuente externa.
+            fuente: nombre de la fuente (portal/operador).
+            deposito_texto: texto libre del depósito informado (opcional).
+
+        Returns:
+            dict con {'divergencia': bool}.
+        """
+        estados = {value for value, _ in self.ESTADOS}
+        if estado_externo not in estados:
+            raise ValidationError(f"Estado desconocido: {estado_externo}")
+        self.estado_verificado = estado_externo
+        self.fuente_verificacion = fuente
+        self.verificado_en = timezone.now()
+        if deposito_texto:
+            deposito = Deposit.resolver(deposito_texto)
+            if deposito:
+                self.deposito_verificado = deposito
+        divergencia = self.estado_verificado != self.estado
+        self.save(update_fields=[
+            'estado_verificado', 'fuente_verificacion', 'verificado_en',
+            'deposito_verificado', 'updated_at'
+        ])
+        # Evento de trazabilidad (patrón del sistema)
+        from apps.events.models import Event
+        Event.objects.create(
+            container=self,
+            event_type='cambio_estado',
+            detalles={
+                'tipo': 'verificacion_externa',
+                'estado_declarado': self.estado,
+                'estado_verificado': estado_externo,
+                'fuente': fuente,
+                'divergencia': divergencia,
+            },
+            usuario=None
+        )
+        return {'divergencia': divergencia}
+
+    @property
+    def divergencia_estado(self):
+        """True si el estado verificado difiere del declarado (o hay verificación pendiente)."""
+        if self.estado_verificado is None:
+            return None
+        return self.estado_verificado != self.estado

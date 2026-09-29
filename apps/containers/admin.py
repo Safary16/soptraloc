@@ -50,3 +50,21 @@ class ContainerAdmin(admin.ModelAdmin):
         updated = queryset.update(secuenciado=False)
         self.message_user(request, f'{updated} contenedores desmarcados como secuenciados.')
     desmarcar_secuenciado.short_description = 'Desmarcar secuenciado'
+
+
+from .models import Deposit, EvidenceDocument
+
+
+@admin.register(Deposit)
+class DepositAdmin(admin.ModelAdmin):
+    list_display = ['name', 'aliases', 'activo', 'updated_at']
+    search_fields = ['name', 'aliases']
+    list_filter = ['activo']
+
+
+@admin.register(EvidenceDocument)
+class EvidenceDocumentAdmin(admin.ModelAdmin):
+    list_display = ['container', 'tipo', 'fuente', 'md5', 'duplicado_de', 'uploaded_at', 'uploaded_by']
+    list_filter = ['tipo', 'fuente']
+    search_fields = ['container__container_id', 'md5', 'fuente']
+    readonly_fields = ['md5', 'duplicado_de', 'uploaded_at']

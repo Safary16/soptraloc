@@ -1,6 +1,6 @@
 from rest_framework import serializers
 
-from .models import Container
+from .models import Container, EvidenceDocument
 
 
 class ContainerSerializer(serializers.ModelSerializer):
@@ -94,3 +94,18 @@ class ContainerStockExportSerializer(serializers.ModelSerializer):
         from django.utils import timezone
         delta = obj.fecha_demurrage - timezone.now()
         return delta.days
+
+
+class EvidenceDocumentSerializer(serializers.ModelSerializer):
+    """Serializer para documentos de evidencia"""
+    container_id = serializers.CharField(source='container.container_id', read_only=True)
+    tipo_display = serializers.CharField(source='get_tipo_display', read_only=True)
+
+    class Meta:
+        model = EvidenceDocument
+        fields = [
+            'id', 'container', 'container_id', 'archivo', 'md5', 'tipo',
+            'tipo_display', 'fuente', 'fecha_programacion', 'duplicado_de',
+            'uploaded_at', 'uploaded_by'
+        ]
+        read_only_fields = ['md5', 'duplicado_de', 'uploaded_at']
