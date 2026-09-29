@@ -13,7 +13,7 @@ from apps.cds.models import CD
 from apps.containers.importers.programacion import ProgramacionImporter
 from apps.containers.importers.embarque import EmbarqueImporter
 from apps.containers.importers.liberacion import LiberacionImporter
-from apps.containers.models import Container
+from apps.containers.models import Container, Deposit, EvidenceDocument
 from apps.programaciones.models import Programacion
 from apps.core.services.returns import EmptyReturnService
 from apps.core.utils import normalizar_cliente
@@ -338,3 +338,130 @@ class ReglasNegocioImportadoresTests(TestCase):
         self.assertEqual(container.fecha_liberacion.day, 5)
         self.assertEqual(container.fecha_liberacion.month, 10)
 
+
+
+# ===== Trabajo 1: export de stock completo =====
+class ExportStockCompletoTests(APITestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(username='op', password='x12345', is_staff=True)
+        self.client.force_authenticate(user=self.user)
+        Container.objects.create(container_id='TEST0001', tipo='40HC', estado='por_arribar')
+        Container.objects.create(container_id='TEST0002', tipo='40HC', estado='secuenciado')
+        Container.objects.create(container_id='TEST0003', tipo='40HC', estado='devuelto')
+
+    def test_default_retrocompatible(self):
+        """Sin parámetros: solo liberado y por_arribar (comportamiento histórico)."""
+        resp = self.client.get('/api/containers/export-stock/')
+        self.assertEqual(resp.status_code, 200)
+        ids = [c['container_id'] for c in resp.data['containers']]
+        self.assertIn('TEST0001', ids)
+        self.assertNotIn('TEST0003', ids)
+
+    def test_incluir_todos_devuelve_devueltos(self):
+        """incluir_todos=true: un contenedor devuelto SÍ aparece."""
+        resp = self.client.get('/api/containers/export-stock/?incluir_todos=true')
+        self.assertEqual(resp.status_code, 200)
+        ids = [c['container_id'] for c in resp.data['containers']]
+        self.assertIn('TEST0003', ids)
+        self.assertIn('TEST0002', ids)
+        self.assertEqual(resp.data['total'], 3)
+
+    def test_estado_parametro(self):
+        resp = self.client.get('/api/containers/export-stock/?estado=devuelto')
+        self.assertEqual(resp.status_code, 200)
+        ids = [c['container_id'] for c in resp.data['containers']]
+        self.assertEqual(ids, ['TEST0003'])
+
+    def test_estado_invalido_400(self):
+        resp = self.client.get('/api/containers/export-stock/?estado=inexistente')
+        self.assertEqual(resp.status_code, 400)
+
+
+# ===== Trabajo 2: EvidenceDocument =====
+class EvidenceDocumentTests(APITestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(username='op', password='x12345', is_staff=True)
+        self.client.force_authenticate(user=self.user)
+        self.cont = Container.objects.create(container_id='TEST0004', tipo='40HC', estado='devuelto')
+
+    def _upload(self, contenido=b'PDF-EVIDENCIA', nombre='eir.pdf', fuente='Depósito X'):
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        return self.client.post(
+            f'/api/containers/{self.cont.pk}/evidencias/',
+            {'archivo': SimpleUploadedFile(nombre, contenido), 'tipo': 'eir_out', 'fuente': fuente},
+            format='multipart'
+        )
+
+    def test_subida_y_md5(self):
+        resp = self._upload()
+        self.assertEqual(resp.status_code, 201)
+        self.assertFalse(resp.data['duplicado'])
+        doc = EvidenceDocument.objects.get(pk=resp.data['evidencia']['id'])
+        import hashlib
+        self.assertEqual(doc.md5, hashlib.md5(b'PDF-EVIDENCIA').hexdigest())
+        self.assertEqual(doc.fuente, 'Depósito X')
+
+    def test_duplicado_marcado_no_crash(self):
+        r1 = self._upload()
+        r2 = self._upload(nombre='copia.pdf')
+        self.assertEqual(r1.status_code, 201)
+        self.assertEqual(r2.status_code, 201)
+        self.assertTrue(r2.data['duplicado'])
+        self.assertEqual(r2.data['evidencia']['duplicado_de'], r1.data['evidencia']['id'])
+
+    def test_sin_archivo_400(self):
+        resp = self.client.post(f'/api/containers/{self.cont.pk}/evidencias/', {}, format='multipart')
+        self.assertEqual(resp.status_code, 400)
+
+    def test_listado_por_contenedor(self):
+        self._upload()
+        resp = self.client.get(f'/api/containers/{self.cont.pk}/evidencias/')
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.data['total'], 1)
+
+
+# ===== Trabajo 3: Deposit + verificación externa =====
+class DepositYVerificacionTests(TestCase):
+    def setUp(self):
+        self.cont = Container.objects.create(
+            container_id='TEST0005', tipo='40HC', estado='por_arribar',
+            deposito_devolucion='Depósito Alfa'
+        )
+        self.dep = Deposit.objects.create(name='Depósito Alfa', aliases='DEP ALFA, deposito alfa')
+
+    def test_resolver_por_nombre_y_alias(self):
+        self.assertEqual(Deposit.resolver('depósito alfa'), self.dep)
+        self.assertEqual(Deposit.resolver('DEP ALFA'), self.dep)
+        self.assertIsNone(Deposit.resolver('Otro Depósito'))
+        self.assertIsNone(Deposit.resolver(None))
+
+    def test_verificacion_divergencia(self):
+        """Estado declarado por_arribar, externo confirma devuelto → divergencia."""
+        out = self.cont.marcar_verificacion_externa('devuelto', 'Portal Depósito', 'DEP ALFA')
+        self.assertTrue(out['divergencia'])
+        self.cont.refresh_from_db()
+        self.assertEqual(self.cont.estado, 'por_arribar')  # FSM intacto
+        self.assertEqual(self.cont.estado_verificado, 'devuelto')
+        self.assertEqual(self.cont.deposito_verificado, self.dep)
+        self.assertTrue(self.cont.divergencia_estado)
+
+    def test_verificacion_sin_divergencia(self):
+        out = self.cont.marcar_verificacion_externa('por_arribar', 'Portal Depósito')
+        self.assertFalse(out['divergencia'])
+        self.cont.refresh_from_db()
+        self.assertIsNone(self.cont.deposito_verificado)
+        self.assertFalse(self.cont.divergencia_estado)
+
+    def test_estado_externo_invalido(self):
+        from django.core.exceptions import ValidationError
+        with self.assertRaises(ValidationError):
+            self.cont.marcar_verificacion_externa('no_existe', 'Portal')
+
+    def test_evento_registrado(self):
+        from apps.events.models import Event
+        self.cont.marcar_verificacion_externa('devuelto', 'Portal Depósito')
+        self.assertTrue(Event.objects.filter(
+            container=self.cont,
+            detalles__tipo='verificacion_externa',
+            detalles__divergencia=True
+        ).exists())
