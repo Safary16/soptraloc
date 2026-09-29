@@ -18,8 +18,10 @@ from apps.programaciones.models import Programacion
 from .serializers import (
     ContainerSerializer, 
     ContainerListSerializer,
-    ContainerStockExportSerializer
+    ContainerStockExportSerializer,
+    EvidenceDocumentSerializer
 )
+from .models import EvidenceDocument
 from .filters import ContainerFilter
 from .importers.embarque import EmbarqueImporter
 from .importers.liberacion import LiberacionImporter
@@ -307,22 +309,133 @@ class ContainerViewSet(viewsets.ModelViewSet):
             if os.path.exists(tmp_path):
                 os.unlink(tmp_path)
     
+    @action(detail=True, methods=['post', 'get'], url_path='evidencias')
+    def evidencias(self, request, pk=None):
+        """
+        POST: sube un documento de evidencia para el contenedor.
+        GET: lista los documentos de evidencia del contenedor.
+
+        Multipart (POST): archivo (obligatorio), tipo (eir_in|eir_out|otro),
+        fuente (texto libre del emisor), fecha_programacion (ISO, opcional).
+
+        Deduplicación por MD5: si ya existe el mismo archivo para el mismo
+        contenedor, la nueva copia se marca como duplicado (duplicado_de)
+        en vez de rechazarse — la integridad queda registrada sin crash.
+        """
+        container = self.get_object()
+
+        if request.method == 'GET':
+            evidencias = container.evidencias.all()
+            serializer = EvidenceDocumentSerializer(evidencias, many=True)
+            return Response({
+                'success': True,
+                'total': evidencias.count(),
+                'evidencias': serializer.data
+            })
+
+        archivo = request.FILES.get('archivo')
+        if not archivo:
+            return Response(
+                {'error': 'Archivo no proporcionado'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        tipo = request.data.get('tipo', 'otro')
+        if tipo not in dict(EvidenceDocument.TIPOS):
+            return Response(
+                {'error': f'Tipo inválido: {tipo}'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        fecha_prog = request.data.get('fecha_programacion')
+        if fecha_prog:
+            try:
+                fecha_prog = date_parser.parse(fecha_prog)
+            except (ValueError, OverflowError):
+                return Response(
+                    {'error': f'Fecha de programación inválida: {fecha_prog}'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+        # MD5 del contenido subido (streaming por chunks)
+        import hashlib
+        hasher = hashlib.md5()
+        for chunk in archivo.chunks():
+            hasher.update(chunk)
+        md5 = hasher.hexdigest()
+
+        usuario = request.user.username if request.user.is_authenticated else None
+
+        original = EvidenceDocument.objects.filter(
+            container=container, md5=md5
+        ).exclude(pk=None).first()
+
+        evidencia = EvidenceDocument.objects.create(
+            container=container,
+            archivo=archivo,
+            md5=md5,
+            tipo=tipo,
+            fuente=request.data.get('fuente'),
+            fecha_programacion=fecha_prog,
+            duplicado_de=original,
+            uploaded_by=usuario
+        )
+
+        serializer = EvidenceDocumentSerializer(evidencia)
+        resp = {
+            'success': True,
+            'duplicado': original is not None,
+            'evidencia': serializer.data
+        }
+        if original is not None:
+            resp['mensaje'] = (
+                f'Archivo idéntico al documento #{original.id} '
+                f'(mismo MD5) — registrado como duplicado'
+            )
+        return Response(resp, status=status.HTTP_201_CREATED)
+
     @action(detail=False, methods=['get'], url_path='export-stock')
     def export_stock(self, request):
         """
-        Exporta stock de contenedores liberados y por arribar (formato JSON)
-        Incluye flag de 'secuenciado' para próximas liberaciones
+        Exporta stock de contenedores (formato JSON).
+
+        Retrocompatible: por defecto exporta solo liberados y por_arribar
+        (incluye flag de 'secuenciado' para próximas liberaciones).
+
+        Parámetros opcionales (genéricos, sin acople a ningún cliente/portal):
+        - ?estado=<codigo>: exporta solo ese estado (código del FSM).
+        - ?incluir_todos=true: exporta TODOS los estados del ciclo de vida
+          (útil para conciliación/auditoría contra fuentes externas).
         """
-        # Filtrar solo liberados y por_arribar
-        containers = Container.objects.filter(
-            Q(estado='liberado') | Q(estado='por_arribar')
-        ).order_by('secuenciado', '-fecha_liberacion')
-        
+        incluir_todos = str(request.query_params.get('incluir_todos', '')).lower() in (
+            'true', '1', 'si', 'yes'
+        )
+        estado_param = request.query_params.get('estado')
+
+        if incluir_todos:
+            containers = Container.objects.all()
+        elif estado_param:
+            if estado_param not in dict(Container.ESTADOS):
+                return Response(
+                    {'error': f'Estado inválido: {estado_param}'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            containers = Container.objects.filter(estado=estado_param)
+        else:
+            # Comportamiento histórico: solo liberados y por_arribar.
+            containers = Container.objects.filter(
+                Q(estado='liberado') | Q(estado='por_arribar')
+            )
+
+        containers = containers.order_by('secuenciado', '-fecha_liberacion')
+
         serializer = ContainerStockExportSerializer(containers, many=True)
-        
+
         return Response({
             'success': True,
             'total': containers.count(),
+            'incluir_todos': incluir_todos,
+            'estado': estado_param,
             'containers': serializer.data
         })
     
