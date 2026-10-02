@@ -66,7 +66,7 @@ class OperationalLearningEngine:
     @classmethod
     def _history(cls, origin, destination):
         cutoff = timezone.localdate() - timedelta(days=cls.HISTORY_DAYS)
-        rows = TiempoViaje.objects.filter(anomalia=False, fecha__gte=cutoff).select_related('conductor')
+        rows = TiempoViaje.objects.filter(anomalia=False, fecha__gte=cutoff).exclude(conductor__excluir_ml=True).select_related('conductor')
         return [
             row for row in rows
             if cls._near(row.origen_lat, float(origin[0]))
@@ -116,7 +116,7 @@ class OperationalLearningEngine:
     @classmethod
     def _compute_driver_profile(cls, driver, rows=None):
         rows = rows if rows is not None else list(
-            TiempoViaje.objects.filter(conductor=driver, anomalia=False).order_by('-fecha')[:40]
+            TiempoViaje.objects.filter(conductor=driver, anomalia=False).exclude(conductor__excluir_ml=True).order_by('-fecha')[:40]
         )
         factors = [r.calcular_factor_correccion() for r in rows if r.tiempo_mapbox_min > 0 and r.tiempo_real_min > 0]
         samples = len(factors)
@@ -157,7 +157,7 @@ class OperationalLearningEngine:
             tipo_operacion='descarga_cd',
             anomalia=False,
             fecha__gte=cutoff,
-        )
+        ).exclude(conductor__excluir_ml=True)
         conductor_rows = []
         if conductor is not None:
             conductor_rows = list(
@@ -223,7 +223,7 @@ class OperationalLearningEngine:
                 conductor=driver,
                 tipo_operacion='descarga_cd',
                 anomalia=False,
-            ).order_by('-fecha')[:40]
+            ).exclude(conductor__excluir_ml=True).order_by('-fecha')[:40]
         )
         samples = len(rows)
         if samples < cls.MIN_DISCHARGE_SAMPLES:

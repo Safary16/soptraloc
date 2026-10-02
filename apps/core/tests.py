@@ -98,3 +98,59 @@ class OperationalLearningEngineTests(TestCase):
         trip.save(update_fields=['anomalia'])
         history = OperationalLearningEngine._history(self.origin, self.destination)
         self.assertEqual(history, [])
+
+
+class ExcluirMLTests(TestCase):
+    """TAREA 0 (auditoría Flaco 2026-10-02): Driver.excluir_ml marca
+    conductores de prueba/demo — sus viajes NO deben alimentar el motor de
+    aprendizaje ni los perfiles que usa AssignmentService."""
+
+    def setUp(self):
+        self.driver_activo = Driver.objects.create(nombre='Driver ML')
+        self.driver_excluido = Driver.objects.create(nombre='Driver Demo', excluir_ml=True)
+        self.cd = CD.objects.create(
+            nombre='CD Excl', codigo='CD-EXCL', direccion='Destino', comuna='Santiago',
+            lat=-33.45, lng=-70.65,
+        )
+        self.origin = (-33.50, -70.70)
+        self.destination = (-33.45, -70.65)
+        self.departure = timezone.now().replace(hour=8, minute=0, second=0, microsecond=0)
+
+    def _trip(self, driver, real, mapbox=40, days_ago=1):
+        departure = self.departure - timedelta(days=days_ago)
+        return TiempoViaje.objects.create(
+            conductor=driver,
+            programacion=None,
+            origen_lat=self.origin[0], origen_lon=self.origin[1],
+            destino_lat=self.destination[0], destino_lon=self.destination[1],
+            origen_nombre='Origen', destino_nombre='Destino',
+            tiempo_mapbox_min=mapbox, tiempo_real_min=real,
+            hora_salida=departure, hora_llegada=departure + timedelta(minutes=real),
+            hora_del_dia=8, dia_semana=departure.weekday(),
+            distancia_km=25, ruta_firma='route-a', anomalia=False,
+        )
+
+    def test_excluded_driver_trips_do_not_seed_history(self):
+        """_history ignora los viajes de un conductor con excluir_ml=True."""
+        self._trip(self.driver_excluido, real=80, days_ago=1)
+        self._trip(self.driver_excluido, real=80, days_ago=2)
+        rows = OperationalLearningEngine._history(self.origin, self.destination)
+        self.assertEqual(len(rows), 0)
+
+    def test_excluded_driver_profile_is_cold_start(self):
+        """driver_profile de un conductor excluido no ve ni sus propios viajes."""
+        for index in range(6):
+            self._trip(self.driver_excluido, real=80, days_ago=index + 1)
+        profile = OperationalLearningEngine.driver_profile(self.driver_excluido)
+        self.assertEqual(profile['samples'], 0)
+        self.assertEqual(profile['label'], 'sin_datos_suficientes')
+
+    def test_active_driver_trips_still_feed_history(self):
+        """Sanidad: un conductor normal sí alimenta el historial (control)."""
+        self._trip(self.driver_activo, real=50, days_ago=1)
+        rows = OperationalLearningEngine._history(self.origin, self.destination)
+        self.assertEqual(len(rows), 1)
+
+    def test_default_is_not_excluded(self):
+        """Default False: conductores existentes siguen en el ML tras migrar."""
+        self.assertFalse(self.driver_activo.excluir_ml)

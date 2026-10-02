@@ -26,6 +26,11 @@ class Driver(models.Model):
     # Disponibilidad
     presente = models.BooleanField(default=True, verbose_name='Presente', help_text='¿Está disponible hoy?')
     activo = models.BooleanField(default=True, verbose_name='Activo')
+    excluir_ml = models.BooleanField(
+        default=False,
+        verbose_name='Excluir del ML',
+        help_text='Si True: sus viajes/operaciones NO alimentan el motor de aprendizaje (conductores de prueba o demo).',
+    )
 
     # Capacidad del vehículo (toneladas). Si es None, se usa el default de 28t.
     capacidad_ton = models.DecimalField(
