@@ -296,24 +296,26 @@ class ProgramacionViewSet(viewsets.ModelViewSet):
                     request.user.username if request.user.is_authenticated else 'operador_manual',
                 )
             except Exception as _fsm_exc:
-                # Fallback defensivo: si por algún motivo el FSM rechaza la
-                # transición directa (estado no contemplado), replicar el flujo
-                # manual antiguo + emitir Event para no perder auditoría.
-                logger.warning(
-                    'desasignar_fsm_fallback container_id=%s estado=%s detalle=%s',
+                # Auditoría Flaco 2026-10-02: el fallback anterior forzaba el
+                # estado saltándose el FSM, dejándolo decorativo justo en el
+                # caso donde más importa. Ahora la desasignación falla de forma
+                # ruidosa (el contenedor queda 'asignado' y la programación
+                # conserva al conductor) para que el operador corrija la causa
+                # raíz por la vía administrativa explícita del FSM.
+                logger.error(
+                    'desasignar_fsm_rechazado container_id=%s estado=%s detalle=%s',
                     getattr(container, 'container_id', None),
                     getattr(container, 'estado', None),
                     _fsm_exc,
                 )
-                from apps.events.models import Event as _EventFallback
-                container.estado = 'programado'
-                container.fecha_asignacion = None
-                container.save(update_fields=['estado', 'fecha_asignacion'])
-                _EventFallback.objects.create(
-                    container=container,
-                    event_type='cambio_estado',
-                    detalles={'estado_anterior': 'asignado', 'estado_nuevo': 'programado'},
-                    usuario=request.user.username if request.user.is_authenticated else 'operador_manual',
+                return Response(
+                    {'error': (
+                        'El FSM rechazó la transición del contenedor a programado '
+                        f'({getattr(_fsm_exc, "messages", None) or str(_fsm_exc)}). '
+                        'La desasignación fue revertida; corrija el estado del contenedor '
+                        'por la vía administrativa e intente nuevamente.'
+                    )},
+                    status=status.HTTP_409_CONFLICT
                 )
             else:
                 # FSM aplicado correctamente; igualamos fecha_asignacion a None
