@@ -31,8 +31,20 @@ def auditoria_events(request):
     if event_type:
         qs = qs.filter(event_type=event_type)
 
-    limit = min(int(request.query_params.get('limit', 100)), 500)
-    offset = max(int(request.query_params.get('offset', 0)), 0)
+    # Bug detectado en auditoría Flaco 2026-10-02: int() sin try lanzaba 500
+    # con '?limit=abc'. Ahora responde 400 con mensaje claro.
+    def _parse_int_param(request, name, default):
+        raw = request.query_params.get(name, '')
+        if not raw:
+            return default
+        try:
+            return int(raw)
+        except (TypeError, ValueError):
+            from rest_framework.exceptions import ValidationError as DRFValidationError
+            raise DRFValidationError(f"Parámetro '{name}' debe ser un entero (recibido: {raw!r}).")
+
+    limit = min(_parse_int_param(request, 'limit', 100), 500)
+    offset = max(_parse_int_param(request, 'offset', 0), 0)
 
     total = qs.count()
     eventos = qs.order_by('-created_at')[offset:offset + limit]
