@@ -1,11 +1,15 @@
 """Motor híbrido de aprendizaje operacional, explicable y con fallback seguro."""
 from __future__ import annotations
 
+import time
 from datetime import timedelta
 from math import exp
 from statistics import median
 
 from django.utils import timezone
+
+from django.db.models.signals import post_delete, post_save
+from django.dispatch import receiver
 
 from apps.core.services.mapbox import MapboxService
 from apps.programaciones.models import TiempoViaje, TiempoOperacion
@@ -18,6 +22,42 @@ class OperationalLearningEngine:
     MIN_ROUTE_SAMPLES = 2
     MIN_DRIVER_SAMPLES = 3
     MIN_DISCHARGE_SAMPLES = 3
+
+    # Auditoría Flaco 2026-10-02: los perfiles de conductor se recalculaban
+    # contra la BD en cada request (dashboard, assignment, ML). Caché en proceso
+    # con TTL corto: suficiente para absorber ráfagas de requests sin servir
+    # datos stale más allá de PROFILE_TTL_SECONDS.
+    PROFILE_TTL_SECONDS = 120
+    _profile_cache: dict = {}
+
+    @classmethod
+    def _cached(cls, key, producer):
+        now = time.monotonic()
+        entry = cls._profile_cache.get(key)
+        if entry and (now - entry[0]) < cls.PROFILE_TTL_SECONDS:
+            return entry[1]
+        value = producer()
+        cls._profile_cache[key] = (now, value)
+        # Evitar crecimiento ilimitado si hay muchos conductores.
+        if len(cls._profile_cache) > 512:
+            cutoff = now - cls.PROFILE_TTL_SECONDS
+            cls._profile_cache = {k: v for k, v in cls._profile_cache.items() if v[0] >= cutoff}
+        return value
+
+    @classmethod
+    def invalidate_driver(cls, driver):
+        """Invalida el caché de perfiles de un conductor.
+
+        Auditoría Flaco 2026-10-02: sin invalidación explícita, un perfil
+        cacheado queda stale hasta expirar el TTL después de registrar un
+        viaje/operación real (los tests lo detectaron: crear trips y pedir
+        el perfil inmediatamente devolvía 'sin_datos_suficientes').
+        """
+        key = getattr(driver, 'pk', driver)  # acepta instancia o id crudo
+        if key is None:
+            return
+        cls._profile_cache.pop(('driver_profile', key), None)
+        cls._profile_cache.pop(('driver_discharge_profile', key), None)
 
     @classmethod
     def _near(cls, value, target, radius=0.012):
@@ -66,6 +106,15 @@ class OperationalLearningEngine:
 
     @classmethod
     def driver_profile(cls, driver, rows=None):
+        if rows is None and driver is not None:
+            # Auditoría Flaco 2026-10-02: caché por conductor (TTL corto) para
+            # no golpear la BD en cada request del dashboard/assignment.
+            cache_key = ('driver_profile', driver.pk)
+            return cls._cached(cache_key, lambda: cls._compute_driver_profile(driver))
+        return cls._compute_driver_profile(driver, rows=rows)
+
+    @classmethod
+    def _compute_driver_profile(cls, driver, rows=None):
         rows = rows if rows is not None else list(
             TiempoViaje.objects.filter(conductor=driver, anomalia=False).order_by('-fecha')[:40]
         )
@@ -162,6 +211,13 @@ class OperationalLearningEngine:
         Combina TiempoOperacion con tipo_operacion='descarga_cd' del conductor
         para producir un factor multiplicativo sobre el tiempo estimado del CD.
         """
+        if driver is not None:
+            cache_key = ('driver_discharge_profile', driver.pk)
+            return cls._cached(cache_key, lambda: cls._compute_driver_discharge_profile(driver))
+        return cls._compute_driver_discharge_profile(driver)
+
+    @classmethod
+    def _compute_driver_discharge_profile(cls, driver):
         rows = list(
             TiempoOperacion.objects.filter(
                 conductor=driver,
@@ -267,3 +323,14 @@ class OperationalLearningEngine:
                 f"confianza {best['confidence']:.0%}."
             ),
         }
+
+
+@receiver(post_save, sender=TiempoViaje)
+@receiver(post_delete, sender=TiempoViaje)
+def _invalidate_on_viaje(sender, instance, **kwargs):
+    OperationalLearningEngine.invalidate_driver(instance.conductor_id)
+
+@receiver(post_save, sender=TiempoOperacion)
+@receiver(post_delete, sender=TiempoOperacion)
+def _invalidate_on_operacion(sender, instance, **kwargs):
+    OperationalLearningEngine.invalidate_driver(instance.conductor_id)
