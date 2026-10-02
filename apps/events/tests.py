@@ -1,7 +1,6 @@
 from datetime import timedelta
 
 from django.test import TestCase
-from django.urls import reverse
 from django.utils import timezone
 from rest_framework.test import APIClient
 
