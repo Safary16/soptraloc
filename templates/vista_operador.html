@@ -102,6 +102,25 @@
         return m[c.estado] || c.estado_display || c.estado;
     }
 
+    function accionSugerida(c){
+        // Reglas de negocio del sistema, en idioma del transportista.
+        // Solo lectura: deriva la acción del estado que ya publica el API.
+        const urgencia = c.urgencia_demurrage;
+        if (urgencia === 'vencido') return {icono:'🚨', texto:'Demurrage VENCIDO — liberar de inmediato', nivel:'urgencia'};
+        if (urgencia === 'critico') return {icono:'⏰', texto:'Demurrage crítico — programar HOY', nivel:'urgencia'};
+        if (urgencia === 'alto') return {icono:'⚠️', texto:'Demurrage alto — confirmar plan pronto', nivel:'alerta'};
+        if (c.estado === 'por_arribar') return {icono:'⛴️', texto:'Preparar arribo — ETA en seguimiento', nivel:'info'};
+        if (c.estado === 'liberado' || c.estado === 'secuenciado') return {icono:'🗓️', texto:'Programar entrega — define fecha y CD', nivel:'alerta'};
+        if (c.estado === 'programado' && !c.driver_nombre) return {icono:'🚛', texto:'Asignar conductor para la programación', nivel:'alerta'};
+        if (c.estado === 'en_ruta') return {icono:'🛣️', texto:'En tránsito — vigilar ETA y geocerca', nivel:'info'};
+        if (c.estado === 'entregado' || c.estado === 'soltado') return {icono:'📦', texto:'Esperando descarga en destino', nivel:'info'};
+        if (c.estado === 'descargado' || c.estado === 'vacio') return {icono:'🔵', texto:'Planificar retorno del vacío', nivel:'alerta'};
+        if (c.estado === 'vacio_en_ruta') return {icono:'🔄', texto:'Vacío en retorno — confirmar destino', nivel:'info'};
+        if (c.estado === 'en_patio') return {icono:'🏭', texto:'Vacío en patio — coordinar devolución', nivel:'info'};
+        if (c.estado === 'devuelto') return {icono:'✅', texto:'Ciclo cerrado', nivel:'ok'};
+        return {icono:'•', texto:'Sin acción pendiente', nivel:'info'};
+    }
+
     function card(c){
         const g = grupo(c).key;
         const demurrage = c.urgencia_demurrage==='vencido'
@@ -111,6 +130,10 @@
             : c.urgencia_demurrage==='alto'
             ? `<span class="tag" style="background:#ffc107;color:#333;">Demurrage alto</span>` : '';
         const estadoTag = `<span class="tag" style="background:#eee;color:#333;">${E(chipEstado(c))}</span>`;
+        const accion = accionSugerida(c);
+        const accionRow = `<div class="meta" style="margin-top:6px;padding-top:6px;border-top:1px dashed #e0e3e8;">
+            <span style="font-weight:600;color:${accion.nivel==='urgencia'?'#dc3545':accion.nivel==='alerta'?'#8a6d00':'#0f5c3a'};">
+            ${accion.icono} Siguiente acción: ${E(accion.texto)}</span></div>`;
         const destino = c.cd_entrega_nombre || c.retorno_destino_cd_nombre || c.comuna || '—';
         let detalle = '';
         if (c.estado==='liberado' || c.estado==='secuenciado') detalle = c.dias_para_demurrage!=null
@@ -131,6 +154,7 @@
                 ${c.dias_para_demurrage!=null && c.urgencia_demurrage!=='sin_fecha' ? ` · <i class="fas fa-hourglass-half"></i> ${c.dias_para_demurrage} día(s) para demurrage` : ''}
             </div>
             ${detalle ? `<div class="meta"><i class="fas fa-info-circle"></i> ${E(detalle)}</div>` : ''}
+            ${accionRow}
         </div>`;
     }
 
