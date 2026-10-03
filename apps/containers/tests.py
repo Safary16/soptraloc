@@ -214,7 +214,7 @@ class ReglasNegocioImportadoresTests(TestCase):
         frame = pd.DataFrame([{
             'contenedor': container.container_id,
             'almacen': 'TPS',
-            'fecha salida': timezone.now().strftime('%d/%m/%Y'),
+            'fecha salida': '01/10/2026',  # fecha fija pasada: timezone.now() es UTC y entre 21:00-24:00 local produce la fecha de mañana → por_arribar (HAL-27)
             'cliente': 'N/A',
         }])
         with patch(
@@ -233,7 +233,7 @@ class ReglasNegocioImportadoresTests(TestCase):
         frame = pd.DataFrame([{
             'contenedor': container.container_id,
             'almacen': 'TPS',
-            'fecha salida': timezone.now().strftime('%d/%m/%Y'),
+            'fecha salida': '01/10/2026',  # fecha fija pasada (mismo motivo HAL-27 que el test anterior)
             'cliente': 'Easy',
         }])
         with patch(
