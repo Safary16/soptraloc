@@ -2251,7 +2251,7 @@ class ProgramacionViewSet(viewsets.ModelViewSet):
                 while time.time() - start < max_duration:
                     try:
                         prog = Programacion.objects.only(
-                            'eta_recalculado_min', 'estado',
+                            'eta_recalculado_min', 'container__estado',
                         ).select_related('container').get(pk=programacion_id)
                         estado_actual = prog.container.estado if prog.container else 'sin_contenedor'
                         eta_actual = prog.eta_recalculado_min

@@ -1712,3 +1712,49 @@ class Hal23IniciarRutaRetiroVacioTests(TestCase):
         )
         OperationalFlowService.iniciar_transito(c2, 'test')
         self.assertEqual(c2.estado, 'en_ruta')
+
+
+# ---------------------------------------------------------------------------
+# FASE 4 — HAL-22: eta-stream (SSE) usaba .only(..., 'estado') pero 'estado'
+# es @property de Programacion → FieldError en la 1ª iteración del generador;
+# el stream nunca emitió un evento. Fix: only(..., 'container__estado').
+# ---------------------------------------------------------------------------
+
+class Hal22EtaStreamTests(TestCase):
+    """HAL-22: el SSE de ETA debe resolver la query y emitir su primer evento."""
+
+    def setUp(self):
+        self.user = User.objects.create_user(username='h22_op', password='***', is_staff=True)
+        self.driver = Driver.objects.create(nombre='HAL22 Driver')
+        self.cd = CD.objects.create(
+            nombre='HAL22 CD', codigo='HAL22-CD', direccion='Depósito',
+            comuna='Santiago', lat=-33.45, lng=-70.65,
+        )
+        self.container = Container.objects.create(
+            container_id='HAL22S1234', estado='en_ruta', cliente='HAL22 Cliente',
+        )
+        self.programacion = Programacion.objects.create(
+            container=self.container, cd=self.cd, driver=self.driver,
+            cliente='HAL22 Cliente', fecha_programada=timezone.now(),
+            eta_recalculado_min=42,
+        )
+        self.factory = APIRequestFactory()
+
+    def test_stream_emite_primer_evento_sin_fielderror(self):
+        request = self.factory.get('/', HTTP_LAST_EVENT_ID='')
+        force_authenticate(request, user=self.user)
+        view = ProgramacionViewSet.as_view({'get': 'eta_stream'})
+        response = view(request, pk=self.programacion.pk)
+        chunks = list(response.streaming_content) if response.streaming else []
+        self.assertTrue(chunks, 'HAL-22: el stream debe emitir al menos un evento')
+        import json
+        payload = json.loads(chunks[0].decode().split('data: ')[1].strip())
+        self.assertEqual(payload['eta_recalculado_min'], 42)
+        self.assertEqual(payload['estado'], 'en_ruta')
+
+    def test_query_only_resuelve_estado_de_container(self):
+        """La query del poll 1Hz resuelve con container__estado (no la property)."""
+        prog = Programacion.objects.only(
+            'eta_recalculado_min', 'container__estado',
+        ).select_related('container').get(pk=self.programacion.pk)
+        self.assertEqual(prog.container.estado, 'en_ruta')
