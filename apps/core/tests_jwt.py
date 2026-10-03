@@ -6,7 +6,6 @@ Estos tests verifican que (1) los endpoints de token existen y funcionan,
 (2) el acceso anónimo a la API sigue funcionando SIN token (regla sagrada).
 """
 from django.contrib.auth import get_user_model
-from django.urls import reverse
 from rest_framework.test import APITestCase
 
 
