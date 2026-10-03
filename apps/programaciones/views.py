@@ -2170,6 +2170,20 @@ class ProgramacionViewSet(viewsets.ModelViewSet):
                 urgencia_servicio='NORMAL',
                 observaciones='Retiro de vacío asignado por operador.',
             )
+        elif programacion.driver_id and programacion.fecha_liberacion_conductor:
+            # HAL-24: reuso de programación histórica del viaje lleno — el FK
+            # driver queda seteado tras el drop (liberar_conductor no limpia el
+            # FK, solo fecha_liberacion_conductor y el contador). Chequear
+            # idempotencia ANTES de resetear: si la liberación ya ocurrió,
+            # el conductor fue descontado y es seguro liberar el FK para
+            # reasignar; si NO ocurrió, es un servicio activo → 400 real.
+            programacion.driver = None
+            programacion.save(update_fields=['driver', 'updated_at'])
+        elif programacion.driver_id:
+            return Response(
+                {'error': 'La programación ya tiene conductor asignado (servicio activo).'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
         try:
             programacion.asignar_conductor(
                 driver,
