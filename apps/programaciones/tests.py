@@ -241,7 +241,8 @@ class OperationalCompletionTests(TestCase):
     def test_retries_do_not_double_release_or_duplicate_timing(self):
         driver, cd, container, programacion = self._flow(True)
         OperationalFlowService.drop_container(programacion, 'driver')
-        _, created = OperationalFlowService.drop_container(programacion, 'driver')
+        # HAL-20: la tupla es SIEMPRE de 3 (locked, created, retorno).
+        _, created, _ = OperationalFlowService.drop_container(programacion, 'driver')
         self.assertFalse(created)
         OperationalFlowService.mark_empty(programacion, 'cd', 'test')
         driver.refresh_from_db(); cd.refresh_from_db()
@@ -1330,6 +1331,21 @@ class HalNocheSoltarContenedorAutoRetornoTests(TestCase):
         # conductor ejecute un comando de inicio. Esto es coherente con el
         # patrón P0-5 (Safari review).
         self.assertEqual(prog_retorno.container.estado, 'vacio')
+
+    def test_soltar_contenedor_reintento_idempotente_200(self):
+        """HAL-20: reintento de drop (app móvil con conexión inestable) → 200.
+
+        Antes: drop_container retornaba 2-tupla en el camino idempotente
+        (estado 'soltado') y la vista desempaquetaba 3 → ValueError → 500.
+        """
+        first = self._post('soltar_contenedor', {})
+        self.assertEqual(first.status_code, 200,
+                         f'primer drop debe ser 200: {first.data}')
+        retry = self._post('soltar_contenedor', {})
+        self.assertEqual(retry.status_code, 200,
+                         f'reintento de drop debe ser 200 idempotente: {retry.data}')
+        self.assertTrue(retry.data.get('ya_registrado'))
+        self.assertIsNone(retry.data.get('retorno_automatico'))
 
     def test_full_flow_drop_to_vacio_estado_consistente(self):
         response = self._post('soltar_contenedor', {})

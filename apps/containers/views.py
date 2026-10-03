@@ -1260,7 +1260,8 @@ class ContainerViewSet(viewsets.ModelViewSet):
             return Response({'error': 'Contenedor sin programación asociada'}, status=status.HTTP_400_BAD_REQUEST)
         from apps.core.services.operations import OperationalFlowService
         try:
-            programacion, _ = OperationalFlowService.drop_container(programacion, usuario)
+            # HAL-20: drop_container retorna SIEMPRE 3-tupla.
+            programacion, _, _ = OperationalFlowService.drop_container(programacion, usuario)
         except ValueError as exc:
             return Response({'error': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
         container = programacion.container

@@ -364,14 +364,21 @@ class OperationalFlowService:
     @classmethod
     @transaction.atomic
     def drop_container(cls, programacion, usuario=None):
-        """Drop & hook deja carga en CD; no declara vacío antes de la descarga."""
+        """Drop & hook deja carga en CD; no declara vacío antes de la descarga.
+
+        HAL-20: retorna SIEMPRE 3-tupla (locked, created, retorno_programacion);
+        en el camino idempotente (ya soltado) created=False y retorno=None.
+        """
         locked = Programacion.objects.select_for_update().select_related(
             'container', 'driver', 'cd'
         ).get(pk=programacion.pk)
         if not locked.cd.permite_soltar_contenedor:
             raise ValueError(f'El CD {locked.cd.nombre} no permite Drop & Hook.')
         if locked.container.estado == 'soltado':
-            return locked, False
+            # HAL-20: camino idempotente retorna la MISMA 3-tupla que el camino
+            # normal; el consumidor (vista del conductor) desempaqueta 3 y un
+            # reintento de drop reventaba con 'too many values to unpack' → 500.
+            return locked, False, None
         if locked.container.estado != 'entregado':
             raise ValueError('Solo se puede soltar después de registrar el arribo.')
         locked.container.cambiar_estado('soltado', usuario)
