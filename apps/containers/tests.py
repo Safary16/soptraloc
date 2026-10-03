@@ -4,12 +4,13 @@ import pandas as pd
 from django.test import TestCase
 from django.contrib.auth.models import User
 from django.urls import reverse
-from rest_framework.test import APITestCase
+from rest_framework.test import APITestCase, APIRequestFactory, force_authenticate
 from django.utils import timezone
 from django.core.management import call_command
 from datetime import timedelta
 
 from apps.cds.models import CD
+from apps.containers.views import ContainerViewSet
 from apps.containers.importers.programacion import ProgramacionImporter
 from apps.containers.importers.embarque import EmbarqueImporter
 from apps.containers.importers.liberacion import LiberacionImporter
@@ -465,3 +466,51 @@ class DepositYVerificacionTests(TestCase):
             detalles__tipo='verificacion_externa',
             detalles__divergencia=True
         ).exists())
+
+
+# ---------------------------------------------------------------------------
+# FASE 5 — HAL-26: idempotencia unificada de soltar_contenedor (operador).
+# Antes: reintento tras drop → 400 engañoso; el endpoint del conductor sí era
+# idempotente (y por HAL-20 reventaba). Ahora ambos espejan el contrato.
+# ---------------------------------------------------------------------------
+
+class Hal26SoltarContenedorIdempotenteTests(TestCase):
+    """HAL-26: reintento de soltar_contenedor (operador) → 200 ya_registrado."""
+
+    def setUp(self):
+        from apps.programaciones.models import Programacion
+        from apps.drivers.models import Driver
+        self.operador = User.objects.create_user(username='op26', password='***', is_staff=True)
+        self.driver = Driver.objects.create(nombre='HAL26 Driver')
+        self.cd = CD.objects.create(
+            nombre='HAL26 CD', codigo='HAL26-CD', direccion='CD',
+            comuna='Santiago', lat=-33.45, lng=-70.65,
+            permite_soltar_contenedor=True,
+        )
+        self.container = Container.objects.create(
+            container_id='HAL26S1234', estado='soltado', cliente='HAL26 Cliente',
+            cd_entrega=self.cd,
+        )
+        self.programacion = Programacion.objects.create(
+            container=self.container, cd=self.cd, driver=self.driver,
+            cliente='HAL26 Cliente', fecha_programada=timezone.now(),
+        )
+        self.factory = APIRequestFactory()
+
+    def test_reintento_soltado_200_idempotente(self):
+        request = self.factory.post('/', {}, format='json')
+        force_authenticate(request, user=self.operador)
+        view = ContainerViewSet.as_view({'post': 'soltar_contenedor'})
+        response = view(request, pk=self.container.pk)
+        self.assertEqual(response.status_code, 200,
+                         f'reintento debe ser 200 idempotente: {response.data}')
+        self.assertTrue(response.data.get('ya_registrado'))
+
+    def test_estado_distinto_sigue_400(self):
+        self.container.estado = 'en_ruta'
+        self.container.save()
+        request = self.factory.post('/', {}, format='json')
+        force_authenticate(request, user=self.operador)
+        view = ContainerViewSet.as_view({'post': 'soltar_contenedor'})
+        response = view(request, pk=self.container.pk)
+        self.assertEqual(response.status_code, 400)

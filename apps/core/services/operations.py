@@ -401,10 +401,11 @@ class OperationalFlowService:
         locked.container.cambiar_estado('soltado', usuario)
         locked.liberar_conductor()
         # P0-5: auto-asignación de retiro de vacío desde el CD donde se soltó.
-        # Buscar un contenedor 'fresco' (vacio contabilizado en últimas 2h) en el
-        # mismo CD y crear una Programacion de retorno automático. La señal
-        # trigger_automatic_assignment (apps/programaciones/signals.py) la
-        # asignará al conductor recién liberado, sin llamada de red adicional.
+        # Busca cualquier contenedor 'vacio' contabilizado en el mismo CD y crea
+        # una Programacion de retorno automático (SIN límite de frescura —
+        # decisión del dueño 25-sep). La señal trigger_automatic_assignment
+        # (apps/programaciones/signals.py) la asignará al conductor recién
+        # liberado, sin llamada de red adicional.
         retorno_programacion = cls._auto_assign_empty_return(locked)
         return locked, True, retorno_programacion
 
