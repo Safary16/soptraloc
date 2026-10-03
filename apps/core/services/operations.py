@@ -363,6 +363,23 @@ class OperationalFlowService:
 
     @classmethod
     @transaction.atomic
+    def iniciar_transito(cls, container, usuario=None):
+        """HAL-23: transición de inicio de ruta según el estado del contenedor.
+
+        Un solo lugar decide: viaje lleno (asignado) → 'en_ruta'; retiro de
+        vacío (vacio/en_ccti) → 'vacio_en_ruta' (única transición válida del
+        FSM para esos estados). Sin esto, iniciar_ruta sobre un retorno
+        automático P0-5 (container en 'vacio') reventaba con ValidationError
+        → 500 y el circuito quedaba asignado sin camino de ejecución.
+        """
+        if container.estado in ('vacio', 'en_ccti'):
+            container.cambiar_estado('vacio_en_ruta', usuario)
+        else:
+            container.cambiar_estado('en_ruta', usuario)
+        return container
+
+    @classmethod
+    @transaction.atomic
     def drop_container(cls, programacion, usuario=None):
         """Drop & hook deja carga en CD; no declara vacío antes de la descarga.
 

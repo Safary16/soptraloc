@@ -1631,3 +1631,84 @@ class Hal24ReusoProgramacionHistoricaTests(TestCase):
         self.driver_viejo.refresh_from_db()
         self.assertEqual(self.driver_viejo.num_entregas_dia, contador_antes,
                          'el reset de FK no debe tocar el contador ya descontado')
+
+
+# ---------------------------------------------------------------------------
+# FASE 3 — HAL-23: iniciar_ruta sobre retiro de vacío → vacio_en_ruta.
+# El retorno automático P0-5 deja el container en 'vacio'; iniciar_ruta
+# forzaba 'en_ruta' (transición inexistente) → 500. La elección de transición
+# vive ahora en OperationalFlowService.iniciar_transito (helper único).
+# ---------------------------------------------------------------------------
+
+class Hal23IniciarRutaRetiroVacioTests(TestCase):
+    """Circuito P0-5 completo: drop → retorno auto-asignado → iniciar_ruta OK."""
+
+    def setUp(self):
+        self.user = User.objects.create_user(username='h23_driver', password='***')
+        self.driver = Driver.objects.create(
+            nombre='HAL23 Driver', user=self.user, patente='H23-1234',
+            num_entregas_dia=0, max_entregas_dia=3,
+        )
+        self.cd = CD.objects.create(
+            nombre='HAL23 CD', codigo='HAL23-CD', direccion='Depósito',
+            comuna='Santiago', lat=-33.45, lng=-70.65,
+            permite_soltar_contenedor=True, capacidad_vacios=10,
+        )
+        self.container_vacio = Container.objects.create(
+            container_id='HAL23V1234', estado='vacio', cliente='HAL23 Cliente',
+            cd_entrega=self.cd, retorno_destino_cd=self.cd,
+            vacio_contabilizado=True, fecha_vacio=timezone.now() - timedelta(hours=1),
+        )
+        self.factory = APIRequestFactory()
+
+    def _crear_retorno_asignado(self):
+        return Programacion.objects.create(
+            container=self.container_vacio, cd=self.cd, driver=self.driver,
+            cliente='HAL23 Cliente', fecha_programada=timezone.now(),
+        )
+
+    def _iniciar_ruta(self, programacion):
+        request = self.factory.post('/', {
+            'patente': 'H23-1234', 'lat': -33.40, 'lng': -70.60,
+        }, format='json')
+        force_authenticate(request, user=self.user)
+        view = ProgramacionViewSet.as_view({'post': 'iniciar_ruta'})
+        return view(request, pk=programacion.pk)
+
+    def test_iniciar_ruta_sobre_vacio_200_y_vacio_en_ruta(self):
+        """Antes: vacio→en_ruta no es transición FSM → ValidationError → 500."""
+        programacion = self._crear_retorno_asignado()
+        response = self._iniciar_ruta(programacion)
+        self.assertEqual(response.status_code, 200,
+                         f'iniciar_ruta de retiro de vacío debe ser 200: {response.data}')
+        self.container_vacio.refresh_from_db()
+        self.assertEqual(self.container_vacio.estado, 'vacio_en_ruta',
+                         'HAL-23: el retiro de vacío arranca como vacio_en_ruta')
+
+    def test_iniciar_ruta_viaje_lleno_sigue_en_ruta(self):
+        """El helper NO cambia el comportamiento del viaje lleno (asignado→en_ruta)."""
+        container_lleno = Container.objects.create(
+            container_id='HAL23L1234', estado='asignado', cliente='HAL23 Cliente',
+        )
+        programacion = Programacion.objects.create(
+            container=container_lleno, cd=self.cd, driver=self.driver,
+            cliente='HAL23 Cliente', fecha_programada=timezone.now(),
+        )
+        response = self._iniciar_ruta(programacion)
+        self.assertEqual(response.status_code, 200,
+                         f'viaje lleno debe seguir funcionando: {response.data}')
+        container_lleno.refresh_from_db()
+        self.assertEqual(container_lleno.estado, 'en_ruta')
+
+    def test_helper_unitario_elige_transicion(self):
+        from apps.core.services.operations import OperationalFlowService
+        c1 = Container.objects.create(
+            container_id='HAL23U0001', estado='vacio', cliente='C',
+        )
+        OperationalFlowService.iniciar_transito(c1, 'test')
+        self.assertEqual(c1.estado, 'vacio_en_ruta')
+        c2 = Container.objects.create(
+            container_id='HAL23U0002', estado='asignado', cliente='C',
+        )
+        OperationalFlowService.iniciar_transito(c2, 'test')
+        self.assertEqual(c2.estado, 'en_ruta')

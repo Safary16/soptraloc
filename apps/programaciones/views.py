@@ -1062,9 +1062,12 @@ class ProgramacionViewSet(viewsets.ModelViewSet):
         programacion.gps_inicio_lng = lng
         programacion.save()
         
-        # Cambiar estado del contenedor a 'en_ruta'
+        # Cambiar estado del contenedor: HAL-23 — la elección de transición vive
+        # en OperationalFlowService.iniciar_transito (viaje lleno → 'en_ruta';
+        # retiro de vacío → 'vacio_en_ruta', única transición FSM válida).
+        from apps.core.services.operations import OperationalFlowService
         usuario = request.user.username if request.user.is_authenticated else None
-        programacion.container.cambiar_estado('en_ruta', usuario)
+        OperationalFlowService.iniciar_transito(programacion.container, usuario)
         
         # Crear evento de inicio de ruta con datos GPS
         from apps.events.models import Event
