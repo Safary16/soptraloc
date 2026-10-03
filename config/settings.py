@@ -2,6 +2,7 @@
 Django settings for SoptraLoc TMS
 """
 import os
+from datetime import timedelta
 from pathlib import Path
 from decouple import config
 import dj_database_url
@@ -177,6 +178,9 @@ REST_FRAMEWORK = {
         # BasicAuthentication deshabilitada: disparaba el popup HTTP Basic del
         # navegador ('requiere usuario y contraseña') antes de llegar a Django.
         'rest_framework.authentication.SessionAuthentication',
+        # JWT opcional (Fase 2): adicional a SessionAuth — NO cambia permisos.
+        # AllowAny permanece intacto (deuda N1 fuera de scope; decisión Neteroku).
+        'rest_framework_simplejwt.authentication.JWTAuthentication',
     ],
     'DEFAULT_PERMISSION_CLASSES': [
         'rest_framework.permissions.AllowAny',
@@ -188,6 +192,16 @@ REST_FRAMEWORK = {
     ],
     'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
     'PAGE_SIZE': 50,
+}
+
+# JWT opcional (Fase 2 plan soptraloc↔OpenClaw): SOLO autenticación adicional.
+# No altera permisos (AllowAny intacto). Lifetimes cortos + rotate por seguridad.
+SIMPLE_JWT = {
+    'ACCESS_TOKEN_LIFETIME': timedelta(hours=8),
+    'REFRESH_TOKEN_LIFETIME': timedelta(days=7),
+    'ROTATE_REFRESH_TOKENS': True,
+    'BLACKLIST_AFTER_ROTATION': False,
+    'AUTH_HEADER_TYPES': ('Bearer',),
 }
 
 # CORS
