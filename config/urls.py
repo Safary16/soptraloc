@@ -24,6 +24,7 @@ from apps.core.views import (
     operaciones, operaciones_panel, drivers_list, cds_list, executive_dashboard,
     operaciones_diarias as operaciones_diarias_view,
     auditoria, cliente_portal, gestion, gestion_vacios,
+    vista_operador,
     health,
 )
 
@@ -58,6 +59,7 @@ urlpatterns = [
     path('cliente/', cliente_portal, name='cliente_portal'),
     path('gestion/', gestion, name='gestion'),
     path('gestion/vacios/', gestion_vacios, name='gestion_vacios'),
+    path('vista/', vista_operador, name='vista_operador'),
     path('drivers/', drivers_list, name='drivers_list'),
     path('cds/', cds_list, name='cds_list'),
     path('executive/', executive_dashboard, name='executive_dashboard'),
