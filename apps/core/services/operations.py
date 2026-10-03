@@ -363,24 +363,49 @@ class OperationalFlowService:
 
     @classmethod
     @transaction.atomic
+    def iniciar_transito(cls, container, usuario=None):
+        """HAL-23: transición de inicio de ruta según el estado del contenedor.
+
+        Un solo lugar decide: viaje lleno (asignado) → 'en_ruta'; retiro de
+        vacío (vacio/en_ccti) → 'vacio_en_ruta' (única transición válida del
+        FSM para esos estados). Sin esto, iniciar_ruta sobre un retorno
+        automático P0-5 (container en 'vacio') reventaba con ValidationError
+        → 500 y el circuito quedaba asignado sin camino de ejecución.
+        """
+        if container.estado in ('vacio', 'en_ccti'):
+            container.cambiar_estado('vacio_en_ruta', usuario)
+        else:
+            container.cambiar_estado('en_ruta', usuario)
+        return container
+
+    @classmethod
+    @transaction.atomic
     def drop_container(cls, programacion, usuario=None):
-        """Drop & hook deja carga en CD; no declara vacío antes de la descarga."""
+        """Drop & hook deja carga en CD; no declara vacío antes de la descarga.
+
+        HAL-20: retorna SIEMPRE 3-tupla (locked, created, retorno_programacion);
+        en el camino idempotente (ya soltado) created=False y retorno=None.
+        """
         locked = Programacion.objects.select_for_update().select_related(
             'container', 'driver', 'cd'
         ).get(pk=programacion.pk)
         if not locked.cd.permite_soltar_contenedor:
             raise ValueError(f'El CD {locked.cd.nombre} no permite Drop & Hook.')
         if locked.container.estado == 'soltado':
-            return locked, False
+            # HAL-20: camino idempotente retorna la MISMA 3-tupla que el camino
+            # normal; el consumidor (vista del conductor) desempaqueta 3 y un
+            # reintento de drop reventaba con 'too many values to unpack' → 500.
+            return locked, False, None
         if locked.container.estado != 'entregado':
             raise ValueError('Solo se puede soltar después de registrar el arribo.')
         locked.container.cambiar_estado('soltado', usuario)
         locked.liberar_conductor()
         # P0-5: auto-asignación de retiro de vacío desde el CD donde se soltó.
-        # Buscar un contenedor 'fresco' (vacio contabilizado en últimas 2h) en el
-        # mismo CD y crear una Programacion de retorno automático. La señal
-        # trigger_automatic_assignment (apps/programaciones/signals.py) la
-        # asignará al conductor recién liberado, sin llamada de red adicional.
+        # Busca cualquier contenedor 'vacio' contabilizado en el mismo CD y crea
+        # una Programacion de retorno automático (SIN límite de frescura —
+        # decisión del dueño 25-sep). La señal trigger_automatic_assignment
+        # (apps/programaciones/signals.py) la asignará al conductor recién
+        # liberado, sin llamada de red adicional.
         retorno_programacion = cls._auto_assign_empty_return(locked)
         return locked, True, retorno_programacion
 

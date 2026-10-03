@@ -241,7 +241,8 @@ class OperationalCompletionTests(TestCase):
     def test_retries_do_not_double_release_or_duplicate_timing(self):
         driver, cd, container, programacion = self._flow(True)
         OperationalFlowService.drop_container(programacion, 'driver')
-        _, created = OperationalFlowService.drop_container(programacion, 'driver')
+        # HAL-20: la tupla es SIEMPRE de 3 (locked, created, retorno).
+        _, created, _ = OperationalFlowService.drop_container(programacion, 'driver')
         self.assertFalse(created)
         OperationalFlowService.mark_empty(programacion, 'cd', 'test')
         driver.refresh_from_db(); cd.refresh_from_db()
@@ -1331,6 +1332,21 @@ class HalNocheSoltarContenedorAutoRetornoTests(TestCase):
         # patrón P0-5 (Safari review).
         self.assertEqual(prog_retorno.container.estado, 'vacio')
 
+    def test_soltar_contenedor_reintento_idempotente_200(self):
+        """HAL-20: reintento de drop (app móvil con conexión inestable) → 200.
+
+        Antes: drop_container retornaba 2-tupla en el camino idempotente
+        (estado 'soltado') y la vista desempaquetaba 3 → ValueError → 500.
+        """
+        first = self._post('soltar_contenedor', {})
+        self.assertEqual(first.status_code, 200,
+                         f'primer drop debe ser 200: {first.data}')
+        retry = self._post('soltar_contenedor', {})
+        self.assertEqual(retry.status_code, 200,
+                         f'reintento de drop debe ser 200 idempotente: {retry.data}')
+        self.assertTrue(retry.data.get('ya_registrado'))
+        self.assertIsNone(retry.data.get('retorno_automatico'))
+
     def test_full_flow_drop_to_vacio_estado_consistente(self):
         response = self._post('soltar_contenedor', {})
         self.assertEqual(response.status_code, 200)
@@ -1469,3 +1485,276 @@ class HalNochePatenteNullTests(TestCase):
         # Comportamiento: patente vacía → 400 con mensaje "Debe ingresar la patente".
         self.assertEqual(response.status_code, 400,
                          f'patente=null debe manejarse sin 500: {response.data}')
+
+
+# ---------------------------------------------------------------------------
+# FASE 2 — HAL-21 + HAL-24: retiro de vacíos operable.
+# HAL-21: asignar_conductor transicionaba el contenedor a 'asignado'
+# incondicionalmente; vacio/en_ccti no tienen esa transición → 400 garantizado.
+# HAL-24: reuso de programación histórica con driver FK residual → 400
+# 'ya tiene conductor' + desasignar bloqueado → contenedor varado.
+# ---------------------------------------------------------------------------
+
+class Hal21RetiroVacioTests(TestCase):
+    """HAL-21: asignación de retiro de vacío funciona en sus estados declarados."""
+
+    def setUp(self):
+        self.operador = User.objects.create_user(username='op21', password='***')
+        self.driver = Driver.objects.create(
+            nombre='HAL21 Driver', num_entregas_dia=0, max_entregas_dia=3,
+        )
+        self.cd = CD.objects.create(
+            nombre='HAL21 CD', codigo='HAL21-CD', direccion='Depósito',
+            comuna='Santiago', lat=-33.45, lng=-70.65,
+        )
+        self.factory = APIRequestFactory()
+
+    def _container(self, estado):
+        return Container.objects.create(
+            container_id=f'HAL21{estado[:4].upper()}123',
+            estado=estado, cliente='HAL21 Cliente',
+            cd_entrega=self.cd, retorno_destino_cd=self.cd,
+        )
+
+    def _post(self, container, driver=None):
+        request = self.factory.post('/', {
+            'container_id': container.id, 'driver_id': (driver or self.driver).id,
+        }, format='json')
+        force_authenticate(request, user=self.operador)
+        view = ProgramacionViewSet.as_view({'post': 'asignar_conductor_retiro_vacio'})
+        return view(request)
+
+    def test_asignar_retiro_sobre_vacio_201(self):
+        """El estado principal del endpoint ya no revienta con 400 FSM."""
+        response = self._post(self._container('vacio'))
+        self.assertEqual(response.status_code, 201,
+                         f'asignación de retiro sobre vacío debe ser 201: {response.data}')
+        self.assertEqual(response.data['programacion']['driver'], self.driver.id)
+
+    def test_asignar_retiro_sobre_en_ccti_201(self):
+        response = self._post(self._container('en_ccti'))
+        self.assertEqual(response.status_code, 201,
+                         f'asignación de retiro sobre en_ccti debe ser 201: {response.data}')
+
+    def test_asignar_retiro_no_transiciona_contenedor(self):
+        """El contenedor queda en su estado: la transición ocurre al iniciar ruta (HAL-23)."""
+        container = self._container('vacio')
+        self._post(container)
+        container.refresh_from_db()
+        self.assertEqual(container.estado, 'vacio',
+                         'HAL-21: vacío NO debe transicionar a asignado')
+
+    def test_asignacion_registra_event_y_fecha(self):
+        from apps.events.models import Event
+        container = self._container('vacio')
+        self._post(container)
+        prog = Programacion.objects.get(container=container)
+        self.assertIsNotNone(prog.fecha_asignacion,
+                             'fecha_asignacion debe setearse aunque no haya transición FSM')
+        self.assertTrue(Event.objects.filter(
+            container=container, event_type='asignacion_conductor').exists(),
+            'la auditoría Event del flujo normal debe conservarse')
+
+    def test_conductor_activo_en_otro_servicio_sigue_bloqueado(self):
+        """El guard de conflicto de asignar_conductor NO se relajó."""
+        otro = Container.objects.create(
+            container_id='HAL21OTRO123', estado='asignado', cliente='C',
+        )
+        Programacion.objects.create(
+            container=otro, cd=self.cd, driver=self.driver,
+            cliente='C', fecha_programada=timezone.now(),
+        )
+        response = self._post(self._container('vacio'))
+        self.assertEqual(response.status_code, 400)
+
+
+class Hal24ReusoProgramacionHistoricaTests(TestCase):
+    """HAL-24: retiro de vacío sobre programación histórica con driver residual."""
+
+    def setUp(self):
+        self.operador = User.objects.create_user(username='op24', password='***')
+        self.driver_viejo = Driver.objects.create(
+            nombre='HAL24 Viejo', num_entregas_dia=0, max_entregas_dia=3,
+        )
+        self.driver_nuevo = Driver.objects.create(
+            nombre='HAL24 Nuevo', num_entregas_dia=0, max_entregas_dia=3,
+        )
+        self.cd = CD.objects.create(
+            nombre='HAL24 CD', codigo='HAL24-CD', direccion='Depósito',
+            comuna='Santiago', lat=-33.45, lng=-70.65,
+        )
+        self.factory = APIRequestFactory()
+
+    def _escenario_historico(self, estado='vacio'):
+        """Container con programación del viaje lleno ya liberado (drop hecho)."""
+        container = Container.objects.create(
+            container_id='HAL24HIST123', estado=estado, cliente='HAL24 Cliente',
+            cd_entrega=self.cd, retorno_destino_cd=self.cd,
+        )
+        prog = Programacion.objects.create(
+            container=container, cd=self.cd, driver=self.driver_viejo,
+            cliente='HAL24 Cliente', fecha_programada=timezone.now() - timedelta(hours=4),
+            fecha_liberacion_conductor=timezone.now() - timedelta(hours=2),
+        )
+        return container, prog
+
+    def _post(self, container, driver=None):
+        request = self.factory.post('/', {
+            'container_id': container.id,
+            'driver_id': (driver or self.driver_nuevo).id,
+        }, format='json')
+        force_authenticate(request, user=self.operador)
+        view = ProgramacionViewSet.as_view({'post': 'asignar_conductor_retiro_vacio'})
+        return view(request)
+
+    def test_reuso_con_driver_liberado_reasigna_201(self):
+        container, prog = self._escenario_historico()
+        response = self._post(container)
+        self.assertEqual(response.status_code, 201,
+                         f'reuso con driver histórico liberado debe reasignar: {response.data}')
+        prog.refresh_from_db()
+        self.assertEqual(prog.driver_id, self.driver_nuevo.id)
+
+    def test_reuso_con_driver_activo_sigue_400(self):
+        """Servicio ACTIVO (sin liberación) no se pisa: 400 real, no reset a ciegas."""
+        container, prog = self._escenario_historico()
+        prog.fecha_liberacion_conductor = None
+        prog.save()
+        response = self._post(container)
+        self.assertEqual(response.status_code, 400)
+
+    def test_reset_no_duplica_descuento_de_contador(self):
+        """liberar_conductor ya descontó al driver_viejo; el reset del FK no lo vuelve a tocar."""
+        container, prog = self._escenario_historico()
+        contador_antes = self.driver_viejo.num_entregas_dia
+        self._post(container)
+        self.driver_viejo.refresh_from_db()
+        self.assertEqual(self.driver_viejo.num_entregas_dia, contador_antes,
+                         'el reset de FK no debe tocar el contador ya descontado')
+
+
+# ---------------------------------------------------------------------------
+# FASE 3 — HAL-23: iniciar_ruta sobre retiro de vacío → vacio_en_ruta.
+# El retorno automático P0-5 deja el container en 'vacio'; iniciar_ruta
+# forzaba 'en_ruta' (transición inexistente) → 500. La elección de transición
+# vive ahora en OperationalFlowService.iniciar_transito (helper único).
+# ---------------------------------------------------------------------------
+
+class Hal23IniciarRutaRetiroVacioTests(TestCase):
+    """Circuito P0-5 completo: drop → retorno auto-asignado → iniciar_ruta OK."""
+
+    def setUp(self):
+        self.user = User.objects.create_user(username='h23_driver', password='***')
+        self.driver = Driver.objects.create(
+            nombre='HAL23 Driver', user=self.user, patente='H23-1234',
+            num_entregas_dia=0, max_entregas_dia=3,
+        )
+        self.cd = CD.objects.create(
+            nombre='HAL23 CD', codigo='HAL23-CD', direccion='Depósito',
+            comuna='Santiago', lat=-33.45, lng=-70.65,
+            permite_soltar_contenedor=True, capacidad_vacios=10,
+        )
+        self.container_vacio = Container.objects.create(
+            container_id='HAL23V1234', estado='vacio', cliente='HAL23 Cliente',
+            cd_entrega=self.cd, retorno_destino_cd=self.cd,
+            vacio_contabilizado=True, fecha_vacio=timezone.now() - timedelta(hours=1),
+        )
+        self.factory = APIRequestFactory()
+
+    def _crear_retorno_asignado(self):
+        return Programacion.objects.create(
+            container=self.container_vacio, cd=self.cd, driver=self.driver,
+            cliente='HAL23 Cliente', fecha_programada=timezone.now(),
+        )
+
+    def _iniciar_ruta(self, programacion):
+        request = self.factory.post('/', {
+            'patente': 'H23-1234', 'lat': -33.40, 'lng': -70.60,
+        }, format='json')
+        force_authenticate(request, user=self.user)
+        view = ProgramacionViewSet.as_view({'post': 'iniciar_ruta'})
+        return view(request, pk=programacion.pk)
+
+    def test_iniciar_ruta_sobre_vacio_200_y_vacio_en_ruta(self):
+        """Antes: vacio→en_ruta no es transición FSM → ValidationError → 500."""
+        programacion = self._crear_retorno_asignado()
+        response = self._iniciar_ruta(programacion)
+        self.assertEqual(response.status_code, 200,
+                         f'iniciar_ruta de retiro de vacío debe ser 200: {response.data}')
+        self.container_vacio.refresh_from_db()
+        self.assertEqual(self.container_vacio.estado, 'vacio_en_ruta',
+                         'HAL-23: el retiro de vacío arranca como vacio_en_ruta')
+
+    def test_iniciar_ruta_viaje_lleno_sigue_en_ruta(self):
+        """El helper NO cambia el comportamiento del viaje lleno (asignado→en_ruta)."""
+        container_lleno = Container.objects.create(
+            container_id='HAL23L1234', estado='asignado', cliente='HAL23 Cliente',
+        )
+        programacion = Programacion.objects.create(
+            container=container_lleno, cd=self.cd, driver=self.driver,
+            cliente='HAL23 Cliente', fecha_programada=timezone.now(),
+        )
+        response = self._iniciar_ruta(programacion)
+        self.assertEqual(response.status_code, 200,
+                         f'viaje lleno debe seguir funcionando: {response.data}')
+        container_lleno.refresh_from_db()
+        self.assertEqual(container_lleno.estado, 'en_ruta')
+
+    def test_helper_unitario_elige_transicion(self):
+        from apps.core.services.operations import OperationalFlowService
+        c1 = Container.objects.create(
+            container_id='HAL23U0001', estado='vacio', cliente='C',
+        )
+        OperationalFlowService.iniciar_transito(c1, 'test')
+        self.assertEqual(c1.estado, 'vacio_en_ruta')
+        c2 = Container.objects.create(
+            container_id='HAL23U0002', estado='asignado', cliente='C',
+        )
+        OperationalFlowService.iniciar_transito(c2, 'test')
+        self.assertEqual(c2.estado, 'en_ruta')
+
+
+# ---------------------------------------------------------------------------
+# FASE 4 — HAL-22: eta-stream (SSE) usaba .only(..., 'estado') pero 'estado'
+# es @property de Programacion → FieldError en la 1ª iteración del generador;
+# el stream nunca emitió un evento. Fix: only(..., 'container__estado').
+# ---------------------------------------------------------------------------
+
+class Hal22EtaStreamTests(TestCase):
+    """HAL-22: el SSE de ETA debe resolver la query y emitir su primer evento."""
+
+    def setUp(self):
+        self.user = User.objects.create_user(username='h22_op', password='***', is_staff=True)
+        self.driver = Driver.objects.create(nombre='HAL22 Driver')
+        self.cd = CD.objects.create(
+            nombre='HAL22 CD', codigo='HAL22-CD', direccion='Depósito',
+            comuna='Santiago', lat=-33.45, lng=-70.65,
+        )
+        self.container = Container.objects.create(
+            container_id='HAL22S1234', estado='en_ruta', cliente='HAL22 Cliente',
+        )
+        self.programacion = Programacion.objects.create(
+            container=self.container, cd=self.cd, driver=self.driver,
+            cliente='HAL22 Cliente', fecha_programada=timezone.now(),
+            eta_recalculado_min=42,
+        )
+        self.factory = APIRequestFactory()
+
+    def test_stream_emite_primer_evento_sin_fielderror(self):
+        request = self.factory.get('/', HTTP_LAST_EVENT_ID='')
+        force_authenticate(request, user=self.user)
+        view = ProgramacionViewSet.as_view({'get': 'eta_stream'})
+        response = view(request, pk=self.programacion.pk)
+        chunks = list(response.streaming_content) if response.streaming else []
+        self.assertTrue(chunks, 'HAL-22: el stream debe emitir al menos un evento')
+        import json
+        payload = json.loads(chunks[0].decode().split('data: ')[1].strip())
+        self.assertEqual(payload['eta_recalculado_min'], 42)
+        self.assertEqual(payload['estado'], 'en_ruta')
+
+    def test_query_only_resuelve_estado_de_container(self):
+        """La query del poll 1Hz resuelve con container__estado (no la property)."""
+        prog = Programacion.objects.only(
+            'eta_recalculado_min', 'container__estado',
+        ).select_related('container').get(pk=self.programacion.pk)
+        self.assertEqual(prog.container.estado, 'en_ruta')

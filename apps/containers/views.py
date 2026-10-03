@@ -1228,12 +1228,25 @@ class ContainerViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=['post'])
     def soltar_contenedor(self, request, pk=None):
         """
-        Permite soltar un contenedor en El Peñón (drop & hook)
+        Permite soltar un contenedor en el CD (drop & hook)
         Solo funciona si cd.permite_soltar_contenedor=True
-        Cambia estado a 'descargado' y libera al conductor inmediatamente
+        HAL-26: cambia estado a 'soltado' (no 'descargado') y libera al
+        conductor; reintento idempotente → 200 con ya_registrado=True
+        (espeja el contrato del endpoint del conductor).
         """
         
         container = self.get_object()
+        
+        # HAL-26: idempotencia unificada con el endpoint del conductor —
+        # un reintento tras drop ya hecho responde 200 (ya_registrado)
+        # en vez de 400 engañoso.
+        if container.estado == 'soltado':
+            return Response({
+                'success': True,
+                'mensaje': 'Contenedor ya estaba soltado (reintento idempotente).',
+                'ya_registrado': True,
+                'nuevo_estado': 'soltado',
+            })
         
         if container.estado != 'entregado':
             return Response(
@@ -1260,7 +1273,8 @@ class ContainerViewSet(viewsets.ModelViewSet):
             return Response({'error': 'Contenedor sin programación asociada'}, status=status.HTTP_400_BAD_REQUEST)
         from apps.core.services.operations import OperationalFlowService
         try:
-            programacion, _ = OperationalFlowService.drop_container(programacion, usuario)
+            # HAL-20: drop_container retorna SIEMPRE 3-tupla.
+            programacion, _, _ = OperationalFlowService.drop_container(programacion, usuario)
         except ValueError as exc:
             return Response({'error': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
         container = programacion.container

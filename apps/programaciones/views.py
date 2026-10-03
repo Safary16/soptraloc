@@ -1062,9 +1062,12 @@ class ProgramacionViewSet(viewsets.ModelViewSet):
         programacion.gps_inicio_lng = lng
         programacion.save()
         
-        # Cambiar estado del contenedor a 'en_ruta'
+        # Cambiar estado del contenedor: HAL-23 — la elección de transición vive
+        # en OperationalFlowService.iniciar_transito (viaje lleno → 'en_ruta';
+        # retiro de vacío → 'vacio_en_ruta', única transición FSM válida).
+        from apps.core.services.operations import OperationalFlowService
         usuario = request.user.username if request.user.is_authenticated else None
-        programacion.container.cambiar_estado('en_ruta', usuario)
+        OperationalFlowService.iniciar_transito(programacion.container, usuario)
         
         # Crear evento de inicio de ruta con datos GPS
         from apps.events.models import Event
@@ -2170,6 +2173,20 @@ class ProgramacionViewSet(viewsets.ModelViewSet):
                 urgencia_servicio='NORMAL',
                 observaciones='Retiro de vacío asignado por operador.',
             )
+        elif programacion.driver_id and programacion.fecha_liberacion_conductor:
+            # HAL-24: reuso de programación histórica del viaje lleno — el FK
+            # driver queda seteado tras el drop (liberar_conductor no limpia el
+            # FK, solo fecha_liberacion_conductor y el contador). Chequear
+            # idempotencia ANTES de resetear: si la liberación ya ocurrió,
+            # el conductor fue descontado y es seguro liberar el FK para
+            # reasignar; si NO ocurrió, es un servicio activo → 400 real.
+            programacion.driver = None
+            programacion.save(update_fields=['driver', 'updated_at'])
+        elif programacion.driver_id:
+            return Response(
+                {'error': 'La programación ya tiene conductor asignado (servicio activo).'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
         try:
             programacion.asignar_conductor(
                 driver,
@@ -2234,7 +2251,7 @@ class ProgramacionViewSet(viewsets.ModelViewSet):
                 while time.time() - start < max_duration:
                     try:
                         prog = Programacion.objects.only(
-                            'eta_recalculado_min', 'estado',
+                            'eta_recalculado_min', 'container__estado',
                         ).select_related('container').get(pk=programacion_id)
                         estado_actual = prog.container.estado if prog.container else 'sin_contenedor'
                         eta_actual = prog.eta_recalculado_min
