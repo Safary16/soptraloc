@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+{% load static %}
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Operación de Hoy - SoptraLoc</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="{% static 'css/ubuntu-style.css' %}">
+    <style>
+        :root { --soptra:#E95420; --soptra-dark:#2C001E; --soptra-mid:#772953; }
+        body { background:#f5f6f8; font-family:'Segoe UI',Tahoma,Geneva,Verdana,sans-serif; }
+        .topbar { background:linear-gradient(135deg,#2C001E 0%,#772953 55%,#E95420 100%); color:#fff; padding:16px 24px; }
+        .topbar h1 { font-size:20px; margin:0; font-weight:700; }
+        .topbar .sub { font-size:12px; opacity:.85; }
+        .topbar .badge-live { background:rgba(255,255,255,.18); border-radius:20px; padding:4px 12px; font-size:11px; }
+        .summary { display:flex; gap:10px; flex-wrap:wrap; margin:16px 0 4px; }
+        .chip { background:#fff; border:1px solid #e2e5ea; border-radius:14px; padding:10px 16px; font-size:13px; font-weight:600; box-shadow:0 1px 3px rgba(0,0,0,.06); }
+        .chip b { display:block; font-size:20px; line-height:1.1; }
+        .chip.danger { border-color:#dc3545; color:#a41e2c; }
+        .chip.warn { border-color:#ffc107; color:#8a6d00; }
+        .chip.ok { border-color:#198754; color:#0f5c3a; }
+        .section-title { font-size:13px; font-weight:700; text-transform:uppercase; letter-spacing:.05em; color:#772953; margin:22px 0 10px; border-bottom:2px solid #eee; padding-bottom:6px; display:flex; align-items:center; gap:8px; }
+        .section-title .count { background:#772953; color:#fff; border-radius:10px; padding:0 8px; font-size:11px; }
+        .card-c { background:#fff; border:1px solid #e2e5ea; border-left:5px solid #6c757d; border-radius:10px; padding:12px 14px; margin-bottom:10px; box-shadow:0 1px 2px rgba(0,0,0,.04); }
+        .card-c.riesgo { border-left-color:#dc3545; background:#fff5f5; }
+        .card-c.por_programar { border-left-color:#ffc107; background:#fffaf0; }
+        .card-c.en_ruta { border-left-color:#0d6efd; }
+        .card-c.asignados { border-left-color:#0dcaf0; }
+        .card-c.vacios { border-left-color:#6f42c1; }
+        .card-c.entregas { border-left-color:#198754; }
+        .card-c.arribos { border-left-color:#20c997; }
+        .card-c .cid { font-weight:700; font-size:15px; }
+        .card-c .tag { font-size:11px; border-radius:6px; padding:1px 8px; font-weight:600; }
+        .card-c .meta { font-size:12px; color:#555; margin-top:4px; }
+        .card-c .meta i { width:16px; color:#772953; }
+        .searchbar { display:flex; gap:8px; flex-wrap:wrap; margin:12px 0; }
+        .searchbar input, .searchbar select { border-radius:10px; border:1px solid #d5d9e0; padding:8px 12px; font-size:13px; }
+        .foot { color:#999; font-size:11px; text-align:center; padding:24px 0 12px; }
+        .empty { text-align:center; padding:40px; color:#888; }
+        .empty i { font-size:40px; color:#ccc; margin-bottom:10px; }
+        @media (max-width:640px){ .topbar h1{font-size:16px;} .chip{border-radius:10px;padding:8px 12px;} }
+    </style>
+</head>
+<body>
+    <div class="topbar">
+        <div class="d-flex justify-content-between align-items-center flex-wrap">
+            <div>
+                <h1><i class="fas fa-satellite-dish"></i> SoptraLoc — Operación de Hoy</h1>
+                <div class="sub">Todo lo que necesita tu atención, sin mirar 20 pantallas.</div>
+            </div>
+            <div class="d-flex gap-2 align-items-center">
+                <span class="badge-live"><i class="fas fa-circle" style="color:#7CFC00"></i> <span id="fecha-hoy"></span></span>
+                <a href="/monitoring/" class="btn btn-light btn-sm"><i class="fas fa-map"></i> Mapa en vivo</a>
+                <a href="/operaciones/" class="btn btn-light btn-sm"><i class="fas fa-tasks"></i> Operaciones</a>
+            </div>
+        </div>
+    </div>
+
+    <div class="container" style="max-width:1100px;">
+        <div class="summary" id="summary">
+            <div class="chip danger"><b id="cnt-riesgo">0</b>En riesgo de demurrage</div>
+            <div class="chip warn"><b id="cnt-prog">0</b>Liberados por programar</div>
+            <div class="chip"><b id="cnt-ruta">0</b>En ruta / asignados</div>
+            <div class="chip"><b id="cnt-vacio">0</b>Vacíos por retirar</div>
+            <div class="chip ok"><b id="cnt-cerrado">0</b>Cerrados hoy</div>
+        </div>
+
+        <div class="searchbar">
+            <input id="q" type="text" placeholder="🔎 Buscar contenedor, cliente o naviera…" style="flex:1;min-width:220px;">
+            <select id="f-cliente" style="max-width:240px;"><option value="">Todos los clientes</option></select>
+            <button class="btn btn-sm" id="btn-refresh" style="background:#772953;color:#fff;border-radius:10px;"><i class="fas fa-sync-alt"></i> Refrescar</button>
+        </div>
+
+        <div id="sections"><div class="empty"><i class="fas fa-box-open"></i><br>Cargando operación…</div></div>
+    </div>
+
+    <div class="foot">SoptraLoc · operación simulada de demostración · <a href="/admin/" style="color:#999;">admin</a></div>
+
+    <script>
+    const E = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+    let ALL = [];
+
+    function grupo(c){
+        if (['vencido','critico','alto'].includes(c.urgencia_demurrage)) return {key:'riesgo', label:'🔴 En riesgo de demurrage'};
+        if (['liberado','secuenciado'].includes(c.estado)) return {key:'por_programar', label:'🟠 Liberados — por programar'};
+        if (c.estado==='en_ruta') return {key:'en_ruta', label:'🚚 En ruta'};
+        if (['programado','asignado'].includes(c.estado)) return {key:'asignados', label:'📋 Programados / asignados'};
+        if (['vacio','vacio_en_ruta','en_patio'].includes(c.estado)) return {key:'vacios', label:'🔵 Vacíos — por retirar'};
+        if (['entregado','soltado','descargado'].includes(c.estado)) return {key:'entregas', label:'📦 Entregas en curso'};
+        if (c.estado==='por_arribar') return {key:'arribos', label:'⛴️ Por arribar'};
+        if (['devuelto','cancelado'].includes(c.estado)) return {key:'cerrados', label:'✅ Cerrados'};
+        return {key:'otros', label:'Otros'};
+    }
+
+    function chipEstado(c){
+        const m = {liberado:'Liberado', secuenciado:'Secuenciado', programado:'Programado', asignado:'Asignado',
+            en_ruta:'En ruta', entregado:'Entregado', soltado:'Soltado', descargado:'Descargado', vacio:'Vacío',
+            vacio_en_ruta:'Vacío en ruta', en_patio:'En patio', devuelto:'Devuelto', por_arribar:'Por arribar',
+            incidente:'Incidente', cancelado:'Cancelado'};
+        return m[c.estado] || c.estado_display || c.estado;
+    }
+
+    function card(c){
+        const g = grupo(c).key;
+        const demurrage = c.urgencia_demurrage==='vencido'
+            ? `<span class="tag" style="background:#dc3545;color:#fff;">Demurrage VENCIDO</span>`
+            : c.urgencia_demurrage==='critico'
+            ? `<span class="tag" style="background:#fd7e14;color:#fff;">Demurrage crítico</span>`
+            : c.urgencia_demurrage==='alto'
+            ? `<span class="tag" style="background:#ffc107;color:#333;">Demurrage alto</span>` : '';
+        const estadoTag = `<span class="tag" style="background:#eee;color:#333;">${E(chipEstado(c))}</span>`;
+        const destino = c.cd_entrega_nombre || c.retorno_destino_cd_nombre || c.comuna || '—';
+        let detalle = '';
+        if (c.estado==='liberado' || c.estado==='secuenciado') detalle = c.dias_para_demurrage!=null
+            ? `⚠️ lleva ${c.dias_para_demurrage} día(s) sin programar` : '⚠️ esperando programación';
+        else if (c.estado==='en_ruta') detalle = `hacia ${E(destino)}`;
+        else if (c.estado==='vacio' || c.estado==='en_patio' || c.estado==='vacio_en_ruta') detalle = `desde ${E(destino)} — falta retorno`;
+        else if (c.estado==='por_arribar') detalle = `ETA: ${c.fecha_eta ? new Date(c.fecha_eta).toLocaleDateString('es-CL') : '—'}`;
+        else if (c.estado==='devuelto') detalle = `devuelto a ${E(c.retorno_destino_cd_nombre || 'depósito')}`;
+        return `
+        <div class="card-c ${g}">
+            <div class="d-flex justify-content-between align-items-start flex-wrap">
+                <span class="cid">${E(c.container_id_formatted || c.container_id)}</span>
+                <span class="d-flex gap-1 flex-wrap">${estadoTag}${demurrage}</span>
+            </div>
+            <div class="meta">
+                <i class="fas fa-building"></i> ${E(c.cliente || '—')}
+                ${c.nave ? ` · <i class="fas fa-ship"></i> ${E(c.nave)}` : ''}
+                ${c.dias_para_demurrage!=null && c.urgencia_demurrage!=='sin_fecha' ? ` · <i class="fas fa-hourglass-half"></i> ${c.dias_para_demurrage} día(s) para demurrage` : ''}
+            </div>
+            ${detalle ? `<div class="meta"><i class="fas fa-info-circle"></i> ${E(detalle)}</div>` : ''}
+        </div>`;
+    }
+
+    function render(){
+        const q = (document.getElementById('q').value||'').toLowerCase();
+        const fc = document.getElementById('f-cliente').value;
+        const rows = ALL.filter(c => {
+            if (fc && c.cliente !== fc) return false;
+            if (!q) return true;
+            return (c.container_id||'').toLowerCase().includes(q)
+                || (c.cliente||'').toLowerCase().includes(q)
+                || (c.nave||'').toLowerCase().includes(q);
+        });
+
+        const grupos = {};
+        rows.forEach(c => { const g = grupo(c); (grupos[g.key] = grupos[g.key] || {label:g.label, list:[]}).list.push(c); });
+        [['riesgo'],['por_programar'],['en_ruta'],['asignados'],['vacios'],['entregas'],['arribos'],['cerrados'],['otros']]
+            .forEach(([k])=>{ if(grupos[k]) grupos[k].list.sort((a,b)=>(b.dias_para_demurrage??-999)-(a.dias_para_demurrage??-999)); });
+
+        const sec = document.getElementById('sections');
+        if (!rows.length){ sec.innerHTML = '<div class="empty"><i class="fas fa-box-open"></i><br>Sin resultados para este filtro.</div>'; }
+        else sec.innerHTML = Object.values(grupos)
+            .map(g => `<div class="section-title">${g.label} <span class="count">${g.list.length}</span></div>` + g.list.map(card).join(''))
+            .join('');
+
+        const cnt = k => Object.values(grupos).flat().filter(c => grupo(c).key===k).length;
+        document.getElementById('cnt-riesgo').textContent = cnt('riesgo');
+        document.getElementById('cnt-prog').textContent = cnt('por_programar');
+        document.getElementById('cnt-ruta').textContent = cnt('en_ruta') + cnt('asignados');
+        document.getElementById('cnt-vacio').textContent = cnt('vacios');
+        document.getElementById('cnt-cerrado').textContent = cnt('cerrados');
+    }
+
+    function load(){
+        fetch('/api/containers/?page_size=200')
+            .then(r => r.json())
+            .then(d => { ALL = d.results || d || []; poblarClientes(); render(); })
+            .catch(() => { document.getElementById('sections').innerHTML = '<div class="empty">Error conectando con el API.</div>'; });
+    }
+
+    function poblarClientes(){
+        const sel = document.getElementById('f-cliente');
+        const actual = sel.value;
+        sel.innerHTML = '<option value="">Todos los clientes</option>';
+        [...new Set(ALL.map(c => c.cliente).filter(Boolean))].sort().forEach(cl => {
+            const o = document.createElement('option'); o.value = cl; o.textContent = cl; sel.appendChild(o);
+        });
+        sel.value = actual;
+    }
+
+    document.getElementById('q').addEventListener('input', render);
+    document.getElementById('f-cliente').addEventListener('change', render);
+    document.getElementById('btn-refresh').addEventListener('click', load);
+    document.getElementById('fecha-hoy').textContent = new Date().toLocaleDateString('es-CL', {weekday:'long', day:'numeric', month:'long'});
+    load();
+    setInterval(load, 60000);
+    </script>
+</body>
+</html>

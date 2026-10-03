@@ -241,3 +241,14 @@ def gestion_vacios(request):
     from django.middleware.csrf import get_token
     get_token(request)
     return render(request, 'gestion_vacios.html')
+
+
+def vista_operador(request):
+    """Vitrina: operación del día en idioma del transportista.
+
+    Nada de jerga técnica: agrupa los contenedores por lo que REQUIERE atención
+    (riesgo de demurrage, liberados por programar, en ruta, vacíos por retirar,
+    cerrados) con busqueda y filtro por cliente. Consume /api/containers/ —
+    solo lectura, sin auth adicional (igual que monitoring).
+    """
+    return render(request, 'vista_operador.html')
