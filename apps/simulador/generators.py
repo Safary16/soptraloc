@@ -6,8 +6,6 @@ Solo nombres ficticios, catálogos genéricos y algoritmos estándar
 clientes, proveedores ni operaciones reales.
 """
 import random
-import string
-from datetime import datetime, timedelta
 from math import asin, cos, radians, sin, sqrt
 
 # ---------------------------------------------------------------- ISO 6346
