@@ -458,7 +458,7 @@ def operaciones_diarias(request):
         'asignadas': programaciones_dia.filter(driver__isnull=False, container__estado='asignado').count(),
         'en_ruta': programaciones_dia.filter(container__estado='en_ruta').count(),
         'entregadas': programaciones_dia.filter(container__estado__in=['entregado', 'soltado', 'descargado', 'vacio']).count(),
-        'completadas': programaciones_dia.filter(container__estado__in=['vacio', 'vacio_en_ruta', 'en_ccti', 'devuelto']).count(),
+        'completadas': programaciones_dia.filter(container__estado__in=['vacio', 'vacio_en_ruta', 'en_patio', 'devuelto']).count(),
     }
     
     return Response({

@@ -160,7 +160,7 @@ body {
 .estado-descargado   { --ec: #28a745; }
 .estado-vacio        { --ec: #17a2b8; }
 .estado-vacio_en_ruta{ --ec: #6c757d; }
-.estado-en_ccti      { --ec: #007bff; }
+.estado-en_patio      { --ec: #007bff; }
 .estado-devuelto     { --ec: #6f42c1; }
 .estado-cancelado    { --ec: #dc3545; }
 

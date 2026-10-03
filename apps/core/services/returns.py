@@ -10,16 +10,16 @@ class EmptyReturnService:
     @transaction.atomic
     def start(cls, container, *, destination_type, destination_cd=None, depot_name=None, user=None):
         locked = Container.objects.select_for_update().select_related('cd_entrega').get(pk=container.pk)
-        if locked.estado not in {'vacio', 'en_ccti'}:
+        if locked.estado not in {'vacio', 'en_patio'}:
             raise ValueError('El contenedor debe estar vacío y disponible para iniciar retorno.')
-        if destination_type not in {'deposito', 'ccti'}:
-            raise ValueError('Destino debe ser depósito o CCTI.')
-        if destination_type == 'ccti':
-            if not destination_cd or destination_cd.tipo != 'ccti' or not destination_cd.activo:
-                raise ValueError('Debe seleccionar un CCTI activo.')
+        if destination_type not in {'deposito', 'patio'}:
+            raise ValueError('Destino debe ser depósito o patio.')
+        if destination_type == 'patio':
+            if not destination_cd or destination_cd.tipo != 'patio' or not destination_cd.activo:
+                raise ValueError('Debe seleccionar un patio activo.')
             destination_cd = CD.objects.select_for_update().get(pk=destination_cd.pk)
             if not destination_cd.puede_recibir_vacios:
-                raise ValueError('El CCTI destino no tiene capacidad disponible.')
+                raise ValueError('El patio destino no tiene capacidad disponible.')
         elif not (depot_name or locked.deposito_devolucion):
             raise ValueError('Debe indicar el depósito de devolución.')
 
@@ -30,7 +30,7 @@ class EmptyReturnService:
             locked.vacio_contabilizado = False
 
         locked.retorno_destino_tipo = destination_type
-        locked.retorno_destino_cd = destination_cd if destination_type == 'ccti' else None
+        locked.retorno_destino_cd = destination_cd if destination_type == 'patio' else None
         if destination_type == 'deposito':
             locked.deposito_devolucion = depot_name or locked.deposito_devolucion
         locked.save(update_fields=[
@@ -46,14 +46,14 @@ class EmptyReturnService:
         locked = Container.objects.select_for_update().get(pk=container.pk)
         if locked.estado != 'vacio_en_ruta':
             raise ValueError('El contenedor debe estar en retorno.')
-        if locked.retorno_destino_tipo == 'ccti':
+        if locked.retorno_destino_tipo == 'patio':
             destination = CD.objects.select_for_update().get(pk=locked.retorno_destino_cd_id)
             if not destination.recibir_vacio():
-                raise ValueError('El CCTI destino quedó sin capacidad disponible.')
+                raise ValueError('El patio destino quedó sin capacidad disponible.')
             locked.cd_entrega = destination
             locked.vacio_contabilizado = True
             locked.save(update_fields=['cd_entrega', 'vacio_contabilizado', 'updated_at'])
-            locked.cambiar_estado('en_ccti', user)
+            locked.cambiar_estado('en_patio', user)
         elif locked.retorno_destino_tipo == 'deposito':
             locked.cambiar_estado('devuelto', user)
         else:

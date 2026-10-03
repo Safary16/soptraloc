@@ -76,7 +76,7 @@ class ProgramacionViewSet(viewsets.ModelViewSet):
                     if estado_actual in ('programado', 'asignado', 'secuenciado', 'incidente'):
                         # Cancelado es el destino valido desde varios estados FSM.
                         container.cambiar_estado('cancelado')
-                    elif estado_actual in ('en_ccti', 'por_arribar', 'liberado'):
+                    elif estado_actual in ('en_patio', 'por_arribar', 'liberado'):
                         # No requiere cambio de estado; solo limpia timestamps stale.
                         pass
                     # Reset timestamps operativos sobre el contenedor.
@@ -712,13 +712,13 @@ class ProgramacionViewSet(viewsets.ModelViewSet):
         Permite acceso anónimo para operaciones manuales desde el panel.
         
         Casos de uso:
-        1. retiro_ccti: CCTI va a buscar contenedor al puerto y lo lleva a CCTI
-        2. retiro_directo: CCTI va a buscar al puerto y entrega directo a cliente
+        1. retiro_patio: Patio va a buscar contenedor al puerto y lo lleva a Patio
+        2. retiro_directo: Patio va a buscar al puerto y entrega directo a cliente
         
         Payload:
         {
             "container_id": "ABCD1234567",
-            "tipo_movimiento": "retiro_ccti" | "retiro_directo",
+            "tipo_movimiento": "retiro_patio" | "retiro_directo",
             "cd_destino_id": 1,  // Solo para retiro_directo
             "fecha_programacion": "2025-10-15T10:00:00",
             "cliente": "Cliente XYZ",
@@ -742,13 +742,13 @@ class ProgramacionViewSet(viewsets.ModelViewSet):
         container.save(update_fields=['tipo_movimiento'])
         
         # Determinar CD destino
-        if tipo_movimiento == 'retiro_ccti':
-            # Buscar el primer CCTI
+        if tipo_movimiento == 'retiro_patio':
+            # Buscar el primer Patio
             from apps.cds.models import CD
-            cd_destino = CD.objects.filter(tipo='ccti').first()
+            cd_destino = CD.objects.filter(tipo='patio').first()
             if not cd_destino:
                 return Response(
-                    {'error': 'No se encontró ningún CCTI en el sistema'},
+                    {'error': 'No se encontró ningún Patio en el sistema'},
                     status=status.HTTP_400_BAD_REQUEST
                 )
         else:  # retiro_directo
@@ -808,12 +808,12 @@ class ProgramacionViewSet(viewsets.ModelViewSet):
                     }
                 )
 
-                # P1-4: registrar TiempoOperacion para carga_ccti o retiro_puerto
+                # P1-4: registrar TiempoOperacion para carga_patio o retiro_puerto
                 # según tipo_movimiento. started_at = ahora (sin dato histórico real),
                 # finished_at = fecha_programacion (estimación del operador).
                 try:
                     from apps.core.services.operations import OperationalFlowService
-                    tipo_op = 'carga_ccti' if tipo_movimiento == 'retiro_ccti' else 'retiro_puerto'
+                    tipo_op = 'carga_patio' if tipo_movimiento == 'retiro_patio' else 'retiro_puerto'
                     OperationalFlowService.registrar_operacion_tiempo(
                         container=container,
                         tipo_operacion=tipo_op,
@@ -2124,7 +2124,7 @@ class ProgramacionViewSet(viewsets.ModelViewSet):
 
         Payload:
         {
-            "container_id": int,   // contenedor en estado 'vacio' o 'en_ccti'
+            "container_id": int,   // contenedor en estado 'vacio' o 'en_patio'
             "driver_id": int        // conductor disponible
         }
         """
@@ -2145,9 +2145,9 @@ class ProgramacionViewSet(viewsets.ModelViewSet):
                 {'error': 'container_id o driver_id no existen.'},
                 status=status.HTTP_404_NOT_FOUND,
             )
-        if container.estado not in ('vacio', 'en_ccti', 'vacio_en_ruta'):
+        if container.estado not in ('vacio', 'en_patio', 'vacio_en_ruta'):
             return Response(
-                {'error': f'Contenedor en estado {container.estado}; solo se asigna retiro si está vacío o en CCTI.'},
+                {'error': f'Contenedor en estado {container.estado}; solo se asigna retiro si está vacío o en Patio.'},
                 status=status.HTTP_400_BAD_REQUEST,
             )
         if not driver.esta_disponible:

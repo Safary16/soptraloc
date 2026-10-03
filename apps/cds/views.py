@@ -20,7 +20,7 @@ class CDViewSet(viewsets.ModelViewSet):
     permission_classes = [AllowAny]
 
     def get_permissions(self):
-        classes = [AllowAny] if self.action in {'list', 'retrieve', 'cctis', 'clientes'} else [IsAdminUser]
+        classes = [AllowAny] if self.action in {'list', 'retrieve', 'patios', 'clientes'} else [IsAdminUser]
         return [permission() for permission in classes]
 
     def perform_destroy(self, instance):
@@ -34,16 +34,16 @@ class CDViewSet(viewsets.ModelViewSet):
         return CDSerializer
     
     @action(detail=False, methods=['get'])
-    def cctis(self, request):
+    def patios(self, request):
         """
-        Lista solo los CCTIs activos
+        Lista solo los Patios activos
         """
-        cctis = self.queryset.filter(tipo='ccti', activo=True)
-        serializer = self.get_serializer(cctis, many=True)
+        patios = self.queryset.filter(tipo='patio', activo=True)
+        serializer = self.get_serializer(patios, many=True)
         return Response({
             'success': True,
-            'total': cctis.count(),
-            'cctis': serializer.data
+            'total': patios.count(),
+            'patios': serializer.data
         })
     
     @action(detail=False, methods=['get'])
@@ -62,7 +62,7 @@ class CDViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=['post'])
     def recibir_vacio(self, request, pk=None):
         """
-        Registra la recepción de un contenedor vacío en CCTI
+        Registra la recepción de un contenedor vacío en Patio
         """
         cd = self.get_object()
         
@@ -81,14 +81,14 @@ class CDViewSet(viewsets.ModelViewSet):
             })
         else:
             return Response(
-                {'error': 'CCTI sin capacidad disponible'},
+                {'error': 'Patio sin capacidad disponible'},
                 status=status.HTTP_400_BAD_REQUEST
             )
     
     @action(detail=True, methods=['post'])
     def retirar_vacio(self, request, pk=None):
         """
-        Registra el retiro de un contenedor vacío de CCTI
+        Registra el retiro de un contenedor vacío de Patio
         """
         cd = self.get_object()
         

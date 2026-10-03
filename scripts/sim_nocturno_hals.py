@@ -81,7 +81,7 @@ def main():
         defaults=dict(
             nombre='SIM CD Destino', direccion='Depósito naviera', comuna='Valpo',
             lat=-33.40, lng=-70.60,
-            tipo='ccti', capacidad_vacios=20,
+            tipo='patio', capacidad_vacios=20,
         ),
     )
 

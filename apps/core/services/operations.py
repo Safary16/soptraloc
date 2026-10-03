@@ -283,7 +283,7 @@ class OperationalFlowService:
         # No re-crear si ya hay una programación activa sobre el candidato
         if Prog.objects.filter(
             container=candidato,
-            container__estado__in=['asignado', 'en_ruta', 'vacio_en_ruta', 'en_ccti'],
+            container__estado__in=['asignado', 'en_ruta', 'vacio_en_ruta', 'en_patio'],
         ).exists():
             return None
 
@@ -367,12 +367,12 @@ class OperationalFlowService:
         """HAL-23: transición de inicio de ruta según el estado del contenedor.
 
         Un solo lugar decide: viaje lleno (asignado) → 'en_ruta'; retiro de
-        vacío (vacio/en_ccti) → 'vacio_en_ruta' (única transición válida del
+        vacío (vacio/en_patio) → 'vacio_en_ruta' (única transición válida del
         FSM para esos estados). Sin esto, iniciar_ruta sobre un retorno
         automático P0-5 (container en 'vacio') reventaba con ValidationError
         → 500 y el circuito quedaba asignado sin camino de ejecución.
         """
-        if container.estado in ('vacio', 'en_ccti'):
+        if container.estado in ('vacio', 'en_patio'):
             container.cambiar_estado('vacio_en_ruta', usuario)
         else:
             container.cambiar_estado('en_ruta', usuario)
@@ -466,12 +466,12 @@ class OperationalFlowService:
         """Registra un TiempoOperacion explícito para el ciclo completo.
 
         Usado por iniciar_retorno (devolucion_vacio), marcar_devuelto (devolucion_vacio)
-        y crear_ruta_manual (carga_ccti/retiro_puerto). Si finished_at - started_at
+        y crear_ruta_manual (carga_patio/retiro_puerto). Si finished_at - started_at
         es <=0 se marca anomalía para no envenenar el ML con datos inconsistentes.
 
         Args:
-            container: Container relacionado (puede ser None para carga_ccti previa).
-            tipo_operacion: uno de carga_ccti|descarga_cd|retiro_puerto|devolucion_vacio.
+            container: Container relacionado (puede ser None para carga_patio previa).
+            tipo_operacion: uno de carga_patio|descarga_cd|retiro_puerto|devolucion_vacio.
             started_at, finished_at: datetimes del tramo.
             cd_origen, cd_destino: CD (uno u otro obligatorio según tipo).
             conductor: Driver opcional.

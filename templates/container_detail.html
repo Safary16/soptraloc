@@ -430,17 +430,17 @@
                     <label class="form-label">Tipo de Destino *</label>
                     <select id="retornoDestinoTipo" class="form-select" onchange="toggleRetornoDestino()">
                         <option value="deposito">Depósito</option>
-                        <option value="ccti">CCTI</option>
+                        <option value="patio">Patio</option>
                     </select>
                 </div>
                 <div class="mb-3" id="retornoDepositoDiv">
                     <label class="form-label">Nombre del Depósito *</label>
                     <input type="text" id="retornoDeposito" class="form-control" placeholder="Ej: Depósito San Antonio">
                 </div>
-                <div class="mb-3" id="retornoCCTIDiv" style="display:none">
-                    <label class="form-label">CCTI Destino *</label>
-                    <select id="retornoCCTISelect" class="form-select">
-                        <option value="">Cargando CCTIs...</option>
+                <div class="mb-3" id="retornoPatioDiv" style="display:none">
+                    <label class="form-label">Patio Destino *</label>
+                    <select id="retornoPatioSelect" class="form-select">
+                        <option value="">Cargando Patios...</option>
                     </select>
                 </div>
             </div>
@@ -465,17 +465,17 @@ function e(s) {
 function toggleRetornoDestino() {
     const tipo = document.getElementById('retornoDestinoTipo').value;
     document.getElementById('retornoDepositoDiv').style.display = tipo === 'deposito' ? 'block' : 'none';
-    document.getElementById('retornoCCTIDiv').style.display = tipo === 'ccti' ? 'block' : 'none';
-    if (tipo === 'ccti') cargarCCTIs();
+    document.getElementById('retornoPatioDiv').style.display = tipo === 'patio' ? 'block' : 'none';
+    if (tipo === 'patio') cargarPatios();
 }
 
-function cargarCCTIs() {
-    const select = document.getElementById('retornoCCTISelect');
+function cargarPatios() {
+    const select = document.getElementById('retornoPatioSelect');
     if (select.options.length > 1) return; // Ya cargado
-    fetch('/api/cds/?tipo=ccti')
+    fetch('/api/cds/?tipo=patio')
         .then(r => r.json())
         .then(d => {
-            select.innerHTML = '<option value="">Seleccione CCTI...</option>';
+            select.innerHTML = '<option value="">Seleccione Patio...</option>';
             (d.results || d || []).forEach(cd => {
                 select.innerHTML += '<option value="' + cd.id + '">' + e(cd.nombre) + '</option>';
             });
@@ -490,8 +490,8 @@ function confirmarRetorno() {
         body.deposito_devolucion = document.getElementById('retornoDeposito').value.trim();
         if (!body.deposito_devolucion) { alert('Ingrese el nombre del depósito.'); return; }
     } else {
-        body.destino_cd_id = parseInt(document.getElementById('retornoCCTISelect').value);
-        if (!body.destino_cd_id) { alert('Seleccione un CCTI destino.'); return; }
+        body.destino_cd_id = parseInt(document.getElementById('retornoPatioSelect').value);
+        if (!body.destino_cd_id) { alert('Seleccione un Patio destino.'); return; }
     }
     fetch('/api/containers/' + retornoContainerId + '/iniciar_retorno/', {
         method: 'POST',

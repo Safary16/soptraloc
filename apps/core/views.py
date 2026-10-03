@@ -74,7 +74,7 @@ def estados(request):
     estados = [
         'por_arribar', 'liberado', 'secuenciado', 'programado', 
         'asignado', 'en_ruta', 'entregado', 'descargado', 
-        'vacio', 'vacio_en_ruta', 'en_ccti', 'devuelto'
+        'vacio', 'vacio_en_ruta', 'en_patio', 'devuelto'
     ]
     
     # Contar contenedores por estado
@@ -231,13 +231,13 @@ def auditoria(request):
 from django.contrib.auth.decorators import login_required  # noqa: E402  (import tardío intencional)
 @login_required
 @staff_member_required
-def gestion_vacios_ccti(request):
-    """P2-4: panel de gestión de contenedores vacíos en CCTI.
+def gestion_vacios(request):
+    """P2-4: panel de gestión de contenedores vacíos en Patio.
 
-    Lista contenedores en estado 'en_ccti' (vacíos esperando retiro) y permite
+    Lista contenedores en estado 'en_patio' (vacíos esperando retiro) y permite
     asignar un conductor de retiro via el endpoint asignar_conductor_retiro_vacio
     de ProgramacionViewSet.
     """
     from django.middleware.csrf import get_token
     get_token(request)
-    return render(request, 'gestion_vacios_ccti.html')
+    return render(request, 'gestion_vacios.html')

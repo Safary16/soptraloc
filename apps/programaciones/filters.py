@@ -5,7 +5,7 @@ Corrige hallazgos de auditoría 2026-09-22 (N3 + N9):
 - `driver__isnull=true` usado por asignacion.html (pendientes sin asignar)
 - `fecha_asignacion__gte` usado por asignacion.html (asignados hoy)
 - `cliente` con matching insensible a mayúsculas y normalizado
-  (el frontend puede enviar "WALMART" y el valor canónico es "Walmart")
+  (el frontend puede enviar "ANDINA" y el valor canónico es "Andina")
 """
 import django_filters
 

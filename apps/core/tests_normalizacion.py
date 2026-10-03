@@ -6,6 +6,9 @@ La feature ya existe (apps/core/utils.py) y está aplicada en Container.save(),
 Programacion.save(), importadores y filtros API. Esta suite la CONSOLIDA:
 aliases completos, siglas, conectores, idempotencia, herencia end-to-end por
 los 3 importadores y filtro API case-insensitive. Cero código de producción.
+
+Catálogo FICTICIO (sin marcas reales — soptraloc es producto independiente):
+Andina, Pacífico, Bío Bío y Novamar como marcas de ejemplo para los mapeos.
 """
 from datetime import timedelta
 
@@ -19,36 +22,32 @@ from apps.core.utils import normalizar_cliente
 from apps.programaciones.models import Programacion
 
 _CDS = [
-    ('CD Walmart E2E', 'CDW-E2E-NORM'),
-    ('CD Easy E2E', 'CDE-E2E-NORM'),
+    ('CD Andina E2E', 'CDA-E2E-NORM'),
+    ('CD Pacífico E2E', 'CDP-E2E-NORM'),
 ]
 
 
 class NormalizarClienteUnitTestTests(TestCase):
     """normalizar_cliente(): aliases, siglas, conectores, N/A, idempotencia."""
 
-    def test_aliases_walmart_family(self):
-        for variante in ('walmart', 'WALMART', 'WalMart', 'wallmart', 'walmaart',
-                         'wal mart', 'wal-mart', 'walm'):
-            self.assertEqual(normalizar_cliente(variante), 'Walmart', variante)
+    def test_aliases_andina_family(self):
+        for variante in ('andina', 'ANDINA', 'Andina', 'andna', 'andyna'):
+            self.assertEqual(normalizar_cliente(variante), 'Andina', variante)
 
-    def test_aliases_easy_y_divisa(self):
-        for variante in ('easy', 'EASY', 'Easy ', ' ezy ', 'easi'):
-            self.assertEqual(normalizar_cliente(variante), 'Easy', variante)
-        for variante in ('la divisa', 'LA DIVISA', 'ladivisa', 'la divissa'):
-            self.assertEqual(normalizar_cliente(variante), 'La Divisa', variante)
+    def test_aliases_pacifico_y_biobio(self):
+        for variante in ('pacifico', 'PACIFICO', 'Pacífico ', 'pacificco', 'pacificfoo'):
+            self.assertEqual(normalizar_cliente(variante), 'Pacífico', variante)
+        for variante in ('bio bio', 'BIO BIO', 'biobio'):
+            self.assertEqual(normalizar_cliente(variante), 'Bío Bío', variante)
 
-    def test_aliases_lineas(self):
-        self.assertEqual(normalizar_cliente('msk'), 'Maersk')
-        self.assertEqual(normalizar_cliente('maersk'), 'Maersk')
-        self.assertEqual(normalizar_cliente('hamburgsud'), 'Hamburg Süd')
-        self.assertEqual(normalizar_cliente('hamburg sud'), 'Hamburg Süd')
+    def test_aliases_naviera(self):
+        self.assertEqual(normalizar_cliente('novamar'), 'Novamar')
+        self.assertEqual(normalizar_cliente('nova mar'), 'Novamar')
+        self.assertEqual(normalizar_cliente('nmar'), 'Novamar')
 
     def test_siglas_preserved_uppercase(self):
-        for sigla in ('CCTI', 'ccti', 'SAI', 'sai', 'BROWNE', 'browne'):
+        for sigla in ('SA', 's.a.', 'SPA', 'spa', 'LTDA', 'ltda', 'EIRL', 'eirl'):
             self.assertEqual(normalizar_cliente(sigla), sigla.upper(), sigla)
-        # 'cct' también colapsa a CCTI
-        self.assertEqual(normalizar_cliente('cct'), 'CCTI')
 
     def test_conectores_lowercase_except_first_word(self):
         self.assertEqual(
@@ -64,10 +63,10 @@ class NormalizarClienteUnitTestTests(TestCase):
         self.assertEqual(normalizar_cliente(None), '')
 
     def test_collapses_multiple_spaces(self):
-        self.assertEqual(normalizar_cliente('  Walmart   Centro  '), 'Walmart Centro')
+        self.assertEqual(normalizar_cliente('  Andina   Centro  '), 'Andina Centro')
 
     def test_idempotencia(self):
-        for original in ('walmaart', 'LA DIVISA', 'ccti', 'los aceites del valle',
+        for original in ('andna', 'BIO BIO', 'los aceites del valle',
                          'Ferretería El Gato'):
             once = normalizar_cliente(original)
             self.assertEqual(normalizar_cliente(once), once)
@@ -79,30 +78,30 @@ class NormalizacionModelTests(TestCase):
     def test_container_save_normalizes_cliente(self):
         container = Container.objects.create(
             container_id='NORM0000001', tipo='40', nave='N',
-            cliente='walmaart',
+            cliente='andna',
         )
         container.refresh_from_db()
-        self.assertEqual(container.cliente, 'Walmart')
+        self.assertEqual(container.cliente, 'Andina')
 
     def test_programacion_save_normalizes_cliente(self):
         container = Container.objects.create(
             container_id='NORM0000002', tipo='40', nave='N',
-            estado='liberado', cliente='Easy',
+            estado='liberado', cliente='Pacífico',
         )
         cd, _ = CD.objects.get_or_create(
-            nombre='CD Easy E2E',
-            defaults={'codigo': 'CDE-E2E-NORM', 'direccion': 'Dirección E2E',
+            nombre='CD Pacífico E2E',
+            defaults={'codigo': 'CDP-E2E-NORM', 'direccion': 'Dirección E2E',
                       'comuna': 'Comuna E2E', 'tipo': 'cliente',
                       'lat': -33.45, 'lng': -70.65},
         )
         programacion = Programacion.objects.create(
             container=container,
             cd=cd,
-            cliente='ezy',
+            cliente='pacificco',
             fecha_programada=timezone.now() + timedelta(hours=3),
         )
         programacion.refresh_from_db()
-        self.assertEqual(programacion.cliente, 'Easy')
+        self.assertEqual(programacion.cliente, 'Pacífico')
 
 
 class NormalizacionHerenciaEndToEndTests(TestCase):
@@ -136,12 +135,12 @@ class NormalizacionHerenciaEndToEndTests(TestCase):
         return container
 
     def test_na_in_programacion_never_overwrites_real_client(self):
-        container = self._run_chain('walmaart')
-        self.assertEqual(container.cliente, 'Walmart')
+        container = self._run_chain('andna')
+        self.assertEqual(container.cliente, 'Andina')
 
     def test_chain_full_normalization(self):
-        container = self._run_chain('EASY')
-        self.assertEqual(container.cliente, 'Easy')
+        container = self._run_chain('PACIFICO')
+        self.assertEqual(container.cliente, 'Pacífico')
 
     def test_container_without_client_stays_empty(self):
         # Liberación tampoco trajo cliente ('-'), programación tampoco: vacío.
@@ -151,37 +150,37 @@ class NormalizacionHerenciaEndToEndTests(TestCase):
 
 
 class NormalizacionFilterAPITests(TestCase):
-    """?cliente= normalizado: buscar 'walmaart' encuentra rows 'Walmart'
+    """?cliente= normalizado: buscar 'andna' encuentra rows 'Andina'
     (implementado en programaciones/filters.py + views, sin test hasta hoy)."""
 
     def setUp(self):
         self.client_api = APIClient()
         self.cd, _ = CD.objects.get_or_create(
-            nombre='CD Walmart E2E',
-            defaults={'codigo': 'CDW-E2E-NORM', 'direccion': 'Dirección E2E',
+            nombre='CD Andina E2E',
+            defaults={'codigo': 'CDA-E2E-NORM', 'direccion': 'Dirección E2E',
                       'comuna': 'Comuna E2E', 'tipo': 'cliente',
                       'lat': -33.50, 'lng': -70.70},
         )
         self.container = Container.objects.create(
             container_id='NAPI0000001', tipo='40', nave='N',
-            estado='liberado', cliente='Walmart',
+            estado='liberado', cliente='Andina',
         )
         self.programacion = Programacion.objects.create(
             container=self.container,
             cd=self.cd,
-            cliente='Walmart',
+            cliente='Andina',
             fecha_programada=timezone.now() + timedelta(hours=3),
         )
 
     def test_filter_with_alias_finds_canonical_rows(self):
-        response = self.client_api.get('/api/programaciones/?cliente=walmaart')
+        response = self.client_api.get('/api/programaciones/?cliente=andna')
         self.assertEqual(response.status_code, 200)
         data = response.json()
         resultados = data.get('results', data.get('programaciones', data if isinstance(data, list) else []))
-        self.assertTrue(resultados, 'el filtro por alias debía encontrar la programación Walmart')
+        self.assertTrue(resultados, 'el filtro por alias debía encontrar la programación Andina')
 
     def test_filter_case_insensitive(self):
-        response = self.client_api.get('/api/programaciones/?cliente=WALMART')
+        response = self.client_api.get('/api/programaciones/?cliente=ANDINA')
         self.assertEqual(response.status_code, 200)
         data = response.json()
         resultados = data.get('results', data.get('programaciones', data if isinstance(data, list) else []))

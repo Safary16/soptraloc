@@ -1,16 +1,16 @@
 {% extends "base.html" %}
 
-{% block title %}Gestión Vacíos CCTI - SoptraLoc TMS{% endblock %}
+{% block title %}Gestión Vacíos Patio - SoptraLoc TMS{% endblock %}
 
 {% block content %}
 <div class="container-fluid mt-3">
     <div class="d-flex justify-content-between align-items-center mb-3">
-        <h2><i class="fas fa-warehouse"></i> Vacíos en CCTI</h2>
+        <h2><i class="fas fa-warehouse"></i> Vacíos en Patio</h2>
         <span class="badge bg-info" id="totalVacios">—</span>
     </div>
 
     <p class="text-muted">
-        P2-4: lista de contenedores en estado <code>en_ccti</code> con botón para
+        P2-4: lista de contenedores en estado <code>en_patio</code> con botón para
         asignar un conductor de retiro usando el endpoint
         <code>asignar_conductor_retiro_vacio</code>.
     </p>
@@ -31,8 +31,8 @@
                                 <th>Container</th>
                                 <th>Cliente</th>
                                 <th>Tipo</th>
-                                <th>CCTI</th>
-                                <th>En CCTI desde</th>
+                                <th>Patio</th>
+                                <th>En Patio desde</th>
                                 <th>Demurrage</th>
                                 <th class="text-end">Acción</th>
                             </tr>
@@ -100,7 +100,7 @@ let contenedorAsignar = null;
 let conductoresDisponibles = [];
 
 function cargarVacios() {
-    fetch('/api/containers/?estado=en_ccti&page_size=200')
+    fetch('/api/containers/?estado=en_patio&page_size=200')
         .then(r => r.json())
         .then(data => {
             const vacios = data.results || data || [];
@@ -110,14 +110,14 @@ function cargarVacios() {
                 document.getElementById('vaciosTable').style.display = 'none';
                 document.getElementById('vaciosTbody').innerHTML =
                     '<tr><td colspan="7" class="text-center text-success py-4">' +
-                    '<i class="fas fa-check-circle"></i> Sin vacíos en CCTI</td></tr>';
+                    '<i class="fas fa-check-circle"></i> Sin vacíos en Patio</td></tr>';
                 document.getElementById('vaciosTable').style.display = '';
                 return;
             }
             document.getElementById('vaciosTable').style.display = '';
             document.getElementById('vaciosTbody').innerHTML = vacios.map(v => {
-                const fechaCcti = v.fecha_en_ccti
-                    ? new Date(v.fecha_en_ccti).toLocaleString('es-CL')
+                const fechaEnPatio = v.fecha_en_patio
+                    ? new Date(v.fecha_en_patio).toLocaleString('es-CL')
                     : '—';
                 const demurrage = v.fecha_demurrage
                     ? new Date(v.fecha_demurrage).toLocaleDateString('es-CL')
@@ -127,7 +127,7 @@ function cargarVacios() {
                     <td>${esc(v.cliente || '—')}</td>
                     <td>${esc(v.tipo || '—')}</td>
                     <td>${esc(v.retorno_destino_cd_nombre || v.cd_entrega_nombre || '—')}</td>
-                    <td>${fechaCcti}</td>
+                    <td>${fechaEnPatio}</td>
                     <td>${demurrage}</td>
                     <td class="text-end">
                         <button class="btn btn-sm btn-primary"

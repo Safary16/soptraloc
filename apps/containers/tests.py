@@ -115,26 +115,26 @@ class EmptyReturnFlowTests(TestCase):
             nombre='Patio origen', codigo='ORIGIN', direccion='Origen', comuna='Santiago',
             lat=-33.4, lng=-70.6, capacidad_vacios=5, vacios_actuales=1,
         )
-        self.ccti = CD.objects.create(
-            nombre='CCTI destino', codigo='CCTI-D', direccion='Destino', comuna='Santiago',
-            tipo='ccti', lat=-33.5, lng=-70.7, capacidad_vacios=5,
+        self.patio = CD.objects.create(
+            nombre='Patio destino', codigo='Patio-D', direccion='Destino', comuna='Santiago',
+            tipo='patio', lat=-33.5, lng=-70.7, capacidad_vacios=5,
         )
         self.container = Container.objects.create(
             container_id='RETU1234567', tipo='40', nave='Nave', estado='vacio',
             cd_entrega=self.origin, vacio_contabilizado=True,
         )
 
-    def test_return_to_ccti_moves_inventory_between_locations(self):
+    def test_return_to_patio_moves_inventory_between_locations(self):
         EmptyReturnService.start(
-            self.container, destination_type='ccti', destination_cd=self.ccti, user='test'
+            self.container, destination_type='patio', destination_cd=self.patio, user='test'
         )
         self.container.refresh_from_db(); self.origin.refresh_from_db()
         self.assertEqual(self.container.estado, 'vacio_en_ruta')
         self.assertEqual(self.origin.vacios_actuales, 0)
         EmptyReturnService.complete(self.container, user='test')
-        self.container.refresh_from_db(); self.ccti.refresh_from_db()
-        self.assertEqual(self.container.estado, 'en_ccti')
-        self.assertEqual(self.ccti.vacios_actuales, 1)
+        self.container.refresh_from_db(); self.patio.refresh_from_db()
+        self.assertEqual(self.container.estado, 'en_patio')
+        self.assertEqual(self.patio.vacios_actuales, 1)
         self.assertTrue(self.container.vacio_contabilizado)
 
     def test_return_to_depot_closes_cycle(self):
@@ -147,12 +147,12 @@ class EmptyReturnFlowTests(TestCase):
         self.assertEqual(self.origin.vacios_actuales, 0)
         self.assertFalse(self.container.vacio_contabilizado)
 
-    def test_ccti_without_capacity_is_rejected_before_departure(self):
-        self.ccti.capacidad_vacios = 0
-        self.ccti.save(update_fields=['capacidad_vacios', 'updated_at'])
+    def test_patio_without_capacity_is_rejected_before_departure(self):
+        self.patio.capacidad_vacios = 0
+        self.patio.save(update_fields=['capacidad_vacios', 'updated_at'])
         with self.assertRaises(ValueError):
             EmptyReturnService.start(
-                self.container, destination_type='ccti', destination_cd=self.ccti, user='test'
+                self.container, destination_type='patio', destination_cd=self.patio, user='test'
             )
         self.container.refresh_from_db(); self.origin.refresh_from_db()
         self.assertEqual(self.container.estado, 'vacio')
@@ -198,19 +198,19 @@ class ReglasNegocioImportadoresTests(TestCase):
 
     def test_programacion_hereda_cliente_si_excel_dice_na(self):
         container = Container.objects.create(
-            container_id='HEREDO123456', estado='liberado', cliente='Walmart',
+            container_id='HEREDO123456', estado='liberado', cliente='Andina',
             fecha_liberacion=timezone.now(),
         )
         result = self._importar_programacion(container, 'N/A')
         programa = Programacion.objects.get(container=container)
         self.assertEqual(result['programados'], 1)
-        self.assertEqual(programa.cliente, 'Walmart')
+        self.assertEqual(programa.cliente, 'Andina')
         container.refresh_from_db()
-        self.assertEqual(container.cliente, 'Walmart')
+        self.assertEqual(container.cliente, 'Andina')
 
     def test_liberacion_sube_cliente_y_na_no_pisa_existente(self):
         container = Container.objects.create(
-            container_id='LIBNA1234567', estado='por_arribar', cliente='Walmart',
+            container_id='LIBNA1234567', estado='por_arribar', cliente='Andina',
         )
         frame = pd.DataFrame([{
             'contenedor': container.container_id,
@@ -225,7 +225,7 @@ class ReglasNegocioImportadoresTests(TestCase):
             result = LiberacionImporter('liberacion.xlsx', 'test').procesar()
         container.refresh_from_db()
         self.assertEqual(result['liberados'], 1)
-        self.assertEqual(container.cliente, 'Walmart')
+        self.assertEqual(container.cliente, 'Andina')
 
     def test_liberacion_sube_cliente_nuevo(self):
         container = Container.objects.create(
@@ -235,7 +235,7 @@ class ReglasNegocioImportadoresTests(TestCase):
             'contenedor': container.container_id,
             'almacen': 'TPS',
             'fecha salida': '01/10/2026',  # fecha fija pasada (mismo motivo HAL-27 que el test anterior)
-            'cliente': 'Easy',
+            'cliente': 'Pacífico',
         }])
         with patch(
             'apps.containers.importers.liberacion.read_excel_with_header_detection',
@@ -243,7 +243,7 @@ class ReglasNegocioImportadoresTests(TestCase):
         ):
             LiberacionImporter('liberacion.xlsx', 'test').procesar()
         container.refresh_from_db()
-        self.assertEqual(container.cliente, 'Easy')
+        self.assertEqual(container.cliente, 'Pacífico')
 
     # --- 2. 45 = 40HC ---
 
@@ -258,14 +258,14 @@ class ReglasNegocioImportadoresTests(TestCase):
 
     def test_programacion_med_45_es_40hc(self):
         container = Container.objects.create(
-            container_id='MED45123456', estado='liberado', cliente='Walmart',
+            container_id='MED45123456', estado='liberado', cliente='Andina',
             fecha_liberacion=timezone.now(),
         )
         frame = pd.DataFrame([{
             'Contenedor': container.container_id,
             'Fecha de Programacion': timezone.now().strftime('%d/%m/%Y %H:%M'),
             'Centro Distribucion': self.cd.codigo,
-            'Cliente': 'Walmart',
+            'Cliente': 'Andina',
             'med': '45',
             'tipo': 'H',
         }])
@@ -281,7 +281,7 @@ class ReglasNegocioImportadoresTests(TestCase):
 
     def test_liberacion_hora_hh_mm(self):
         container = Container.objects.create(
-            container_id='LIBHH1234567', estado='por_arribar', cliente='Walmart',
+            container_id='LIBHH1234567', estado='por_arribar', cliente='Andina',
         )
         frame = pd.DataFrame([{
             'contenedor': container.container_id,
@@ -300,14 +300,14 @@ class ReglasNegocioImportadoresTests(TestCase):
 
     def test_programacion_hora_hh_mm(self):
         container = Container.objects.create(
-            container_id='PROGHH123456', estado='liberado', cliente='Walmart',
+            container_id='PROGHH123456', estado='liberado', cliente='Andina',
             fecha_liberacion=timezone.now(),
         )
         frame = pd.DataFrame([{
             'Contenedor': container.container_id,
             'Fecha de Programacion': '26/09/2026',
             'Centro Distribucion': self.cd.codigo,
-            'Cliente': 'Walmart',
+            'Cliente': 'Andina',
             'hora': '14:30',
         }])
         with patch(
@@ -323,7 +323,7 @@ class ReglasNegocioImportadoresTests(TestCase):
 
     def test_liberacion_fecha_dayfirst(self):
         container = Container.objects.create(
-            container_id='LIBAÑO123456', estado='por_arribar', cliente='Walmart',
+            container_id='LIBAÑO123456', estado='por_arribar', cliente='Andina',
         )
         frame = pd.DataFrame([{
             'contenedor': container.container_id,

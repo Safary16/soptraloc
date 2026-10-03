@@ -1490,7 +1490,7 @@ class HalNochePatenteNullTests(TestCase):
 # ---------------------------------------------------------------------------
 # FASE 2 — HAL-21 + HAL-24: retiro de vacíos operable.
 # HAL-21: asignar_conductor transicionaba el contenedor a 'asignado'
-# incondicionalmente; vacio/en_ccti no tienen esa transición → 400 garantizado.
+# incondicionalmente; vacio/en_patio no tienen esa transición → 400 garantizado.
 # HAL-24: reuso de programación histórica con driver FK residual → 400
 # 'ya tiene conductor' + desasignar bloqueado → contenedor varado.
 # ---------------------------------------------------------------------------
@@ -1531,10 +1531,10 @@ class Hal21RetiroVacioTests(TestCase):
                          f'asignación de retiro sobre vacío debe ser 201: {response.data}')
         self.assertEqual(response.data['programacion']['driver'], self.driver.id)
 
-    def test_asignar_retiro_sobre_en_ccti_201(self):
-        response = self._post(self._container('en_ccti'))
+    def test_asignar_retiro_sobre_en_patio_201(self):
+        response = self._post(self._container('en_patio'))
         self.assertEqual(response.status_code, 201,
-                         f'asignación de retiro sobre en_ccti debe ser 201: {response.data}')
+                         f'asignación de retiro sobre en_patio debe ser 201: {response.data}')
 
     def test_asignar_retiro_no_transiciona_contenedor(self):
         """El contenedor queda en su estado: la transición ocurre al iniciar ruta (HAL-23)."""

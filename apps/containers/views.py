@@ -813,7 +813,7 @@ class ContainerViewSet(viewsets.ModelViewSet):
     @action(detail=False, methods=['get'], url_path='liberados')
     def liberados(self, request):
         """Lista contenedores liberados disponibles para programar.
-        Acepta ?cliente= para filtrar por cliente (Walmart, Easy, ...)."""
+        Acepta ?cliente= para filtrar por cliente (usar nombre canónico normalizado)."""
         qs = Container.objects.filter(
             estado='liberado'
         ).select_related('cd_entrega').order_by('-fecha_liberacion')
@@ -933,22 +933,22 @@ class ContainerViewSet(viewsets.ModelViewSet):
         """Inicia retorno de contenedor vacío a depósito"""
         container = self.get_object()
         
-        # N8 (auditoría 2026-09-22): el servicio acepta 'vacio' y 'en_ccti';
-        # la vista exigía solo 'vacio' y bloqueaba el retorno desde CCTI.
-        if container.estado not in ('vacio', 'en_ccti'):
+        # N8 (auditoría 2026-09-22): el servicio acepta 'vacio' y 'en_patio';
+        # la vista exigía solo 'vacio' y bloqueaba el retorno desde Patio.
+        if container.estado not in ('vacio', 'en_patio'):
             return Response(
-                {'error': f'Contenedor debe estar vacío o en CCTI. Estado actual: {container.get_estado_display()}'},
+                {'error': f'Contenedor debe estar vacío o en Patio. Estado actual: {container.get_estado_display()}'},
                 status=status.HTTP_400_BAD_REQUEST
             )
         
         destination_type = request.data.get('destino_tipo')
         destination_cd = None
-        if destination_type == 'ccti':
+        if destination_type == 'patio':
             try:
                 from apps.cds.models import CD
                 destination_cd = CD.objects.get(pk=request.data.get('destino_cd_id'))
             except (CD.DoesNotExist, TypeError, ValueError):
-                return Response({'error': 'CCTI destino inválido'}, status=status.HTTP_400_BAD_REQUEST)
+                return Response({'error': 'Patio destino inválido'}, status=status.HTTP_400_BAD_REQUEST)
         usuario = request.user.username if request.user.is_authenticated else None
         from apps.core.services.returns import EmptyReturnService
         try:
@@ -969,7 +969,7 @@ class ContainerViewSet(viewsets.ModelViewSet):
     
     @action(detail=True, methods=['post'])
     def marcar_devuelto(self, request, pk=None):
-        """Completa retorno en depósito o CCTI según el destino seleccionado."""
+        """Completa retorno en depósito o Patio según el destino seleccionado."""
         container = self.get_object()
 
         if container.estado != 'vacio_en_ruta':
@@ -995,9 +995,9 @@ class ContainerViewSet(viewsets.ModelViewSet):
         except ValueError as exc:
             return Response({'error': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
 
-        # CCTI es un lugar físico: el vacío queda en 'en_ccti' (no cierra el ciclo).
+        # Patio es un lugar físico: el vacío queda en 'en_patio' (no cierra el ciclo).
         # 'devuelto' (cierre) solo aplica a depósito de naviera, y complete() ya lo dejó así.
-        # No forzar la transición aquí: antes rompía con 500 (en_ccti → devuelto inválida).
+        # No forzar la transición aquí: antes rompía con 500 (en_patio → devuelto inválida).
         if container.retorno_destino_tipo == 'deposito' and container.estado != 'devuelto':
             container.cambiar_estado('devuelto', usuario)
             container.save()
@@ -1145,9 +1145,9 @@ class ContainerViewSet(viewsets.ModelViewSet):
         Cambia estado a 'descargado'
         
         Lógica de negocio:
-        - Si cd.requiere_espera_carga=True (Puerto Madero, Campos, Quilicura):
-          conductor espera descarga sobre camión, luego retorna a CCTI/depot con vacío
-        - Si cd.permite_soltar_contenedor=True (El Peñón):
+        - Si cd.requiere_espera_carga=True:
+          conductor espera descarga sobre camión, luego retorna a Patio/depot con vacío
+        - Si cd.permite_soltar_contenedor=True:
           drop & hook, conductor libre inmediatamente, puede recoger otro vacío
         
         Automáticamente crea registro TiempoOperacion para ML
@@ -1263,7 +1263,7 @@ class ContainerViewSet(viewsets.ModelViewSet):
         
         if not cd.permite_soltar_contenedor:
             return Response(
-                {'error': f'CD {cd.nombre} no permite drop & hook. Solo El Peñón tiene esta opción.'},
+                {'error': f'CD {cd.nombre} no permite drop & hook. Solo CDs con drop & hook habilitado.'},
                 status=status.HTTP_400_BAD_REQUEST
             )
         

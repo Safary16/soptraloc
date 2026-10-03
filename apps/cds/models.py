@@ -3,11 +3,11 @@ from math import asin, cos, radians, sin, sqrt
 
 
 class CD(models.Model):
-    """Centros de Distribución (Clientes y CCTIs)"""
+    """Centros de Distribución (Clientes y Patios propios)"""
     
     TIPOS = [
         ('cliente', 'Cliente'),
-        ('ccti', 'CCTI'),
+        ('patio', 'Patio'),
     ]
     
     # Información básica
@@ -25,7 +25,7 @@ class CD(models.Model):
         help_text='Si se configura, una posición dentro de este radio registra el arribo automáticamente.'
     )
     
-    # Gestión de contenedores vacíos (CCTI o CD cliente con patio habilitado)
+    # Gestión de contenedores vacíos (Patio o CD cliente con patio habilitado)
     capacidad_vacios = models.IntegerField('Capacidad Vacíos', default=0)
     vacios_actuales = models.IntegerField('Vacíos Actuales', default=0)
     
@@ -33,12 +33,12 @@ class CD(models.Model):
     requiere_espera_carga = models.BooleanField(
         'Requiere Espera para Carga', 
         default=False,
-        help_text='Si True: conductor espera descarga sobre camión (Puerto Madero, Campos, Quilicura). Si False: drop & hook (El Peñón)'
+        help_text='Si True: conductor espera descarga sobre camión. Si False: drop & hook (contenedor soltado)'
     )
     permite_soltar_contenedor = models.BooleanField(
         'Permite Drop & Hook', 
         default=False,
-        help_text='Si True: conductor puede soltar contenedor y quedar libre inmediatamente (solo El Peñón)'
+        help_text='Si True: conductor puede soltar contenedor y quedar libre inmediatamente'
     )
     tiempo_promedio_descarga_min = models.IntegerField(
         'Tiempo Promedio Descarga (minutos)', 
@@ -90,7 +90,7 @@ class CD(models.Model):
     
     @property
     def espacios_disponibles(self):
-        """Retorna cuántos espacios libres tiene el CCTI"""
+        """Retorna cuántos espacios libres tiene el patio"""
         return max(0, self.capacidad_vacios - self.vacios_actuales)
     
     def recibir_vacio(self):
@@ -102,7 +102,7 @@ class CD(models.Model):
           El guard `vacio_contabilizado=False` lo deja idempotente (doble evento
           del mismo Container no lo incrementa dos veces).
         - `apps/core/services/returns.py:EmptyReturnService.complete` cuando un
-          Container se entrega a un CCTI (retorno_destino_tipo='ccti'). El check
+          Container se entrega a un Patio (retorno_destino_tipo='patio'). El check
           `puede_recibir_vacios` cubre la capacidad del CD.
 
         NO recibir manualmente desde otros lados: cada Container tiene a lo más

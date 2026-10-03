@@ -69,6 +69,7 @@ INSTALLED_APPS = [
     'apps.events',
     'apps.cds',
     'apps.notifications',
+    'apps.simulador',
 ]
 
 MIDDLEWARE = [

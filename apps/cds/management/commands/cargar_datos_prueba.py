@@ -19,17 +19,17 @@ class Command(BaseCommand):
     def handle(self, *args, **options):
         self.stdout.write(self.style.SUCCESS('Cargando datos de prueba...'))
         
-        # Crear CCTIs adicionales (para testing - además del CCTI principal).
+        # Crear Patios adicionales (para testing - además del Patio principal).
         # Códigos NEUTROS: ZEAL/CLEP son posiciones físicas de terminales en el
-        # dominio (ver posicion_fisica/anomaly_detector), NO etiquetas de CCTIs.
-        self.stdout.write('Creando CCTIs...')
-        ccti_zeal, _ = CD.objects.get_or_create(
+        # dominio (ver posicion_fisica/anomaly_detector), NO etiquetas de Patios.
+        self.stdout.write('Creando Patios...')
+        patio_zeal, _ = CD.objects.get_or_create(
             codigo='PRUEBA1',
             defaults={
-                'nombre': 'CCTI Prueba Norte',
+                'nombre': 'Patio Prueba Norte',
                 'direccion': 'Zona de prueba 1',
                 'comuna': 'Valparaíso',
-                'tipo': 'ccti',
+                'tipo': 'patio',
                 'lat': Decimal('-33.0458'),
                 'lng': Decimal('-71.6197'),
                 'capacidad_vacios': 100,
@@ -37,13 +37,13 @@ class Command(BaseCommand):
             }
         )
         
-        ccti_clep, _ = CD.objects.get_or_create(
+        patio_clep, _ = CD.objects.get_or_create(
             codigo='PRUEBA2',
             defaults={
-                'nombre': 'CCTI Prueba Sur',
+                'nombre': 'Patio Prueba Sur',
                 'direccion': 'Zona de prueba 2',
                 'comuna': 'Padre Hurtado',
-                'tipo': 'ccti',
+                'tipo': 'patio',
                 'lat': Decimal('-33.5733'),
                 'lng': Decimal('-70.8075'),
                 'capacidad_vacios': 150,
@@ -58,7 +58,7 @@ class Command(BaseCommand):
         cd_puerto_madero, _ = CD.objects.get_or_create(
             codigo='MADERO',
             defaults={
-                'nombre': 'CD Puerto Madero',
+                'nombre': 'CD Distribución Poniente',
                 'direccion': 'Puerto Madero 9710, Pudahuel, Región Metropolitana',
                 'comuna': 'Pudahuel',
                 'tipo': 'cliente',
@@ -74,7 +74,7 @@ class Command(BaseCommand):
         cd_campos_chile, _ = CD.objects.get_or_create(
             codigo='CAMPOS',
             defaults={
-                'nombre': 'CD Campos de Chile',
+                'nombre': 'CD Alimentos Sur',
                 'direccion': 'Av. El Parque 1000, Pudahuel, Región Metropolitana',
                 'comuna': 'Pudahuel',
                 'tipo': 'cliente',
@@ -90,7 +90,7 @@ class Command(BaseCommand):
         cd_quilicura, _ = CD.objects.get_or_create(
             codigo='QUILICURA',
             defaults={
-                'nombre': 'CD Quilicura',
+                'nombre': 'CD Retail Quilicura',
                 'direccion': 'Eduardo Frei Montalva 8301, Quilicura, Región Metropolitana',
                 'comuna': 'Quilicura',
                 'tipo': 'cliente',
@@ -106,7 +106,7 @@ class Command(BaseCommand):
         cd_el_penon, _ = CD.objects.get_or_create(
             codigo='PENON',
             defaults={
-                'nombre': 'CD El Peñón',
+                'nombre': 'CD Bodega Norte',
                 'direccion': 'Avenida Presidente Jorge Alessandri Rodriguez 18899, San Bernardo, Región Metropolitana',
                 'comuna': 'San Bernardo',
                 'tipo': 'cliente',
@@ -124,7 +124,7 @@ class Command(BaseCommand):
         self.stdout.write('Creando conductores...')
         conductores_data = [
             {
-                'nombre': 'Juan Pérez',
+                'nombre': 'Conductor Demo Norte',
                 'rut': '12345678-9',
                 'telefono': '+56912345678',
                 'presente': True,
@@ -138,7 +138,7 @@ class Command(BaseCommand):
                 'entregas_a_tiempo': 115,
             },
             {
-                'nombre': 'María González',
+                'nombre': 'Conductor Demo Poniente',
                 'rut': '23456789-0',
                 'telefono': '+56923456789',
                 'presente': True,
@@ -152,7 +152,7 @@ class Command(BaseCommand):
                 'entregas_a_tiempo': 148,
             },
             {
-                'nombre': 'Pedro Sánchez',
+                'nombre': 'Conductor Demo Sur',
                 'rut': '34567890-1',
                 'telefono': '+56934567890',
                 'presente': True,
@@ -166,7 +166,7 @@ class Command(BaseCommand):
                 'entregas_a_tiempo': 92,
             },
             {
-                'nombre': 'Ana Martínez',
+                'nombre': 'Conductor Demo Oriente',
                 'rut': '45678901-2',
                 'telefono': '+56945678901',
                 'presente': False,
@@ -196,14 +196,14 @@ class Command(BaseCommand):
         self.stdout.write('Creando contenedores...')
         contenedores_data = [
             # Por arribar
-            {'container_id': 'CONT001', 'tipo': '40', 'nave': 'MSC MARIA', 'estado': 'por_arribar'},
+            {'container_id': 'CONT001', 'tipo': '40', 'nave': 'Pacific Star', 'estado': 'por_arribar'},
             {'container_id': 'CONT002', 'tipo': '20', 'nave': 'EVER FORWARD', 'estado': 'por_arribar'},
             # Liberados
             {'container_id': 'CONT003', 'tipo': '40HC', 'nave': 'MAERSK LINE', 'estado': 'liberado', 'posicion_fisica': 'ZEAL'},
             {'container_id': 'CONT004', 'tipo': '40', 'nave': 'CMA CGM', 'estado': 'liberado', 'posicion_fisica': 'CLEP'},
             {'container_id': 'CONT005', 'tipo': '20', 'nave': 'HAPAG LLOYD', 'estado': 'liberado', 'posicion_fisica': 'ZEAL', 'secuenciado': True},
             # Programados
-            {'container_id': 'CONT006', 'tipo': '40', 'nave': 'MSC MARIA', 'estado': 'programado', 'posicion_fisica': 'CLEP', 'comuna': 'Quilicura'},
+            {'container_id': 'CONT006', 'tipo': '40', 'nave': 'Pacific Star', 'estado': 'programado', 'posicion_fisica': 'CLEP', 'comuna': 'Quilicura'},
             {'container_id': 'CONT007', 'tipo': '40HC', 'nave': 'EVER FORWARD', 'estado': 'programado', 'posicion_fisica': 'ZEAL', 'comuna': 'Maipú'},
             # Asignado
             {'container_id': 'CONT008', 'tipo': '20', 'nave': 'MAERSK LINE', 'estado': 'asignado', 'posicion_fisica': 'CLEP', 'comuna': 'Colina'},
@@ -228,7 +228,7 @@ class Command(BaseCommand):
             defaults={
                 'cd': cd_quilicura,
                 'fecha_programada': now + timedelta(hours=40),
-                'cliente': 'Empresa ABC',
+                'cliente': 'Comercial Los Aromos',
                 'requiere_alerta': True,
             }
         )
@@ -237,26 +237,26 @@ class Command(BaseCommand):
         
         # Programación con conductor (a Puerto Madero)
         cont007 = Container.objects.get(container_id='CONT007')
-        driver1 = Driver.objects.get(nombre='Juan Pérez')
+        driver1 = Driver.objects.get(nombre='Conductor Demo Norte')
         Programacion.objects.get_or_create(
             container=cont007,
             defaults={
                 'cd': cd_puerto_madero,
                 'fecha_programada': now + timedelta(days=3),
-                'cliente': 'Empresa XYZ',
+                'cliente': 'Distribuidora del Sur',
                 'driver': driver1,
             }
         )
         
         # Programación sin conductor (pero con tiempo) a El Peñón (drop & hook)
         cont008 = Container.objects.get(container_id='CONT008')
-        driver2 = Driver.objects.get(nombre='María González')
+        driver2 = Driver.objects.get(nombre='Conductor Demo Poniente')
         Programacion.objects.get_or_create(
             container=cont008,
             defaults={
                 'cd': cd_el_penon,
                 'fecha_programada': now + timedelta(days=5),
-                'cliente': 'Empresa DEF',
+                'cliente': 'Ferretería Andina',
                 'driver': driver2,
             }
         )
@@ -265,7 +265,7 @@ class Command(BaseCommand):
         
         # Resumen
         self.stdout.write(self.style.SUCCESS('\n=== RESUMEN ==='))
-        self.stdout.write(f'CDs: {CD.objects.count()} ({CD.objects.filter(tipo="ccti").count()} CCTIs, {CD.objects.filter(tipo="cliente").count()} Clientes)')
+        self.stdout.write(f'CDs: {CD.objects.count()} ({CD.objects.filter(tipo="patio").count()} Patios, {CD.objects.filter(tipo="cliente").count()} Clientes)')
         self.stdout.write(f'Conductores: {Driver.objects.count()} ({Driver.objects.filter(presente=True, activo=True).count()} disponibles)')
         self.stdout.write(f'Contenedores: {Container.objects.count()}')
         self.stdout.write(f'  - Por arribar: {Container.objects.filter(estado="por_arribar").count()}')

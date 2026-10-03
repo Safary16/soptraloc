@@ -2,9 +2,13 @@
 Utilidades de normalización de nombres de cliente.
 
 Regla: un cliente solo puede existir en UNA forma canónica (title case),
-así "EASY" / "easy" / "WalMart" / "walmart" colapsan a "Walmart",
+así "ANDINA" / "andina" / "Andina Retail" colapsan a "Andina Retail",
 "LA DIVISA" a "La Divisa", etc. Aplicar SIEMPRE al escribir `cliente`
 (importadores y vistas) y al filtrar por cliente (`?cliente=`).
+
+Nota (2026-10-03): el catálogo es genérico y sin marcas reales — soptraloc
+es un producto independiente, la normalización no debe codificar clientes
+ni proveedores específicos de una operación.
 """
 
 # Conectores que van en minúscula salvo en la primera palabra.
@@ -14,30 +18,24 @@ _CONECTORES = {
 }
 
 # Siglas/marcas que se conservan en mayúsculas tal cual.
+# Solo figuras jurídicas genéricas: nunca marcas reales (producto independiente).
 _SIGLAS = {
-    'CCTI', 'SAI', 'SA', 'S.A.', 'S.A', 'LTDA', 'Ltda.', 'EIRL',
-    'SPA', 'S.P.A.', 'USA', 'EU', 'CNC', 'DPD', 'BCO',
-    # Agencias de aduana (siempre en mayúsculas, no son clientes)
-    'BROWNE',
+    'SA', 'S.A.', 'S.A', 'LTDA', 'Ltda.', 'EIRL',
+    'SPA', 'S.P.A.', 'USA', 'EU',
 }
 
 # Aliases/typos comunes → forma canónica (antes del title case genérico).
+# Ejemplos ficticios (sin marcas reales): sirven de plantilla para que un
+# deployment agregue sus propios mapeos.
 _ALIASES = {
-    # Walmart
-    'walmart': 'Walmart', 'wallmart': 'Walmart', 'walmaart': 'Walmart', 'wal mart': 'Walmart',
-    'wal-mart': 'Walmart', 'walm': 'Walmart',
-    # Easy
-    'easy': 'Easy', 'ezy': 'Easy', 'easi': 'Easy',
-    # La Divisa
-    'la divisa': 'La Divisa', 'ladivisa': 'La Divisa', 'la divissa': 'La Divisa',
-    # Cencosud / Jumbo / Santa Isabel
-    'cencosud': 'Cencosud', 'jumbo': 'Jumbo', 'santa isabel': 'Santa Isabel',
-    # SAI / logística
-    'sai': 'SAI', 'san antonio intl': 'SAI',
-    # Líneas
-    'maersk': 'Maersk', 'maersk line': 'Maersk Line', 'msk': 'Maersk',
-    'hamburg sud': 'Hamburg Süd', 'hamburgsud': 'Hamburg Süd',
-    'ccti': 'CCTI', 'cct': 'CCTI',
+    # Marca de ejemplo: Andina (typos comunes)
+    'andina': 'Andina', 'andna': 'Andina', 'andyna': 'Andina', 'andina retail': 'Andina Retail',
+    # Marca de ejemplo: Pacífico
+    'pacifico': 'Pacífico', 'pacificco': 'Pacífico', 'pacificfoo': 'Pacífico',
+    # Marca de ejemplo: Bío Bío (nombre con tilde)
+    'bio bio': 'Bío Bío', 'biobio': 'Bío Bío',
+    # Línea naviera de ejemplo
+    'novamar': 'Novamar', 'nova mar': 'Novamar', 'nmar': 'Novamar',
 }
 
 

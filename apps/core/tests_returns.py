@@ -11,7 +11,7 @@ from apps.programaciones.models import Programacion
 
 
 class EmptyReturnFlowTest(TestCase):
-    """Cubre EmptyReturnService.start/complete: depósito y CCTI, con guardas reales."""
+    """Cubre EmptyReturnService.start/complete: depósito y Patio, con guardas reales."""
 
     def setUp(self):
         self.suf = uuid.uuid4().hex[:6]
@@ -19,8 +19,8 @@ class EmptyReturnFlowTest(TestCase):
             nombre=f'CD ORIGEN {self.suf}', tipo='cliente', direccion='Av Test 1',
             lat=-33.45, lng=-70.66, capacidad_vacios=10, vacios_actuales=2,
         )
-        self.ccti = CD.objects.create(
-            nombre=f'CCTI {self.suf}', tipo='ccti', direccion='Terminal 2',
+        self.patio = CD.objects.create(
+            nombre=f'Patio {self.suf}', tipo='patio', direccion='Terminal 2',
             lat=-33.40, lng=-70.65, activo=True, capacidad_vacios=5, vacios_actuales=0,
         )
         self.drv = Driver.objects.create(
@@ -28,7 +28,7 @@ class EmptyReturnFlowTest(TestCase):
             patente=f'AA{self.suf[:3]}', max_entregas_dia=5, activo=True, presente=True,
         )
         self.cont = Container.objects.create(
-            container_id=f'AAAA{self.suf}', tipo='40HC', cliente='WALMART',
+            container_id=f'AAAA{self.suf}', tipo='40HC', cliente='ANDINA',
             posicion_fisica='P1', cd_entrega=self.cd_origen, vacio_contabilizado=True,
         )
 
@@ -61,20 +61,20 @@ class EmptyReturnFlowTest(TestCase):
         self.assertEqual(c.estado, 'devuelto')
         self.assertIsNotNone(c.fecha_devolucion)
 
-    def test_retorno_a_ccti_recibe_vacio(self):
+    def test_retorno_a_patio_recibe_vacio(self):
         c = self._llevar_a_vacio()
-        c = EmptyReturnService.start(c, destination_type='ccti', destination_cd=self.ccti)
+        c = EmptyReturnService.start(c, destination_type='patio', destination_cd=self.patio)
         c.refresh_from_db()
         self.assertEqual(c.estado, 'vacio_en_ruta')
-        self.assertEqual(c.retorno_destino_tipo, 'ccti')
-        self.assertEqual(c.retorno_destino_cd, self.ccti)
+        self.assertEqual(c.retorno_destino_tipo, 'patio')
+        self.assertEqual(c.retorno_destino_cd, self.patio)
 
         c = EmptyReturnService.complete(c, user='test')
         c.refresh_from_db()
-        self.assertEqual(c.estado, 'en_ccti')  # llega al CCTI
-        self.assertEqual(c.cd_entrega, self.ccti)  # inventario se reasigna
-        self.ccti.refresh_from_db()
-        self.assertEqual(self.ccti.vacios_actuales, 1)  # CCTI recibió el vacío
+        self.assertEqual(c.estado, 'en_patio')  # llega al Patio
+        self.assertEqual(c.cd_entrega, self.patio)  # inventario se reasigna
+        self.patio.refresh_from_db()
+        self.assertEqual(self.patio.vacios_actuales, 1)  # Patio recibió el vacío
 
     def test_start_rechaza_contenedor_no_vacio(self):
         # Un contenedor en 'liberado' NO puede iniciar retorno

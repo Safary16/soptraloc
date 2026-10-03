@@ -26,7 +26,7 @@ class ContainerLifecycleTest(TestCase):
             patente=f'AA{self.suf[:3]}', max_entregas_dia=5, activo=True, presente=True,
         )
         self.cont = Container.objects.create(
-            container_id=f'AAAA{self.suf}', tipo='40HC', cliente='WALMART',
+            container_id=f'AAAA{self.suf}', tipo='40HC', cliente='ANDINA',
             posicion_fisica='P1', cd_entrega=self.cd,
         )
 

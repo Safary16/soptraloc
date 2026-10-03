@@ -22,7 +22,7 @@ from apps.core.views import (
     containers_list, container_detail,
     operaciones, operaciones_panel, drivers_list, cds_list, executive_dashboard,
     operaciones_diarias as operaciones_diarias_view,
-    auditoria, cliente_portal, gestion, gestion_vacios_ccti,
+    auditoria, cliente_portal, gestion, gestion_vacios,
     health,
 )
 
@@ -56,7 +56,7 @@ urlpatterns = [
     path('operaciones/panel/', operaciones_panel, name='operaciones_panel'),
     path('cliente/', cliente_portal, name='cliente_portal'),
     path('gestion/', gestion, name='gestion'),
-    path('gestion/vacios-ccti/', gestion_vacios_ccti, name='gestion_vacios_ccti'),
+    path('gestion/vacios/', gestion_vacios, name='gestion_vacios'),
     path('drivers/', drivers_list, name='drivers_list'),
     path('cds/', cds_list, name='cds_list'),
     path('executive/', executive_dashboard, name='executive_dashboard'),

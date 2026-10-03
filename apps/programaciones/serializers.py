@@ -63,8 +63,8 @@ class RutaManualSerializer(serializers.Serializer):
     """
     container_id = serializers.CharField(help_text='ID del contenedor a retirar')
     tipo_movimiento = serializers.ChoiceField(
-        choices=['retiro_ccti', 'retiro_directo'],
-        help_text='Tipo de movimiento: retiro_ccti (al CCTI) o retiro_directo (directo a cliente)'
+        choices=['retiro_patio', 'retiro_directo'],
+        help_text='Tipo de movimiento: retiro_patio (al Patio) o retiro_directo (directo a cliente)'
     )
     cd_destino_id = serializers.IntegerField(
         required=False,

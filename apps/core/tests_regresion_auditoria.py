@@ -2,7 +2,7 @@
 Tests de regresión de la auditoría 2026-09-18.
 
 Cubren los hallazgos que la auditoría confirmó por simulación:
-1. Retorno a CCTI: el vacío queda en 'en_ccti' (lugar físico) sin forzar 'devuelto'.
+1. Retorno a Patio: el vacío queda en 'en_patio' (lugar físico) sin forzar 'devuelto'.
 2. Desasignación: libera la capacidad del conductor (num_entregas_dia vuelve a 0).
 3. Reversión del FSM: solo las transiciones en REVERSIONES_VALIDAS pueden revertir
    (nada de resucitar un 'devuelto' ni saltar el FSM arbitrariamente).
@@ -35,31 +35,31 @@ def _cd_cliente(suf):
     )
 
 
-def _ccti(suf):
+def _patio(suf):
     return CD.objects.create(
-        nombre=f"CCTI_{suf}", codigo=f"K{suf}", direccion="Av 2", comuna="San Bernardo",
-        tipo='ccti', lat=-33.59, lng=-70.70, capacidad_vacios=10, vacios_actuales=0,
+        nombre=f"Patio_{suf}", codigo=f"K{suf}", direccion="Av 2", comuna="San Bernardo",
+        tipo='patio', lat=-33.59, lng=-70.70, capacidad_vacios=10, vacios_actuales=0,
     )
 
 
-class RetornoCCTITest(TestCase):
-    """Un retorno a CCTI deja el contenedor en 'en_ccti' (lugar físico), sin 500."""
+class RetornoPatioTest(TestCase):
+    """Un retorno a Patio deja el contenedor en 'en_patio' (lugar físico), sin 500."""
 
-    def test_retorno_ccti_queda_en_ccti(self):
+    def test_retorno_patio_queda_en_patio(self):
         suf = _sufijo()
         cd = _cd_cliente(suf)
-        ccti = _ccti(suf)
+        patio = _patio(suf)
         c = Container.objects.create(
             container_id=f"TST{suf.upper()}1", tipo='40', nave=f"N{suf}",
             cd_entrega=cd, estado='vacio',
         )
-        c2 = EmptyReturnService.start(c, destination_type='ccti', destination_cd=ccti, user='regresion')
+        c2 = EmptyReturnService.start(c, destination_type='patio', destination_cd=patio, user='regresion')
         c3 = EmptyReturnService.complete(c2, user='regresion')
         c3.refresh_from_db()
-        self.assertEqual(c3.estado, 'en_ccti')
-        # La vista marcar_devuelto ya no debe forzar 'devuelto' para destinos CCTI.
-        self.assertEqual(c3.retorno_destino_tipo, 'ccti')
-        # Forzar devuelto desde en_ccti sigue siendo inválido (FSM intacto).
+        self.assertEqual(c3.estado, 'en_patio')
+        # La vista marcar_devuelto ya no debe forzar 'devuelto' para destinos Patio.
+        self.assertEqual(c3.retorno_destino_tipo, 'patio')
+        # Forzar devuelto desde en_patio sigue siendo inválido (FSM intacto).
         with self.assertRaises(ValidationError):
             c3.cambiar_estado('devuelto', 'regresion')
 

@@ -10,7 +10,7 @@ class Deposit(models.Model):
     Reemplaza el texto libre `Container.deposito_devolucion` como fuente de
     verdad para comparaciones: con catálogo + aliases es posible detectar
     divergencias entre lo declarado por el cliente y lo informado por el
-    depósito (p. ej. "SITRANS ALTO SAI" vs "SITRANS SAI").
+    depósito (p. ej. "DEPÓSITO ANDINO ALTO" vs "DEPÓSITO ANDINO").
     """
 
     name = models.CharField('Nombre', max_length=200, unique=True)
@@ -124,7 +124,7 @@ class Container(models.Model):
         # Estados vacío (retorno)
         ('vacio', 'Vacío'),  # Descargado, esperando retiro
         ('vacio_en_ruta', 'Vacío en Ruta'),  # Retornando a depósito
-        ('en_ccti', 'Vacío en CCTI'),
+        ('en_patio', 'Vacío en Patio'),
         ('devuelto', 'Devuelto'),  # Devuelto a depósito naviera
         ('cancelado', 'Cancelado'),
         ('incidente', 'Incidente'),
@@ -142,8 +142,8 @@ class Container(models.Model):
         'soltado': {'descargado', 'vacio', 'vacio_en_ruta', 'incidente'},
         'descargado': {'vacio', 'vacio_en_ruta'},
         'vacio': {'vacio_en_ruta'},
-        'vacio_en_ruta': {'en_ccti', 'devuelto', 'incidente'},
-        'en_ccti': {'vacio_en_ruta'},
+        'vacio_en_ruta': {'en_patio', 'devuelto', 'incidente'},
+        'en_patio': {'vacio_en_ruta'},
         'devuelto': set(),
         'cancelado': set(),
     }
@@ -158,7 +158,7 @@ class Container(models.Model):
         'asignado': {'programado'},
         'en_ruta': {'asignado'},
         'soltado': {'entregado'},
-        'en_ccti': {'vacio_en_ruta'},
+        'en_patio': {'vacio_en_ruta'},
     }
     
     TIPOS = [
@@ -178,7 +178,7 @@ class Container(models.Model):
     
     TIPOS_MOVIMIENTO = [
         ('automatico', 'Automático (Puerto)'),
-        ('retiro_ccti', 'Retiro a CCTI'),
+        ('retiro_patio', 'Retiro a Patio'),
         ('retiro_directo', 'Retiro Directo a Cliente'),
     ]
     
@@ -215,11 +215,11 @@ class Container(models.Model):
     deposito_devolucion = models.CharField('Depósito Devolución', max_length=200, null=True, blank=True, help_text='Dónde devolver contenedor vacío')
     retorno_destino_tipo = models.CharField(
         'Tipo destino retorno', max_length=12, null=True, blank=True,
-        choices=[('deposito', 'Depósito naviera'), ('ccti', 'CCTI')],
+        choices=[('deposito', 'Depósito naviera'), ('patio', 'Patio')],
     )
     retorno_destino_cd = models.ForeignKey(
         'cds.CD', on_delete=models.SET_NULL, null=True, blank=True,
-        related_name='retornos_vacios_recibidos', verbose_name='CCTI destino retorno',
+        related_name='retornos_vacios_recibidos', verbose_name='Patio destino retorno',
     )
     fecha_demurrage = models.DateTimeField('Fecha Demurrage', null=True, blank=True, db_index=True, help_text='Fecha de vencimiento de demurrage (después se paga)')
     
@@ -237,7 +237,7 @@ class Container(models.Model):
     fecha_devolucion = models.DateTimeField('Fecha Devolución', null=True, blank=True, help_text='Devuelto a depósito naviera')
     fecha_incidente = models.DateTimeField('Fecha Incidente', null=True, blank=True, help_text='Registrado cuando el contenedor entra a estado incidente')
     fecha_cancelado = models.DateTimeField('Fecha Cancelación', null=True, blank=True, help_text='Registrado cuando el contenedor entra a estado cancelado')
-    fecha_en_ccti = models.DateTimeField('Fecha En CCTI', null=True, blank=True, help_text='Registrado cuando el contenedor vacío ingresa a CCTI')
+    fecha_en_patio = models.DateTimeField('Fecha En Patio', null=True, blank=True, help_text='Registrado cuando el contenedor vacío ingresa al patio propio')
     fecha_secuenciado = models.DateTimeField('Fecha Secuenciado', null=True, blank=True, help_text='Registrado cuando el contenedor entra a estado secuenciado')
     vacio_contabilizado = models.BooleanField(
         'Vacío contabilizado en CD', default=False,
@@ -413,7 +413,7 @@ class Container(models.Model):
         'descargado': 'fecha_descarga',
         'vacio': 'fecha_vacio',
         'vacio_en_ruta': 'fecha_vacio_ruta',
-        'en_ccti': 'fecha_en_ccti',
+        'en_patio': 'fecha_en_patio',
         'devuelto': 'fecha_devolucion',
         'incidente': 'fecha_incidente',
         'cancelado': 'fecha_cancelado',

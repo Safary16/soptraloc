@@ -16,7 +16,7 @@ class CDAdmin(admin.ModelAdmin):
         ('Ubicación', {
             'fields': ('direccion', 'comuna', 'lat', 'lng', 'geocerca_radio_m')
         }),
-        ('Gestión de Vacíos (CCTI)', {
+        ('Gestión de Vacíos (Patio)', {
             'fields': ('capacidad_vacios', 'vacios_actuales', 'espacios_disponibles'),
             'classes': ('collapse',)
         }),
@@ -27,7 +27,7 @@ class CDAdmin(admin.ModelAdmin):
     )
     
     def vacios_display(self, obj):
-        if obj.tipo == 'ccti':
+        if obj.tipo == 'patio':
             return f"{obj.vacios_actuales}/{obj.capacidad_vacios}"
         return "-"
     vacios_display.short_description = 'Vacíos (actual/capacidad)'

@@ -29,7 +29,7 @@ class MLTimePredictor:
         
         Args:
             cd: CD object
-            tipo_operacion: str ('carga_ccti', 'descarga_cd', 'retiro_puerto', 'devolucion_vacio')
+            tipo_operacion: str ('carga_patio', 'descarga_cd', 'retiro_puerto', 'devolucion_vacio')
             conductor: Driver object (opcional)
         
         Returns:

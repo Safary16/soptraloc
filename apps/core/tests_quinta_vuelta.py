@@ -30,7 +30,7 @@ class DashboardQueriesTest(TestCase):
             patente=f'QQ{self.suf[:2]}', max_entregas_dia=5, activo=True, presente=True,
         )
         self.cont = Container.objects.create(
-            container_id=f'QQQA{self.suf[:3]}1', tipo='40HC', cliente='WALMART',
+            container_id=f'QQQA{self.suf[:3]}1', tipo='40HC', cliente='ANDINA',
             posicion_fisica='P1', cd_entrega=self.cd,
         )
         self.cont.cambiar_estado('liberado', 'test')
@@ -83,7 +83,7 @@ class ArriboDirectoUnificadoTest(TestCase):
             lat=-33.45, lng=-70.66,
         )
         self.cont = Container.objects.create(
-            container_id=f'AAAB{self.suf[:3]}2', tipo='40HC', cliente='WALMART',
+            container_id=f'AAAB{self.suf[:3]}2', tipo='40HC', cliente='ANDINA',
             posicion_fisica='P1', cd_entrega=self.cd,
         )
         self.cont.cambiar_estado('liberado', 'test')
@@ -147,7 +147,7 @@ class ConfirmarRecomendacionTrazabilidadTest(TestCase):
             patente=f'AC{self.suf[:2]}', max_entregas_dia=5, activo=True, presente=True,
         )
         self.cont = Container.objects.create(
-            container_id=f'AAAC{self.suf[:3]}3', tipo='40HC', cliente='WALMART',
+            container_id=f'AAAC{self.suf[:3]}3', tipo='40HC', cliente='ANDINA',
             posicion_fisica='P1', cd_entrega=self.cd,
         )
         self.cont.cambiar_estado('liberado', 'test')

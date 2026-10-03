@@ -83,7 +83,7 @@ class FSMPostDeliveryBranchesTests(TestCase):
             self.assertEqual(container.estado, target)
 
     def test_entregado_cannot_jump_to_return_states(self):
-        for invalid in ('vacio_en_ruta', 'en_ccti', 'devuelto', 'programado'):
+        for invalid in ('vacio_en_ruta', 'en_patio', 'devuelto', 'programado'):
             container = _make_container(estado='entregado')
             with self.assertRaises(ValidationError):
                 container.cambiar_estado(invalid, 'test')
@@ -107,20 +107,20 @@ class FSMPostDeliveryBranchesTests(TestCase):
 
     def test_full_empty_return_chain(self):
         container = _make_container(estado='descargado')
-        chain = ['vacio', 'vacio_en_ruta', 'en_ccti', 'vacio_en_ruta', 'devuelto']
+        chain = ['vacio', 'vacio_en_ruta', 'en_patio', 'vacio_en_ruta', 'devuelto']
         for target in chain:
             container.cambiar_estado(target, 'test')
         container.refresh_from_db()
         self.assertEqual(container.estado, 'devuelto')
 
-    def test_vacio_cannot_skip_to_en_ccti_or_devuelto(self):
-        for invalid in ('en_ccti', 'devuelto', 'entregado'):
+    def test_vacio_cannot_skip_to_en_patio_or_devuelto(self):
+        for invalid in ('en_patio', 'devuelto', 'entregado'):
             container = _make_container(estado='vacio')
             with self.assertRaises(ValidationError):
                 container.cambiar_estado(invalid, 'test')
 
-    def test_en_ccti_only_exit_is_back_to_vacio_en_ruta(self):
-        container = _make_container(estado='en_ccti')
+    def test_en_patio_only_exit_is_back_to_vacio_en_ruta(self):
+        container = _make_container(estado='en_patio')
         with self.assertRaises(ValidationError):
             container.cambiar_estado('devuelto', 'test')
         container.cambiar_estado('vacio_en_ruta', 'test')
@@ -144,7 +144,7 @@ class FSMTerminalStateTests(TestCase):
 
     def test_devuelto_is_absolute_sink(self):
         container = _make_container(estado='devuelto')
-        for target in ('vacio_en_ruta', 'por_arribar', 'liberado', 'en_ccti'):
+        for target in ('vacio_en_ruta', 'por_arribar', 'liberado', 'en_patio'):
             with self.assertRaises(ValidationError):
                 container.cambiar_estado(target, 'test', permitir_reversion=True)
 
@@ -183,7 +183,7 @@ class FSMReversionTests(TestCase):
         self._assert_reversion_works('asignado', 'programado')
         self._assert_reversion_works('en_ruta', 'asignado')
         self._assert_reversion_works('soltado', 'entregado')
-        self._assert_reversion_works('en_ccti', 'vacio_en_ruta')
+        self._assert_reversion_works('en_patio', 'vacio_en_ruta')
 
     def test_same_reversion_fails_without_flag(self):
         # NOTA: asignado→programado es transición válida hacia adelante
@@ -322,10 +322,10 @@ class FSMExternalVerificationTests(TestCase):
 
     def test_verified_state_does_not_touch_fsm(self):
         container = _make_container(estado='liberado')
-        resultado = container.marcar_verificacion_externa('en_ccti', 'portal_test')
+        resultado = container.marcar_verificacion_externa('en_patio', 'portal_test')
         container.refresh_from_db()
         self.assertEqual(container.estado, 'liberado')  # FSM intacto
-        self.assertEqual(container.estado_verificado, 'en_ccti')
+        self.assertEqual(container.estado_verificado, 'en_patio')
         self.assertEqual(container.fuente_verificacion, 'portal_test')
         self.assertIsNotNone(container.verificado_en)
         self.assertTrue(resultado['divergencia'])

@@ -217,13 +217,13 @@ class Programacion(models.Model):
             programacion.driver = locked_driver
             programacion.fecha_asignacion = timezone.now()
             programacion.save(update_fields=['driver', 'fecha_asignacion', 'updated_at'])
-            # HAL-21: el retiro de vacíos (vacio/en_ccti/vacio_en_ruta) NO tiene
+            # HAL-21: el retiro de vacíos (vacio/en_patio/vacio_en_ruta) NO tiene
             # transición a 'asignado' en TRANSICIONES_VALIDAS (solo a
             # 'vacio_en_ruta', que ocurre al iniciar ruta — HAL-23). Forzarla
             # acá reventaba con ValidationError y dejaba el endpoint
             # asignar_conductor_retiro_vacio inoperante en todos sus estados.
             # La asignación queda registrada por driver FK + Event de abajo.
-            if programacion.container.estado not in ('vacio', 'en_ccti', 'vacio_en_ruta'):
+            if programacion.container.estado not in ('vacio', 'en_patio', 'vacio_en_ruta'):
                 programacion.container.cambiar_estado('asignado', usuario)
             Driver.objects.filter(pk=locked_driver.pk).update(
                 num_entregas_dia=F('num_entregas_dia') + 1
@@ -339,7 +339,7 @@ class TiempoOperacion(models.Model):
     """Modelo para tracking de tiempos de operación (carga/descarga)"""
     
     TIPOS_OPERACION = [
-        ('carga_ccti', 'Carga en CCTI'),
+        ('carga_patio', 'Carga en Patio'),
         ('descarga_cd', 'Descarga en CD'),
         ('retiro_puerto', 'Retiro en Puerto'),
         ('devolucion_vacio', 'Devolución Vacío'),
