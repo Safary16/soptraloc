@@ -206,7 +206,17 @@ class AssignmentService:
                 'reason': score_data['reason'],
                 'eta_estimado_min': score_data['eta_estimado_min'],
             })
-        resultados.sort(key=lambda x: x['score'], reverse=True)
+        # ROTACIÓN EQUITATIVA (fix 04-oct-2026): antes el sort usaba SOLO el score,
+        # y con empate (sin historial/ML todos en 0.0) el sort estable devolvía
+        # SIEMPRE el mismo conductor (obs: noches de simulación sugerían siempre
+        # 'SIM-DIA Conductor 03'). Ahora: score desc → menos cargado primero
+        # (num_entregas_dia asc, que sube con cada asignación F+1) → id como
+        # desempate final determinístico. El consejo rota de verdad.
+        resultados.sort(key=lambda x: (
+            -float(x['score']),
+            x['driver'].num_entregas_dia,
+            x['driver'].id,
+        ))
         return resultados
 
     @classmethod
