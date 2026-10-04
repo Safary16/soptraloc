@@ -109,11 +109,50 @@ class ETAEstimator:
                 conductor=driver
             )
 
-        # Manejo defensivo: si el predictor devolvio None (sin Mapbox ni ML),
-        # preferimos None sobre un entero ficticio (60). El operador ve la
-        # advertencia via requires_attention en lugar de una ETA inventada.
+        # Fallback robusto: si Mapbox/ML no tienen datos (sin MAPBOX_API_KEY o cold
+        # start), usamos haversine + velocidad por franja horaria — NUNCA None, para
+        # que AssignmentService pueda despachar (DESPACHO_DIRECTO) y haya ETA siempre.
         if tiempo_viaje is None or tiempo_op is None:
-            return None
+            if programacion.cd:
+                origen_lat = origen_lng = None
+                if driver and driver.ultima_posicion_lat and driver.ultima_posicion_lng:
+                    origen_lat = float(driver.ultima_posicion_lat)
+                    origen_lng = float(driver.ultima_posicion_lng)
+                elif programacion.container.posicion_fisica:
+                    puertos = {
+                        'ZEAL': (-33.05, -71.63), 'TPS': (-33.03, -71.63),
+                        'STI': (-33.58, -71.61), 'CLEP': (-33.60, -71.58),
+                    }
+                    origen = puertos.get(programacion.container.posicion_fisica)
+                    if origen:
+                        origen_lat, origen_lng = origen
+                if origen_lat is None:
+                    origen_lat, origen_lng = -33.4569, -70.6483  # centro RM
+                from apps.simulador.generators import haversine_km
+                km = haversine_km(origen_lat, origen_lng, float(programacion.cd.lat), float(programacion.cd.lng))
+                hora = programacion.fecha_programada.hour if programacion.fecha_programada else timezone.now().hour
+                factor = 0.55 if (7 <= hora <= 10 or 17 <= hora <= 20) else (0.85 if 6 <= hora <= 22 else 1.1)
+                vel = 35.0 * factor  # km/h urbano
+                tiempo_viaje_fb = max(8, int(km * 1.3 / max(1.0, vel) * 60))  # 1.3 = desvios
+            else:
+                tiempo_viaje_fb = 30
+            if tiempo_viaje is None:
+                tiempo_viaje = tiempo_viaje_fb
+            if tiempo_op is None:
+                try:
+                    from apps.core.services.learning_engine import OperationalLearningEngine
+                    pred = OperationalLearningEngine.predict_discharge(
+                        programacion.cd, conductor=driver, departure=programacion.fecha_programada)
+                    if isinstance(pred, dict):
+                        tiempo_op = pred.get('estimated_minutes')
+                except Exception:
+                    tiempo_op = None
+                if tiempo_op is None:
+                    tiempo_op = (
+                        programacion.cd.tiempo_promedio_descarga_min
+                        if programacion.cd and getattr(programacion.cd, 'tiempo_promedio_descarga_min', None)
+                        else 60
+                    )
         return int(tiempo_viaje + tiempo_op)
 
 

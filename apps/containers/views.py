@@ -85,6 +85,7 @@ class ContainerViewSet(viewsets.ModelViewSet):
             'list', 'retrieve', 'liberados', 'export_stock', 'export_liberacion_excel',
             'vacios', 'programar', 'desprogramar', 'marcar_liberado', 'marcar_entregado',
             'marcar_vacio', 'iniciar_retorno', 'marcar_devuelto', 'confirmar_vacio_cd',
+            'marcar_descargado', 'registrar_descarga', 'registrar_arribo',
         }
         classes = [AllowAny] if self.action in public_actions else [IsAdminUser]
         return [permission() for permission in classes]

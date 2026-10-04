@@ -151,7 +151,43 @@ window.addEventListener('load', () => {
     _startPoll();
 });
 
-function refreshAll(){ loadServices(); if (!CLIENTE_FILTRO) loadDrivers(); }
+function refreshAll(){ loadServices(); if (!CLIENTE_FILTRO) loadDrivers(); drawGeocercas(); }
+
+// ---- Geocercas dibujadas: circulo por CD (radio en metros) ----
+let geocercaSource = null;
+function drawGeocercas(){
+    if (!map.getSource('geocercas')) {
+        map.addSource('geocercas', { type:'geojson', data:{ type:'FeatureCollection', features:[] } });
+        map.addLayer({
+            id:'geocercas-fill', type:'fill', source:'geocercas',
+            paint:{ 'fill-color':'#5b8cff', 'fill-opacity':0.10 },
+            layout:{ visibility:'visible' }
+        });
+        map.addLayer({
+            id:'geocercas-line', type:'line', source:'geocercas',
+            paint:{ 'line-color':'#5b8cff', 'line-width':1.6, 'line-opacity':0.55 }
+        });
+    }
+    fetch('/api/cds/?activo=true')
+        .then(r=>r.json())
+        .then(d=>{
+            const cds = (d.results||d||[]).filter(c=>c.lat && c.lng && c.geocerca_radio_m);
+            const feat=cds.map(c=>{
+                const lat=Number(c.lat), lng=Number(c.lng), r=Number(c.geocerca_radio_m);
+                const coords=[];
+                for(let i=0;i<40;i++){
+                    const a=i/40*2*Math.PI;
+                    const dLat=(r/111320), dLng=(r/(111320*Math.cos(lat*Math.PI/180)));
+                    coords.push([lng+dLng*Math.cos(a), lat+dLat*Math.sin(a)]);
+                }
+                coords.push(coords[0]);
+                return { type:'Feature', properties:{ nombre:c.nombre, radio:r, comuna:c.comuna||'' },
+                         geometry:{ type:'Polygon', coordinates:[coords] } };
+            });
+            map.getSource('geocercas').setData({ type:'FeatureCollection', features:feat });
+        })
+        .catch(()=>{});
+}
 
 function updateRefresh(text){ document.getElementById('refresh-text').textContent = text; }
 

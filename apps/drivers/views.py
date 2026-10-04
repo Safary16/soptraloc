@@ -183,12 +183,36 @@ class DriverViewSet(viewsets.ModelViewSet):
             
             try:
                 driver.actualizar_posicion(lat, lng, accuracy)
+                # Arribo automático por geocerca: si el conductor tiene una
+                # programación activa sin arribo cuyo CD geocercado contiene su
+                # posición, se registra el arribo con origen='geocerca' — el
+                # movimiento REAL dispara el evento (Seba 04-oct: queremos que
+                # los traslados se vean y los arribos funcionen al entrar).
+                arribo_geocerca = None
+                try:
+                    from apps.programaciones.models import Programacion
+                    progs = list(Programacion.objects.filter(
+                        driver=driver, fecha_arribo_cd__isnull=True, cd__isnull=False
+                    ).select_related('container', 'cd')[:3])
+                    lat_f, lng_f = float(lat), float(lng)
+                    for prog in progs:
+                        cd = prog.cd
+                        if (cd and cd.lat and cd.lng and cd.geocerca_radio_m
+                                and cd.contiene_en_geocerca(lat_f, lng_f)):
+                            from apps.core.services.operations import OperationalFlowService
+                            _prog, arribo_geocerca = OperationalFlowService.registrar_arribo(
+                                prog, lat_f, lng_f, origen='geocerca', usuario='system_gps')
+                            if arribo_geocerca:
+                                break
+                except Exception:
+                    pass  # nunca romper track_location por el intento de arribo
                 return Response({
                     'success': True,
                     'mensaje': 'Ubicación actualizada',
                     'lat': float(lat),
                     'lng': float(lng),
-                    'timestamp': driver.ultima_actualizacion_posicion
+                    'timestamp': driver.ultima_actualizacion_posicion,
+                    'arribo_geocerca': bool(arribo_geocerca),
                 })
             except Exception as e:
                 return Response(
