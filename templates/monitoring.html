@@ -153,6 +153,48 @@ window.addEventListener('load', () => {
 
 function refreshAll(){ loadServices(); if (!CLIENTE_FILTRO) loadDrivers(); drawGeocercas(); }
 
+/* ---------- SERVICIOS EN EL MAPA DEL OPERADOR (Seba 04-oct-2026) ----------
+   Antes los contenedores solo se veían en modo cliente (renderClientMap).
+   Ahora en modo operador también se dibujan: marcador de caja en la geocerca
+   del CD con su estado + ETA + conductor; si está en ruta, marcador de camión
+   en la ULTIMA posición GPS reportada. Así el mapa nunca queda vacío. */
+function renderServicesMap(){
+    // quitar markers de servicios viejos (dejar solo los de drivers)
+    Object.keys(markers).forEach(id=>{
+        if(id.startsWith('svc-')){ markers[id].remove(); delete markers[id]; }
+    });
+    const drvById={}; drivers.forEach(d=>{ drvById[d.id]=d; });
+    services.forEach(s=>{
+        const estado=s.estado_container||'';
+        let coords=null;
+        let icono='<i class="fas fa-box" style="color:#0d6efd;font-size:20px;text-shadow:0 1px 2px rgba(0,0,0,.3);"></i>';
+        // en ruta → dibujar en la posición GPS del conductor (movimiento real)
+        if(estado==='en_ruta' && s.driver_id && drvById[s.driver_id]){
+            coords=[drvById[s.driver_id].lng, drvById[s.driver_id].lat];
+            icono='<i class="fas fa-truck" style="color:#E95420;font-size:24px;text-shadow:0 1px 3px rgba(0,0,0,.4);"></i>';
+        } else if(s.cd_lat && s.cd_lng){
+            coords=[Number(s.cd_lng), Number(s.cd_lat)];
+        }
+        if(!coords) return;
+        const eta=s.eta_minutos!=null?` · ⏱️ ${Math.round(s.eta_minutos)} min`:(s.distancia_km!=null?` · 📏 ${s.distancia_km} km`:'');
+        const horaProg=s.fecha_programada?new Date(s.fecha_programada).toLocaleTimeString('es-CL',{hour:'2-digit',minute:'2-digit'}):'';
+        const pop=new mapboxgl.Popup({offset:25}).setHTML(
+            `<strong>${e(s.container_id_formatted||s.container_id)}</strong><br>`+
+            `<span class="badge bg-secondary">${e(estado||'—')}</span>${eta}<br>`+
+            `🏭 ${e(s.cd_nombre||'—')} · 🕐 ${horaProg||'—'}<br>`+
+            `${s.driver_nombre?`🚚 ${e(s.driver_nombre)} ${e(s.driver_patente||'')}`:'<span style="color:#d97706">⚠️ sin asignar</span>'}`
+        );
+        const el=document.createElement('div'); el.innerHTML=icono;
+        markers['svc-'+s.id]=new mapboxgl.Marker(el).setLngLat(coords).setPopup(pop).addTo(map);
+    });
+    if(!selectedDriver){
+        const b=new mapboxgl.LngLatBounds();
+        services.forEach(s=>{ if(s.cd_lat&&s.cd_lng) b.extend([Number(s.cd_lng),Number(s.cd_lat)]); });
+        drivers.forEach(d=>{ b.extend([d.lng,d.lat]); });
+        if(!b.isEmpty()) map.fitBounds(b,{padding:60,maxZoom:13});
+    }
+}
+
 // ---- Geocercas dibujadas: circulo por CD (radio en metros) ----
 let geocercaSource = null;
 function drawGeocercas(){
@@ -160,12 +202,12 @@ function drawGeocercas(){
         map.addSource('geocercas', { type:'geojson', data:{ type:'FeatureCollection', features:[] } });
         map.addLayer({
             id:'geocercas-fill', type:'fill', source:'geocercas',
-            paint:{ 'fill-color':'#5b8cff', 'fill-opacity':0.10 },
+            paint:{ 'fill-color':'#5b8cff', 'fill-opacity':0.18, 'fill-outline-color':'#2563eb' },
             layout:{ visibility:'visible' }
         });
         map.addLayer({
             id:'geocercas-line', type:'line', source:'geocercas',
-            paint:{ 'line-color':'#5b8cff', 'line-width':1.6, 'line-opacity':0.55 }
+            paint:{ 'line-color':'#2563eb', 'line-width':3.0, 'line-opacity':0.95, 'line-dasharray':[2,1] }
         });
     }
     fetch('/api/cds/?activo=true')
@@ -175,16 +217,31 @@ function drawGeocercas(){
             const feat=cds.map(c=>{
                 const lat=Number(c.lat), lng=Number(c.lng), r=Number(c.geocerca_radio_m);
                 const coords=[];
-                for(let i=0;i<40;i++){
-                    const a=i/40*2*Math.PI;
+                for(let i=0;i<48;i++){
+                    const a=i/48*2*Math.PI;
                     const dLat=(r/111320), dLng=(r/(111320*Math.cos(lat*Math.PI/180)));
                     coords.push([lng+dLng*Math.cos(a), lat+dLat*Math.sin(a)]);
                 }
                 coords.push(coords[0]);
-                return { type:'Feature', properties:{ nombre:c.nombre, radio:r, comuna:c.comuna||'' },
-                         geometry:{ type:'Polygon', coordinates:[coords] } };
+                return { type:'Feature',
+                    properties:{ nombre:c.nombre, radio:Math.round(r)+' m', comuna:c.comuna||'', lat, lng },
+                    geometry:{ type:'Polygon', coordinates:[coords] } };
             });
             map.getSource('geocercas').setData({ type:'FeatureCollection', features:feat });
+            // Etiquetas con el nombre del CD en cada geocerca
+            if (!map.getLayer('geocercas-label')) {
+                map.addLayer({
+                    id:'geocercas-label', type:'symbol', source:'geocercas',
+                    layout:{
+                        'text-field':['format',['get','nombre'],{'font-scale':0.7}],
+                        'text-size':12,
+                        'text-anchor':'bottom',
+                        'text-offset':[0,-0.5],
+                        'text-allow-overlap':false
+                    },
+                    paint:{ 'text-color':'#1e3a8a', 'text-halo-color':'#ffffff', 'text-halo-width':1.2 }
+                });
+            }
         })
         .catch(()=>{});
 }
@@ -198,7 +255,7 @@ function loadServices(){
     const clienteQ = CLIENTE_FILTRO ? '&cliente=' + encodeURIComponent(CLIENTE_FILTRO) : '';
     fetch(`/api/programaciones/por-dia/?fecha=${fecha}${clienteQ}`)
         .then(r=>r.json())
-        .then(d=>{ services = d.programaciones||[]; renderServices(); if (CLIENTE_FILTRO) renderClientMap(); else updateMap(); updateRefresh(`Actualizado ${new Date().toLocaleTimeString()}`); })
+        .then(d=>{ services = d.programaciones||[]; renderServices(); if (CLIENTE_FILTRO) renderClientMap(); else { renderServicesMap(); updateMap(); } updateRefresh(`Actualizado ${new Date().toLocaleTimeString()}`); })
         .catch(()=>{ document.getElementById('services-list').innerHTML='<p class="empty-note">Error cargando servicios</p>'; });
 }
 
@@ -257,12 +314,25 @@ function renderServices(){
 
         let etaTxt = '';
         const pm = s.prediccion_ml;
+        let etaMin = null;
         if (pm && pm.eta_minutos) {
-            etaTxt = `⏱️ ${Math.round(pm.eta_minutos)} min <small class="text-muted">(${pm.fuente||'ML'})</small>`;
+            etaMin = pm.eta_minutos; etaTxt = `⏱️ ${Math.round(pm.eta_minutos)} min <small class="text-muted">(${pm.fuente||'ML'})</small>`;
         } else if (s.eta_minutos != null) {
-            etaTxt = `⏱️ ${s.eta_minutos} min <small class="text-muted">(ML/Mapbox)</small>`;
+            etaMin = s.eta_minutos; etaTxt = `⏱️ ${s.eta_minutos} min <small class="text-muted">(ML/Mapbox)</small>`;
         } else if (s.distancia_km != null) {
             etaTxt = `📏 ${s.distancia_km} km <small class="text-muted">(sin ETA)</small>`;
+        }
+        // Hora estimada de arribo (Seba 04-oct): fecha_programada + ETA → hora local
+        let horaArribo = '';
+        if (etaMin != null) {
+            const base = s.fecha_inicio_ruta ? new Date(s.fecha_inicio_ruta) : new Date();
+            const arr = new Date(base.getTime() + Number(etaMin)*60000);
+            horaArribo = `🕐 Arribo ~${arr.toLocaleTimeString('es-CL',{hour:'2-digit',minute:'2-digit'})}`;
+        }
+        // Botón inicio de ruta MANUAL (Seba 04-oct): solo si asignado sin ruta
+        let btnRuta = '';
+        if(estado==='asignado' && s.driver_nombre && !s.fecha_inicio_ruta && !CLIENTE_FILTRO){
+            btnRuta = `<button class="btn btn-sm btn-outline-light btn-iniciar-ruta mt-1" data-pid="${s.id}" data-did="${s.driver_id||''}" data-pat="${e(s.driver_patente||'')}" onclick="iniciarRutaManual(this)">🚦 Iniciar ruta</button>`;
         }
 
         return `
@@ -276,13 +346,41 @@ function renderServices(){
                 <span class="badge-eta">${etaTxt||'—'}</span>
             </div>
             <div class="svc-meta mt-1">
-                <i class="fas fa-clock"></i> ${hora} · <i class="fas fa-store"></i> ${e(s.cd_nombre||'—')}<br>
+                <i class="fas fa-clock"></i> ${hora} · <i class="fas fa-store"></i> ${e(s.cd_nombre||'—')}
+                ${horaArribo?`<br><span class="text-success">${horaArribo}</span>`:''}
+                <br>
                 <i class="fas fa-user"></i> ${e(s.cliente||'—')}
                 ${s.driver_nombre ? `<br><i class="fas fa-truck"></i> ${e(s.driver_nombre)} <span class="text-muted">(${e(s.driver_patente||'s/patente')})</span>` : ''}
                 ${s.nivel_confianza?`<br><small class="text-muted">confianza ${s.nivel_confianza}% · ${e(s.clasificacion_sistema||'').replace(/_/g,' ')}</small>`:''}
+                ${btnRuta}
             </div>
         </div>`;
     }).join('');
+}
+
+/* Inicio de ruta MANUAL desde el panel (Seba 04-oct-2026)
+   POST /api/programaciones/{id}/iniciar_ruta/ con patente + GPS del conductor. */
+function iniciarRutaManual(btn){
+    const pid = btn.dataset.pid, pat = btn.dataset.pat;
+    const did = btn.dataset.did;
+    const drv = drivers.find(d=>String(d.id)===String(did));
+    const lat = drv?drv.lat:-33.4569, lng = drv?drv.lng:-70.6483;
+    btn.disabled = true; btn.textContent = 'Iniciando…';
+    fetch(`/api/programaciones/${pid}/iniciar_ruta/`, {
+        method:'POST', headers:{'Content-Type':'application/json','X-CSRFToken':getCookie('csrftoken')},
+        body: JSON.stringify({patente: pat, lat: lat, lng: lng})
+    })
+    .then(r=>r.json())
+    .then(d=>{
+        if(d.success){
+            btn.textContent = '✅ Ruta iniciada'; btn.classList.add('disabled');
+            setTimeout(refreshAll, 1500);
+        } else {
+            btn.disabled=false; btn.textContent = '🚦 Iniciar ruta';
+            alert('⚠️ ' + (d.error||'No se pudo iniciar la ruta'));
+        }
+    })
+    .catch(()=>{ btn.disabled=false; btn.textContent = '🚦 Iniciar ruta'; alert('Error de red'); });
 }
 
 /* ---------- Conductores en el mapa ---------- */
