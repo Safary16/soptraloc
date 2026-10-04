@@ -987,7 +987,7 @@ class ProgramacionViewSet(viewsets.ModelViewSet):
             'perfil_ml': perfil_ml,
         })
     
-    @action(detail=True, methods=['post'])
+    @action(detail=True, methods=['post'], permission_classes=[AllowAny])
     def iniciar_ruta(self, request, pk=None):
         """
         Inicia la ruta de una programación y crea notificación con ETA
