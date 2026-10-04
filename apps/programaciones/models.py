@@ -255,6 +255,52 @@ class Programacion(models.Model):
             logger = logging.getLogger(__name__)
             logger.error(f"Error creando notificación de asignación para la programación {self.id}: {str(e)}", exc_info=True)
 
+    def iniciar_ruta_con_gps(self, lat, lng, patente=None, usuario=None):
+        """INICIO DE RUTA AUTOMÁTICO POR GPS (Seba 04-oct-2026).
+
+        Si el conductor reporta track_location en movimiento y esta programación
+        está 'asignado' sin fecha_inicio_ruta, transiciona asignado→en_ruta con
+        los datos GPS reales (sin esperar botón del chofer). Idempotente.
+        Ej: camión que arranca y se mueve → la ruta "se inicia sola".
+        Reutiliza OperationalFlowService.iniciar_transito (HAL-23), que decide
+        en_ruta vs vacio_en_ruta según el estado del contenedor.
+        """
+        from apps.events.models import Event
+        from apps.core.services.operations import OperationalFlowService
+
+        with transaction.atomic():
+            locked = Programacion.objects.select_for_update().select_related('container', 'driver').get(pk=self.pk)
+            if locked.fecha_inicio_ruta:
+                return locked, False
+            if not locked.driver:
+                return locked, False
+            if locked.container.estado == 'programado':
+                locked.container.cambiar_estado('asignado', usuario)
+            patente_final = (patente or (locked.driver.patente or '')).strip()
+            locked.driver.actualizar_posicion(lat, lng)
+            locked.posicion_actual_lat = lat
+            locked.posicion_actual_lng = lng
+            locked.ultima_actualizacion_tracking = timezone.now()
+            if patente_final:
+                locked.patente_confirmada = patente_final.upper()
+            locked.fecha_inicio_ruta = timezone.now()
+            locked.gps_inicio_lat = lat
+            locked.gps_inicio_lng = lng
+            locked.save()
+            OperationalFlowService.iniciar_transito(locked.container, usuario)
+            Event.objects.create(
+                container=locked.container,
+                event_type='inicio_ruta_automatico',
+                detalles={
+                    'conductor': locked.driver.nombre,
+                    'gps_lat': str(lat),
+                    'gps_lng': str(lng),
+                    'patente': patente_final,
+                },
+                usuario=usuario or 'system_gps',
+            )
+        return locked, True
+
     def liberar_conductor(self):
         """Libera capacidad una sola vez, incluso ante reintentos del navegador."""
         if not self.driver_id:

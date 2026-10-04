@@ -183,6 +183,25 @@ class DriverViewSet(viewsets.ModelViewSet):
             
             try:
                 driver.actualizar_posicion(lat, lng, accuracy)
+                # AUTO-INICIO DE RUTA POR MOVIMIENTO GPS (Seba 04-oct-2026):
+                # si el conductor reporta posición y tiene una programación
+                # 'asignado' sin fecha_inicio_ruta, la ruta se inicia sola con
+                # los datos GPS reales (sin depender de un botón del chofer).
+                auto_inicio = None
+                try:
+                    from apps.programaciones.models import Programacion
+                    pend = list(Programacion.objects.filter(
+                        driver=driver, fecha_inicio_ruta__isnull=True,
+                        container__estado='asignado',
+                    ).select_related('container', 'cd')[:3])
+                    lat_f, lng_f = float(lat), float(lng)
+                    for prog in pend:
+                        _p, creado = prog.iniciar_ruta_con_gps(lat_f, lng_f, usuario='system_gps')
+                        if creado:
+                            auto_inicio = prog.id
+                            break
+                except Exception:
+                    pass  # nunca romper track_location por el intento de inicio
                 # Arribo automático por geocerca: si el conductor tiene una
                 # programación activa sin arribo cuyo CD geocercado contiene su
                 # posición, se registra el arribo con origen='geocerca' — el
@@ -194,7 +213,6 @@ class DriverViewSet(viewsets.ModelViewSet):
                     progs = list(Programacion.objects.filter(
                         driver=driver, fecha_arribo_cd__isnull=True, cd__isnull=False
                     ).select_related('container', 'cd')[:3])
-                    lat_f, lng_f = float(lat), float(lng)
                     for prog in progs:
                         cd = prog.cd
                         if (cd and cd.lat and cd.lng and cd.geocerca_radio_m
@@ -212,6 +230,7 @@ class DriverViewSet(viewsets.ModelViewSet):
                     'lat': float(lat),
                     'lng': float(lng),
                     'timestamp': driver.ultima_actualizacion_posicion,
+                    'ruta_iniciada_auto': bool(auto_inicio),
                     'arribo_geocerca': bool(arribo_geocerca),
                 })
             except Exception as e:
