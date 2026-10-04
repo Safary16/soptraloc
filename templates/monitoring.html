@@ -104,6 +104,7 @@ let mapReady = false;
 function syncMapPaints(){
     if (!mapReady || !servicesLoaded) return false;
     drawGeocercas();
+    drawRutas();
     if (CLIENTE_FILTRO) renderClientMap(); else { renderServicesMap(); updateMap(); }
     return true;
 }
@@ -167,7 +168,7 @@ window.addEventListener('load', () => {
     _startPoll();
 });
 
-function refreshAll(){ loadServices(); if (!CLIENTE_FILTRO) loadDrivers(); drawGeocercas(); }
+function refreshAll(){ loadServices(); if (!CLIENTE_FILTRO) loadDrivers(); drawGeocercas(); drawRutas(); }
 
 /* ---------- SERVICIOS EN EL MAPA DEL OPERADOR (Seba 04-oct-2026) ----------
    Antes los contenedores solo se veían en modo cliente (renderClientMap).
@@ -192,7 +193,14 @@ function renderServicesMap(){
             coords=[Number(s.cd_lng), Number(s.cd_lat)];
         }
         if(!coords) return;
-        const eta=s.eta_minutos!=null?` · ⏱️ ${Math.round(s.eta_minutos)} min`:(s.distancia_km!=null?` · 📏 ${s.distancia_km} km`:'');
+        const eta=(()=>{
+            if(s.eta_recalculado_min!=null && s.eta_minutos!=null){
+                const atraso=s.eta_recalculado_min-s.eta_minutos;
+                const warn=atraso>5 ? 'color:#dc3545' : 'color:#b45309';
+                return ` · ⏱️ <span style="${warn};font-weight:700">${Math.round(s.eta_recalculado_min)} min</span>${atraso>5?` ⚠️+${Math.round(atraso)}`:''}`;
+            }
+            return s.eta_minutos!=null?` · ⏱️ ${Math.round(s.eta_minutos)} min`:(s.distancia_km!=null?` · 📏 ${s.distancia_km} km`:'');
+        })();
         const horaProg=s.fecha_programada?new Date(s.fecha_programada).toLocaleTimeString('es-CL',{hour:'2-digit',minute:'2-digit'}):'';
         const pop=new mapboxgl.Popup({offset:25}).setHTML(
             `<strong>${e(s.container_id_formatted||s.container_id)}</strong><br>`+
@@ -263,6 +271,26 @@ function drawGeocercas(){
 }
 
 function updateRefresh(text){ document.getElementById('refresh-text').textContent = text; }
+
+/* ---- Rutas reales OSRM del simulador GPS (Seba 04-oct): polyline por ruta_geojson ---- */
+function drawRutas(){
+    if (!mapReady || !servicesLoaded) return;
+    if (!map.getSource('rutas')) {
+        map.addSource('rutas', { type:'geojson', data:{ type:'FeatureCollection', features:[] } });
+        map.addLayer({
+            id:'rutas-line', type:'line', source:'rutas',
+            paint:{ 'line-color':'#E95420', 'line-width':3.5, 'line-opacity':0.85, 'line-dasharray':[1,0.4] }
+        });
+    }
+    const feats = services
+        .filter(s=>s.ruta_geojson && s.ruta_geojson.geometry && s.ruta_geojson.geometry.coordinates && s.ruta_geojson.geometry.coordinates.length>1)
+        .map(s=>({
+            type:'Feature',
+            properties:{ id:s.id, container:s.container_id_formatted||s.container_id, eta:s.eta_recalculado_min!=null?s.eta_recalculado_min:s.eta_minutos },
+            geometry:s.ruta_geojson.geometry
+        }));
+    map.getSource('rutas').setData({ type:'FeatureCollection', features:feats });
+}
 
 /* ---------- Servicios del día (por-dia: GMST + estado + ETA ML/Mapbox) ---------- */
 function loadServices(){
