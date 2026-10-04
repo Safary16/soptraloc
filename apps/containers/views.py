@@ -777,12 +777,34 @@ class ContainerViewSet(viewsets.ModelViewSet):
             )
         
         serializer = self.get_serializer(container)
+        # "La joya": sugerir el mejor conductor para esta programación (más cerca / más
+        # tiempo disponible) usando el scoring del AssignmentService (5 dimensiones).
+        sugerencia = None
+        try:
+            from apps.core.services.assignment import AssignmentService
+            candidatos = AssignmentService.obtener_conductores_disponibles_con_score(programacion)
+            if candidatos:
+                mejor = candidatos[0]
+                sugerencia = {
+                    'driver_id': mejor['driver'].id,
+                    'driver_nombre': mejor['driver'].nombre,
+                    'patente': mejor['driver'].patente,
+                    'score_total': round(float(mejor.get('score_total', 0)), 2),
+                    'eta_estimado_min': mejor.get('eta_estimado_min'),
+                    'classification': mejor.get('classification'),
+                    'desglose': mejor.get('desglose', []),
+                }
+        except Exception:
+            logger = logging.getLogger(__name__)
+            logger.warning(f"No se pudo calcular conductor sugerido para {container.container_id}", exc_info=True)
+
         return Response({
             'success': True,
             'mensaje': f'Contenedor {container.container_id} programado para {cd.nombre}',
             'container': serializer.data,
             'programacion_id': programacion.id,
-            'fecha_programada': fecha_programada_dt.isoformat()
+            'fecha_programada': fecha_programada_dt.isoformat(),
+            'conductor_sugerido': sugerencia,
         }, status=status.HTTP_201_CREATED)
     
     @action(detail=True, methods=['post'], permission_classes=[AllowAny])
