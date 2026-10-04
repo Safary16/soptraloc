@@ -94,6 +94,19 @@ mapboxgl.accessToken = '{{ MAPBOX_PUBLIC_TOKEN|default_if_none:"" }}';
 const map = new mapboxgl.Map({ container:'map', style:'mapbox://styles/mapbox/streets-v12', center:[-70.6483,-33.4569], zoom:10 });
 map.addControl(new mapboxgl.NavigationControl());
 
+// ---- FIX SEVERIDAD (Seba 04-oct-2026): las capas/markers se agregaban antes
+// de que Mapbox terminara de cargar el estilo → 'Style is not done loading' y
+// el mapa quedaba VACÍO (0 geocercas, 0 markers) aunque la sidebar mostrara
+// 51 servicios. Ahora todo lo que pinta se dispara CON el evento 'load' y
+// cada refresco se autoconserva con isStyleLoaded(). ----
+function syncMapPaints(){
+    if (!map.isStyleLoaded()) return false;
+    drawGeocercas();
+    if (CLIENTE_FILTRO) renderClientMap(); else { renderServicesMap(); updateMap(); }
+    return true;
+}
+map.on('load', () => { syncMapPaints(); });
+
 // Modo cliente: /monitoring/?cliente=X → solo sus servicios; sin filtro → visión completa
 const urlParams = new URLSearchParams(window.location.search);
 const CLIENTE_FILTRO = (urlParams.get('cliente') || '').trim();
