@@ -1368,8 +1368,17 @@ class ProgramacionViewSet(viewsets.ModelViewSet):
             locked = Programacion.objects.select_for_update().get(pk=programacion.pk)
             geo = request.data.get('ruta_geojson')
             if geo is not None:
-                if isinstance(geo, dict) and geo.get('type') in ('Feature', 'LineString') and geo.get('coordinates'):
-                    locked.ruta_geojson = geo if geo.get('type') == 'Feature' else {
+                # Acepta Feature con geometry LineString, o LineString directo.
+                # OJO (bug 04-oct): un Feature NO tiene 'coordinates' a nivel raíz,
+                # vive en geo['geometry']['coordinates']; el check anterior lo
+                # descartaba silenciosamente pese a responder success:true.
+                if isinstance(geo, dict) and geo.get('type') == 'Feature' \
+                        and isinstance(geo.get('geometry'), dict) \
+                        and geo['geometry'].get('type') == 'LineString' \
+                        and geo['geometry'].get('coordinates'):
+                    locked.ruta_geojson = geo
+                elif isinstance(geo, dict) and geo.get('type') == 'LineString' and geo.get('coordinates'):
+                    locked.ruta_geojson = {
                         'type': 'Feature',
                         'properties': {'source': 'osrm', 'simulador': True},
                         'geometry': geo,
