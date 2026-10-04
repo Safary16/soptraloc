@@ -201,7 +201,7 @@ class DriverViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_403_FORBIDDEN
             )
     
-    @action(detail=False, methods=['get'])
+    @action(detail=False, methods=['get'], permission_classes=[AllowAny])
     def active_locations(self, request):
         """
         Obtener ubicaciones de conductores activos (últimos 30 minutos)

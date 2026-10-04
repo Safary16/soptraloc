@@ -2114,7 +2114,7 @@ class ProgramacionViewSet(viewsets.ModelViewSet):
             'anomalia': bool(timing.anomalia) if timing else False,
         }, status=status.HTTP_201_CREATED)
 
-    @action(detail=False, methods=['post'])
+    @action(detail=False, methods=['post'], permission_classes=[AllowAny])
     def asignar_conductor_retiro_vacio(self, request):
         """P1-2: asigna un conductor a un retiro de vacío.
 

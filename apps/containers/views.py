@@ -77,7 +77,15 @@ class ContainerViewSet(viewsets.ModelViewSet):
         )
 
     def get_permissions(self):
-        public_actions = {'list', 'retrieve', 'liberados', 'export_stock', 'export_liberacion_excel', 'vacios'}
+        # Portal cliente + operaciones manuales + gestion de vacios: acciones ANONIMAS.
+        # (Seba 03-oct: el portal del cliente no podia programar -> 403 NotAuthenticated
+        # porque programar no estaba en public_actions; el override pisaba el AllowAny
+        # del decorator de la accion). Los imports siguen IsAdminUser.
+        public_actions = {
+            'list', 'retrieve', 'liberados', 'export_stock', 'export_liberacion_excel',
+            'vacios', 'programar', 'desprogramar', 'marcar_liberado', 'marcar_entregado',
+            'marcar_vacio', 'iniciar_retorno', 'marcar_devuelto', 'confirmar_vacio_cd',
+        }
         classes = [AllowAny] if self.action in public_actions else [IsAdminUser]
         return [permission() for permission in classes]
 
