@@ -1346,6 +1346,60 @@ class ProgramacionViewSet(viewsets.ModelViewSet):
             return True
         return programacion.driver_id and programacion.driver.user_id == request.user.id
 
+    @action(detail=True, methods=['post'], permission_classes=[AllowAny])
+    def reportar_avance(self, request, pk=None):
+        """
+        SIMULADOR GPS REAL (Seba 04-oct-2026): persiste la ruta real (OSRM) y el
+        ETA recalculado de una programación en ruta, para que el operador y los
+        subagentes tomen decisiones con datos vivos (si hay atraso: pivotar a otro
+        conductor o solicitar holgura al cliente).
+
+        Payload (parcial opcional):
+        {
+          "ruta_geojson": {"type":"LineString","coordinates":[[lng,lat],...]} o Feature,
+          "eta_recalculado_min": 42.5,
+          "posicion_actual_lat": -33.4569,
+          "posicion_actual_lng": -70.6483,
+          "distancia_km": 12.3
+        }
+        """
+        programacion = self.get_object()
+        with transaction.atomic():
+            locked = Programacion.objects.select_for_update().get(pk=programacion.pk)
+            geo = request.data.get('ruta_geojson')
+            if geo is not None:
+                if isinstance(geo, dict) and geo.get('type') in ('Feature', 'LineString') and geo.get('coordinates'):
+                    locked.ruta_geojson = geo if geo.get('type') == 'Feature' else {
+                        'type': 'Feature',
+                        'properties': {'source': 'osrm', 'simulador': True},
+                        'geometry': geo,
+                    }
+            eta = request.data.get('eta_recalculado_min')
+            if eta is not None:
+                locked.eta_recalculado_min = float(eta)
+                locked.eta_minutos = int(float(eta))
+            plat = request.data.get('posicion_actual_lat')
+            plng = request.data.get('posicion_actual_lng')
+            updated = ['updated_at']
+            if plat is not None and plng is not None:
+                locked.posicion_actual_lat = plat
+                locked.posicion_actual_lng = plng
+                locked.ultima_actualizacion_tracking = timezone.now()
+                updated += ['posicion_actual_lat', 'posicion_actual_lng', 'ultima_actualizacion_tracking']
+            dkm = request.data.get('distancia_km')
+            if dkm is not None:
+                locked.distancia_km = float(dkm)
+                updated.append('distancia_km')
+            if (request.data.get('ruta_geojson') is not None) or (eta is not None) or (plat is not None):
+                updated.append('ruta_geojson' if request.data.get('ruta_geojson') is not None else 'eta_recalculado_min')
+                locked.save(update_fields=list(set(updated)))
+        return Response({
+            'success': True,
+            'mensaje': 'Avance registrado',
+            'eta_recalculado_min': locked.eta_recalculado_min,
+            'tiene_ruta': bool(locked.ruta_geojson),
+        })
+
 
     @action(detail=True, methods=['post'])
     def notificar_arribo(self, request, pk=None):
