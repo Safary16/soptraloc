@@ -430,6 +430,8 @@ function updateMap(){
     // Set de IDs activos para busqueda O(1) en lugar de O(n) por marker.
     const driverIds = new Set(drivers.map(d=>String(d.id)));
     Object.keys(markers).forEach(id=>{
+        // NO borrar los markers de servicios (svc-*) — los gestiona renderServicesMap.
+        if(id.startsWith('svc-')) return;
         if(!driverIds.has(id)){ markers[id].remove(); delete markers[id]; }
     });
     drivers.forEach(d=>{
