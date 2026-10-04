@@ -210,7 +210,11 @@ class OperationalFlowService:
 
     @staticmethod
     def _lock_programacion(programacion):
-        return Programacion.objects.select_for_update().select_related(
+        # of=('self',): bloquear SOLO la fila Programacion (punto de serialización
+        # del FSM). Sin esto, Postgres lanza NotSupportedError: FOR UPDATE cannot
+        # be applied to the nullable side of an outer join (driver/cd son FK
+        # nullable → LEFT JOIN → FOR UPDATE ilegal en PostgreSQL).
+        return Programacion.objects.select_for_update(of=('self',)).select_related(
             'container', 'driver', 'cd'
         ).get(pk=programacion.pk)
 
@@ -386,7 +390,7 @@ class OperationalFlowService:
         HAL-20: retorna SIEMPRE 3-tupla (locked, created, retorno_programacion);
         en el camino idempotente (ya soltado) created=False y retorno=None.
         """
-        locked = Programacion.objects.select_for_update().select_related(
+        locked = Programacion.objects.select_for_update(of=('self',)).select_related(
             'container', 'driver', 'cd'
         ).get(pk=programacion.pk)
         if not locked.cd.permite_soltar_contenedor:
@@ -414,7 +418,7 @@ class OperationalFlowService:
     def complete_discharge(cls, programacion, usuario=None, source='conductor'):
         """Cierra descarga desde espera sobre camión o desde un drop previo."""
         from apps.events.models import Event
-        locked = Programacion.objects.select_for_update().select_related(
+        locked = Programacion.objects.select_for_update(of=('self',)).select_related(
             'container', 'driver', 'cd'
         ).get(pk=programacion.pk)
         if locked.container.estado not in {'entregado', 'soltado', 'descargado'}:
