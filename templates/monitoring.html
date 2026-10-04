@@ -97,15 +97,18 @@ map.addControl(new mapboxgl.NavigationControl());
 // ---- FIX SEVERIDAD (Seba 04-oct-2026): las capas/markers se agregaban antes
 // de que Mapbox terminara de cargar el estilo → 'Style is not done loading' y
 // el mapa quedaba VACÍO (0 geocercas, 0 markers) aunque la sidebar mostrara
-// 51 servicios. Ahora todo lo que pinta se dispara CON el evento 'load' y
-// cada refresco se autoconserva con isStyleLoaded(). ----
+// 51 servicios. PEOR: la carrera fetch-vs-map hacia rendiciones parciales
+// (markers solo si se llamaba renderServicesMap a mano). Ahora: bandera
+// mapReady + sincronización en AMBOS eventos + reintento en cada refresh. ----
+let mapReady = false;
 function syncMapPaints(){
-    if (!map.isStyleLoaded()) return false;
+    if (!mapReady || !servicesLoaded) return false;
     drawGeocercas();
     if (CLIENTE_FILTRO) renderClientMap(); else { renderServicesMap(); updateMap(); }
     return true;
 }
-map.on('load', () => { syncMapPaints(); });
+map.on('load', () => { mapReady = true; syncMapPaints(); });
+let servicesLoaded = false;
 
 // Modo cliente: /monitoring/?cliente=X → solo sus servicios; sin filtro → visión completa
 const urlParams = new URLSearchParams(window.location.search);
@@ -268,7 +271,7 @@ function loadServices(){
     const clienteQ = CLIENTE_FILTRO ? '&cliente=' + encodeURIComponent(CLIENTE_FILTRO) : '';
     fetch(`/api/programaciones/por-dia/?fecha=${fecha}${clienteQ}`)
         .then(r=>r.json())
-        .then(d=>{ services = d.programaciones||[]; renderServices(); if (CLIENTE_FILTRO) renderClientMap(); else { renderServicesMap(); updateMap(); } updateRefresh(`Actualizado ${new Date().toLocaleTimeString()}`); })
+        .then(d=>{ services = d.programaciones||[]; servicesLoaded = true; renderServices(); syncMapPaints(); updateRefresh(`Actualizado ${new Date().toLocaleTimeString()}`); })
         .catch(()=>{ document.getElementById('services-list').innerHTML='<p class="empty-note">Error cargando servicios</p>'; });
 }
 
