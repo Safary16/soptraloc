@@ -47,7 +47,7 @@ class ContainerListSerializer(serializers.ModelSerializer):
     class Meta:
         model = Container
         fields = [
-            'id', 'container_id', 'container_id_formatted', 'tipo', 'tipo_carga', 'tipo_carga_display',
+            'id', 'container_id', 'container_id_formatted', 'referencia', 'tipo', 'tipo_carga', 'tipo_carga_display',
             'estado', 'estado_display', 'nave', 'cliente',
             'peso_carga', 'tara', 'peso_total', 'contenido',
             'posicion_fisica', 'comuna', 'secuenciado', 'fecha_programacion',
