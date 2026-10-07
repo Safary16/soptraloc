@@ -509,3 +509,407 @@ class OperationalFlowService:
             anomalia=delta_min >= max(1, estimated) * 3,
             observaciones=observaciones or f'Registro operacional: {tipo_operacion}',
         )
+
+    @staticmethod
+    def iniciar_ruta_con_eta(programacion, *, patente, lat, lng, usuario=None):
+        """Valida y ejecuta el inicio de ruta con confirmación de patente + GPS.
+
+        Extraído de programaciones.views.iniciar_ruta (iteración 1 monolito,
+        07-oct). Mantiene EXACTO el contrato HTTP original: el caller (la vista)
+        mapea estos resultados a las mismas respuestas 200/400 de antes.
+
+        Validaciones (en orden, cada una puede cortar):
+        - conductor asignado
+        - idempotencia: si fecha_inicio_ruta ya existe → ok con flag
+        - patente ingresada obligatoria (HAL-7: coalescencia a '' antes de strip)
+        - patente vs la asignada al conductor (mismatch incluye esperada/ingresada)
+        - coordenadas GPS obligatorias
+
+        Efectos: posición del conductor, campos de inicio (patente/GPS/fecha),
+        FSM via iniciar_transito (HAL-23), Event 'inicio_ruta', ETA con triple
+        fallback (recommend → MLTimePredictor → haversine HAL-1) con blindaje
+        final, y notificación al conductor (su fallo NO revierte el inicio).
+
+        Returns:
+            dict: {'ok': True, 'programacion', 'notificacion_data', 'patente_confirmada',
+                   'gps'} — o {'ok': False, 'error', ...extras} si alguna validación corta.
+        """
+        if not programacion.driver:
+            return {'ok': False, 'error': 'Programación no tiene conductor asignado'}
+
+        # Fix auditoría 07-oct: guard idempotente. Si la ruta ya fue iniciada,
+        # NO sobrescribir GPS/fecha_inicio_ruta (doble clic o retry de red no
+        # debe mutar el registro original). 200 con el estado actual.
+        if programacion.fecha_inicio_ruta:
+            return {'ok': True, 'idempotente': True, 'programacion': programacion}
+
+        # Validar que se proporcione la patente
+        # HAL-7: el default '' solo aplica si la clave está ausente. Si el cliente
+        # envía {'patente': null}, el default no aplica y .strip() revienta con
+        # AttributeError: 'NoneType' object has no attribute 'strip'. Forzamos
+        # coalescencia a '' antes de strip().
+        patente_ingresada = (patente or '').strip().upper()
+        if not patente_ingresada:
+            return {'ok': False, 'error': 'Debe ingresar la patente del vehículo para confirmar'}
+        
+        # Si el conductor tiene una patente asignada, validar que coincida
+        if programacion.driver.patente and programacion.driver.patente.strip():
+            patente_asignada = programacion.driver.patente.strip().upper()
+            if patente_ingresada != patente_asignada:
+                return {
+                    'ok': False,
+                    'error': f'La patente ingresada ({patente_ingresada}) no coincide con la asignada ({patente_asignada})',
+                    'patente_esperada': patente_asignada,
+                    'patente_ingresada': patente_ingresada,
+                    'success': False,
+                }
+        else:
+            # Si no hay patente asignada, aceptar cualquiera pero registrarla
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.info(f'Conductor {programacion.driver.nombre} no tiene patente asignada. Usando: {patente_ingresada}')
+        
+        # Obtener coordenadas GPS (requeridas para registrar posición de inicio)
+        if not lat or not lng:
+            return {'ok': False, 'error': 'Se requieren coordenadas GPS (lat, lng) para iniciar la ruta'}
+        
+        # Actualizar posición del conductor
+        programacion.driver.actualizar_posicion(lat, lng)
+        programacion.posicion_actual_lat = lat
+        programacion.posicion_actual_lng = lng
+        programacion.ultima_actualizacion_tracking = timezone.now()
+        
+        # Guardar datos de inicio de ruta en la programación
+        programacion.patente_confirmada = patente_ingresada
+        programacion.fecha_inicio_ruta = timezone.now()
+        programacion.gps_inicio_lat = lat
+        programacion.gps_inicio_lng = lng
+        programacion.save()
+        
+        # Cambiar estado del contenedor: HAL-23 — la elección de transición vive
+        # en OperationalFlowService.iniciar_transito (viaje lleno → 'en_ruta';
+        # retiro de vacío → 'vacio_en_ruta', única transición FSM válida).
+        OperationalFlowService.iniciar_transito(programacion.container, usuario)
+        
+        # Crear evento de inicio de ruta con datos GPS
+        from apps.events.models import Event
+        Event.objects.create(
+            container=programacion.container,
+            event_type='inicio_ruta',
+            detalles={
+                'conductor': programacion.driver.nombre,
+                'patente': patente_ingresada,
+                'gps_lat': str(lat),
+                'gps_lng': str(lng),
+                'timestamp': timezone.now().isoformat()
+            },
+            usuario=usuario
+        )
+        
+        # Calcular y guardar ETA híbrido (Mapbox + aprendizaje histórico).
+        from apps.core.services.learning_engine import OperationalLearningEngine
+        from apps.core.services.ml_predictor import MLTimePredictor
+        eta_ok = False
+        try:
+            recomendacion = OperationalLearningEngine.recommend(
+                (float(lat), float(lng)),
+                (float(programacion.cd.lat), float(programacion.cd.lng)),
+                programacion.fecha_inicio_ruta,
+                driver=programacion.driver,
+                window_hours=0,
+            )
+            if recomendacion.get('success'):
+                prediccion = recomendacion['recommended']
+                programacion.eta_minutos = prediccion['predicted_minutes']
+                programacion.distancia_km = prediccion['distance_km']
+                programacion.ruta_geojson = prediccion.get('geometry')
+                programacion.ruta_firma = prediccion.get('route_signature')
+                programacion.prediccion_ml = {
+                    'source': prediccion['source'],
+                    'mapbox_minutes': prediccion['mapbox_minutes'],
+                    'predicted_minutes': prediccion['predicted_minutes'],
+                    'learned_factor': prediccion['learned_factor'],
+                    'samples': prediccion['samples'],
+                    'confidence': prediccion['confidence'],
+                    'driver_profile': prediccion.get('driver_profile'),
+                    'explanation': recomendacion['explanation'],
+                }
+                eta_ok = True
+        except Exception as e:
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.warning(f"Error calculando ETA (recommend) para programación: {str(e)}")
+        
+        # Fallback: si Mapbox/ML recomendación falla, usar el predictor con fallback
+        # (siempre debe quedar una ETA operable para advertir choques y mostrar llegada).
+        if not eta_ok:
+            try:
+                pred_fb = MLTimePredictor.predecir_tiempo_viaje(
+                    (float(lat), float(lng)),
+                    (float(programacion.cd.lat), float(programacion.cd.lng)),
+                    programacion.fecha_inicio_ruta,
+                    conductor=programacion.driver,
+                )
+                programacion.eta_minutos = int(pred_fb['tiempo_estimado_min'])
+                programacion.distancia_km = pred_fb.get('distancia_km') or 0
+                programacion.prediccion_ml = {
+                    'source': pred_fb.get('fuente', 'fallback'),
+                    'mapbox_minutes': pred_fb.get('tiempo_mapbox_min', 0),
+                    'predicted_minutes': programacion.eta_minutos,
+                    'learned_factor': None,
+                    'samples': 0,
+                    'confidence': None,
+                    'driver_profile': None,
+                    'explanation': 'ETA de respaldo (fuente: %s).' % pred_fb.get('fuente', 'fallback'),
+                }
+                eta_ok = True
+            except Exception as e2:
+                import logging
+                logger = logging.getLogger(__name__)
+                logger.warning(f"Error calculando ETA (fallback) para programación: {str(e2)}")
+
+        # HAL-1: tercer fallback (haversine + velocidad de referencia 35 km/h).
+        # Mismo cálculo que NotificationService.actualizar_eta, para garantizar
+        # que siempre haya un eta_minutos operable (la UI muestra ETA desde
+        # fecha_inicio_ruta + eta_minutos, y sin él quedaba en silencio).
+        if not eta_ok:
+            from math import asin, cos, radians, sin, sqrt
+            from decimal import Decimal as _Dec
+            try:
+                R = 6371.0
+                p1 = radians(float(lat))
+                p2 = radians(float(programacion.cd.lat))
+                dp = radians(float(programacion.cd.lat) - float(lat))
+                dl = radians(float(programacion.cd.lng) - float(lng))
+                a = sin(dp / 2) ** 2 + cos(p1) * cos(p2) * sin(dl / 2) ** 2
+                km = 2 * R * asin(sqrt(a))
+                velocidad_kmh = 35.0
+                eta_min = max(1, int(round(km / velocidad_kmh * 60)))
+                programacion.eta_minutos = eta_min
+                programacion.distancia_km = _Dec(str(round(km, 2)))
+                programacion.prediccion_ml = {
+                    'source': 'haversine_fallback',
+                    'mapbox_minutes': None,
+                    'predicted_minutes': eta_min,
+                    'learned_factor': None,
+                    'samples': 0,
+                    'confidence': 0.0,
+                    'driver_profile': None,
+                    'explanation': (
+                        'ETA estimada por distancia haversine (35 km/h de referencia) '
+                        'porque tanto Mapbox como ML no estaban disponibles.'
+                    ),
+                }
+                eta_ok = True
+                import logging
+                _logger = logging.getLogger(__name__)
+                _logger.warning(
+                    f"HAL-1 haversine fallback activado: prog={programacion.pk} "
+                    f"km={km:.2f} eta_min={eta_min}"
+                )
+            except Exception as e3:
+                import logging
+                _logger = logging.getLogger(__name__)
+                _logger.warning(
+                    f"HAL-1 haversine fallback falló prog={programacion.pk}: {e3}"
+                )
+
+        # HAL-1: blindaje final — si llegamos aquí sin ETA, persiste algo legible
+        # en lugar de propagar None y romper la UI / int(None) downstream.
+        if not eta_ok or programacion.eta_minutos is None:
+            programacion.eta_minutos = 0
+            programacion.distancia_km = programacion.distancia_km or 0
+            programacion.prediccion_ml = {
+                **(programacion.prediccion_ml or {}),
+                'source': 'no_disponible',
+                'explanation': 'ETA no disponible (Mapbox, ML y haversine fallaron).',
+                'requires_attention': True,
+            }
+
+        # HAL-1: persisto siempre aunque eta_ok=False — la blindaja final deja
+        # prediccion_ml marcado como no_disponible y eta_minutos=0, evitando
+        # un save posterior que perdería la asignación.
+        programacion.save(update_fields=[
+            'eta_minutos', 'distancia_km', 'ruta_geojson', 'ruta_firma',
+            'prediccion_ml', 'updated_at',
+        ])
+        
+        # Crear notificación con ETA (pasar la ETA ya calculada de la programación
+        # para no recalcular con Mapbox y quedar sin ella si Mapbox falla).
+        try:
+            notificacion = NotificationService.crear_notificacion_inicio_ruta(
+                programacion, programacion.driver,
+                eta_minutos=programacion.eta_minutos,
+                distancia_km=programacion.distancia_km,
+            )
+            notificacion_data = {
+                'id': notificacion.id,
+                'titulo': notificacion.titulo,
+                'mensaje': notificacion.mensaje,
+                'eta_minutos': notificacion.eta_minutos,
+                'eta_timestamp': notificacion.eta_timestamp,
+                'distancia_km': str(notificacion.distancia_km) if notificacion.distancia_km else None
+            }
+        except Exception as e:
+            # Si falla la notificación, continuar pero registrar el error
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.warning(f"Error creando notificación de inicio de ruta: {str(e)}")
+            notificacion_data = None
+        
+        return {
+            'ok': True,
+            'programacion': programacion,
+            'notificacion_data': notificacion_data,
+            'patente_confirmada': patente_ingresada,
+            'gps': {'lat': str(lat), 'lng': str(lng)},
+        }
+
+    @classmethod
+    def aceptar_asignacion_conductor(cls, programacion, usuario=None):
+        """(iteración 2 monolito — extraído de programaciones.views.aceptar_asignacion)
+        Registra la decisión del conductor que ACEPTA la asignación.
+
+        HAL-16 (decisión creativa documentada): aceptar tanto 'asignado' como
+        'programado'. Rationale:
+        - 'asignado' es el camino normal: conductor ya visible.
+        - 'programado' lo aceptamos porque hay una ventana transitoria donde
+          Programacion.objects.create(driver=X) YA pasó pero el container
+          aún no pasó a 'asignado' (la cadena post_save → driver.asignar_conductor
+          puede estar en vuelo vía on_commit). En esa ventana, rechazar el clic
+          'Aceptar' generaba falsos 400 que confundían al conductor. La regla
+          de fondo (driver_id presente + container en estado válido) ya cubre
+          el caso.
+        No restringir a solo 'asignado' porque romperíamos la UX sin necesidad:
+        la pregunta relevante es "¿conductor asignado?", no "¿container ya
+        transicionado?".
+
+        Este método NO cambia container.estado (a diferencia del incidente):
+        solo registra la decisión del conductor para trazabilidad y dispara
+        el evento de auditoría.
+
+        Returns:
+            dict: {'ok': True, 'decision_operador': 'CONFIRMAR'} o
+                  {'ok': False, 'error': str}.
+        """
+        if container_estado := programacion.container.estado:
+            if container_estado not in ('asignado', 'programado'):
+                return {
+                    'ok': False,
+                    'error': f'Contenedor en estado {container_estado}; solo se acepta en estado asignado/programado.',
+                }
+
+        from apps.events.models import Event
+        with transaction.atomic():
+            locked = Programacion.objects.select_for_update().get(pk=programacion.pk)
+            locked.decision_operador = 'CONFIRMAR'
+            locked.save(update_fields=['decision_operador', 'updated_at'])
+            Event.objects.create(
+                container=locked.container,
+                event_type='asignacion_conductor',
+                detalles={
+                    'driver_id': locked.driver_id,
+                    'aceptada': True,
+                    'decision_operador': 'CONFIRMAR',
+                    'reportado_por': usuario or 'anonimo',
+                },
+                usuario=usuario or 'anonimo',
+            )
+        # Propagar al objeto externo
+        programacion.decision_operador = 'CONFIRMAR'
+        return {'ok': True, 'decision_operador': 'CONFIRMAR'}
+
+    @staticmethod
+    def registrar_incidente_viaje(programacion, *, tipo_incidente, descripcion,
+                                  gravedad='MODERADA', lat=None, lng=None, usuario=None):
+        """(iteración 3 monolito — extraído de programaciones.views.reportar_incidente)
+        Registra un incidente de viaje en `incidentes_registrados` (JSONField)
+        con append atómico (select_for_update) + Event de auditoría, y notifica
+        a operadores vía OpenClaw si la gravedad es ALTA/CRITICA (fuera del
+        atomic — patrón e9e88b46: I/O de red fuera del lock; su fallo no
+        revierte el incidente ya persistido).
+
+        P2-3: los 4 tipos aquí cambian container.estado a 'incidente' (FSM).
+        Problemas operativos que NO escalan estado van por reportar_problema.
+
+        Returns:
+            dict: {'ok': True, 'incidente': incidente_data} o
+                  {'ok': False, 'lock_failure': bool, 'error': str}.
+        """
+        import logging
+        logger = logging.getLogger(__name__)
+
+        if not tipo_incidente or not descripcion:
+            return {'ok': False, 'error': 'tipo_incidente y descripcion son campos obligatorios.'}
+
+        tipos_validos = ["ACCIDENTE", "AVERIA", "DEMORA_TRAFICO", "OTRO"]
+        gravedades_validas = ["LEVE", "MODERADA", "ALTA", "CRITICA"]
+        if tipo_incidente not in tipos_validos:
+            return {'ok': False, 'error': f'Tipo de incidente inválido. Tipos permitidos: {", ".join(tipos_validos)}'}
+        if gravedad not in gravedades_validas:
+            return {'ok': False, 'error': f'Gravedad inválida. Gravedades permitidas: {", ".join(gravedades_validas)}'}
+
+        incidente_data = {
+            'tipo': tipo_incidente,
+            'descripcion': descripcion,
+            'gravedad': gravedad,
+            'timestamp': timezone.now().isoformat(),
+            'reportado_por': usuario or 'anonimo',
+        }
+        if lat and lng:
+            incidente_data['gps_lat'] = str(lat)
+            incidente_data['gps_lng'] = str(lng)
+
+        from apps.events.models import Event
+        try:
+            with transaction.atomic():
+                locked = Programacion.objects.select_for_update().get(pk=programacion.pk)
+                lista_actual = locked.incidentes_registrados or []
+                lista_actual.append(incidente_data)
+                locked.incidentes_registrados = lista_actual
+                locked.save(update_fields=['incidentes_registrados'])
+                # Propagar la lista actualizada al objeto del caller para que
+                # el serializer refleje el incidente recién agregado.
+                programacion.incidentes_registrados = lista_actual
+                Event.objects.create(
+                    container=locked.container,
+                    event_type='incidente_reportado',
+                    detalles=incidente_data,
+                    usuario=usuario or 'anonimo'
+                )
+        except Exception as _lock_exc:
+            logger.error(
+                'registrar_incidente_viaje_lock_failure programacion_id=%s detalle=%s',
+                getattr(programacion, 'pk', None),
+                _lock_exc,
+                exc_info=True,
+            )
+            return {
+                'ok': False,
+                'lock_failure': True,
+                'error': 'No se pudo registrar el incidente de forma atómica. Reintente.',
+            }
+
+        if gravedad in ('ALTA', 'CRITICA'):
+            try:
+                from apps.core.services.openclaw import OpenClawService
+                OpenClawService.notify_anomaly(
+                    programacion,
+                    [
+                        {
+                            'code': f"INCIDENTE_{gravedad}",
+                            'severity': 'P0' if gravedad == 'CRITICA' else 'P1',
+                            'message': f"Incidente reportado: {tipo_incidente} - {descripcion}",
+                            'recommended_action': "Revisar de inmediato y coordinar asistencia."
+                        }
+                    ]
+                )
+            except Exception as _openclaw_exc:
+                logger.warning(
+                    'registrar_incidente_viaje_openclaw_failed programacion_id=%s gravedad=%s detalle=%s',
+                    getattr(programacion, 'pk', None),
+                    gravedad,
+                    _openclaw_exc,
+                )
+
+        return {'ok': True, 'incidente': incidente_data}
