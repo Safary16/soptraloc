@@ -913,3 +913,200 @@ class OperationalFlowService:
                 )
 
         return {'ok': True, 'incidente': incidente_data}
+
+    @staticmethod
+    def calcular_preasignacion_ml(programacion, *, driver_id, fecha_salida_str):
+        """(iteración 2 monolito — extraído de programaciones.views.crear_preasignacion)
+        Crea una pre-asignación: reserva conductor en una programación SIN
+        cambiar el estado del contenedor, calculando métricas ML de ETA y
+        confianza para decisión del operador.
+
+        Origen: posición física del contenedor (geocode) con fallback a la
+        última posición del driver y a Santiago. Ruta base Mapbox + predicción
+        híbrida ML; persiste prediccion_ml auditable, bitácora
+        RegistroOperacion, recomendación de horario óptimo y riesgo demurrage.
+
+        Returns:
+            dict: {'ok': True, 'payload': {...201 body...}, 'programacion'} o
+                  {'ok': False, 'error': str, 'status_code': 400|404}.
+        """
+        from apps.core.services.learning_engine import OperationalLearningEngine
+        from apps.core.services.mapbox import MapboxService
+        from apps.programaciones.models import RegistroOperacion
+        from dateutil import parser as date_parser
+        import uuid, logging
+        logger = logging.getLogger(__name__)
+
+        if not driver_id:
+            return {'ok': False, 'error': 'driver_id es requerido', 'status_code': 400}
+        if not fecha_salida_str:
+            return {'ok': False, 'error': 'fecha_salida es requerida', 'status_code': 400}
+
+        from apps.drivers.models import Driver
+        try:
+            driver = Driver.objects.get(id=driver_id)
+        except Driver.DoesNotExist:
+            return {'ok': False, 'error': f'Conductor ID {driver_id} no encontrado', 'status_code': 404}
+
+        if not driver.esta_disponible:
+            return {
+                'ok': False,
+                'error': f'Conductor {driver.nombre} no está disponible',
+                'status_code': 400,
+            }
+
+        if programacion.driver:
+            return {
+                'ok': False,
+                'error': f'Ya tiene conductor asignado ({programacion.driver.nombre}). Use desasignar primero.',
+                'status_code': 400,
+            }
+
+        try:
+            fecha_salida = date_parser.parse(fecha_salida_str)
+        except Exception:
+            return {'ok': False, 'error': 'fecha_salida con formato inválido. Use ISO 8601.', 'status_code': 400}
+
+        container = programacion.container
+        cd = programacion.cd
+
+        # -- Origen: posición física del contenedor o fallback a ubicación del driver --
+        origen_coords = None
+        if container.posicion_fisica:
+            try:
+                geocode = MapboxService.geocode(container.posicion_fisica)
+                if geocode and geocode.get('success'):
+                    origen_coords = (geocode['lat'], geocode['lng'])
+            except Exception:
+                pass
+
+        if not origen_coords:
+            if driver.ultima_posicion_lat is not None and driver.ultima_posicion_lng is not None:
+                origen_coords = (float(driver.ultima_posicion_lat), float(driver.ultima_posicion_lng))
+            else:
+                origen_coords = (-33.4489, -70.6693)  # Santiago fallback
+
+        destino_coords = (float(cd.lat), float(cd.lng))
+
+        # -- Ruta base Mapbox --
+        mapbox_route = MapboxService.calcular_ruta(
+            float(origen_coords[1]), float(origen_coords[0]),
+            float(destino_coords[1]), float(destino_coords[0])
+        )
+        if not mapbox_route.get('duration_minutes'):
+            # Fix co-review Safari 07-oct: Response/status no están importados en
+            # operations.py (NameError -> 500 en cuanto Mapbox falle). Devolver el
+            # resultado del servicio; el wrapper mapea status_code a la respuesta.
+            return {
+                'ok': False,
+                'error': f'No se pudo calcular ruta desde {origen_coords} hasta {cd.nombre}.',
+                'status_code': 400,
+            }
+
+        base_route = {
+            'duration_minutes': float(mapbox_route['duration_minutes']),
+            'distance_km': float(mapbox_route.get('distance_km', 0)),
+            'route_index': 0,
+            'route_signature': mapbox_route.get('route_signature', ''),
+        }
+
+        # -- Predicción híbrida ML --
+        prediccion = OperationalLearningEngine.predict_route(
+            origen_coords, destino_coords, fecha_salida,
+            base_route, driver=driver
+        )
+
+        eta_minutos = prediccion['predicted_minutes']
+        confianza = prediccion['confidence']
+        fuente = prediccion['source']
+        factor_ml = prediccion['learned_factor']
+        muestras_ml = prediccion['samples']
+        perfil_conductor = prediccion.get('driver_profile')
+        mapa_minutos = prediccion['mapbox_minutes']
+
+        # -- Guardar predicción ML en Programacion (auditable) --
+        programacion.prediccion_ml = {
+            'driver_id': driver.id,
+            'driver_nombre': driver.nombre,
+            'fecha_salida': fecha_salida.isoformat(),
+            'eta_minutos': eta_minutos,
+            'confianza': confianza,
+            'fuente': fuente,
+            'factor_ml': factor_ml,
+            'muestras_ml': muestras_ml,
+            'mapbox_minutos': mapa_minutos,
+            'distancia_km': base_route['distance_km'],
+            'perfil_conductor': perfil_conductor,
+            'origen_coords': list(origen_coords),
+            'destino_coords': list(destino_coords),
+            'cd_destino': cd.nombre,
+        }
+        programacion.save(update_fields=['prediccion_ml', 'updated_at'])
+
+        # -- Bitácora RegistroOperacion --
+        service_id = f"preasign-{programacion.id}-{uuid.uuid4().hex[:8]}"
+        RegistroOperacion.objects.create(
+            programacion=programacion,
+            service_id=service_id,
+            recurso_asignado=f"{driver.nombre} (pre-asignación ML)",
+            score_por_dimension={
+                'eta_minutos': eta_minutos,
+                'confianza': confianza,
+                'factor_ml': factor_ml,
+                'muestras_ml': muestras_ml,
+            }
+        )
+
+        # -- Recomendación horario óptimo --
+        recomendacion = OperationalLearningEngine.recommend(
+            origen_coords, destino_coords, fecha_salida,
+            driver=driver, window_hours=3
+        )
+        horario_optimo = None
+        if recomendacion.get('success') and recomendacion.get('recommended'):
+            rec = recomendacion['recommended']
+            horario_optimo = {
+                'hora_salida': rec.get('departure').isoformat() if rec.get('departure') else None,
+                'eta_min': rec.get('predicted_minutes'),
+                'confianza': rec.get('confidence'),
+            }
+
+        # -- Alerta demurrage --
+        riesgo_demurrage = None
+        if container.fecha_demurrage:
+            horas_vencimiento = (container.fecha_demurrage - fecha_salida).total_seconds() / 3600
+            riesgo_demurrage = {
+                'horas_hasta_vencimiento': round(horas_vencimiento, 1),
+                'alerta': horas_vencimiento < (eta_minutos / 60),
+                'mensaje': '⚠️ Demurrage por vencer' if horas_vencimiento < (eta_minutos / 60) else None,
+            }
+
+        logger.info(
+            f"Pre-asignación ML: prog={programacion.id} driver={driver.nombre} "
+            f"ETA={eta_minutos}min confianza={confianza:.0%} muestras={muestras_ml}"
+        )
+
+        payload = {
+            'success': True,
+            'mensaje': f'Pre-asignación creada para {driver.nombre}',
+            'programacion_id': programacion.id,
+            'driver': {
+                'id': driver.id,
+                'nombre': driver.nombre,
+                'patente': driver.patente,
+            },
+            'ml': {
+                'eta_minutos': eta_minutos,
+                'confianza': round(confianza, 3),
+                'fuente': fuente,
+                'factor_ml': factor_ml,
+                'muestras_ml': muestras_ml,
+                'mapbox_minutos': mapa_minutos,
+                'distancia_km': base_route['distance_km'],
+                'perfil_conductor': perfil_conductor,
+            },
+            'horario_optimo': horario_optimo,
+            'riesgo_demurrage': riesgo_demurrage,
+            'service_id': service_id,
+        }
+        return {'ok': True, 'payload': payload, 'programacion': programacion}
