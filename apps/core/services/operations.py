@@ -818,3 +818,98 @@ class OperationalFlowService:
         # Propagar al objeto externo
         programacion.decision_operador = 'CONFIRMAR'
         return {'ok': True, 'decision_operador': 'CONFIRMAR'}
+
+    @staticmethod
+    def registrar_incidente_viaje(programacion, *, tipo_incidente, descripcion,
+                                  gravedad='MODERADA', lat=None, lng=None, usuario=None):
+        """(iteración 3 monolito — extraído de programaciones.views.reportar_incidente)
+        Registra un incidente de viaje en `incidentes_registrados` (JSONField)
+        con append atómico (select_for_update) + Event de auditoría, y notifica
+        a operadores vía OpenClaw si la gravedad es ALTA/CRITICA (fuera del
+        atomic — patrón e9e88b46: I/O de red fuera del lock; su fallo no
+        revierte el incidente ya persistido).
+
+        P2-3: los 4 tipos aquí cambian container.estado a 'incidente' (FSM).
+        Problemas operativos que NO escalan estado van por reportar_problema.
+
+        Returns:
+            dict: {'ok': True, 'incidente': incidente_data} o
+                  {'ok': False, 'lock_failure': bool, 'error': str}.
+        """
+        import logging
+        logger = logging.getLogger(__name__)
+
+        if not tipo_incidente or not descripcion:
+            return {'ok': False, 'error': 'tipo_incidente y descripcion son campos obligatorios.'}
+
+        tipos_validos = ["ACCIDENTE", "AVERIA", "DEMORA_TRAFICO", "OTRO"]
+        gravedades_validas = ["LEVE", "MODERADA", "ALTA", "CRITICA"]
+        if tipo_incidente not in tipos_validos:
+            return {'ok': False, 'error': f'Tipo de incidente inválido. Tipos permitidos: {", ".join(tipos_validos)}'}
+        if gravedad not in gravedades_validas:
+            return {'ok': False, 'error': f'Gravedad inválida. Gravedades permitidas: {", ".join(gravedades_validas)}'}
+
+        incidente_data = {
+            'tipo': tipo_incidente,
+            'descripcion': descripcion,
+            'gravedad': gravedad,
+            'timestamp': timezone.now().isoformat(),
+            'reportado_por': usuario or 'anonimo',
+        }
+        if lat and lng:
+            incidente_data['gps_lat'] = str(lat)
+            incidente_data['gps_lng'] = str(lng)
+
+        from apps.events.models import Event
+        try:
+            with transaction.atomic():
+                locked = Programacion.objects.select_for_update().get(pk=programacion.pk)
+                lista_actual = locked.incidentes_registrados or []
+                lista_actual.append(incidente_data)
+                locked.incidentes_registrados = lista_actual
+                locked.save(update_fields=['incidentes_registrados'])
+                # Propagar la lista actualizada al objeto del caller para que
+                # el serializer refleje el incidente recién agregado.
+                programacion.incidentes_registrados = lista_actual
+                Event.objects.create(
+                    container=locked.container,
+                    event_type='incidente_reportado',
+                    detalles=incidente_data,
+                    usuario=usuario or 'anonimo'
+                )
+        except Exception as _lock_exc:
+            logger.error(
+                'registrar_incidente_viaje_lock_failure programacion_id=%s detalle=%s',
+                getattr(programacion, 'pk', None),
+                _lock_exc,
+                exc_info=True,
+            )
+            return {
+                'ok': False,
+                'lock_failure': True,
+                'error': 'No se pudo registrar el incidente de forma atómica. Reintente.',
+            }
+
+        if gravedad in ('ALTA', 'CRITICA'):
+            try:
+                from apps.core.services.openclaw import OpenClawService
+                OpenClawService.notify_anomaly(
+                    programacion,
+                    [
+                        {
+                            'code': f"INCIDENTE_{gravedad}",
+                            'severity': 'P0' if gravedad == 'CRITICA' else 'P1',
+                            'message': f"Incidente reportado: {tipo_incidente} - {descripcion}",
+                            'recommended_action': "Revisar de inmediato y coordinar asistencia."
+                        }
+                    ]
+                )
+            except Exception as _openclaw_exc:
+                logger.warning(
+                    'registrar_incidente_viaje_openclaw_failed programacion_id=%s gravedad=%s detalle=%s',
+                    getattr(programacion, 'pk', None),
+                    gravedad,
+                    _openclaw_exc,
+                )
+
+        return {'ok': True, 'incidente': incidente_data}
