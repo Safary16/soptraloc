@@ -1758,3 +1758,56 @@ class Hal22EtaStreamTests(TestCase):
             'eta_recalculado_min', 'container__estado',
         ).select_related('container').get(pk=self.programacion.pk)
         self.assertEqual(prog.container.estado, 'en_ruta')
+
+
+class CalcularPreasignacionMLTests(TestCase):
+    """Fix co-review Safari 07-oct: el fallo de Mapbox en
+    calcular_preasignacion_ml debe devolver {'ok': False, 'status_code': 400}
+    del servicio (antes: NameError->500 por Response/status sin import en
+    operations.py — camino sin testear)."""
+
+    def setUp(self):
+        from apps.drivers.models import Driver
+        from apps.cds.models import CD
+        from apps.containers.models import Container
+        self.user = User.objects.create_user(username='preasign_user', password='test123')
+        self.driver = Driver.objects.create(
+            nombre='Preasign Driver',
+            rut='11111111-1',
+            user=self.user,
+            num_entregas_dia=0,
+            max_entregas_dia=3,
+        )
+        self.cd = CD.objects.create(
+            nombre='CD Preasign', codigo='PRE-CD', tipo='cliente',
+            direccion='Direccion', comuna='Santiago',
+            lat=-33.450000, lng=-70.650000,
+        )
+        self.container = Container.objects.create(
+            container_id='PREA001', tipo='40HC', estado='liberado',
+        )
+        self.programacion = Programacion.objects.create(
+            container=self.container,
+            cd=self.cd,
+            cliente='Test Cliente',
+            fecha_programada=timezone.now() + timedelta(hours=24),
+        )
+
+    def test_mapbox_failure_returns_service_error_400(self):
+        from unittest.mock import patch
+        from apps.core.services.operations import OperationalFlowService
+        # Mapbox sin duration_minutes -> rama de fallo del servicio
+        with patch('apps.core.services.mapbox.MapboxService') as mock_mapbox:
+            mock_mapbox.calcular_ruta.return_value = {}
+            resultado = OperationalFlowService.calcular_preasignacion_ml(
+                self.programacion,
+                driver_id=self.driver.id,
+                fecha_salida_str='2026-10-08T08:00:00',
+            )
+        self.assertFalse(resultado['ok'])
+        self.assertEqual(resultado['status_code'], 400)
+        self.assertIn('No se pudo calcular ruta', resultado['error'])
+        # Sin efectos: la pre-asignación fallida no persiste nada
+        self.programacion.refresh_from_db()
+        self.assertFalse(self.programacion.prediccion_ml)
+        self.assertIsNone(self.programacion.fecha_inicio_ruta)
