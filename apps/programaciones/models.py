@@ -465,23 +465,25 @@ class TiempoOperacion(models.Model):
         
         # Intentar con conductor específico primero
         if conductor:
-            tiempos_conductor = cls.objects.filter(
+            # Fix auditoría 07-oct: materializar una vez (count() sobre slice
+            # + aggregate = 2-3 queries; con la lista es 1 query y promedio local).
+            tiempos_conductor = list(cls.objects.filter(
                 **filtros,
                 conductor=conductor
-            ).order_by('-fecha')[:10]
+            ).order_by('-fecha')[:10])
             
-            if tiempos_conductor.count() >= 3:
+            if len(tiempos_conductor) >= 3:
                 # Suficientes datos del conductor
-                promedio = tiempos_conductor.aggregate(Avg('tiempo_real_min'))['tiempo_real_min__avg']
+                promedio = sum(t.tiempo_real_min for t in tiempos_conductor) / len(tiempos_conductor)
                 if promedio:
                     return int(promedio)
         
         # Fallback a datos generales del CD
-        tiempos_cd = cls.objects.filter(**filtros).order_by('-fecha')[:20]
+        tiempos_cd = list(cls.objects.filter(**filtros).order_by('-fecha')[:20])
         
-        if tiempos_cd.count() >= 5:
+        if len(tiempos_cd) >= 5:
             # Suficientes datos generales
-            promedio = tiempos_cd.aggregate(Avg('tiempo_real_min'))['tiempo_real_min__avg']
+            promedio = sum(t.tiempo_real_min for t in tiempos_cd) / len(tiempos_cd)
             if promedio:
                 return int(promedio)
         
@@ -627,30 +629,31 @@ class TiempoViaje(models.Model):
         
         # Intentar con conductor específico primero
         if conductor:
-            viajes_conductor = cls.objects.filter(
+            # Fix auditoría 07-oct: materializar una vez (menos queries).
+            viajes_conductor = list(cls.objects.filter(
                 filtros_base,
                 conductor=conductor,
                 hora_del_dia__gte=hora_min,
                 hora_del_dia__lte=hora_max
-            ).order_by('-fecha')[:5]
+            ).order_by('-fecha')[:5])
             
-            if viajes_conductor.count() >= 2:
+            if len(viajes_conductor) >= 2:
                 # Suficientes datos del conductor
-                promedio_real = viajes_conductor.aggregate(Avg('tiempo_real_min'))['tiempo_real_min__avg']
+                promedio_real = sum(v.tiempo_real_min for v in viajes_conductor) / len(viajes_conductor)
                 if promedio_real:
                     return int(promedio_real)
         
         # Fallback a datos generales (misma franja horaria)
-        viajes_similares = cls.objects.filter(
+        viajes_similares = list(cls.objects.filter(
             filtros_base,
             hora_del_dia__gte=hora_min,
             hora_del_dia__lte=hora_max
-        ).order_by('-fecha')[:10]
+        ).order_by('-fecha')[:10])
         
-        if viajes_similares.count() >= 3:
+        if len(viajes_similares) >= 3:
             # Calcular factor de corrección
-            promedio_real = viajes_similares.aggregate(Avg('tiempo_real_min'))['tiempo_real_min__avg']
-            promedio_mapbox = viajes_similares.aggregate(Avg('tiempo_mapbox_min'))['tiempo_mapbox_min__avg']
+            promedio_real = sum(v.tiempo_real_min for v in viajes_similares) / len(viajes_similares)
+            promedio_mapbox = sum(v.tiempo_mapbox_min for v in viajes_similares) / len(viajes_similares)
             
             if promedio_real and promedio_mapbox and promedio_mapbox > 0:
                 factor = promedio_real / promedio_mapbox

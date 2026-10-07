@@ -1011,6 +1011,18 @@ class ProgramacionViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST
             )
         
+        # Fix auditoría 07-oct: guard idempotente. Si la ruta ya fue iniciada,
+        # NO sobrescribir GPS/fecha_inicio_ruta (doble clic o retry de red no
+        # debe mutar el registro original). 200 con el estado actual.
+        if programacion.fecha_inicio_ruta:
+            serializer = self.get_serializer(programacion)
+            return Response({
+                'success': True,
+                'mensaje': 'La ruta ya fue iniciada previamente (respuesta idempotente).',
+                'idempotente': True,
+                'programacion': serializer.data,
+            })
+
         # Validar que se proporcione la patente
         # HAL-7: el default '' solo aplica si la clave está ausente. Si el cliente
         # envía {'patente': null}, el default no aplica y .strip() revienta con

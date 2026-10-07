@@ -21,6 +21,7 @@ class Event(models.Model):
         ('demurrage_cercano', 'Demurrage Cercano'),
         ('model_review_trigger', 'Gatillo de Revisión de Modelo'),
         ('cambio_estado', 'Cambio de Estado'),
+        ('verificacion_externa', 'Verificación Externa'),
         ('actualizacion_posicion', 'Actualización de Posición'),
         ('exportacion_stock', 'Exportación de Stock'),
         ('asignacion_conductor', 'Asignación de Conductor'),

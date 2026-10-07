@@ -3,6 +3,8 @@ from datetime import timedelta
 import logging
 from django.conf import settings
 from django.db import transaction
+from django.db.models import Avg, ExpressionWrapper, FloatField, F
+from django.db.models.functions import Abs
 from django.utils import timezone
 
 from apps.drivers.models import Driver
@@ -142,13 +144,15 @@ class AssignmentService:
         final_score = round((deterministic * 0.8) + (similar_boost * 0.2), 3)
 
         anomalies = AnomalyDetector.detect(programacion, driver)
-        
-        # Notificar anomalías críticas vía OpenClaw
-        if anomalies:
-            OpenClawService.notify_anomaly(programacion, anomalies)
+        # Fix auditoría 07-oct: la notificación OpenClaw se movió al punto de
+        # decisión (asignar_mejor_conductor). Antes disparaba I/O de red una vez
+        # por CADA conductor candidato dentro del loop de scoring.
 
         classification = cls._classify(final_score, anomalies, confidence)
         reason = cls._build_reason(driver, final_score, classification, anomalies, confidence)
+        # Fix auditoría 07-oct: UNA sola llamada al estimador (antes se llamaba
+        # 2 veces = doble I/O a Mapbox por conductor evaluado).
+        eta_estimado = ETAEstimator.estimate_minutes(programacion, driver)
 
         return {
             'score_total': Decimal(str(final_score)),
@@ -174,8 +178,8 @@ class AssignmentService:
             'reason': reason,
             # Si el estimador cae a None (Mapbox/ML sin respuesta), propagamos None
             # y marcamos 'requires_attention' para que la vista muestre advertencia.
-            'eta_estimado_min': ETAEstimator.estimate_minutes(programacion, driver),
-            'factible': (lambda eta: RouteFeasibilityValidator.is_feasible(programacion, eta) if eta is not None else False)(ETAEstimator.estimate_minutes(programacion, driver)),
+            'eta_estimado_min': eta_estimado,
+            'factible': RouteFeasibilityValidator.is_feasible(programacion, eta_estimado) if eta_estimado is not None else False,
         }
 
     @classmethod
@@ -247,14 +251,19 @@ class AssignmentService:
             return
 
         last_30d = RegistroOperacion.objects.filter(created_at__gte=timezone.now() - timedelta(days=30))
-        eta_error_pct = 0.0
-        eta_with_data = last_30d.filter(eta_real_min__isnull=False, eta_estimado_min__isnull=False)
-        if eta_with_data.exists():
-            diffs = [
-                abs((r.eta_real_min - r.eta_estimado_min) / r.eta_estimado_min) * 100
-                for r in eta_with_data if r.eta_estimado_min and r.eta_estimado_min > 0
-            ]
-            eta_error_pct = round(sum(diffs) / len(diffs), 2) if diffs else 0.0
+        # Fix auditoría 07-oct: aggregate en SQL (antes cargaba todas las filas
+        # en Python para promediar el error porcentual).
+        eta_error_pct = last_30d.filter(
+            eta_real_min__isnull=False,
+            eta_estimado_min__isnull=False,
+            eta_estimado_min__gt=0,
+        ).aggregate(
+            pct=Avg(ExpressionWrapper(
+                Abs(F('eta_real_min') - F('eta_estimado_min')) * 100.0 / F('eta_estimado_min'),
+                output_field=FloatField(),
+            ))
+        )['pct']
+        eta_error_pct = round(eta_error_pct, 2) if eta_error_pct is not None else 0.0
 
         overrides_14d = RegistroOperacion.objects.filter(
             created_at__gte=timezone.now() - timedelta(days=14),
@@ -332,6 +341,18 @@ class AssignmentService:
                 logger.exception(
                     'OpenClaw.request_review fallo para programacion %s; '
                     'la asignacion y bitacora quedaron registradas localmente.',
+                    programacion.id,
+                )
+
+        # Fix auditoría 07-oct: notificación de anomalías UNA vez por programación,
+        # en el punto de decisión y fuera del atomic (antes vivía dentro de
+        # calcular_score_total y disparaba por cada conductor candidato).
+        if mejor.get('anomalies'):
+            try:
+                OpenClawService.notify_anomaly(programacion, mejor['anomalies'])
+            except Exception:
+                logger.exception(
+                    'OpenClaw.notify_anomaly fallo para programacion %s',
                     programacion.id,
                 )
 

@@ -40,6 +40,9 @@ class Deposit(models.Model):
         if not texto:
             return None
         candidato = str(texto).strip().upper()
+        # NOTA auditoría 07-oct: el matching en PYTHON es obligatorio —
+        # iexact/icontains en sqlite son case-insensitive SOLO ASCII y rompen
+        # con nombres con tilde ('Depósito Alfa'). NO optimizar a SQL.
         for dep in cls.objects.filter(activo=True):
             if dep.name.strip().upper() == candidato:
                 return dep
@@ -469,6 +472,9 @@ class Container(models.Model):
             # Limpiar timestamps de estados no aplicables al nuevo estado.
             # Sin esto, una reversion a 'programado' dejaba fecha_asignacion
             # intacta aunque ya no estuviéramos 'asignado'.
+            # NOTA auditoría 07-oct: semántica INTENCIONAL y testeada
+            # (tests_fsm: 'cada transición deja solo el timestamp nuevo y el
+            # del estado previo'). NO envolver en if permitir_reversion.
             for estado, campo in locked._TIMESTAMP_FIELD_BY_ESTADO.items():
                 if estado == nuevo_estado:
                     continue
@@ -545,11 +551,12 @@ class Container(models.Model):
             'estado_verificado', 'fuente_verificacion', 'verificado_en',
             'deposito_verificado', 'updated_at'
         ])
-        # Evento de trazabilidad (patrón del sistema)
+        # Fix auditoría 07-oct: tipo específico (antes usaba 'cambio_estado' y
+        # contaminaba el filtro de eventos reales del FSM).
         from apps.events.models import Event
         Event.objects.create(
             container=self,
-            event_type='cambio_estado',
+            event_type='verificacion_externa',
             detalles={
                 'tipo': 'verificacion_externa',
                 'estado_declarado': self.estado,
