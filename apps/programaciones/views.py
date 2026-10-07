@@ -2158,28 +2158,7 @@ class ProgramacionViewSet(viewsets.ModelViewSet):
                 {'error': 'La programación no tiene conductor asignado.'},
                 status=status.HTTP_400_BAD_REQUEST,
             )
-        # HAL-16 (decisión creativa documentada): aceptar tanto 'asignado' como
-        # 'programado'. Rationale:
-        # - 'asignado' es el camino normal: conductor ya visible.
-        # - 'programado' lo aceptamos porque hay una ventana transitoria donde
-        #   Programacion.objects.create(driver=X) YA pasó pero el container
-        #   aún no pasó a 'asignado' (la cadena post_save → driver.asignar_conductor
-        #   puede estar en vuelo vía on_commit). En esa ventana, rechazar el clic
-        #   'Aceptar' generaba falsos 400 que confundían al conductor. La regla
-        #   de fondo (driver_id presente + container en estado válido) ya cubre
-        #   el caso.
-        # No restringir a solo 'asignado' porque romperíamos la UX sin necesidad:
-        # la pregunta relevante es "¿conductor asignado?", no "¿container ya
-        # transicionado?".
-        if container_estado := programacion.container.estado:
-            if container_estado not in ('asignado', 'programado'):
-                return Response(
-                    {'error': f'Contenedor en estado {container_estado}; solo se acepta en estado asignado/programado.'},
-                    status=status.HTTP_400_BAD_REQUEST,
-                )
-
-        # Validación: solo el conductor asignado puede aceptar (o staff).
-        # Revisión senior (Safari): usar helper canónico _usuario_puede_operar_viaje
+        # Revisión senior (Safari): helper canónico _usuario_puede_operar_viaje
         # para que un request ANÓNIMO sea rechazado (403) — el guard anterior
         # (is_authenticated and not is_staff) dejaba pasar a usuarios no autenticados.
         if not self._usuario_puede_operar_viaje(request, programacion):
@@ -2188,25 +2167,16 @@ class ProgramacionViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_403_FORBIDDEN,
             )
 
-        from apps.events.models import Event
-        with transaction.atomic():
-            locked = Programacion.objects.select_for_update().get(pk=programacion.pk)
-            locked.decision_operador = 'CONFIRMAR'
-            locked.save(update_fields=['decision_operador', 'updated_at'])
-            Event.objects.create(
-                container=locked.container,
-                event_type='asignacion_conductor',
-                detalles={
-                    'driver_id': locked.driver_id,
-                    'aceptada': True,
-                    'decision_operador': 'CONFIRMAR',
-                    'reportado_por': request.user.username if request.user.is_authenticated else 'anonimo',
-                },
-                usuario=request.user.username if request.user.is_authenticated else 'anonimo',
+        from apps.core.services.operations import OperationalFlowService
+        resultado = OperationalFlowService.aceptar_asignacion_conductor(
+            programacion,
+            usuario=request.user.username if request.user.is_authenticated else None,
+        )
+        if not resultado['ok']:
+            return Response(
+                {'error': resultado['error']},
+                status=status.HTTP_400_BAD_REQUEST,
             )
-
-        # Propagar al objeto externo
-        programacion.decision_operador = 'CONFIRMAR'
 
         serializer = self.get_serializer(programacion)
         return Response({

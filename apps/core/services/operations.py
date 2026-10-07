@@ -764,4 +764,57 @@ class OperationalFlowService:
             'patente_confirmada': patente_ingresada,
             'gps': {'lat': str(lat), 'lng': str(lng)},
         }
-    
+
+    @classmethod
+    def aceptar_asignacion_conductor(cls, programacion, usuario=None):
+        """(iteración 2 monolito — extraído de programaciones.views.aceptar_asignacion)
+        Registra la decisión del conductor que ACEPTA la asignación.
+
+        HAL-16 (decisión creativa documentada): aceptar tanto 'asignado' como
+        'programado'. Rationale:
+        - 'asignado' es el camino normal: conductor ya visible.
+        - 'programado' lo aceptamos porque hay una ventana transitoria donde
+          Programacion.objects.create(driver=X) YA pasó pero el container
+          aún no pasó a 'asignado' (la cadena post_save → driver.asignar_conductor
+          puede estar en vuelo vía on_commit). En esa ventana, rechazar el clic
+          'Aceptar' generaba falsos 400 que confundían al conductor. La regla
+          de fondo (driver_id presente + container en estado válido) ya cubre
+          el caso.
+        No restringir a solo 'asignado' porque romperíamos la UX sin necesidad:
+        la pregunta relevante es "¿conductor asignado?", no "¿container ya
+        transicionado?".
+
+        Este método NO cambia container.estado (a diferencia del incidente):
+        solo registra la decisión del conductor para trazabilidad y dispara
+        el evento de auditoría.
+
+        Returns:
+            dict: {'ok': True, 'decision_operador': 'CONFIRMAR'} o
+                  {'ok': False, 'error': str}.
+        """
+        if container_estado := programacion.container.estado:
+            if container_estado not in ('asignado', 'programado'):
+                return {
+                    'ok': False,
+                    'error': f'Contenedor en estado {container_estado}; solo se acepta en estado asignado/programado.',
+                }
+
+        from apps.events.models import Event
+        with transaction.atomic():
+            locked = Programacion.objects.select_for_update().get(pk=programacion.pk)
+            locked.decision_operador = 'CONFIRMAR'
+            locked.save(update_fields=['decision_operador', 'updated_at'])
+            Event.objects.create(
+                container=locked.container,
+                event_type='asignacion_conductor',
+                detalles={
+                    'driver_id': locked.driver_id,
+                    'aceptada': True,
+                    'decision_operador': 'CONFIRMAR',
+                    'reportado_por': usuario or 'anonimo',
+                },
+                usuario=usuario or 'anonimo',
+            )
+        # Propagar al objeto externo
+        programacion.decision_operador = 'CONFIRMAR'
+        return {'ok': True, 'decision_operador': 'CONFIRMAR'}
