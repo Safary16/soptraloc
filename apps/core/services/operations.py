@@ -1409,3 +1409,67 @@ class OperationalFlowService:
             'created': created,
             'retorno_programacion': retorno_programacion,
         }
+    @classmethod
+    def reportar_problema_operador(cls, programacion, *, tipo, descripcion,
+                                   lat=None, lng=None, usuario=None):
+        """(iteración 8 monolito — extraído de programaciones.views.reportar_problema)
+        Reporte operativo que NO cambia container.estado (a diferencia de
+        reportar_incidente). Append atómico sobre JSONField bajo lock
+        (paridad con reportar_incidente) + Event + Notification alta.
+
+        Returns:
+            dict: {'ok': True, 'problema': dict} o {'ok': False, 'error': str,
+                  'status_code': 400|500}.
+        """
+        from apps.events.models import Event
+        from apps.notifications.models import Notification
+
+        problema_data = {
+            'tipo': tipo,
+            'descripcion': descripcion,
+            'timestamp': timezone.now().isoformat(),
+            'reportado_por': usuario or 'anonimo',
+        }
+        if lat and lng:
+            problema_data['gps_lat'] = str(lat)
+            problema_data['gps_lng'] = str(lng)
+
+        with transaction.atomic():
+            locked = Programacion.objects.select_for_update().get(pk=programacion.pk)
+            # Marca diferencia: tipo_problema distinto de tipo_incidente
+            problema_data['es_problema'] = True
+            lista_actual = locked.incidentes_registrados or []
+            lista_actual.append(problema_data)
+            locked.incidentes_registrados = lista_actual
+            locked.save(update_fields=['incidentes_registrados'])
+            programacion.incidentes_registrados = lista_actual
+
+            Event.objects.create(
+                container=locked.container,
+                event_type='reporte_problema',
+                detalles=problema_data,
+                usuario=usuario,
+            )
+
+            # Notificación alta para el operador (no cambia estado del contenedor)
+            Notification.objects.create(
+                container=locked.container,
+                programacion=locked,
+                tipo='problema_reportado',
+                prioridad='alta',
+                titulo=f'Problema reportado - {locked.container.container_id}',
+                mensaje=(
+                    f'{tipo}: {descripcion}'
+                    + (f' · CD {locked.cd.nombre}' if locked.cd else '')
+                ),
+                detalles={
+                    'tipo_problema': tipo,
+                    'descripcion': descripcion,
+                    'cd': locked.cd.nombre if locked.cd else None,
+                    'cliente': locked.cliente,
+                    'conductor': locked.driver.nombre if locked.driver else None,
+                    'es_problema': True,
+                },
+            )
+
+        return {'ok': True, 'problema': problema_data}

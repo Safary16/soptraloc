@@ -1800,65 +1800,22 @@ class ProgramacionViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_403_FORBIDDEN,
             )
 
-        problema_data = {
-            'tipo': tipo,
-            'descripcion': descripcion,
-            'timestamp': timezone.now().isoformat(),
-            'reportado_por': request.user.username if request.user.is_authenticated else 'anonimo',
-        }
-        lat = request.data.get('lat')
-        lng = request.data.get('lng')
-        if lat and lng:
-            problema_data['gps_lat'] = str(lat)
-            problema_data['gps_lng'] = str(lng)
-
         usuario = request.user.username if request.user.is_authenticated else 'anonimo'
-        # Append atómico sobre JSONField bajo lock (paridad con reportar_incidente)
-        from apps.events.models import Event
-        with transaction.atomic():
-            locked = Programacion.objects.select_for_update().get(pk=programacion.pk)
-            lista_actual = locked.incidentes_registrados or []
-            # Marca diferencia: tipo_problema distinto de tipo_incidente
-            problema_data['es_problema'] = True
-            lista_actual.append(problema_data)
-            locked.incidentes_registrados = lista_actual
-            locked.save(update_fields=['incidentes_registrados'])
-            programacion.incidentes_registrados = lista_actual
-
-            Event.objects.create(
-                container=locked.container,
-                event_type='reporte_problema',
-                detalles=problema_data,
-                usuario=usuario,
-            )
-
-            # Notificación alta para el operador (no cambia estado del contenedor)
-            from apps.notifications.models import Notification
-            Notification.objects.create(
-                container=locked.container,
-                programacion=locked,
-                tipo='problema_reportado',
-                prioridad='alta',
-                titulo=f'Problema reportado - {locked.container.container_id}',
-                mensaje=(
-                    f'{tipo}: {descripcion}'
-                    + (f' · CD {locked.cd.nombre}' if locked.cd else '')
-                ),
-                detalles={
-                    'tipo_problema': tipo,
-                    'descripcion': descripcion,
-                    'cd': locked.cd.nombre if locked.cd else None,
-                    'cliente': locked.cliente,
-                    'conductor': locked.driver.nombre if locked.driver else None,
-                    'es_problema': True,
-                },
-            )
+        from apps.core.services.operations import OperationalFlowService
+        resultado = OperationalFlowService.reportar_problema_operador(
+            programacion,
+            tipo=tipo,
+            descripcion=descripcion,
+            lat=request.data.get('lat'),
+            lng=request.data.get('lng'),
+            usuario=usuario,
+        )
 
         serializer = self.get_serializer(programacion)
         return Response({
             'success': True,
             'mensaje': 'Problema reportado. Operador notificado.',
-            'problema': problema_data,
+            'problema': resultado['problema'],
             'programacion': serializer.data,
         }, status=status.HTTP_201_CREATED)
 
