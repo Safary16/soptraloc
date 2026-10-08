@@ -1107,89 +1107,43 @@ class ProgramacionViewSet(viewsets.ModelViewSet):
             return Response({'error': 'No puede operar un viaje ajeno.'}, status=status.HTTP_403_FORBIDDEN)
         
         # Verificar que el CD permita soltar contenedor
-        if not programacion.cd.permite_soltar_contenedor:
+        if not programacion.driver:
             return Response(
-                {'error': f'El CD {programacion.cd.nombre} no permite Drop & Hook. El conductor debe esperar la descarga.'},
+                {'error': 'Programación no tiene conductor asignado'},
                 status=status.HTTP_400_BAD_REQUEST
             )
-        
-        # Permitir reintento idempotente desde conexiones móviles inestables.
-        if programacion.container.estado not in {'entregado', 'soltado'}:
-            return Response(
-                {'error': f'Solo se puede soltar el contenedor después de haberlo entregado. Estado actual: {programacion.container.get_estado_display()}'},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-        
-        # Actualizar posición del conductor si se proporciona
-        lat = request.data.get('lat')
-        lng = request.data.get('lng')
-        if lat and lng:
-            programacion.driver.actualizar_posicion(lat, lng)
-        
-        usuario = request.user.username if request.user.is_authenticated else None
+        if not self._usuario_puede_operar_viaje(request, programacion):
+            return Response({'error': 'No puede operar un viaje ajeno.'}, status=status.HTTP_403_FORBIDDEN)
+
         from apps.core.services.operations import OperationalFlowService
-        # HAL-4: el service devuelve 3-tupla (locked, created, retorno_programacion).
-        # El unpack antiguo (programacion, created) reventaba con
-        # 'too many values to unpack (expected 2, got 3)' y abortaba el flujo
-        # completo de drop & hook. Ahora desempaquetamos 3, manejamos el retorno
-        # automático y lo exponemos al cliente para auditoría.
-        try:
-            programacion, created, retorno_programacion = OperationalFlowService.drop_container(
-                programacion, usuario,
+        resultado = OperationalFlowService.soltar_contenedor_drop(
+            programacion,
+            lat=request.data.get('lat'),
+            lng=request.data.get('lng'),
+            usuario=request.user.username if request.user.is_authenticated else None,
+        )
+
+        if not resultado['ok']:
+            return Response(
+                {'error': resultado['error']},
+                status=status.HTTP_400_BAD_REQUEST
             )
-        except ValueError as exc:
-            return Response({'error': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
 
-        # El viaje lleno terminó: la entrega se completó; la descarga pendiente
-        # del CD se registra con su propio timing (coherencia de estado_final).
-        self._update_registro_operacion_on_completion(programacion, 'ENTREGADO')
+        prog = resultado['programacion']
+        created = resultado['created']
+        retorno = resultado['retorno_programacion']
 
-        # Crear evento de contenedor soltado
-        from apps.events.models import Event
-        if created:
-            Event.objects.create(
-                container=programacion.container,
-                event_type='contenedor_soltado',
-                detalles={
-                    'conductor': programacion.driver.nombre,
-                    'cd': programacion.cd.nombre,
-                    'tipo': 'drop_and_hook',
-                    'gps_lat': str(lat) if lat else None,
-                    'gps_lng': str(lng) if lng else None,
-                    'timestamp': timezone.now().isoformat()
-                },
-                usuario=usuario
-            )
-            if retorno_programacion is not None:
-                # HAL-4: trazabilidad del retorno automático creado por el service.
-                # El modelo Event solo conoce container (no programacion FK), por
-                # lo que la programacion de retorno va dentro de detalles para
-                # conservarla en auditoría.
-                Event.objects.create(
-                    container=retorno_programacion.container,
-                    event_type='retorno_vacio_autoasignado',
-                    detalles={
-                        'programacion_retorno_id': retorno_programacion.id,
-                        'conductor': retorno_programacion.driver.nombre if retorno_programacion.driver else None,
-                        'cd': retorno_programacion.cd.nombre if retorno_programacion.cd else None,
-                        'origen_drop': programacion.container.container_id,
-                        'descripcion': 'Retorno automático creado en drop_container',
-                        'automatico': True,
-                    },
-                    usuario=usuario,
-                )
+        self._update_registro_operacion_on_completion(prog, 'ENTREGADO')
 
-        serializer = self.get_serializer(programacion)
+        serializer = self.get_serializer(prog)
         return Response({
             'success': True,
-            'mensaje': f'Contenedor soltado en {programacion.cd.nombre}. Conductor libre para nueva asignación.',
+            'mensaje': f'Contenedor soltado en {prog.cd.nombre}. Conductor libre para nueva asignación.',
             'programacion': serializer.data,
             'nuevo_estado': 'soltado',
             'conductor_liberado': True,
             'ya_registrado': not created,
-            'retorno_automatico': (
-                retorno_programacion.id if retorno_programacion is not None else None
-            ),
+            'retorno_automatico': retorno.id if retorno is not None else None,
         })
     
     @action(detail=True, methods=['post'])

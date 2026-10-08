@@ -1323,3 +1323,85 @@ class OperationalFlowService:
             }
         
         return {'ok': True, **response_data}
+
+    @classmethod
+    def soltar_contenedor_drop(cls, programacion, *, lat=None, lng=None, usuario=None):
+        """(iteración 7 monolito — extraído de programaciones.views.soltar_contenedor)
+        Drop & Hook: el conductor solta el contenedor y queda libre inmediatamente.
+        Solo disponible si el CD permite soltar contenedor.
+
+        Returns:
+            dict: {'ok': True, 'programacion', 'created', 'retorno_programacion'} o
+                  {'ok': False, 'error': str}.
+        """
+        if not programacion.cd.permite_soltar_contenedor:
+            return {'ok': False, 'error': f'El CD {programacion.cd.nombre} no permite Drop & Hook. El conductor debe esperar la descarga.'}
+        
+        # Permitir reintento idempotente desde conexiones móviles inestables.
+        if programacion.container.estado not in {'entregado', 'soltado'}:
+            return {'ok': False, 'error': f'Solo se puede soltar el contenedor después de haberlo entregado. Estado actual: {programacion.container.get_estado_display()}'}
+        
+        # Actualizar posición del conductor si se proporciona
+        # lat y lng son parámetros del método
+        if lat and lng:
+            programacion.driver.actualizar_posicion(lat, lng)
+        
+        usuario = usuario or 'system'
+        # HAL-4: el service devuelve 3-tupla (locked, created, retorno_programacion).
+        # El unpack antiguo (programacion, created) reventaba con
+        # 'too many values to unpack (expected 2, got 3)' y abortaba el flujo
+        # completo de drop & hook. Ahora desempaquetamos 3, manejamos el retorno
+        # automático y lo exponemos al cliente para auditoría.
+        try:
+            programacion, created, retorno_programacion = cls.drop_container(
+                programacion, usuario,
+            )
+        except ValueError as exc:
+            return {'ok': False, 'error': str(exc)}
+
+        # El viaje lleno terminó: la entrega se completó; la descarga pendiente
+        # del CD se registra con su propio timing (coherencia de estado_final).
+        self._update_registro_operacion_on_completion(programacion, 'ENTREGADO')
+
+        # Crear evento de contenedor soltado
+        from apps.events.models import Event
+        if created:
+            Event.objects.create(
+                container=programacion.container,
+                event_type='contenedor_soltado',
+                detalles={
+                    'conductor': programacion.driver.nombre,
+                    'cd': programacion.cd.nombre,
+                    'tipo': 'drop_and_hook',
+                    'gps_lat': str(lat) if lat else None,
+                    'gps_lng': str(lng) if lng else None,
+                    'timestamp': timezone.now().isoformat()
+                },
+                usuario=usuario
+            )
+            if retorno_programacion is not None:
+                # HAL-4: trazabilidad del retorno automático creado por el service.
+                # El modelo Event solo conoce container (no programacion FK), por
+                # lo que la programacion de retorno va dentro de detalles para
+                # conservarla en auditoría.
+                Event.objects.create(
+                    container=retorno_programacion.container,
+                    event_type='retorno_vacio_autoasignado',
+                    detalles={
+                        'programacion_retorno_id': retorno_programacion.id,
+                        'conductor': retorno_programacion.driver.nombre if retorno_programacion.driver else None,
+                        'cd': retorno_programacion.cd.nombre if retorno_programacion.cd else None,
+                        'origen_drop': programacion.container.container_id,
+                        'descripcion': 'Retorno automático creado en drop_container',
+                        'automatico': True,
+                    },
+                    usuario=usuario,
+                )
+
+        serializer = self.get_serializer(programacion)
+        return {
+            'ok': True,
+            'programacion': programacion,
+            'created': created,
+            'retorno_programacion': retorno_programacion,
+        }
