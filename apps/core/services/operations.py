@@ -1293,10 +1293,8 @@ class OperationalFlowService:
             NotificationService.crear_alerta_arribo_proximo(programacion)
 
         programacion.eta_recalculado_min = resultado['eta_minutos']
-        configured_delay_threshold = int(getattr(settings, 'ETA_DELAY_ALERT_MIN', 15))
-        request_override_threshold = request.query_params.get('eta_delay_alert_min')
-        eta_delay_threshold = int(request_override_threshold) if request_override_threshold else configured_delay_threshold
-        if programacion.eta_minutos and (resultado['eta_minutos'] - programacion.eta_minutos) > eta_delay_threshold:
+        threshold = eta_delay_threshold if eta_delay_threshold is not None else int(getattr(settings, 'ETA_DELAY_ALERT_MIN', 15))
+        if programacion.eta_minutos and (resultado['eta_minutos'] - programacion.eta_minutos) > threshold:
             desvio = {
                 'tipo': 'ETA_DELAY',
                 'mensaje': 'ETA recalculado supera lo prometido',
@@ -1324,4 +1322,4 @@ class OperationalFlowService:
                 'mensaje': resultado['notificacion'].mensaje
             }
         
-        return Response(response_data)
+        return {'ok': True, **response_data}
