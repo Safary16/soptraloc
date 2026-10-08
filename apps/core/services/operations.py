@@ -1110,3 +1110,127 @@ class OperationalFlowService:
             'service_id': service_id,
         }
         return {'ok': True, 'payload': payload, 'programacion': programacion}
+    @classmethod
+    def crear_ruta_manual(cls, container, *, tipo_movimiento, cd_destino,
+                          fecha_programacion, cliente='', observaciones=None,
+                          usuario=None):
+        """(iteración 5 monolito — extraído de programaciones.views.crear_ruta_manual)
+        Crea una ruta manual para retiro desde puerto sin tocar request/Response.
+
+        Casos de uso: retiro_patio (puerto → patio) y retiro_directo (puerto →
+        cliente). Para retiro_patio resuelve el primer CD tipo 'patio' (error si
+        no hay). Pre-valida programación existente (idempotente, payload rico
+        con programacion_existente) y captura IntegrityError de la carrera
+        OneToOne como 409 lógico. Dentro del atomic: create + FSM a 'programado'
+        + Event 'import_programacion' (ruta_manual_creada) + P1-4
+        TiempoOperacion (fallo loggeado, no bloquea).
+
+        Returns:
+            dict: {'ok': True, 'programacion', 'container', 'cd_destino'} o
+                  {'ok': False, 'error': str, ['status_code': 409],
+                   ['programacion_existente': {...}]}.
+        """
+        import logging
+        logger = logging.getLogger(__name__)
+        from django.db import IntegrityError
+        from apps.core.utils import normalizar_cliente
+        from apps.cds.models import CD
+        from apps.events.models import Event
+
+        # Actualizar tipo de movimiento en el contenedor
+        container.tipo_movimiento = tipo_movimiento
+        container.save(update_fields=['tipo_movimiento'])
+        
+        # Determinar CD destino
+        if tipo_movimiento == 'retiro_patio':
+            # Buscar el primer Patio
+            cd_destino = CD.objects.filter(tipo='patio').first()
+            if not cd_destino:
+                return {'ok': False, 'error': 'No se encontró ningún Patio en el sistema'}
+        # (retiro_directo llega con cd_destino ya resuelto por el serializer)
+        
+        # Pre-validación: si el contenedor ya tiene una programación asociada,
+        # evitamos el IntegrityError del OneToOne respondiendo 400 (consistente
+        # con containers.views.programar). Hace la re-ejecución sobre el mismo
+        # contenedor idempotente para el operador en vez de un 500 opaco.
+        tiene_prog, existing_prog = Programacion.container_tiene_programacion(container)
+        if tiene_prog and existing_prog is not None:
+            return {
+                'ok': False,
+                'error': f'Este contenedor ya tiene una programación asociada (ID: {existing_prog.id})',
+                'programacion_existente': {
+                    'id': existing_prog.id,
+                    'fecha_programada': existing_prog.fecha_programada.isoformat(),
+                    'cd': existing_prog.cd.nombre if existing_prog.cd else None,
+                    'tiene_conductor': existing_prog.driver is not None,
+                    'estado_container': container.estado,
+                },
+            }
+
+        # Crear la programación dentro de transacción atómica y capturar
+        # IntegrityError por si una carrera concurrente inserta la fila OneToOne
+        # entre la validación previa y el create().
+        try:
+            with transaction.atomic():
+                programacion = Programacion.objects.create(
+                    container=container,
+                    cd=cd_destino,
+                    fecha_programada=fecha_programacion,
+                    cliente=normalizar_cliente(cliente),
+                    direccion_entrega=cd_destino.direccion,
+                    observaciones=observaciones if observaciones is not None else f'Retiro manual desde {container.posicion_fisica}',
+                )
+
+                container.cambiar_estado('programado', usuario)
+
+                # Crear evento de auditoría
+                from apps.events.models import Event
+                Event.objects.create(
+                    container=container,
+                    event_type='import_programacion',
+                    usuario=usuario,
+                    detalles={
+                        'accion': 'ruta_manual_creada',
+                        'descripcion': f'Ruta manual creada: {tipo_movimiento}',
+                        'tipo_movimiento': tipo_movimiento,
+                        'origen': container.posicion_fisica,
+                        'destino': cd_destino.nombre,
+                        'programacion_id': programacion.id,
+                        'fecha_programacion': fecha_programacion.isoformat(),
+                    }
+                )
+
+                # P1-4: registrar TiempoOperacion para carga_patio o retiro_puerto
+                # según tipo_movimiento. started_at = ahora (sin dato histórico real),
+                # finished_at = fecha_programacion (estimación del operador).
+                try:
+                    tipo_op = 'carga_patio' if tipo_movimiento == 'retiro_patio' else 'retiro_puerto'
+                    cls.registrar_operacion_tiempo(
+                        container=container,
+                        tipo_operacion=tipo_op,
+                        started_at=timezone.now(),
+                        finished_at=fecha_programacion,
+                        cd_origen=cd_destino,
+                        cd_destino=cd_destino,
+                        conductor=None,
+                        observaciones=f'Carga/retiro programado (ruta manual {tipo_movimiento})',
+                    )
+                except Exception as _p1_exc:
+                    logger.warning('crear_ruta_manual tiempo_operacion_failed: %s', _p1_exc)
+        except IntegrityError:
+            logger.warning(
+                'crear_ruta_manual_integrity_error',
+                extra={'container_id': getattr(container, 'container_id', None)},
+            )
+            return {
+                'ok': False,
+                'status_code': 409,
+                'error': 'Este contenedor ya tiene una programación asociada. Por favor, recargue la página.',
+            }
+        
+        return {
+            'ok': True,
+            'programacion': programacion,
+            'container': container,
+            'cd_destino': cd_destino,
+        }

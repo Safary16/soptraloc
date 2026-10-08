@@ -573,113 +573,31 @@ class ProgramacionViewSet(viewsets.ModelViewSet):
         data = serializer.validated_data
         container = data['_container']
         tipo_movimiento = data['tipo_movimiento']
-        
-        # Actualizar tipo de movimiento en el contenedor
-        container.tipo_movimiento = tipo_movimiento
-        container.save(update_fields=['tipo_movimiento'])
-        
-        # Determinar CD destino
-        if tipo_movimiento == 'retiro_patio':
-            # Buscar el primer Patio
-            from apps.cds.models import CD
-            cd_destino = CD.objects.filter(tipo='patio').first()
-            if not cd_destino:
-                return Response(
-                    {'error': 'No se encontró ningún Patio en el sistema'},
-                    status=status.HTTP_400_BAD_REQUEST
-                )
-        else:  # retiro_directo
-            cd_destino = data['_cd_destino']
-        
-        # Pre-validación: si el contenedor ya tiene una programación asociada,
-        # evitamos el IntegrityError del OneToOne respondiendo 400 (consistente
-        # con containers.views.programar). Hace la re-ejecución sobre el mismo
-        # contenedor idempotente para el operador en vez de un 500 opaco.
-        tiene_prog, existing_prog = Programacion.container_tiene_programacion(container)
-        if tiene_prog and existing_prog is not None:
-            return Response(
-                {
-                    'error': f'Este contenedor ya tiene una programación asociada (ID: {existing_prog.id})',
-                    'programacion_existente': {
-                        'id': existing_prog.id,
-                        'fecha_programada': existing_prog.fecha_programada.isoformat(),
-                        'cd': existing_prog.cd.nombre if existing_prog.cd else None,
-                        'tiene_conductor': existing_prog.driver is not None,
-                        'estado_container': container.estado,
-                    },
-                },
-                status=status.HTTP_400_BAD_REQUEST,
-            )
 
-        # Crear la programación dentro de transacción atómica y capturar
-        # IntegrityError por si una carrera concurrente inserta la fila OneToOne
-        # entre la validación previa y el create().
-        try:
-            with transaction.atomic():
-                programacion = Programacion.objects.create(
-                    container=container,
-                    cd=cd_destino,
-                    fecha_programada=data['fecha_programacion'],
-                    cliente=normalizar_cliente(data.get('cliente', '')),
-                    direccion_entrega=cd_destino.direccion,
-                    observaciones=data.get('observaciones', f'Retiro manual desde {container.posicion_fisica}')
-                )
+        from apps.core.services.operations import OperationalFlowService
+        resultado = OperationalFlowService.crear_ruta_manual(
+            container,
+            tipo_movimiento=tipo_movimiento,
+            cd_destino=data.get('_cd_destino'),
+            fecha_programacion=data['fecha_programacion'],
+            cliente=data.get('cliente', ''),
+            observaciones=data.get('observaciones'),
+            usuario=request.user.username if request.user.is_authenticated else None,
+        )
+        if not resultado['ok']:
+            payload = {'error': resultado['error']}
+            if resultado.get('programacion_existente'):
+                payload['programacion_existente'] = resultado['programacion_existente']
+            return Response(payload, status=resultado.get('status_code', status.HTTP_400_BAD_REQUEST))
 
-                usuario = request.user.username if request.user.is_authenticated else None
-                container.cambiar_estado('programado', usuario)
-
-                # Crear evento de auditoría
-                from apps.events.models import Event
-                Event.objects.create(
-                    container=container,
-                    event_type='import_programacion',
-                    usuario=request.user.username if request.user.is_authenticated else None,
-                    detalles={
-                        'accion': 'ruta_manual_creada',
-                        'descripcion': f'Ruta manual creada: {tipo_movimiento}',
-                        'tipo_movimiento': tipo_movimiento,
-                        'origen': container.posicion_fisica,
-                        'destino': cd_destino.nombre,
-                        'programacion_id': programacion.id,
-                        'fecha_programacion': data['fecha_programacion'].isoformat()
-                    }
-                )
-
-                # P1-4: registrar TiempoOperacion para carga_patio o retiro_puerto
-                # según tipo_movimiento. started_at = ahora (sin dato histórico real),
-                # finished_at = fecha_programacion (estimación del operador).
-                try:
-                    from apps.core.services.operations import OperationalFlowService
-                    tipo_op = 'carga_patio' if tipo_movimiento == 'retiro_patio' else 'retiro_puerto'
-                    OperationalFlowService.registrar_operacion_tiempo(
-                        container=container,
-                        tipo_operacion=tipo_op,
-                        started_at=timezone.now(),
-                        finished_at=data['fecha_programacion'],
-                        cd_origen=cd_destino,
-                        cd_destino=cd_destino,
-                        conductor=None,
-                        observaciones=f'Carga/retiro programado (ruta manual {tipo_movimiento})',
-                    )
-                except Exception as _p1_exc:
-                    logger.warning('crear_ruta_manual tiempo_operacion_failed: %s', _p1_exc)
-        except IntegrityError:
-            logger.warning(
-                'crear_ruta_manual_integrity_error',
-                extra={'container_id': getattr(container, 'container_id', None)},
-            )
-            return Response(
-                {'error': 'Este contenedor ya tiene una programación asociada. Por favor, recargue la página.'},
-                status=status.HTTP_409_CONFLICT,
-            )
-        
+        programacion = resultado['programacion']
         return Response({
             'success': True,
             'mensaje': 'Ruta manual creada exitosamente',
             'programacion': ProgramacionSerializer(programacion).data,
             'tipo_movimiento': tipo_movimiento,
             'origen': container.posicion_fisica,
-            'destino': cd_destino.nombre
+            'destino': resultado['cd_destino'].nombre
         }, status=status.HTTP_201_CREATED)
     
     @action(detail=False, methods=['post'], parser_classes=[MultiPartParser, FormParser], url_path='import-excel', permission_classes=[AllowAny])
