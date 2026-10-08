@@ -1440,48 +1440,23 @@ class ProgramacionViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_409_CONFLICT,
             )
 
-        now = timezone.now()
-        lat = request.data.get('lat')
-        lng = request.data.get('lng')
-        with transaction.atomic():
-            locked = Programacion.objects.select_for_update().get(pk=programacion.pk)
-            locked.fecha_inicio_descarga = now
-            update_fields = ['fecha_inicio_descarga', 'updated_at']
-            if lat and lng:
-                locked.posicion_actual_lat = lat
-                locked.posicion_actual_lng = lng
-                locked.ultima_actualizacion_tracking = now
-                update_fields += ['posicion_actual_lat', 'posicion_actual_lng', 'ultima_actualizacion_tracking']
-            locked.save(update_fields=update_fields)
-
-        from apps.events.models import Event
-        Event.objects.create(
-            container=programacion.container,
-            event_type='inicio_descarga',
-            detalles={
-                'cd': programacion.cd.nombre,
-                'conductor': programacion.driver.nombre,
-                'lat': str(lat) if lat else None,
-                'lng': str(lng) if lng else None,
-                'timestamp': now.isoformat(),
-                # HAL-13: registrar siempre el evento (geocerca/directo,
-                # inicio fuera de secuencia, etc.).
-                'origen_registro': 'conductor_click',
-                # HAL-9: flag explícito cuando el inicio llega después del cierre
-                # automático (CD cerró mientras el conductor hacía clic).
-                'fuera_de_secuencia': bool(fuera_de_secuencia),
-            },
+        from apps.core.services.operations import OperationalFlowService
+        ahora = OperationalFlowService.registrar_inicio_descarga(
+            programacion,
+            lat=request.data.get('lat'),
+            lng=request.data.get('lng'),
             usuario=request.user.username if request.user.is_authenticated else 'conductor',
+            fuera_de_secuencia=fuera_de_secuencia,
         )
 
         return Response({
             'success': True,
             'mensaje': 'Inicio de descarga registrado.',
-            'fecha_inicio_descarga': now.isoformat(),
+            'fecha_inicio_descarga': ahora['fecha_inicio_descarga'].isoformat(),
             'programacion_id': programacion.pk,
             # HAL-9: flag para que la UI/auditoría distinga el flujo normal del
             # caso de timing con el CD.
-            'fuera_de_secuencia': bool(fuera_de_secuencia),
+            'fuera_de_secuencia': ahora['fuera_de_secuencia'],
         }, status=status.HTTP_201_CREATED)
 
     @action(detail=True, methods=['post'])

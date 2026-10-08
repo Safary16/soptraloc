@@ -1418,8 +1418,8 @@ class OperationalFlowService:
         (paridad con reportar_incidente) + Event + Notification alta.
 
         Returns:
-            dict: {'ok': True, 'problema': dict} o {'ok': False, 'error': str,
-                  'status_code': 400|500}.
+            dict: {'ok': True, 'problema': dict}. Los errores HTTP (400/403)
+            los mapea la vista — el servicio no retorna errores.
         """
         from apps.events.models import Event
         from apps.notifications.models import Notification
@@ -1473,3 +1473,64 @@ class OperationalFlowService:
             )
 
         return {'ok': True, 'problema': problema_data}
+
+    @classmethod
+    def registrar_inicio_descarga(cls, programacion, *, lat=None, lng=None,
+                                  usuario=None, fuera_de_secuencia=False):
+        """(iteración 9 monolito — extraído de programaciones.views.notificar_inicio_descarga)
+        P1-1: marca el clic "Iniciar Descarga" del conductor en CD. NO cambia
+        container.estado (sigue en 'entregado' o 'soltado').
+
+        Precondiciones que la VISTA debe garantizar (errors HTTP 400/403/409):
+        - programacion.driver existe
+        - _usuario_puede_operar_viaje OK
+        - container.estado en ('entregado', 'soltado', 'descargado')
+        - fecha_inicio_descarga vacía (idempotencia → 409)
+
+        Args:
+            fuera_de_secuencia: HAL-9 — el caller (vista) ya lo determinó
+                (container en 'descargado' con clic tardío).
+
+        Returns:
+            dict: {'ok': True, 'fecha_inicio_descarga': dt,
+                   'fuera_de_secuencia': bool} — los errores HTTP los mapea
+                   la vista; el servicio no retorna errores.
+        """
+        from apps.events.models import Event
+
+        now = timezone.now()
+        with transaction.atomic():
+            locked = Programacion.objects.select_for_update().get(pk=programacion.pk)
+            locked.fecha_inicio_descarga = now
+            update_fields = ['fecha_inicio_descarga', 'updated_at']
+            if lat and lng:
+                locked.posicion_actual_lat = lat
+                locked.posicion_actual_lng = lng
+                locked.ultima_actualizacion_tracking = now
+                update_fields += ['posicion_actual_lat', 'posicion_actual_lng', 'ultima_actualizacion_tracking']
+            locked.save(update_fields=update_fields)
+
+        Event.objects.create(
+            container=programacion.container,
+            event_type='inicio_descarga',
+            detalles={
+                'cd': programacion.cd.nombre,
+                'conductor': programacion.driver.nombre,
+                'lat': str(lat) if lat else None,
+                'lng': str(lng) if lng else None,
+                'timestamp': now.isoformat(),
+                # HAL-13: registrar siempre el evento (geocerca/directo,
+                # inicio fuera de secuencia, etc.).
+                'origen_registro': 'conductor_click',
+                # HAL-9: flag explícito cuando el inicio llega después del cierre
+                # automático (CD cerró mientras el conductor hacía clic).
+                'fuera_de_secuencia': bool(fuera_de_secuencia),
+            },
+            usuario=usuario or 'conductor',
+        )
+
+        return {
+            'ok': True,
+            'fecha_inicio_descarga': now,
+            'fuera_de_secuencia': bool(fuera_de_secuencia),
+        }
