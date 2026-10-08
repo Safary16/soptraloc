@@ -1758,3 +1758,74 @@ class Hal22EtaStreamTests(TestCase):
             'eta_recalculado_min', 'container__estado',
         ).select_related('container').get(pk=self.programacion.pk)
         self.assertEqual(prog.container.estado, 'en_ruta')
+
+
+class CrearRutaManualServiceTests(TestCase):
+    """Fix co-review Safari 08-oct: crear_ruta_manual (servicio) no tenía tests.
+    Cubre: retiro_patio happy path (patio resuelto + FSM + Event + TiempoOperacion),
+    retiro_directo, y el caso idempotente con programacion_existente."""
+
+    def setUp(self):
+        from apps.cds.models import CD
+        from apps.containers.models import Container
+        self.container = Container.objects.create(
+            container_id='RMTST001', tipo='40HC', estado='liberado',
+            posicion_fisica='TPS',
+        )
+        self.cd_patio = CD.objects.create(
+            nombre='Patio RMTST', codigo='PATIO-RMT', tipo='patio',
+            direccion='Patio Test', comuna='Santiago',
+            lat=-33.500000, lng=-70.700000,
+        )
+        self.cd_cliente = CD.objects.create(
+            nombre='Cliente RMTST', codigo='CLI-RMT', tipo='cliente',
+            direccion='Cliente Test', comuna='Santiago',
+            lat=-33.480000, lng=-70.720000,
+        )
+
+    def _llamar(self, container, tipo_movimiento, cd_destino=None):
+        from django.utils import timezone
+        from datetime import timedelta
+        from apps.core.services.operations import OperationalFlowService
+        return OperationalFlowService.crear_ruta_manual(
+            container,
+            tipo_movimiento=tipo_movimiento,
+            cd_destino=cd_destino,
+            fecha_programacion=timezone.now() + timedelta(hours=12),
+            cliente='Test Cliente',
+            observaciones=None,
+            usuario='test',
+        )
+
+    def test_retiro_patio_happy_path(self):
+        resultado = self._llamar(self.container, 'retiro_patio', cd_destino=None)
+        self.assertTrue(resultado['ok'])
+        prog = resultado['programacion']
+        self.assertEqual(prog.container.container_id, 'RMTST001')
+        self.assertEqual(prog.cd, self.cd_patio)
+        self.container.refresh_from_db()
+        self.assertEqual(self.container.estado, 'programado')
+        from apps.events.models import Event
+        self.assertTrue(Event.objects.filter(
+            container=self.container, event_type='import_programacion').exists())
+        from apps.programaciones.models import TiempoOperacion
+        self.assertTrue(TiempoOperacion.objects.filter(
+            container=self.container, tipo_operacion='carga_patio').exists())
+
+    def test_retiro_directo_usa_cd_destino(self):
+        resultado = self._llamar(self.container, 'retiro_directo', cd_destino=self.cd_cliente)
+        self.assertTrue(resultado['ok'])
+        prog = resultado['programacion']
+        self.assertEqual(prog.cd, self.cd_cliente)
+        self.container.refresh_from_db()
+        self.assertEqual(self.container.estado, 'programado')
+
+    def test_pre_validacion_programacion_existente(self):
+        # Primera llamada crea la programación; la segunda debe cortar con
+        # programacion_existente (comportamiento idempotente del original).
+        self._llamar(self.container, 'retiro_patio', cd_destino=None)
+        resultado = self._llamar(self.container, 'retiro_patio', cd_destino=None)
+        self.assertFalse(resultado['ok'])
+        self.assertIn('ya tiene una programación asociada', resultado['error'])
+        self.assertIn('programacion_existente', resultado)
+        self.assertIsNotNone(resultado['programacion_existente']['id'])

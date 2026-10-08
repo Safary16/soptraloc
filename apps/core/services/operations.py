@@ -941,10 +941,6 @@ class OperationalFlowService:
         from apps.cds.models import CD
         from apps.events.models import Event
 
-        data = serializer.validated_data
-        container = data['_container']
-        tipo_movimiento = data['tipo_movimiento']
-        
         # Actualizar tipo de movimiento en el contenedor
         container.tipo_movimiento = tipo_movimiento
         container.save(update_fields=['tipo_movimiento'])
@@ -1017,7 +1013,7 @@ class OperationalFlowService:
                         container=container,
                         tipo_operacion=tipo_op,
                         started_at=timezone.now(),
-                        finished_at=data['fecha_programacion'],
+                        finished_at=fecha_programacion,
                         cd_origen=cd_destino,
                         cd_destino=cd_destino,
                         conductor=None,
