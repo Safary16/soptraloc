@@ -1105,15 +1105,6 @@ class ProgramacionViewSet(viewsets.ModelViewSet):
             )
         if not self._usuario_puede_operar_viaje(request, programacion):
             return Response({'error': 'No puede operar un viaje ajeno.'}, status=status.HTTP_403_FORBIDDEN)
-        
-        # Verificar que el CD permita soltar contenedor
-        if not programacion.driver:
-            return Response(
-                {'error': 'Programación no tiene conductor asignado'},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-        if not self._usuario_puede_operar_viaje(request, programacion):
-            return Response({'error': 'No puede operar un viaje ajeno.'}, status=status.HTTP_403_FORBIDDEN)
 
         from apps.core.services.operations import OperationalFlowService
         resultado = OperationalFlowService.soltar_contenedor_drop(
