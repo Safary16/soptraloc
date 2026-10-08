@@ -1234,3 +1234,94 @@ class OperationalFlowService:
             'container': container,
             'cd_destino': cd_destino,
         }
+
+    @classmethod
+    def actualizar_posicion_gps(cls, programacion, *, lat, lng, usuario=None,
+                                eta_delay_threshold=None):
+        """(iteración 6 monolito — extraído de programaciones.views.actualizar_posicion)
+        Actualiza la posición del conductor y recalcula ETA.
+
+        Arribo automático: permanece dormido hasta que el CD tenga un radio.
+        Se comprueba antes del tracking ordinario para registrar una sola
+        muestra GPS.
+
+        Args:
+            eta_delay_threshold: override del umbral de alerta de retraso
+            (si None, usa settings.ETA_DELAY_ALERT_MIN).
+
+        Returns:
+            dict: {'ok': True, ...} o {'ok': False, 'error': str,
+                  'status_code': 400|500}.
+        """
+        from apps.notifications.services import NotificationService
+        from django.conf import settings
+
+        if lat is None or lng is None:
+            return {'ok': False, 'error': 'lat y lng requeridos', 'status_code': 400}
+        
+        # Arribo automático: permanece dormido hasta que el CD tenga un radio.
+        # Se comprueba antes del tracking ordinario para registrar una sola muestra GPS.
+        if (
+            programacion.container.estado == 'en_ruta'
+            and programacion.cd.contiene_en_geocerca(lat, lng)
+        ):
+            locked, created = cls.registrar_arribo(
+                programacion, lat, lng, 'geocerca', 'system_geocerca'
+            )
+            return {
+                'ok': True,
+                'arribo_automatico': True,
+                'arribo_creado': created,
+                'fecha_arribo_cd': programacion.fecha_arribo_cd,
+                'nuevo_estado': 'entregado',
+                'programacion': programacion,
+            }
+
+        # Fuera de geocerca, guardar tracking y recalcular ETA normalmente.
+        programacion.driver.actualizar_posicion(lat, lng)
+        
+        # Actualizar ETA y crear notificación si cambió significativamente
+        resultado = NotificationService.actualizar_eta(
+            programacion, programacion.driver, lat, lng
+        )
+        
+        if not resultado:
+            return {'ok': False, 'error': 'No se pudo calcular ETA actualizado', 'status_code': 500}
+        
+        # Verificar si debe crear alerta de arribo próximo
+        if resultado['eta_minutos'] <= 15:
+            NotificationService.crear_alerta_arribo_proximo(programacion)
+
+        programacion.eta_recalculado_min = resultado['eta_minutos']
+        configured_delay_threshold = int(getattr(settings, 'ETA_DELAY_ALERT_MIN', 15))
+        request_override_threshold = request.query_params.get('eta_delay_alert_min')
+        eta_delay_threshold = int(request_override_threshold) if request_override_threshold else configured_delay_threshold
+        if programacion.eta_minutos and (resultado['eta_minutos'] - programacion.eta_minutos) > eta_delay_threshold:
+            desvio = {
+                'tipo': 'ETA_DELAY',
+                'mensaje': 'ETA recalculado supera lo prometido',
+                'valor_min': int(resultado['eta_minutos'] - programacion.eta_minutos),
+                'timestamp': timezone.now().isoformat(),
+            }
+            programacion.desviaciones_detectadas = (programacion.desviaciones_detectadas or []) + [desvio]
+        programacion.save(update_fields=[
+            'posicion_actual_lat', 'posicion_actual_lng', 'ultima_actualizacion_tracking',
+            'eta_recalculado_min', 'desviaciones_detectadas'
+        ])
+        
+        response_data = {
+            'success': True,
+            'mensaje': 'Posición actualizada y ETA recalculado',
+            'eta_minutos': resultado['eta_minutos'],
+            'distancia_km': str(resultado['distancia_km']),
+            'eta_timestamp': resultado['eta_timestamp']
+        }
+        
+        if resultado['notificacion']:
+            response_data['notificacion'] = {
+                'id': resultado['notificacion'].id,
+                'titulo': resultado['notificacion'].titulo,
+                'mensaje': resultado['notificacion'].mensaje
+            }
+        
+        return Response(response_data)

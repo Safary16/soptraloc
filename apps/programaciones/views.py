@@ -1218,83 +1218,47 @@ class ProgramacionViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_403_FORBIDDEN,
             )
         
-        lat = request.data.get('lat')
-        lng = request.data.get('lng')
-        
-        if lat is None or lng is None:
+        from apps.core.services.operations import OperationalFlowService
+        resultado = OperationalFlowService.actualizar_posicion_gps(
+            programacion,
+            lat=request.data.get('lat'),
+            lng=request.data.get('lng'),
+            usuario=request.user.username if request.user.is_authenticated else None,
+            eta_delay_threshold=int(request.query_params.get('eta_delay_alert_min')) if request.query_params.get('eta_delay_alert_min') else None,
+        )
+
+        if not resultado['ok']:
             return Response(
-                {'error': 'lat y lng requeridos'},
-                status=status.HTTP_400_BAD_REQUEST
+                {'error': resultado['error']},
+                status=resultado.get('status_code', status.HTTP_400_BAD_REQUEST)
             )
-        
-        # Arribo automático: permanece dormido hasta que el CD tenga un radio.
-        # Se comprueba antes del tracking ordinario para registrar una sola muestra GPS.
-        if (
-            programacion.container.estado == 'en_ruta'
-            and programacion.cd.contiene_en_geocerca(lat, lng)
-        ):
-            programacion, created = self._registrar_arribo(
-                programacion, lat, lng, 'geocerca', 'system_geocerca'
-            )
+
+        if resultado.get('arribo_automatico'):
             return Response({
                 'success': True,
                 'mensaje': 'Arribo registrado automáticamente por geocerca',
                 'arribo_automatico': True,
-                'arribo_creado': created,
-                'fecha_arribo_cd': programacion.fecha_arribo_cd,
+                'arribo_creado': resultado['arribo_creado'],
+                'fecha_arribo_cd': resultado['fecha_arribo_cd'],
                 'nuevo_estado': 'entregado',
             })
 
-        # Fuera de geocerca, guardar tracking y recalcular ETA normalmente.
-        programacion.driver.actualizar_posicion(lat, lng)
-        
-        # Actualizar ETA y crear notificación si cambió significativamente
-        resultado = NotificationService.actualizar_eta(
-            programacion, programacion.driver, lat, lng
-        )
-        
-        if not resultado:
-            return Response(
-                {'error': 'No se pudo calcular ETA actualizado'},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR
-            )
-        
-        # Verificar si debe crear alerta de arribo próximo
-        if resultado['eta_minutos'] <= 15:
-            NotificationService.crear_alerta_arribo_proximo(programacion)
-
-        programacion.eta_recalculado_min = resultado['eta_minutos']
-        configured_delay_threshold = int(getattr(settings, 'ETA_DELAY_ALERT_MIN', 15))
-        request_override_threshold = request.query_params.get('eta_delay_alert_min')
-        eta_delay_threshold = int(request_override_threshold) if request_override_threshold else configured_delay_threshold
-        if programacion.eta_minutos and (resultado['eta_minutos'] - programacion.eta_minutos) > eta_delay_threshold:
-            desvio = {
-                'tipo': 'ETA_DELAY',
-                'mensaje': 'ETA recalculado supera lo prometido',
-                'valor_min': int(resultado['eta_minutos'] - programacion.eta_minutos),
-                'timestamp': timezone.now().isoformat(),
-            }
-            programacion.desviaciones_detectadas = (programacion.desviaciones_detectadas or []) + [desvio]
-        programacion.save(update_fields=[
-            'posicion_actual_lat', 'posicion_actual_lng', 'ultima_actualizacion_tracking',
-            'eta_recalculado_min', 'desviaciones_detectadas'
-        ])
-        
+        res = resultado['resultado']
         response_data = {
             'success': True,
             'mensaje': 'Posición actualizada y ETA recalculado',
-            'eta_minutos': resultado['eta_minutos'],
-            'distancia_km': str(resultado['distancia_km']),
-            'eta_timestamp': resultado['eta_timestamp']
+            'eta_minutos': res['eta_minutos'],
+            'distancia_km': str(res['distancia_km']),
+            'eta_timestamp': res['eta_timestamp']
         }
-        
-        if resultado['notificacion']:
+
+        if res['notificacion']:
             response_data['notificacion'] = {
-                'id': resultado['notificacion'].id,
-                'titulo': resultado['notificacion'].titulo,
-                'mensaje': resultado['notificacion'].mensaje
+                'id': res['notificacion'].id,
+                'titulo': res['notificacion'].titulo,
+                'mensaje': res['notificacion'].mensaje
             }
-        
+
         return Response(response_data)
 
     @action(detail=True, methods=['get'])
