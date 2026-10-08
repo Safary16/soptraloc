@@ -2,30 +2,15 @@
 Flujo del conductor en viaje: ruta, avances, arribos, incidents, drop, tracking y descarga.
 Extraído de apps/programaciones/views.py (ProgramacionViewSet) sin cambios de comportamiento.
 """
-from rest_framework import viewsets, status
+from rest_framework import status
 from rest_framework.decorators import action
 from rest_framework.response import Response
-from rest_framework.parsers import MultiPartParser, FormParser
-from rest_framework.permissions import AllowAny, IsAuthenticatedOrReadOnly
-from django.conf import settings
-from django.db import transaction, IntegrityError
+from rest_framework.permissions import AllowAny
+from django.db import transaction
 from django.utils import timezone
-from datetime import timedelta
-from dateutil import parser as date_parser
 import logging
-import uuid
 
-from ..filters import ProgramacionFilter
 from ..models import Programacion
-from ..serializers import (
-    ProgramacionSerializer,
-    RutaManualSerializer,
-    ProgramacionListSerializer,
-    ProgramacionCreateSerializer
-)
-from apps.core.services.assignment import AssignmentService
-from apps.core.utils import normalizar_cliente
-from apps.drivers.serializers import DriverDisponibleSerializer
 
 
 logger = logging.getLogger(__name__)
@@ -348,7 +333,6 @@ class FlujoConductorMixin:
             "lng": -70.6506
         }
         """
-        from apps.notifications.services import NotificationService
         
         programacion = self.get_object()
         
