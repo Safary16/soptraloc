@@ -737,6 +737,7 @@ class OperationalFlowService:
         # Crear notificación con ETA (pasar la ETA ya calculada de la programación
         # para no recalcular con Mapbox y quedar sin ella si Mapbox falla).
         try:
+            from apps.notifications.services import NotificationService
             notificacion = NotificationService.crear_notificacion_inicio_ruta(
                 programacion, programacion.driver,
                 eta_minutos=programacion.eta_minutos,
@@ -1184,7 +1185,6 @@ class OperationalFlowService:
                 container.cambiar_estado('programado', usuario)
 
                 # Crear evento de auditoría
-                from apps.events.models import Event
                 Event.objects.create(
                     container=container,
                     event_type='import_programacion',

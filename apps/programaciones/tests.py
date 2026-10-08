@@ -1,4 +1,3 @@
-import unittest
 from django.test import TestCase
 from django.contrib.auth.models import User
 from django.utils import timezone
@@ -1883,7 +1882,7 @@ class CrearRutaManualServiceTests(TestCase):
         self.assertIsNotNone(resultado['programacion_existente']['id'])
 
 
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 class ActualizarPosicionTrackingTests(TestCase):
     """Fix co-review Safari 08-oct: el path de TRACKING (fuera de geocerca)

@@ -451,7 +451,6 @@ class TiempoOperacion(models.Model):
         """
         from datetime import timedelta
         from django.utils import timezone
-        from django.db.models import Avg
         
         # Filtro base: CD + tipo_operacion + sin anomalías + últimos 30 días
         fecha_limite = timezone.now() - timedelta(days=30)
@@ -598,7 +597,7 @@ class TiempoViaje(models.Model):
         """
         from datetime import timedelta
         from django.utils import timezone
-        from django.db.models import Avg, Q
+        from django.db.models import Q
         from decimal import Decimal
         
         # Radio de búsqueda: ~1km = 0.009 grados
