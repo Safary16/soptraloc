@@ -1293,6 +1293,9 @@ class OperationalFlowService:
             NotificationService.crear_alerta_arribo_proximo(programacion)
 
         programacion.eta_recalculado_min = resultado['eta_minutos']
+        programacion.posicion_actual_lat = lat
+        programacion.posicion_actual_lng = lng
+        programacion.ultima_actualizacion_tracking = timezone.now()
         threshold = eta_delay_threshold if eta_delay_threshold is not None else int(getattr(settings, 'ETA_DELAY_ALERT_MIN', 15))
         if programacion.eta_minutos and (resultado['eta_minutos'] - programacion.eta_minutos) > threshold:
             desvio = {
