@@ -1361,7 +1361,9 @@ class OperationalFlowService:
 
         # El viaje lleno terminó: la entrega se completó; la descarga pendiente
         # del CD se registra con su propio timing (coherencia de estado_final).
-        self._update_registro_operacion_on_completion(programacion, 'ENTREGADO')
+        # Fix iter7: _update_registro_operacion_on_completion es helper de la vista
+        # — el caller lo ejecuta después de que el servicio retorna.
+        # TODO(iter8): mover a este servicio si el patrón lo justifica.
 
         # Crear evento de contenedor soltado
         from apps.events.models import Event
@@ -1398,7 +1400,6 @@ class OperationalFlowService:
                     usuario=usuario,
                 )
 
-        serializer = self.get_serializer(programacion)
         return {
             'ok': True,
             'programacion': programacion,
